@@ -65,8 +65,10 @@ type Options struct {
 	// Models builds the chat models (default: llm.New(Config), the OpenAI-compatible
 	// provider, or Anthropic with LLM_PROVIDER=anthropic).
 	Models llm.Factory
-	// Backend provides the sandboxes (default: the local machine when SANDBOX_BACKEND=local,
-	// OpenSandbox when OPENSANDBOX_URL is set, else none: the agent then has no sandbox tools).
+	// Backend provides the sandboxes. Default: the backend named by
+	// SANDBOX_BACKEND (local, opensandbox, none, or one registered with
+	// sandbox.Register), else OpenSandbox when OPENSANDBOX_URL is set, else
+	// none: the agent then has no sandbox tools and a prompt that says so.
 	Backend sandbox.Backend
 	// Blobs stores artifact contents (default: in the Store).
 	Blobs artifacts.Blobs
@@ -111,6 +113,8 @@ type Harness struct {
 	Workspace *workspace.Service
 	Runtime   *runtime.Runtime
 	Agent     *agent.Agent
+
+	sandboxTools bool
 }
 
 // New wires the harness: the core (store, models, sandboxes, infrastructure,
@@ -132,11 +136,7 @@ func New(o Options) (*Harness, error) {
 	backend := o.Backend
 	if backend == nil {
 		var err error
-		if cfg.LocalSandbox() {
-			backend, err = localBackend(cfg)
-		} else {
-			backend, err = sandbox.BackendFromConfig(cfg)
-		}
+		backend, err = sandbox.NewBackend(cfg)
 		if err != nil {
 			return nil, err
 		}
@@ -182,7 +182,8 @@ func New(o Options) (*Harness, error) {
 	}
 
 	h := &Harness{cfg: cfg, Store: st, Log: infra.Log, Queue: infra.Broker, Bus: infra.Broker,
-		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace}
+		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace,
+		sandboxTools: b.sandboxTools != nil}
 	h.Agent = &agent.Agent{
 		Models: models, Tools: registry, Store: st, Steers: h.Bus,
 		MaxSteps: cfg.AgentMaxSteps, MaxToolOutputChars: cfg.AgentMaxToolOutputChars,
@@ -232,7 +233,32 @@ type RunOptions struct {
 	Interactive bool
 	// MessageID makes Send idempotent for that user message (optional).
 	MessageID string
+	// Sandbox says whether the run may use a sandbox (default SandboxAuto).
+	// It is kept in the run record: a resumed run, a goal turn and a
+	// compaction keep the mode of the thread's latest run.
+	Sandbox SandboxMode
 }
+
+// SandboxMode is RunOptions.Sandbox.
+type SandboxMode string
+
+const (
+	// SandboxAuto (the default): the run has the sandbox tools when a backend
+	// is configured and the Sandbox feature is installed; the sandbox is only
+	// created when a tool first needs it. Without a backend the run simply has
+	// no sandbox tools.
+	SandboxAuto SandboxMode = "auto"
+	// SandboxOff: the run has no sandbox tools, gets the no-sandbox prompt and
+	// never creates (or uses) a sandbox, whatever the harness is configured with.
+	SandboxOff SandboxMode = "off"
+	// SandboxOn: like SandboxAuto, but Send fails with ErrInvalidRequest when
+	// the harness cannot provide a sandbox (no backend, or no Sandbox feature).
+	SandboxOn SandboxMode = "on"
+)
+
+// ErrNoSandbox is returned (wrapped in ErrInvalidRequest) by Send when the run
+// asks for SandboxOn and the harness has no sandbox.
+var ErrNoSandbox = errors.New("this run requires a sandbox but the harness has none: set Options.Backend or SANDBOX_BACKEND")
 
 // ErrInvalidRequest wraps the errors caused by the caller's input.
 var ErrInvalidRequest = errors.New("invalid request")
@@ -251,6 +277,10 @@ func (h *Harness) Send(ctx context.Context, user, threadID, text string, o RunOp
 	if !h.cfg.ModelAllowed(o.Model) {
 		return nil, fmt.Errorf("%w: model %q is not allowed", ErrInvalidRequest, o.Model)
 	}
+	sbMode, err := h.sandboxMode(o.Sandbox)
+	if err != nil {
+		return nil, err
+	}
 	mode := ""
 	if o.Interactive {
 		mode = "interactive"
@@ -262,6 +292,7 @@ func (h *Harness) Send(ctx context.Context, user, threadID, text string, o RunOp
 		Skills:          o.Skills,
 		ReasoningEffort: o.ReasoningEffort,
 		InteractionMode: mode,
+		Sandbox:         sbMode,
 	})
 	if err != nil {
 		return nil, err
@@ -270,6 +301,26 @@ func (h *Harness) Send(ctx context.Context, user, threadID, text string, o RunOp
 		return nil, err
 	}
 	return run, nil
+}
+
+// HasSandbox reports whether runs can use a sandbox: a backend is configured
+// and the Sandbox feature is installed.
+func (h *Harness) HasSandbox() bool { return h.sandboxTools }
+
+// sandboxMode validates a run's sandbox mode and returns the stored value.
+func (h *Harness) sandboxMode(m SandboxMode) (string, error) {
+	switch m {
+	case "", SandboxAuto:
+		return store.SandboxAuto, nil
+	case SandboxOff:
+		return store.SandboxOff, nil
+	case SandboxOn:
+		if !h.HasSandbox() {
+			return "", fmt.Errorf("%w: %w", ErrInvalidRequest, ErrNoSandbox)
+		}
+		return store.SandboxOn, nil
+	}
+	return "", fmt.Errorf("%w: sandbox must be auto, off or on, not %q", ErrInvalidRequest, m)
 }
 
 // Events streams the run's AG-UI events with seq > after, then follows it live

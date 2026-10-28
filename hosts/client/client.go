@@ -155,6 +155,8 @@ type Run struct {
 	ErrorCode string    `json:"errorCode,omitempty"`
 	LastSeq   int64     `json:"lastSeq"`
 	CreatedAt time.Time `json:"createdAt"`
+	// Sandbox is the sandbox mode of the run: auto, off or on.
+	Sandbox string `json:"sandbox,omitempty"`
 }
 
 // SendOptions are the per-run settings of Send; they are also the optional
@@ -168,8 +170,8 @@ type SendOptions struct {
 	Skills []string `json:"skills,omitempty"`
 	// Interactive makes risky tool calls wait for a decision (Resume).
 	Interactive bool `json:"interactive,omitempty"`
-	// Sandbox names the sandbox adapter of this run ("" for the server's default).
-	// The server forwards it to the engine when the engine supports a per-run sandbox.
+	// Sandbox is auto (default: sandbox tools when the server has a backend, created on first use), off (no
+	// sandbox tools for this run) or on (fail when the server has no sandbox).
 	Sandbox string `json:"sandbox,omitempty"`
 }
 

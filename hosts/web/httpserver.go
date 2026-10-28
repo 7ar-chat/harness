@@ -17,7 +17,7 @@
 //	GET    /api/threads/{id}                         → Thread + messages (+ pendingApproval, pendingQuestion, activeRun)
 //	PATCH  /api/threads/{id}       {"title"}         → Thread
 //	DELETE /api/threads/{id}                         → 204
-//	POST   /api/threads/{id}/runs  {"message","model","reasoningEffort","skills","interactive"} → 202 Run
+//	POST   /api/threads/{id}/runs  {"message","model","reasoningEffort","skills","interactive","sandbox":"auto|off|on"} → 202 Run
 //	POST   /api/threads/{id}/resume {"interruptId","reason","decision":"approve|deny","always","text","model","interactive"} → 202 Run
 //	GET    /api/threads/{id}/files?path=             → [File]   (read-only, confined to /workspace)
 //	GET    /api/threads/{id}/files/download?path=    → file bytes, Content-Disposition: attachment

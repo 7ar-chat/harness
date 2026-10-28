@@ -107,6 +107,9 @@ type Run struct {
 	ReasoningEffort string
 	// InteractionMode is interactive or automatic ("" is automatic).
 	InteractionMode string
+	// Sandbox is the run's sandbox mode: SandboxAuto ("" too), SandboxOff or
+	// SandboxOn. A resumed run keeps the mode of the thread's previous run.
+	Sandbox string
 	// ApprovedTools are the tool kinds approved with scope "run" in this run
 	// chain (the run and its resume runs): they run without asking again.
 	ApprovedTools   []string
@@ -208,7 +211,22 @@ type NewRun struct {
 	// remembered as the thread's last choice, an empty one uses that choice
 	// (automatic when the thread has none).
 	InteractionMode string
+	// Sandbox is the run's sandbox mode (SandboxAuto, SandboxOff, SandboxOn).
+	// Empty inherits the mode of the thread's latest run (resume, goal and
+	// compaction runs), else auto.
+	Sandbox string
 }
+
+// Sandbox modes of a run (Run.Sandbox).
+const (
+	// SandboxAuto: sandbox tools are offered when a backend is configured; the
+	// sandbox is created on the first command.
+	SandboxAuto = "auto"
+	// SandboxOff: the run has no sandbox tools and never creates a sandbox.
+	SandboxOff = "off"
+	// SandboxOn: like auto, but the run is refused without a backend.
+	SandboxOn = "on"
+)
 
 // Store is the persistence boundary used by api, runtime and agent.
 type Store interface {

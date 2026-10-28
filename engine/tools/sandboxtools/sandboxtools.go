@@ -119,6 +119,9 @@ var _ tools.ReadOnly = readOnlyTool{}
 
 // Tools implements tools.Provider. The sandbox is acquired lazily on first tool call.
 func (p *Provider) Tools(_ context.Context, rc tools.RunContext) ([]tool.BaseTool, func(), error) {
+	if rc.Sandbox == tools.SandboxOff {
+		return nil, func() {}, nil
+	}
 	b := &binding{p: p, rc: rc}
 	var out []tool.BaseTool
 	add := func(readOnly bool) func(t tool.InvokableTool, err error) error {

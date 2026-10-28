@@ -68,6 +68,27 @@ func testThreadLifecycle(t *testing.T, mk Factory) {
 	wantErr(t, "deleted thread", err, client.ErrNotFound)
 }
 
+func testSandboxMode(t *testing.T, mk Factory) {
+	// Arrange
+	r := newRig(t, mk, rigOpts{})
+	id := newThread(t, r, r.alice)
+
+	// Act
+	off := mustSend(t, r, r.alice, id, "Say hello", client.SendOptions{Sandbox: "off"})
+	stream(t, r, r.alice, off.ID, 0)
+	waitIdle(t, r, r.alice, id)
+	got, err := r.alice.GetRun(r.ctx, off.ID)
+	_, badErr := r.alice.Send(r.ctx, id, "again", client.SendOptions{Sandbox: "sometimes"})
+
+	// Assert
+	if err != nil || got.Sandbox != "off" || off.Sandbox != "off" {
+		t.Fatalf("the sandbox mode must round-trip: sent %q, read %q, err %v", off.Sandbox, got.Sandbox, err)
+	}
+	if !errors.Is(badErr, client.ErrInvalidRequest) {
+		t.Fatalf("an unknown sandbox mode must be an invalid request, got %v", badErr)
+	}
+}
+
 func testSendAndStream(t *testing.T, mk Factory) {
 	// Arrange
 	r := newRig(t, mk, rigOpts{})

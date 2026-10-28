@@ -101,7 +101,9 @@ func (b *Backend) Create(_ context.Context, _ sandbox.CreateOptions) (sandbox.In
 			return nil, err
 		}
 	}
-	return in, nil
+	// The directories exist now: resolve their symlinks (a temp dir on macOS
+	// is under /var -> /private/var), or the confinement check never matches.
+	return b.instance(in.id), nil
 }
 
 // Connect returns an existing sandbox, or sandbox.ErrNoSandbox when its state is gone.

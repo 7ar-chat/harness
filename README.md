@@ -64,8 +64,11 @@ h.Cancel(ctx, "alice", run.ID)
   directory) runs the tools on this machine through `sandbox/local`; the agent still sees `/workspace`.
   There is no isolation beyond path confinement of the file API: use it on your own machine or inside a container.
 * **Your own sandbox**: implement `sandbox.Backend` (Create/Connect/Kill) returning
-  `sandbox.Instance` (Exec, ReadFile, WriteFile, MkdirAll, List, Stat, Healthy…).
-  `sandbox/sandboxtest` is an in-memory fake for tests.
+  `sandbox.Instance` (Exec, ReadFile, WriteFile, MkdirAll, List, Stat, Healthy…), prove it with
+  `sandboxtest.RunConformance` and select it with `SANDBOX_BACKEND=<name>` (`sandbox.Register`); see
+  [docs/sandbox-adapters.md](docs/sandbox-adapters.md). `sandbox/sandboxtest` is an in-memory fake for tests.
+* **A website**: [docs/embedding.md](docs/embedding.md) and `examples/website` (own auth, per-user threads, a
+  custom tool, a sandbox only for the requests that need one, `hosts/web` mounted under `/agent/`).
 * **Your own tools**: `Options.Tools` takes `tools.Provider`s (eino tools, per-run).
 
 ## Coding profile
@@ -456,6 +459,15 @@ ping := harness.FeatureFunc("ping", func(b *harness.Builder) error {
 })
 h, err := harness.New(harness.Options{Config: cfg, Features: append(harness.ProfileMinimal(), ping)})
 ```
+
+## Sandbox per run
+
+The sandbox is optional for each run: `RunOptions.Sandbox` (JSON `sandbox` on `POST /api/threads/{id}/runs`) is
+`auto` (default: the sandbox tools are offered when a backend is configured and the sandbox is created at the
+first command), `off` (no sandbox tools, the no-sandbox prompt, `Backend.Create` is never called) or `on`
+(like `auto`, but `Send` fails with `ErrInvalidRequest` when the harness has no sandbox). The choice is kept in
+the run record and inherited by the thread's resumed runs. `SANDBOX_BACKEND` names the backend: `local`, `opensandbox`,
+`none` or one registered with `sandbox.Register`. See [docs/embedding.md](docs/embedding.md).
 
 ## Infrastructure
 

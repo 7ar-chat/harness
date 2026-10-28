@@ -91,7 +91,7 @@ func toThread(t *store.Thread) Thread {
 
 func toRun(r *store.Run) *Run {
 	return &Run{ID: r.ID, ThreadID: r.ThreadID, Status: r.Status, Model: r.Model, Error: r.Error, ErrorCode: r.ErrorCode,
-		LastSeq: r.LastSeq, CreatedAt: r.CreatedAt}
+		LastSeq: r.LastSeq, CreatedAt: r.CreatedAt, Sandbox: r.Sandbox}
 }
 
 func limitOf(n, def int) int {
@@ -184,9 +184,9 @@ func (c *inProcess) Send(ctx context.Context, threadID, text string, o SendOptio
 	if err := c.owns(ctx, threadID); err != nil {
 		return nil, err
 	}
-	// o.Sandbox is not forwarded yet: the engine's RunOptions has no per-run sandbox.
 	run, err := c.h.Send(ctx, c.user, threadID, text, harness.RunOptions{
 		Model: c.modelOr(o.Model), ReasoningEffort: o.ReasoningEffort, Skills: o.Skills, Interactive: o.Interactive,
+		Sandbox: harness.SandboxMode(o.Sandbox),
 	})
 	if err != nil {
 		return nil, mapErr(err)

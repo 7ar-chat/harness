@@ -33,12 +33,13 @@ type rig struct {
 }
 
 type rigOpts struct {
-	web     httpserver.Options // Authenticate/User default to the X-User header
-	model   *llmtest.Model
-	store   harness.Store
-	env     map[string]string
-	local   bool // local sandbox backend instead of the in-memory fake
-	rawAuth bool // keep the web options' authentication (default: the X-User header)
+	web       httpserver.Options // Authenticate/User default to the X-User header
+	model     *llmtest.Model
+	store     harness.Store
+	env       map[string]string
+	local     bool // local sandbox backend instead of the in-memory fake
+	noSandbox bool // no backend at all
+	rawAuth   bool // keep the web options' authentication (default: the X-User header)
 }
 
 // scripted asks for one tool call, then answers "done" once it has seen the tool result.
@@ -78,7 +79,7 @@ func newRig(t *testing.T, o rigOpts) *rig {
 		o.model = llmtest.New(llmtest.Turn{Chunks: llmtest.Text("Hi there")}, llmtest.Turn{Chunks: llmtest.Text("Title")})
 	}
 	ho := harness.Options{Config: cfg, Models: llmtest.Factory{M: o.model}, Store: o.store}
-	if !o.local {
+	if !o.local && !o.noSandbox {
 		ho.Backend = sandboxtest.NewBackend()
 	}
 	h, err := harness.New(ho)

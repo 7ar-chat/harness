@@ -10,6 +10,8 @@ import (
 	"github.com/GhaziBenDahmane/harness/sandbox/local"
 )
 
+func init() { sandbox.Register(config.BackendLocal, localBackend) }
+
 // localBackend is the SANDBOX_BACKEND=local backend: commands run on this machine.
 func localBackend(cfg *config.Config) (sandbox.Backend, error) {
 	ws := cfg.LocalWorkspace

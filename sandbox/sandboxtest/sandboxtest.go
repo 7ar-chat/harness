@@ -378,10 +378,10 @@ func (s *Sandbox) Stat(_ context.Context, p string) (sandbox.FileInfo, error) {
 	defer s.mu.Unlock()
 	p = s.realLocked(p)
 	if d, ok := s.files[p]; ok {
-		return sandbox.FileInfo{Path: p, Type: "file", Size: int64(len(d))}, nil
+		return sandbox.FileInfo{Path: p, Type: "file", Size: int64(len(d)), ModifiedAt: time.Unix(0, 0)}, nil
 	}
 	if s.dirs[p] {
-		return sandbox.FileInfo{Path: p, Type: "directory"}, nil
+		return sandbox.FileInfo{Path: p, Type: "directory", ModifiedAt: time.Unix(0, 0)}, nil
 	}
 	return sandbox.FileInfo{}, sandbox.ErrNotFound
 }

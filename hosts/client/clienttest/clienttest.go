@@ -44,6 +44,7 @@ func Run(t *testing.T, mk Factory) {
 	t.Run("models", func(t *testing.T) { testModels(t, mk) })
 	t.Run("thread lifecycle", func(t *testing.T) { testThreadLifecycle(t, mk) })
 	t.Run("send and stream", func(t *testing.T) { testSendAndStream(t, mk) })
+	t.Run("sandbox mode", func(t *testing.T) { testSandboxMode(t, mk) })
 	t.Run("resume the stream from a seq", func(t *testing.T) { testResumeFromAfter(t, mk) })
 	t.Run("steer a blocked run", func(t *testing.T) { testSteer(t, mk) })
 	t.Run("cancel a blocked run", func(t *testing.T) { testCancel(t, mk) })
