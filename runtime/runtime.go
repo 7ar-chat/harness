@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/GhaziBenDahmane/harness/agent"
@@ -49,7 +48,9 @@ type RunQueue interface {
 
 // Options tunes the runtime.
 type Options struct {
-	ID            string
+	ID string
+	// Reporter receives internal errors and panics (an error tracker such as Sentry); nil: logs only.
+	Reporter      ErrorReporter
 	Concurrency   int
 	Heartbeat     time.Duration // default 10 s
 	SweepEvery    time.Duration // default 30 s
@@ -469,7 +470,9 @@ func (r *Runtime) safeRun(ctx context.Context, in agent.Input, w eventlog.Writer
 	defer func() {
 		if p := recover(); p != nil {
 			slog.Error("agent panic", "run_id", in.Run.ID, "panic", p)
-			sentry.CurrentHub().Recover(p)
+			if r.opts.Reporter != nil {
+				r.opts.Reporter.CapturePanic(p)
+			}
 			err = &agent.Error{Code: agui.CodeInternal, Message: agent.MsgInternal, Detail: fmt.Sprint(p)}
 		}
 	}()
@@ -524,7 +527,9 @@ func (r *Runtime) classify(runCtx context.Context, run *store.Run, res agent.Res
 		return store.StatusFailed, ae.Message, agui.RunErrorEvent(ae.Code, ae.Message)
 	}
 	slog.Error("run failed", "run_id", run.ID, "error", err)
-	sentry.CaptureException(err)
+	if r.opts.Reporter != nil {
+		r.opts.Reporter.CaptureError(err)
+	}
 	return store.StatusFailed, agent.MsgInternal, agui.RunErrorEvent(agui.CodeInternal, agent.MsgInternal)
 }
 
@@ -773,4 +778,10 @@ func (r *Runtime) finishInterrupted(ctx context.Context, run *store.Run, leftove
 		return
 	}
 	slog.Error("sweeper: gave up writing RUN_ERROR (log keeps moving)", "run_id", run.ID)
+}
+
+// ErrorReporter receives what the runtime logs as internal failures.
+type ErrorReporter interface {
+	CaptureError(err error)
+	CapturePanic(recovered any)
 }

@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/GhaziBenDahmane/harness/artifacts"
+	"github.com/GhaziBenDahmane/harness/artifacts/s3blobs"
 	"github.com/GhaziBenDahmane/harness/store"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
 )
@@ -230,7 +231,7 @@ func TestS3PutStreamUsesMultipartUploadsForLargeContent(t *testing.T) {
 	fake := newFakeS3()
 	srv := httptest.NewServer(fake)
 	defer srv.Close()
-	b, err := artifacts.NewS3(artifacts.S3Options{Bucket: "bucket", Endpoint: srv.URL, AccessKey: "k", SecretKey: "s", PathStyle: true, Prefix: "work/"})
+	b, err := s3blobs.New(s3blobs.Options{Bucket: "bucket", Endpoint: srv.URL, AccessKey: "k", SecretKey: "s", PathStyle: true, Prefix: "work/"})
 	if err != nil {
 		t.Fatal(err)
 	}

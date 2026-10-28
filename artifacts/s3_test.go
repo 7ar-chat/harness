@@ -15,12 +15,13 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/GhaziBenDahmane/harness/artifacts"
+	"github.com/GhaziBenDahmane/harness/artifacts/s3blobs"
 	"github.com/GhaziBenDahmane/harness/store"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
 )
 
 // s3Blobs returns the S3 backend on a fresh bucket of WORK_TEST_S3_ENDPOINT (e.g. local RustFS); skipped when unset.
-func s3Blobs(t *testing.T) *artifacts.S3Blobs {
+func s3Blobs(t *testing.T) *s3blobs.Blobs {
 	t.Helper()
 	endpoint := os.Getenv("WORK_TEST_S3_ENDPOINT")
 	if endpoint == "" {
@@ -33,7 +34,7 @@ func s3Blobs(t *testing.T) *artifacts.S3Blobs {
 	if _, err := admin.CreateBucket(context.Background(), &s3.CreateBucketInput{Bucket: aws.String(bucket)}); err != nil {
 		t.Fatal(err)
 	}
-	b, err := artifacts.NewS3(artifacts.S3Options{Bucket: bucket, Endpoint: endpoint, AccessKey: key, SecretKey: secret, PathStyle: true, Prefix: "work/"})
+	b, err := s3blobs.New(s3blobs.Options{Bucket: bucket, Endpoint: endpoint, AccessKey: key, SecretKey: secret, PathStyle: true, Prefix: "work/"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +116,7 @@ func TestS3BlobsEnsureBucketCreatesAMissingBucketOnce(t *testing.T) {
 		t.Skip("WORK_TEST_S3_ENDPOINT not set")
 	}
 	key, secret := os.Getenv("WORK_TEST_S3_ACCESS_KEY"), os.Getenv("WORK_TEST_S3_SECRET_KEY")
-	b, err := artifacts.NewS3(artifacts.S3Options{Bucket: "work-test-" + uuid.NewString()[:8], Endpoint: endpoint, AccessKey: key, SecretKey: secret,
+	b, err := s3blobs.New(s3blobs.Options{Bucket: "work-test-" + uuid.NewString()[:8], Endpoint: endpoint, AccessKey: key, SecretKey: secret,
 		PathStyle: true, Prefix: "work/"})
 	if err != nil {
 		t.Fatal(err)
