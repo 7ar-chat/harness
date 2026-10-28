@@ -3,11 +3,15 @@ package bench_test
 import (
 	"bytes"
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/GhaziBenDahmane/harness/bench"
+	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/llm"
 	"github.com/GhaziBenDahmane/harness/llm/llmtest"
 )
@@ -210,5 +214,31 @@ func TestSuiteStopsOnACancelledContext(t *testing.T) {
 	// Assert
 	if len(got) != 0 {
 		t.Fatalf("a cancelled suite ran %d tasks", len(got))
+	}
+}
+
+func TestAFailedRunReportsWhyItFailed(t *testing.T) {
+	// Arrange: a provider that rejects every call
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error":{"message":"Request is missing x-session"}}`, http.StatusBadRequest)
+	}))
+	defer srv.Close()
+	t.Setenv("LLM_PROVIDER", "openai")
+	t.Setenv("LLM_BASE_URL", srv.URL+"/v1")
+	t.Setenv("LLM_API_KEY", "k")
+	t.Setenv("LLM_MODELS", "m")
+	t.Setenv("LLM_DEFAULT_MODEL", "m")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := mustTask(t, "code-question")
+
+	// Act
+	res := bench.Run(context.Background(), cfg, nil, task, bench.Options{Timeout: 30 * time.Second})
+
+	// Assert
+	if res.Passed || res.Status != "model_error" || !strings.Contains(res.Detail, "missing x-session") {
+		t.Fatalf("status %q detail %q", res.Status, res.Detail)
 	}
 }

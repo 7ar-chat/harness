@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -139,6 +138,7 @@ func Run(ctx context.Context, base *config.Config, models llm.Factory, t Task, o
 	if rctx.Err() != nil && res.Status == "no terminal event" {
 		res.Status = "timeout"
 	}
+	res.Detail = takeDetail(run.ID)
 	res.WallSeconds = time.Since(start).Seconds()
 	res.FinalAnswer = tail(strings.TrimSpace(answer.String()), 600)
 
@@ -224,7 +224,7 @@ func quietLogs() func() {
 	defer logMu.Unlock()
 	if logUsers == 0 {
 		logPrev = slog.Default()
-		slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+		slog.SetDefault(slog.New(&detailHandler{}))
 	}
 	logUsers++
 	return func() {
@@ -234,6 +234,50 @@ func quietLogs() func() {
 			slog.SetDefault(logPrev)
 		}
 	}
+}
+
+// detailHandler drops every log record but remembers the detail of the warnings and errors of each run
+// (the RUN_ERROR event carries only a generic message), so a failed Result can say why.
+type detailHandler struct{}
+
+var (
+	detailMu sync.Mutex
+	details  = map[string]string{}
+)
+
+func (*detailHandler) Enabled(context.Context, slog.Level) bool { return true }
+func (h *detailHandler) WithAttrs([]slog.Attr) slog.Handler     { return h }
+func (h *detailHandler) WithGroup(string) slog.Handler          { return h }
+
+func (*detailHandler) Handle(_ context.Context, r slog.Record) error {
+	if r.Level < slog.LevelWarn {
+		return nil
+	}
+	var runID, detail string
+	r.Attrs(func(a slog.Attr) bool {
+		switch a.Key {
+		case "run_id":
+			runID = a.Value.String()
+		case "detail", "error":
+			detail = a.Value.String()
+		}
+		return true
+	})
+	if runID != "" && detail != "" {
+		detailMu.Lock()
+		details[runID] = r.Message + ": " + detail
+		detailMu.Unlock()
+	}
+	return nil
+}
+
+// takeDetail returns and forgets the last warning detail of a run.
+func takeDetail(runID string) string {
+	detailMu.Lock()
+	defer detailMu.Unlock()
+	d := details[runID]
+	delete(details, runID)
+	return tail(d, 400)
 }
 
 // uncached returns the input tokens not served from the prompt cache, in total and per step.

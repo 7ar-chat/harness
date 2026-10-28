@@ -145,6 +145,7 @@ type runState struct {
 // Run executes the loop. It returns ctx.Err() when cancelled, *Error for run failures.
 func (a *Agent) Run(ctx context.Context, in Input, w eventlog.Writer) (Result, error) {
 	ctx = auth.WithUserinfo(ctx, in.Run.Userinfo)
+	ctx = llm.WithSession(ctx, in.Run.ThreadID) // every model call of the run (steps, compaction, judges)
 	st := &runState{a: a, in: in, w: w, usage: agui.Usage{Model: in.Run.Model}}
 
 	msgs, err := a.Store.ListMessages(ctx, in.Run.ThreadID)

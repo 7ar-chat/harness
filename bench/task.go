@@ -73,7 +73,9 @@ type Result struct {
 	// Passed: the run finished and the task's checks held.
 	Passed bool `json:"passed"`
 	// Status is "finished", or the RUN_ERROR code / failure that ended the run.
-	Status       string `json:"status"`
+	Status string `json:"status"`
+	// Detail is the last warning the harness logged for the run (why a run failed; the event only says "model_error").
+	Detail       string `json:"detail,omitempty"`
 	VerifyOutput string `json:"verifyOutput,omitempty"`
 	FinalAnswer  string `json:"finalAnswer,omitempty"`
 

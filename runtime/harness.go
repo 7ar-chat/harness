@@ -9,6 +9,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/agui"
 	"github.com/GhaziBenDahmane/harness/auth"
 	"github.com/GhaziBenDahmane/harness/eventlog"
+	"github.com/GhaziBenDahmane/harness/llm"
 	"github.com/GhaziBenDahmane/harness/store"
 )
 
@@ -128,10 +129,13 @@ func (r *Runtime) recordInterrupt(ctx context.Context, run *store.Run, status st
 // runHooks runs the hooks' Finishing step and returns their continuations.
 func (r *Runtime) runHooks(ctx context.Context, f *Finish) []func(context.Context) {
 	ctx = auth.WithUserinfo(ctx, f.Run.Userinfo) // model calls go through the gateway as the user
+	ctx = llm.WithSession(ctx, f.Run.ThreadID)   // and carry the session header of providers that route by it
 	var after []func(context.Context)
 	for _, h := range r.opts.Hooks {
 		if next := safeHook(f.Run.ID, func() func(context.Context) { return h.Finishing(ctx, f) }); next != nil {
-			after = append(after, func(ctx context.Context) { next(auth.WithUserinfo(ctx, f.Run.Userinfo)) })
+			after = append(after, func(ctx context.Context) {
+				next(llm.WithSession(auth.WithUserinfo(ctx, f.Run.Userinfo), f.Run.ThreadID))
+			})
 		}
 	}
 	return after

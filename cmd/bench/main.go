@@ -87,6 +87,9 @@ func main() {
 		Skip:     func(t bench.Task, m []string) { fmt.Fprintf(os.Stderr, "skip %s: needs %v on PATH\n", t.Name, m) },
 		Progress: func(t bench.Task, run, n int, r bench.Result) {
 			fmt.Fprintf(os.Stderr, "done %s (%d/%d) passed=%v status=%s steps=%d %.0fs\n", t.Name, run, n, r.Passed, r.Status, r.Steps, r.WallSeconds)
+			if r.Detail != "" {
+				fmt.Fprintf(os.Stderr, "     detail: %s\n", r.Detail)
+			}
 		},
 	}
 	results := suite.Run(ctx, selected, *n)
