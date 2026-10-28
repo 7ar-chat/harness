@@ -21,6 +21,10 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	if os.Getenv("HARNESS_FAKE_MCP") == "1" {
+		runFakeStdio()
+		return
+	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	os.Exit(m.Run())
 }

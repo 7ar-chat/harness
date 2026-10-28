@@ -36,6 +36,9 @@ func (h *Hook) NeedsApproval(ctx context.Context, run *store.Run, toolName, argu
 	if ToolClass(toolName) == classEdit && slices.Contains(run.ApprovedTools, approvals.Kind(toolName)) {
 		return false
 	}
+	if d.Once && slices.Contains(run.ApprovedTools, approvals.Kind(toolName)) {
+		return false
+	}
 	slog.Info("permissions: asking", "tool", toolName, "reason", d.Reason, "run_id", run.ID)
 	return true
 }

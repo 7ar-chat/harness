@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/engine/approvals"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
@@ -135,6 +136,17 @@ func MCP() Feature {
 	}}
 }
 
+// stdioToolGlobs are the tool name globs of the MCP servers that run a local program.
+func stdioToolGlobs(cfg *config.Config) []string {
+	var out []string
+	for _, s := range cfg.MCPServers {
+		if s.IsStdio() {
+			out = append(out, strings.TrimSuffix(mcptools.ToolName(s.Name, "x"), "x")+"*")
+		}
+	}
+	return out
+}
+
 // Plan offers update_plan and ask_user.
 func Plan() Feature {
 	return builtin{FeaturePlan, func(b *Builder) error {
@@ -193,7 +205,8 @@ func Permissions(coding bool) Feature {
 		}
 		policy, err := permissions.Load(permissions.Options{
 			Workspace: ws, Mode: mode,
-			Allow: os.Getenv("AGENT_PERMISSIONS_ALLOW"), Ask: os.Getenv("AGENT_PERMISSIONS_ASK"), Deny: os.Getenv("AGENT_PERMISSIONS_DENY"),
+			Allow: cfg.AgentPermissionsAllow, Ask: cfg.AgentPermissionsAsk, Deny: cfg.AgentPermissionsDeny,
+			AskTools: stdioToolGlobs(cfg),
 		})
 		if err != nil {
 			return fmt.Errorf("%w", err)

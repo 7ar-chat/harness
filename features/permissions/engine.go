@@ -114,6 +114,11 @@ func (p *Policy) decideOther(tool, arguments string) (Decision, bool) {
 		}
 	}
 	if matched == nil {
+		for _, g := range p.AskTools {
+			if globCommand(strings.ToLower(g), strings.ToLower(tool)) {
+				return Decision{Action: Ask, Once: true, Reason: "first use of " + tool + ", a tool of an MCP server that runs a local program (add an allow rule to stop asking)"}, true
+			}
+		}
 		return Decision{}, false
 	}
 	return Decision{Action: matched.Action, Reason: "rule " + matched.String(), Rule: matched.String()}, true

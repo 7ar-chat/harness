@@ -8,6 +8,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"os"
+	"os/exec"
 	"regexp"
 	"time"
 
@@ -112,8 +114,30 @@ func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]tool.BaseT
 
 func (p *Provider) connect(ctx context.Context, s config.MCPServer, rc tools.RunContext, taken map[string]bool) ([]tool.BaseTool, *mcp.ClientSession, error) {
 	tr := &headerTransport{base: http.DefaultTransport, headers: s.Headers}
-	return Connect(ctx, Server{Name: s.Name, URL: s.URL, Tools: s.Tools, Transport: tr, CallTimeout: p.CallTimeout, taken: taken},
+	srv := Server{Name: s.Name, URL: s.URL, Tools: s.Tools, Transport: tr, CallTimeout: p.CallTimeout, SSE: s.Type == "sse", taken: taken}
+	if s.IsStdio() {
+		srv.ClientTransport = &mcp.CommandTransport{Command: StdioCommand(s)}
+	}
+	return Connect(ctx, srv,
 		p.version, p.ConnectTimeout, p.MaxResultChars)
+}
+
+// stdioEnvPassthrough are the variables a stdio server inherits; the others
+// (API keys, database passwords) stay with the harness unless the server's env lists them.
+var stdioEnvPassthrough = []string{"PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "TERM", "TMPDIR", "SHELL"}
+
+// StdioCommand prepares the child process of a stdio server with a reduced environment.
+func StdioCommand(s config.MCPServer) *exec.Cmd {
+	cmd := exec.Command(s.Command, s.Args...)
+	for _, k := range stdioEnvPassthrough {
+		if v, ok := os.LookupEnv(k); ok {
+			cmd.Env = append(cmd.Env, k+"="+v)
+		}
+	}
+	for k, v := range s.Env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
+	return cmd
 }
 
 // Server is an MCP server connected for one run.
@@ -126,6 +150,10 @@ type Server struct {
 	Transport http.RoundTripper
 	// CallTimeout bounds one tool call (0: DefaultCallTimeout).
 	CallTimeout time.Duration
+	// SSE connects with the legacy HTTP+SSE transport instead of streamable HTTP.
+	SSE bool
+	// ClientTransport, when set, replaces the HTTP transports (a child process, an in-memory pipe in tests).
+	ClientTransport mcp.Transport
 	// taken are the exposed names already used by the run (nil: this server's only).
 	taken map[string]bool
 }
@@ -142,11 +170,25 @@ func Connect(ctx context.Context, s Server, version string, connectTimeout time.
 	cctx, cancel := context.WithTimeout(ctx, connectTimeout)
 	defer cancel()
 	// The session outlives the connect timeout: it is bound to the transport, not cctx.
-	sess, err := client.Connect(cctx, &mcp.StreamableClientTransport{
-		Endpoint:             s.URL,
-		HTTPClient:           &http.Client{Transport: tr},
-		DisableStandaloneSSE: true,
-	}, nil)
+	var transport mcp.Transport
+	switch {
+	case s.ClientTransport != nil:
+		transport = s.ClientTransport
+	case s.SSE:
+		transport = &mcp.SSEClientTransport{Endpoint: s.URL, HTTPClient: &http.Client{Transport: tr}}
+	default:
+		transport = &mcp.StreamableClientTransport{Endpoint: s.URL, HTTPClient: &http.Client{Transport: tr}, DisableStandaloneSSE: true}
+	}
+	connectCtx := cctx
+	if s.SSE || s.ClientTransport != nil {
+		// The SSE stream and a child process live as long as the context given to Connect:
+		// it must outlive the connect timeout, which only bounds the handshake.
+		var stop context.CancelFunc
+		connectCtx, stop = context.WithCancel(context.WithoutCancel(ctx))
+		timer := time.AfterFunc(connectTimeout, stop)
+		defer timer.Stop()
+	}
+	sess, err := client.Connect(connectCtx, transport, nil)
 	if err != nil {
 		return nil, nil, err
 	}

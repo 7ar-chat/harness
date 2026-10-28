@@ -173,6 +173,9 @@ type Options struct {
 	// Allow, Ask and Deny are extra rules from the environment
 	// (AGENT_PERMISSIONS_ALLOW|ASK|DENY: entries separated by newlines or ";;").
 	Allow, Ask, Deny string
+	// AskTools are globs on tool names that are asked about, once per run, unless a rule says otherwise
+	// (the tools of MCP servers that start local programs: "name__*").
+	AskTools []string
 	// Files are read in order when they exist; earlier files have priority for
 	// the mode. Default: <workspace>/.har/permissions.yml, then
 	// ~/.har/permissions.yml.
@@ -199,7 +202,7 @@ func Load(o Options) (*Policy, error) {
 			files = append(files, filepath.Join(home, config.DirName, config.PermissionsFile))
 		}
 	}
-	p := &Policy{Workspace: o.Workspace, Home: home}
+	p := &Policy{Workspace: o.Workspace, Home: home, AskTools: o.AskTools}
 	modeName := o.Mode
 	for _, g := range []struct {
 		a   Action
@@ -255,6 +258,8 @@ type Policy struct {
 	Workspace string // host directory of /workspace ("" if unknown)
 	Home      string
 	Files     []string // permission files that were read
+	// AskTools: tools (name globs) that ask, once per run, when no rule matches them.
+	AskTools []string
 }
 
 // Decision is the outcome for a tool call.
@@ -266,6 +271,8 @@ type Decision struct {
 	Rule string
 	// Hard decisions (built-in catastrophic denials) cannot be allowed by a rule.
 	Hard bool
+	// Once: approving the call approves the tool for the rest of the run.
+	Once bool
 	// ReadOnly: the call was judged read-only (what readonly mode allows).
 	ReadOnly bool
 }
