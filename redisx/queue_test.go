@@ -1,4 +1,4 @@
-package queue_test
+package redisx_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/GhaziBenDahmane/harness/engine/queue"
+	"github.com/GhaziBenDahmane/harness/redisx"
 )
 
 func TestReadRecreatesALostGroupAtTheStreamEnd(t *testing.T) {
@@ -17,7 +18,7 @@ func TestReadRecreatesALostGroupAtTheStreamEnd(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
-	q := queue.New(rdb)
+	q := redisx.NewQueue(rdb)
 	ctx := context.Background()
 	_ = q.EnsureGroup(ctx)
 	for _, id := range []string{"a", "b", "c"} {

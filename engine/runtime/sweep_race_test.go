@@ -9,6 +9,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/engine/eventlog"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/store"
 )
 
@@ -38,7 +39,7 @@ func TestSweepRetriesWhenAliveRuntimeWritesConcurrently(t *testing.T) {
 	live := r.log.Writer(run.ID, 0)
 	_, _ = live.Append(ctx, agui.RunStartedEvent(run.ThreadID, run.ID))
 	r.st.SetHeartbeat(run.ID, time.Now().Add(-2*time.Minute))
-	rt := runtime.New(r.opts, r.st, &racingLog{Log: r.log, live: live}, r.q, r.q, r.agent, r.rdb)
+	rt := runtime.New(r.opts, r.st, &racingLog{Log: r.log, live: live}, r.q, r.q, r.agent, redisx.NewCoordinator(r.rdb))
 
 	// Act
 	rt.Sweep(ctx)
@@ -69,7 +70,7 @@ func TestRunThatLostOwnershipStillExpiresItsStream(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("runtime did not stop")
 	}
-	if ttl := r.mr.TTL(eventlog.Key(run.ID)); ttl <= 0 {
+	if ttl := r.mr.TTL(redisx.EventKey(run.ID)); ttl <= 0 {
 		t.Fatalf("stream ttl %v", ttl)
 	}
 	if got := r.reload(run); got.Status != store.StatusInterrupted {

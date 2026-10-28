@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 
 	"github.com/GhaziBenDahmane/harness/engine/syncx"
 	"github.com/GhaziBenDahmane/harness/sandbox"
@@ -25,22 +24,37 @@ const Root = "/skills"
 // writeConcurrency bounds the parallel file uploads of one installation.
 const writeConcurrency = 8
 
-// Bounds of the per-(sandbox, skill) Redis install lock.
+// Bounds of the per-(sandbox, skill) install lock.
 const (
 	lockTTL  = 3 * time.Minute
 	lockWait = 3 * time.Minute
 	lockPoll = 50 * time.Millisecond
 )
 
+// InstallState is the state installers of several runtimes share: which
+// revision of a skill each sandbox holds, and short locks serializing the
+// installation of one skill in one sandbox. redisx.SkillInstalls implements it
+// on Redis; nil means a single process (nothing shared).
+type InstallState interface {
+	// Revision returns the recorded revision of the skill in the sandbox ("" when none).
+	Revision(ctx context.Context, sandboxID, skill string) (string, error)
+	// Record stores skill -> revision for the sandbox, kept for ttl.
+	Record(ctx context.Context, sandboxID string, revisions map[string]string, ttl time.Duration) error
+	// TryLock takes key for ttl unless held (false: held by another).
+	TryLock(ctx context.Context, key, token string, ttl time.Duration) (bool, error)
+	// Unlock releases key while it still holds token.
+	Unlock(ctx context.Context, key, token string) error
+}
+
 // Installer copies skills into sandboxes, once per (sandbox, skill revision).
-// An installation counts once recorded in Redis (shared by every runtime) and
+// An installation counts once recorded in the InstallState (shared by every runtime) and
 // its marker file /skills/<name>/.installed-<revision> (written last) is in
 // the sandbox; each runtime then remembers it. Installations of one skill in
-// one sandbox are serialized across runtimes (a Redis lock). Which skills a
+// one sandbox are serialized across runtimes (an InstallState lock). Which skills a
 // run needs is decided lazily (lazy.go); loading a skill never starts a sandbox.
 type Installer struct {
 	Registry *Registry
-	Redis    redis.UniversalClient
+	Shared   InstallState
 	// Messages reads the thread's history: the skills loaded or used in its
 	// earlier runs are installed again (nil: this run's only).
 	Messages History
@@ -64,8 +78,6 @@ type installItem struct {
 	pkg   *Package
 }
 
-func installedKey(sandboxID string) string { return "work:skills:installed:" + sandboxID }
-
 func lockKey(sandboxID, name string) string { return "work:skills:lock:" + sandboxID + ":" + name }
 
 var hexRevision = regexp.MustCompile(`^[0-9a-f]{1,128}$`)
@@ -79,17 +91,17 @@ func marker(dir, rev string) string {
 }
 
 // installed reports a verified installation: known to this runtime, or
-// recorded in Redis with its marker present in the sandbox (one Stat, then
+// recorded in the InstallState with its marker present in the sandbox (one Stat, then
 // remembered).
 func (i *Installer) installed(ctx context.Context, sb sandbox.Sandbox, s Skill, rev string) bool {
 	key := sb.ID() + "|" + s.Name + "|" + rev
 	if _, ok := i.done.Get(key); ok {
 		return true
 	}
-	if i.Redis == nil {
+	if i.Shared == nil {
 		return false
 	}
-	got, err := i.Redis.HGet(ctx, installedKey(sb.ID()), s.Name).Result()
+	got, err := i.Shared.Revision(ctx, sb.ID(), s.Name)
 	if err != nil || got != rev {
 		return false
 	}
@@ -101,32 +113,19 @@ func (i *Installer) installed(ctx context.Context, sb sandbox.Sandbox, s Skill, 
 }
 
 func (i *Installer) record(ctx context.Context, sandboxID string, fields map[string]string) {
-	if i.Redis == nil || len(fields) == 0 {
+	if i.Shared == nil || len(fields) == 0 {
 		return
 	}
-	key := installedKey(sandboxID)
-	pipe := i.Redis.TxPipeline()
-	for k, v := range fields {
-		pipe.HSet(ctx, key, k, v)
-	}
-	pipe.Expire(ctx, key, 7*24*time.Hour)
-	if _, err := pipe.Exec(ctx); err != nil {
+	if err := i.Shared.Record(ctx, sandboxID, fields, 7*24*time.Hour); err != nil {
 		slog.Warn("skills: recording installation failed", "sandbox_id", sandboxID, "error", err)
 	}
 }
 
-var unlockScript = redis.NewScript(`
-if redis.call('GET', KEYS[1]) == ARGV[1] then
-  return redis.call('DEL', KEYS[1])
-end
-return 0
-`)
-
-// lockSkills takes the Redis install locks of the skills in one sandbox (in
+// lockSkills takes the install locks of the skills in one sandbox (in
 // name order), waiting up to lockWait for another runtime's installation. A
-// Redis error leaves the installation unlocked (this runtime's lock remains).
+// lock error leaves the installation unlocked (this runtime's lock remains).
 func (i *Installer) lockSkills(ctx context.Context, sandboxID string, names []string) (func(), error) {
-	if i.Redis == nil {
+	if i.Shared == nil {
 		return func() {}, nil
 	}
 	sorted := append([]string(nil), names...)
@@ -137,14 +136,14 @@ func (i *Installer) lockSkills(ctx context.Context, sandboxID string, names []st
 		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		for _, k := range held {
-			_ = unlockScript.Run(rctx, i.Redis, []string{k}, token).Err()
+			_ = i.Shared.Unlock(rctx, k, token)
 		}
 	}
 	deadline := time.Now().Add(lockWait)
 	for _, n := range sorted {
 		k := lockKey(sandboxID, n)
 		for {
-			ok, err := i.Redis.SetNX(ctx, k, token, lockTTL).Result()
+			ok, err := i.Shared.TryLock(ctx, k, token, lockTTL)
 			if err != nil {
 				slog.Warn("skills: install lock unavailable, installing without it", "sandbox_id", sandboxID, "skill", n, "error", err)
 				break

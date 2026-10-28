@@ -14,6 +14,7 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/engine/tools/sandboxtools"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
@@ -39,7 +40,7 @@ func newFixture(t *testing.T, setup func(*sandboxtest.Sandbox)) *fixture {
 			setup(sb)
 		}
 	}
-	mgr := sandbox.NewManager(f.backend, st, rdb, sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour})
+	mgr := sandbox.NewManager(f.backend, st, redisx.NewCoordinator(rdb), sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour})
 	p := sandboxtools.New(mgr, sandboxtools.Options{CommandTimeout: time.Second, MaxSandboxesPerUser: 5})
 	ts, _, err := p.Tools(context.Background(), tools.RunContext{ThreadID: th.ID, RunID: "r", Login: "alice"})
 	if err != nil {
@@ -86,7 +87,7 @@ func newHostFixtureAt(t *testing.T, base string, env map[string]string) (*fixtur
 	th, _ := st.CreateThread(context.Background(), "alice", "t")
 	hb := sandboxtest.NewHostBackend(base)
 	hb.Env = env
-	mgr := sandbox.NewManager(hb, st, rdb, sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour})
+	mgr := sandbox.NewManager(hb, st, redisx.NewCoordinator(rdb), sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour})
 	p := sandboxtools.New(mgr, sandboxtools.Options{CommandTimeout: 5 * time.Second})
 	ts, _, err := p.Tools(context.Background(), tools.RunContext{ThreadID: th.ID, RunID: "r", Login: "alice"})
 	if err != nil {

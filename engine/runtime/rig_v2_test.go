@@ -19,6 +19,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/features/plan"
 	"github.com/GhaziBenDahmane/harness/features/skills"
 	"github.com/GhaziBenDahmane/harness/features/skills/skilltools"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 )
@@ -44,7 +45,7 @@ func newV2RigWith(t *testing.T, builtin fs.FS, vision bool, turns ...llmtest.Tur
 	r.backend.OnCreate = func(sb *sandboxtest.Sandbox) { sb.SetExec(sandboxtest.FindExec(sb, nil)) }
 	v.arts = artifacts.New(r.st, artifacts.PGBlobs{S: r.st}, nil, artifacts.Options{})
 	v.reg = skills.NewRegistry(builtin, r.st)
-	v.inst = &skills.Installer{Registry: v.reg, Redis: r.rdb}
+	v.inst = &skills.Installer{Registry: v.reg, Shared: redisx.NewSkillInstalls(r.rdb)}
 	h := &r.agent.Harness
 	h.Sections = append([]agent.PromptSection{v.reg.PromptSection, artifacts.PromptSection}, h.Sections...)
 	h.ToolHooks = []agent.ToolHook{v.arts}
@@ -63,12 +64,12 @@ func newV2RigWith(t *testing.T, builtin fs.FS, vision bool, turns ...llmtest.Tur
 
 // wire (re)creates the sandbox manager and the tools, like a runtime process start.
 func (v *v2rig) wire() {
-	v.mgr = sandbox.NewManager(v.backend, v.st, v.rdb, sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour,
+	v.mgr = sandbox.NewManager(v.backend, v.st, redisx.NewCoordinator(v.rdb), sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour,
 		OnCreate: func(ctx context.Context, threadID string, sb sandbox.Sandbox, recreated bool) string {
 			return v.arts.RestoreWorkspace(ctx, threadID, sb, recreated)
 		}})
 	v.arts.Sandbox = v.mgr
-	v.inst = &skills.Installer{Registry: v.reg, Redis: v.rdb, Messages: v.st}
+	v.inst = &skills.Installer{Registry: v.reg, Shared: redisx.NewSkillInstalls(v.rdb), Messages: v.st}
 	v.agent.Tools = tools.NewRegistry(
 		sandboxtools.New(v.mgr, sandboxtools.Options{CommandTimeout: 5 * time.Second, MaxSandboxesPerUser: 5, OnAcquire: v.inst.EnsureRunSkills,
 			BeforeCommand: v.inst.EnsureCommandSkills, OnWrite: v.inst.NoteContent, AfterFailedCommand: v.inst.AfterFailedCommand}),

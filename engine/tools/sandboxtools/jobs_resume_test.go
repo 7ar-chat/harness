@@ -12,6 +12,7 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/engine/tools/sandboxtools"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
@@ -29,9 +30,9 @@ func TestARestartedRuntimeResumesTheKeepAliveOfRunningJobs(t *testing.T) {
 	var sb *sandboxtest.Sandbox
 	backend.OnCreate = func(s *sandboxtest.Sandbox) { sb = s; s.SetJobs(blockingJob(make(chan struct{}))) }
 	process := func(rdb *redis.Client) (map[string]tool.InvokableTool, *sandboxtools.Provider, *atomic.Int32) {
-		mgr := sandbox.NewManager(backend, st, rdb, sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour, RenewEvery: 5 * time.Millisecond})
+		mgr := sandbox.NewManager(backend, st, redisx.NewCoordinator(rdb), sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour, RenewEvery: 5 * time.Millisecond})
 		var live atomic.Int32
-		p := sandboxtools.New(mgr, sandboxtools.Options{CommandTimeout: time.Second, JobPollEvery: 10 * time.Millisecond, Jobs: sandboxtools.RedisJobs{RDB: rdb},
+		p := sandboxtools.New(mgr, sandboxtools.Options{CommandTimeout: time.Second, JobPollEvery: 10 * time.Millisecond, Jobs: redisx.NewJobs(rdb),
 			KeepAlive: func(ctx context.Context, sb sandbox.Sandbox) func() {
 				live.Add(1)
 				stop := sandbox.KeepAlive(ctx, sb)
@@ -87,10 +88,10 @@ type jobRuntime struct {
 
 func newJobRuntime(t *testing.T, backend *sandboxtest.Backend, st *memstore.Store, rdb *redis.Client, threadID string, keepMax time.Duration) jobRuntime {
 	t.Helper()
-	mgr := sandbox.NewManager(backend, st, rdb, sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour, RenewEvery: 5 * time.Millisecond})
+	mgr := sandbox.NewManager(backend, st, redisx.NewCoordinator(rdb), sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour, RenewEvery: 5 * time.Millisecond})
 	live := &atomic.Int32{}
 	p := sandboxtools.New(mgr, sandboxtools.Options{CommandTimeout: time.Second, JobPollEvery: 10 * time.Millisecond, JobKeepAliveMax: keepMax,
-		Jobs: sandboxtools.RedisJobs{RDB: rdb},
+		Jobs: redisx.NewJobs(rdb),
 		KeepAlive: func(ctx context.Context, sb sandbox.Sandbox) func() {
 			live.Add(1)
 			stop := sandbox.KeepAlive(ctx, sb)

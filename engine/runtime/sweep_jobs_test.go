@@ -8,6 +8,7 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 	"github.com/GhaziBenDahmane/harness/features/memory"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/store"
 )
 
@@ -19,7 +20,7 @@ func TestSweepRunsPeriodicJobsAtMostOncePerPeriodAcrossRuntimes(t *testing.T) {
 	r.opts.Jobs = []runtime.Job{{Name: "count", Every: time.Hour, Run: func(context.Context) error { runs.Add(1); return nil }}}
 	ctx := context.Background()
 	newRuntime := func(id string) *runtime.Runtime {
-		return runtime.New(runtime.Options{ID: id, Jobs: r.opts.Jobs}, r.st, r.log, r.q, r.q, r.agent, r.rdb)
+		return runtime.New(runtime.Options{ID: id, Jobs: r.opts.Jobs}, r.st, r.log, r.q, r.q, r.agent, redisx.NewCoordinator(r.rdb))
 	}
 
 	// Act

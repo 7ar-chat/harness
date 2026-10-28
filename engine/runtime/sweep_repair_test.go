@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/engine/eventlog"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/store"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
 )
@@ -32,11 +32,11 @@ func TestSweepBackfillsEventsLostToAnOutageAtRunEnd(t *testing.T) {
 	// Arrange
 	r := newRig(t)
 	flaky := &outageStore{Store: r.st}
-	r.log = eventlog.New(r.rdb, flaky)
+	r.log = redisx.NewEventLog(r.rdb, flaky)
 	r.log.CloseRetry = 50 * time.Millisecond
 	r.model = llmtest.New(llmtest.Turn{Chunks: llmtest.Text("answer"), OnCall: func() { flaky.down.Store(true) }})
 	r.agent.Models = llmtest.Factory{M: r.model}
-	rt := runtime.New(r.opts, r.st, r.log, r.q, r.q, r.agent, r.rdb)
+	rt := runtime.New(r.opts, r.st, r.log, r.q, r.q, r.agent, redisx.NewCoordinator(r.rdb))
 	_, run := r.queued("q")
 	_ = rt.Process(context.Background(), run.ID)
 	lost := len(r.events(run.ID))

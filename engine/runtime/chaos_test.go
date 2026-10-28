@@ -9,10 +9,9 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/GhaziBenDahmane/harness/engine/eventlog"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/engine/queue"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/store"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
 )
@@ -25,9 +24,9 @@ func (r *rig) viaSlowRedis(delay, readTimeout time.Duration) *slowProxy {
 	rdb := redis.NewClient(&redis.Options{Addr: p.Addr(), ReadTimeout: readTimeout})
 	r.t.Cleanup(func() { _ = rdb.Close() })
 	r.rdb = rdb
-	r.log = eventlog.New(rdb, r.st)
+	r.log = redisx.NewEventLog(rdb, r.st)
 	r.log.TailBlock, r.log.Poll = 100*time.Millisecond, 10*time.Millisecond
-	r.q = queue.New(rdb)
+	r.q = redisx.NewQueue(rdb)
 	r.agent.Steers = r.q
 	r.rt = nil
 	return p
@@ -77,12 +76,12 @@ func TestChaosPostgresOutageDoesNotGetLiveRunsInterrupted(t *testing.T) {
 		st.down.Store(true)
 		time.Sleep(60 * time.Millisecond)                         // heartbeats fail meanwhile
 		r.st.SetHeartbeat(runID, time.Now().Add(-90*time.Second)) // the last one Postgres saw
-		other := runtime.New(runtime.Options{ID: "other"}, r.st, r.log, r.q, r.q, r.agent, r.rdb)
+		other := runtime.New(runtime.Options{ID: "other"}, r.st, r.log, r.q, r.q, r.agent, redisx.NewCoordinator(r.rdb))
 		other.Sweep(context.Background()) // first sweep after Postgres is back
 		st.down.Store(false)
 	}})
 	r.agent.Models = llmtest.Factory{M: r.model}
-	rt := runtime.New(r.opts, st, r.log, r.q, r.q, r.agent, r.rdb)
+	rt := runtime.New(r.opts, st, r.log, r.q, r.q, r.agent, redisx.NewCoordinator(r.rdb))
 	_, run := r.queued("q")
 	runID = run.ID
 
@@ -136,7 +135,7 @@ func TestChaosRuntimeKilledMidRunIsRecoveredByTheSweeper(t *testing.T) {
 	stale := 300 * time.Millisecond
 	dead := &killSwitch{Store: r.st}
 	deadRdb := redis.NewClient(&redis.Options{Addr: r.mr.Addr()})
-	deadLog := eventlog.New(deadRdb, dead)
+	deadLog := redisx.NewEventLog(deadRdb, dead)
 	deadLog.CloseRetry = 50 * time.Millisecond
 	streaming := make(chan struct{})
 	r.model = llmtest.New(
@@ -144,7 +143,7 @@ func TestChaosRuntimeKilledMidRunIsRecoveredByTheSweeper(t *testing.T) {
 		llmtest.Turn{Chunks: llmtest.Text("Back to work.")},
 	)
 	r.agent.Models = llmtest.Factory{M: r.model}
-	deadRT := runtime.New(runtime.Options{ID: "dead-rt", Heartbeat: 20 * time.Millisecond, StaleAge: stale}, dead, deadLog, r.q, r.q, r.agent, deadRdb)
+	deadRT := runtime.New(runtime.Options{ID: "dead-rt", Heartbeat: 20 * time.Millisecond, StaleAge: stale}, dead, deadLog, r.q, r.q, r.agent, redisx.NewCoordinator(deadRdb))
 	th, run := r.queued("long job")
 	deadDone := make(chan struct{})
 	go func() { defer close(deadDone); _ = deadRT.Process(context.Background(), run.ID) }()
@@ -153,7 +152,7 @@ func TestChaosRuntimeKilledMidRunIsRecoveredByTheSweeper(t *testing.T) {
 	_ = deadRdb.Close() // its Redis heartbeat stops and expires after StaleAge
 	r.mr.FastForward(stale + 100*time.Millisecond)
 	r.st.SetHeartbeat(run.ID, time.Now().Add(-time.Minute))
-	survivor := runtime.New(runtime.Options{ID: "survivor", StaleAge: stale}, r.st, r.log, r.q, r.q, r.agent, r.rdb)
+	survivor := runtime.New(runtime.Options{ID: "survivor", StaleAge: stale}, r.st, r.log, r.q, r.q, r.agent, redisx.NewCoordinator(r.rdb))
 
 	// Act
 	survivor.Sweep(context.Background())

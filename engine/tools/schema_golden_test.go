@@ -20,6 +20,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/features/plan"
 	"github.com/GhaziBenDahmane/harness/features/skills"
 	"github.com/GhaziBenDahmane/harness/features/skills/skilltools"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
@@ -43,11 +44,11 @@ func allTools(t *testing.T) []renderedTool {
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 	st := memstore.New()
-	mgr := sandbox.NewManager(sandboxtest.NewBackend(), st, rdb, sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour})
+	mgr := sandbox.NewManager(sandboxtest.NewBackend(), st, redisx.NewCoordinator(rdb), sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour})
 	reg := skills.NewRegistry(os.DirFS(filepath.Join("..", "..", "features", "skills", "testdata", "builtin")), st)
 	registry := tools.NewRegistry(
 		sandboxtools.New(mgr, sandboxtools.Options{CommandTimeout: time.Minute}),
-		&skilltools.Provider{Registry: reg, Installer: &skills.Installer{Registry: reg, Redis: rdb}, Sandbox: mgr},
+		&skilltools.Provider{Registry: reg, Installer: &skills.Installer{Registry: reg, Shared: redisx.NewSkillInstalls(rdb)}, Sandbox: mgr},
 		harnesstools.New(st),
 		memorytools.New(memory.New(st, memory.Options{})),
 	)

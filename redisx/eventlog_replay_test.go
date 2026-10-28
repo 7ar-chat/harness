@@ -1,4 +1,4 @@
-package eventlog_test
+package redisx_test
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/GhaziBenDahmane/harness/engine/agui"
-	"github.com/GhaziBenDahmane/harness/engine/eventlog"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/store"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
 )
@@ -19,7 +19,7 @@ import (
 type fixture struct {
 	mr  *miniredis.Miniredis
 	st  *memstore.Store
-	log *eventlog.RedisLog
+	log *redisx.EventLog
 	run *store.Run
 }
 
@@ -32,7 +32,7 @@ func newFixture(t *testing.T) *fixture {
 	th, _ := st.CreateThread(context.Background(), "alice", "t")
 	run, _, _ := st.CreateRun(context.Background(), store.NewRun{RunID: "11111111-1111-1111-1111-111111111111", ThreadID: th.ID, UserLogin: "alice", Model: "m", Message: store.Message{Role: "user", Content: "q"}})
 	_, _ = st.ClaimRun(context.Background(), run.ID, "rt")
-	l := eventlog.New(rdb, st)
+	l := redisx.NewEventLog(rdb, st)
 	l.TailBlock, l.Poll, l.TerminalWait = 50*time.Millisecond, 10*time.Millisecond, 100*time.Millisecond
 	return &fixture{mr: mr, st: st, log: l, run: run}
 }
@@ -78,7 +78,7 @@ func TestReplayStitchesPostgresAndRecreatedStream(t *testing.T) {
 		_, _ = w.Append(ctx, step(i))
 	}
 	_ = w.Flush(ctx)
-	f.mr.Del(eventlog.Key(f.run.ID))
+	f.mr.Del(redisx.EventKey(f.run.ID))
 	_, _ = w.Append(ctx, step(4))
 	_, _ = w.Append(ctx, agui.RunFinishedEvent("t", f.run.ID, "success", nil))
 
@@ -99,7 +99,7 @@ func TestReplayWaitsForMissingEventsInsteadOfSkipping(t *testing.T) {
 	w := f.log.Writer(f.run.ID, 0)
 	_, _ = w.Append(ctx, step(1))
 	_, _ = w.Append(ctx, step(2))
-	f.mr.Del(eventlog.Key(f.run.ID))
+	f.mr.Del(redisx.EventKey(f.run.ID))
 	_, _ = w.Append(ctx, step(3))
 	go func() {
 		time.Sleep(150 * time.Millisecond)

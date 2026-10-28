@@ -10,6 +10,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/engine/agui"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/store"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
 )
@@ -36,7 +37,7 @@ func TestFinishRunSurvivesAShortPostgresOutage(t *testing.T) {
 		st.until.Store(time.Now().Add(1600 * time.Millisecond).UnixNano())
 	}})
 	r.agent.Models = llmtest.Factory{M: r.model}
-	rt := runtime.New(r.opts, st, r.log, r.q, r.q, r.agent, r.rdb)
+	rt := runtime.New(r.opts, st, r.log, r.q, r.q, r.agent, redisx.NewCoordinator(r.rdb))
 	_, run := r.queued("q")
 
 	// Act

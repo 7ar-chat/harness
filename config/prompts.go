@@ -17,7 +17,7 @@ type PromptAndEfforts struct {
 	// variants of internal/agent/prompts (default, gpt-5.6, deepseek, coding).
 	// Models not listed use deepseek when their name contains "deepseek",
 	// else default.
-	// AgentProfile is AGENT_PROFILE: "work" (default, documents and data) or "coding": models not
+	// AgentProfile is AGENT_PROFILE: "work" (default, documents and data), "minimal" (sandbox and plan tools only) or "coding": models not
 	// listed in an explicit LLM_PROMPT_VARIANTS then use the coding prompt, which also loads AGENTS.md.
 	AgentProfile         string `env:"AGENT_PROFILE"`
 	LLMPromptVariantsRaw string `env:"LLM_PROMPT_VARIANTS" envDefault:"gpt-5.6-sol=gpt-5.6,gpt-5.6-terra=gpt-5.6"`
@@ -38,9 +38,9 @@ var effortScale = []string{"none", "minimal", "low", "medium", "high", "xhigh"}
 
 func (c *Config) normalizePromptAndEfforts() error {
 	switch strings.ToLower(strings.TrimSpace(c.AgentProfile)) {
-	case "", "work", "coding":
+	case "", "work", "coding", "minimal":
 	default:
-		return fmt.Errorf("AGENT_PROFILE must be work or coding, got %q", c.AgentProfile)
+		return fmt.Errorf("AGENT_PROFILE must be work, coding or minimal, got %q", c.AgentProfile)
 	}
 	c.LLMPromptVariants = map[string]string{}
 	for _, entry := range trimAll(strings.Split(c.LLMPromptVariantsRaw, ",")) {

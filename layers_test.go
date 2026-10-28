@@ -134,6 +134,23 @@ func sameFeature(a, b string) bool {
 	return root(a) == root(b)
 }
 
+// TestTheCoreDoesNotDependOnRedis: engine, sandbox, features, store and config define the interfaces the
+// infrastructure must satisfy; only the adapter package redisx (and the facade, as a convenience) import go-redis.
+func TestTheCoreDoesNotDependOnRedis(t *testing.T) {
+	// Arrange / Act
+	out, err := exec.Command("go", "list", "-deps", "./engine/...", "./sandbox/...", "./features/...", "./store/...", "./config/...").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	for _, dep := range strings.Fields(string(out)) {
+		if strings.Contains(dep, "redis/go-redis") {
+			t.Errorf("the core depends on %s (use redisx)", dep)
+		}
+	}
+}
+
 func allowed(from, to string) bool {
 	for _, t := range featureEdges[from] {
 		if t == to {

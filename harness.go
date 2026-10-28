@@ -19,13 +19,11 @@
 package harness
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -33,7 +31,6 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
 	"github.com/GhaziBenDahmane/harness/engine/agui"
 	"github.com/GhaziBenDahmane/harness/engine/approvals"
 	"github.com/GhaziBenDahmane/harness/engine/eventlog"
@@ -41,21 +38,8 @@ import (
 	"github.com/GhaziBenDahmane/harness/engine/queue"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/engine/tools/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/features/artifacts"
-	"github.com/GhaziBenDahmane/harness/features/codecheck"
-	"github.com/GhaziBenDahmane/harness/features/explore"
-	"github.com/GhaziBenDahmane/harness/features/goals"
-	"github.com/GhaziBenDahmane/harness/features/mcp"
-	"github.com/GhaziBenDahmane/harness/features/memory"
-	"github.com/GhaziBenDahmane/harness/features/memory/memorytools"
-	"github.com/GhaziBenDahmane/harness/features/plan"
-	"github.com/GhaziBenDahmane/harness/features/projectdocs"
 	"github.com/GhaziBenDahmane/harness/features/skills"
-	"github.com/GhaziBenDahmane/harness/features/skills/skillsfs"
-	"github.com/GhaziBenDahmane/harness/features/skills/skilltools"
-	"github.com/GhaziBenDahmane/harness/features/titles"
-	"github.com/GhaziBenDahmane/harness/features/verify"
 	"github.com/GhaziBenDahmane/harness/features/workspace"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/store"
@@ -86,9 +70,19 @@ type Options struct {
 	Backend sandbox.Backend
 	// Blobs stores artifact contents (default: in the Store).
 	Blobs artifacts.Blobs
-	// Redis, when set, shares the event log, run queue, sandbox locks and skill
-	// installs between processes. Without it the harness is single-process.
+	// Infra holds the implementations of what several processes share: run
+	// queue and control bus, event log, locks, job list, skill installs. Every
+	// part is optional and falls back to its in-process version. A host on
+	// another transport (NATS, SQS...) injects its own; see RedisInfra.
+	Infra *Infra
+	// Redis is a convenience for Infra: RedisInfra(Redis, Store). Set at most
+	// one of the two. Without either the harness is single-process.
 	Redis redis.UniversalClient
+	// Features are the capabilities to install, in order (default: the profile
+	// of AGENT_PROFILE: ProfileWork, ProfileCoding or ProfileMinimal). Compose
+	// your own list from the constructors (Sandbox(), Memory()...) and your
+	// own Features; see README "Features and profiles".
+	Features []Feature
 	// BuiltinSkills holds <name>/SKILL.md folders (default: skills/skillsfs).
 	BuiltinSkills fs.FS
 	// ExtraSkills holds more <name>/SKILL.md folders, added after the built-ins
@@ -119,7 +113,9 @@ type Harness struct {
 	Agent     *agent.Agent
 }
 
-// New wires the harness.
+// New wires the harness: the core (store, models, sandboxes, infrastructure,
+// agent loop, runtime) and the features of Options.Features (default: the
+// profile of AGENT_PROFILE, see ProfileWork, ProfileCoding, ProfileMinimal).
 func New(o Options) (*Harness, error) {
 	cfg := o.Config
 	if cfg == nil {
@@ -145,108 +141,50 @@ func New(o Options) (*Harness, error) {
 			return nil, err
 		}
 	}
-	h := &Harness{cfg: cfg, Store: st}
-
-	// Coordination: Redis between processes, memory inside one.
-	var runQueue runtime.RunQueue
-	if o.Redis != nil {
-		q := queue.New(o.Redis)
-		h.Log, h.Queue, h.Bus, runQueue = eventlog.New(o.Redis, st), q, q, q
-	} else {
-		q := queue.NewMemory()
-		h.Log, h.Queue, h.Bus, runQueue = eventlog.NewMemory(st), q, q, q
+	infra, err := resolveInfra(o, st)
+	if err != nil {
+		return nil, err
 	}
-
-	var err error
 	blobs := o.Blobs
 	if blobs == nil {
 		blobs = artifacts.PGBlobs{S: st}
 	}
+	features := o.Features
+	if features == nil {
+		features = profileOf(cfg)
+	}
 
-	var artSvc *artifacts.Service
-	var wsSvc *workspace.Service
-	mgr := sandbox.NewManager(backend, st, o.Redis, sandbox.ManagerOptions{
+	b := newBuilder(o, cfg, st, models, blobs, infra)
+	var coord sandbox.Coordinator
+	var locks runtime.Locks
+	if infra.Coordinator != nil {
+		coord, locks = infra.Coordinator, infra.Coordinator
+	}
+	mgr := sandbox.NewManager(backend, st, coord, sandbox.ManagerOptions{
 		MaxPerUser: cfg.MaxSandboxesPerUser, Timeout: cfg.SandboxTimeout(),
 		UnhealthyRecreate: time.Duration(cfg.SandboxUnhealthyRecreate) * time.Second,
-		OnCreate: func(ctx context.Context, threadID string, sb sandbox.Sandbox, recreated bool) string {
-			if cfg.LocalSandbox() {
-				return "" // the host keeps its files; nothing to restore into the user's project
-			}
-			wsSvc.OnCreate(ctx, threadID, sb) // the checkpoint history first, then the files
-			return artSvc.RestoreWorkspace(ctx, threadID, sb, recreated)
-		},
+		OnCreate:          b.onCreate,
 	})
-	artSvc = artifacts.New(st, blobs, mgr, artifacts.Options{PreviewConcurrency: cfg.PreviewMaxConcurrency,
-		BlobGCGrace: time.Duration(cfg.BlobGCGraceHours) * time.Hour})
-	wsSvc = workspace.New(mgr, st, st, artSvc, workspace.Options{Disabled: !cfg.WorkspaceCheckpoints || cfg.LocalSandbox(), ArchiveMaxBytes: cfg.GitArchiveMaxBytes,
-		MaxFileBytes: cfg.CheckpointMaxFile})
-	builtin := o.BuiltinSkills
-	if builtin == nil {
-		builtin = skillsfs.Builtin()
-	}
-	reg := skills.NewRegistry(builtin, st)
-	reg.AddFS(skills.SourceExtra, o.ExtraSkills)
-	reg.AddDir(skills.SourceUser, cfg.SkillsPath())
-	installer := &skills.Installer{Registry: reg, Redis: o.Redis, Messages: st}
-	h.Sandboxes, h.Artifacts, h.Skills, h.Workspace = mgr, artSvc, reg, wsSvc
-
-	mcpProvider := mcptools.New(cfg.MCPServers, o.Version, mcptools.MaxResultChars)
-	if mcpProvider != nil {
-		mcpProvider.CallTimeout = cfg.MCPCallTimeout()
-	}
-	sbOpts := sandboxtools.Options{CommandTimeout: cfg.CommandTimeout(), MaxSandboxesPerUser: cfg.MaxSandboxesPerUser,
-		OnAcquire: func(ctx context.Context, rc tools.RunContext, sb sandbox.Sandbox) {
-			installer.EnsureRunSkills(ctx, rc, sb)
-			wsSvc.OnAcquire(ctx, rc, sb) // "Before AI turn" checkpoint of a sandbox created mid-run
-		},
-		BeforeCommand:      installer.EnsureCommandSkills,
-		OnWrite:            installer.NoteContent,
-		AfterFailedCommand: installer.AfterFailedCommand,
-	}
-	if strings.EqualFold(strings.TrimSpace(cfg.AgentProfile), "coding") || strings.TrimSpace(cfg.CodeChecks) != "" {
-		extra, err := codecheck.Parse(cfg.CodeChecks)
-		if err != nil {
-			return nil, err
-		}
-		sbOpts.CheckWrite = codecheck.New(extra).Check
-		sbOpts.Coding = strings.EqualFold(strings.TrimSpace(cfg.AgentProfile), "coding")
-	}
-	if o.Redis != nil {
-		sbOpts.Jobs = sandboxtools.RedisJobs{RDB: o.Redis}
-	}
-	sbTools := sandboxtools.New(mgr, sbOpts)
-	if sbTools != nil && o.Redis != nil {
-		go sbTools.KeepResumingJobs(context.Background(), 2*time.Minute, nil)
-	}
-	memSvc := memory.New(st, memory.OptionsFromConfig(cfg))
-	var explore tools.Provider
-	if sbTools != nil && strings.EqualFold(strings.TrimSpace(cfg.AgentProfile), "coding") {
-		if m := cmp.Or(cfg.ExploreModel, cfg.LLMDefaultModel); m != "" {
-			explore = &exploretools.Provider{Source: sbTools, Models: models, Model: m}
-		}
-	}
-	providers := []tools.Provider{
-		nilProvider(sbTools),
-		explore,
-		&skilltools.Provider{Registry: reg, Installer: installer, Sandbox: mgr},
-		nilProvider(mcpProvider),
-		harnesstools.New(st),
-		memorytools.New(memSvc),
-	}
-	providers = append(providers, o.Tools...)
-
-	hs := harnessOptions(cfg, st, reg, artSvc, wsSvc, mgr, memSvc)
-	if hs, err = wirePermissions(cfg, hs); err != nil { // local/coding only: permission rules + git snapshots
+	b.Sandboxes = mgr
+	if err := b.install(features); err != nil {
 		return nil, err
 	}
+
+	hs := agentOptions(cfg, st, mgr)
+	b.applyTo(&hs)
 	if cfg.SandboxEnabled() || backend != nil {
 		hs.Spill = tools.SandboxSpiller{Sandboxes: mgr}
 	}
-	checker := verify.New(verify.Options{Sandbox: mgr, Messages: st, Artifacts: artSvc, EnsureSkill: installer.EnsureSkill})
-	hs.Checker, hs.Deliverables = checker, checker
+	providers := append(append([]tools.Provider{}, b.providers...), o.Tools...)
+	var registry tools.Provider = tools.NewRegistry(providers...)
+	for _, w := range b.wrappers {
+		registry = w(registry)
+	}
 
+	h := &Harness{cfg: cfg, Store: st, Log: infra.Log, Queue: infra.Broker, Bus: infra.Broker,
+		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace}
 	h.Agent = &agent.Agent{
-		Models: models, Tools: newProfile(cfg, reg).Wrap(tools.NewRegistry(providers...)), Store: st, Steers: h.Bus,
+		Models: models, Tools: registry, Store: st, Steers: h.Bus,
 		MaxSteps: cfg.AgentMaxSteps, MaxToolOutputChars: cfg.AgentMaxToolOutputChars,
 		Harness:           hs,
 		ModelTimeout:      time.Duration(cfg.LLMTimeout) * time.Second,
@@ -261,24 +199,20 @@ func New(o Options) (*Harness, error) {
 		host, _ := os.Hostname()
 		id = host + "-" + uuid.NewString()[:8]
 	}
-	hooks := append([]runtime.Hook{
-		artifacts.EndOfRunHook{Svc: artSvc},
-		workspace.EndOfRunHook{Svc: wsSvc},
-		&titles.Hook{Store: st, Models: models, SupportsReasoning: cfg.SupportsReasoning},
-		&goals.Hook{Store: st, Models: models, Queue: h.Queue, ListArtifacts: artSvc.ProducedPaths,
-			Evidence: checker.Evidence, SupportsReasoning: cfg.SupportsReasoning},
-	}, o.Hooks...)
+	jobs := append(append([]runtime.Job{}, b.jobs...), runtime.Job{Name: "approval-expiry", Every: time.Minute,
+		Run: func(ctx context.Context) error {
+			_, err := st.ExpireApprovals(ctx, time.Duration(cfg.ApprovalTTLHours)*time.Hour, "")
+			return err
+		}})
 	h.Runtime = runtime.New(runtime.Options{
 		ID: id, Concurrency: cfg.RuntimeConcurrency, ShutdownGrace: time.Duration(cfg.RuntimeShutdownGrace) * time.Second,
-		Hooks:  hooks,
-		Purger: artifacts.PurgeJob{Svc: artSvc, After: time.Duration(cfg.PurgeAfterDays) * 24 * time.Hour},
-		Jobs: []runtime.Job{{Name: "memory-consolidation", Every: memory.ConsolidationEvery(cfg),
-			Run: memory.Consolidator{Store: st, Retention: memory.DeletedRetention(cfg)}.Run},
-			{Name: "approval-expiry", Every: time.Minute, Run: func(ctx context.Context) error {
-				_, err := st.ExpireApprovals(ctx, time.Duration(cfg.ApprovalTTLHours)*time.Hour, "")
-				return err
-			}}},
-	}, st, h.Log, runQueue, h.Bus, h.Agent, o.Redis)
+		Hooks:  append(append([]runtime.Hook{}, b.endOfRun...), o.Hooks...),
+		Purger: b.purger,
+		Jobs:   jobs,
+	}, st, h.Log, infra.Broker, h.Bus, h.Agent, locks)
+	for _, f := range b.starts {
+		go f(context.Background())
+	}
 	return h, nil
 }
 
@@ -391,24 +325,10 @@ func autoTitle(text string) string {
 	return string(r)
 }
 
-// harnessOptions is the agent's feature configuration (prompt sections, hooks,
-// compaction, approvals).
-func harnessOptions(cfg *config.Config, st store.Store, reg *skills.Registry, artSvc *artifacts.Service, wsSvc *workspace.Service, mgr sandbox.Manager, memSvc *memory.Service) agent.Harness {
-	prof := newProfile(cfg, reg)
+// agentOptions is the agent's configuration without features: compaction,
+// reasoning, vision and the interactive approvals gate.
+func agentOptions(cfg *config.Config, st store.Store, mgr sandbox.Manager) agent.Harness {
 	return agent.Harness{
-		Sections: []agent.PromptSection{
-			prof.skillsSection(reg.PromptSection),
-			projectdocs.Section(mgr),
-			agent.Part(prompts.Git, func(ctx context.Context, in agent.Input) string {
-				if wsSvc.PromptSection(ctx, in) == "" {
-					return ""
-				}
-				return prompts.GitCheckpoints
-			}),
-			prof.memorySection(memory.PromptSection(memSvc)),
-		},
-		Context:               []agent.PromptSection{goals.ContextSection(st), prof.memorySection(memory.RecallSection(memSvc))},
-		Tail:                  []agent.PromptSection{goals.TurnsSection(st)},
 		PromptVariant:         cfg.PromptVariant,
 		Summaries:             st,
 		Plans:                 st,
@@ -423,10 +343,6 @@ func harnessOptions(cfg *config.Config, st store.Store, reg *skills.Registry, ar
 		ReasoningEffort:       cfg.EffortFor,
 		ReasoningPassback:     cfg.ReasoningPassback,
 		PromptCacheKey:        cfg.PromptCacheKey,
-		ToolHooks:             []agent.ToolHook{artSvc},
-		RunStart:              []agent.RunStartHook{wsSvc},
-		Answers:               artSvc,
-		Images:                artifacts.Images{Svc: artSvc, Vision: cfg.SupportsVision},
 		Vision:                cfg.SupportsVision,
 		BeforeTool:            []agent.BeforeToolHook{&approvals.Gate{Store: st, RiskyToolPattern: cfg.RiskyToolPattern, Resolver: gateResolver(mgr)}},
 		Approvals:             st,
@@ -438,12 +354,4 @@ func gateResolver(mgr sandbox.Manager) approvals.PathResolver {
 		return nil
 	}
 	return approvals.SandboxResolver{Sandboxes: mgr}
-}
-
-func nilProvider[T tools.Provider](p T) tools.Provider {
-	var zero T
-	if any(p) == any(zero) {
-		return nil
-	}
-	return p
 }

@@ -7,8 +7,8 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
-	"github.com/GhaziBenDahmane/harness/engine/eventlog"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/store"
 )
 
@@ -46,7 +46,7 @@ func TestProcessStreamsTextAnswerAndCompletes(t *testing.T) {
 		msgs[1].ID != evs[2]["messageId"] {
 		t.Fatalf("messages %+v", msgs)
 	}
-	if ttl := r.mr.TTL(eventlog.Key(run.ID)); ttl <= 0 {
+	if ttl := r.mr.TTL(redisx.EventKey(run.ID)); ttl <= 0 {
 		t.Fatalf("live stream ttl %v", ttl)
 	}
 }

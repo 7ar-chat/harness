@@ -10,6 +10,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
@@ -29,7 +30,7 @@ func newLifecycle(t *testing.T, maxPerUser int) *lifecycle {
 	t.Cleanup(func() { _ = rdb.Close() })
 	st := memstore.New()
 	b := sandboxtest.NewBackend()
-	f := &fixture{max: maxPerUser, rdb: rdb, st: st, backend: b, mgr: sandbox.NewManager(b, st, rdb, sandbox.ManagerOptions{MaxPerUser: maxPerUser, Timeout: time.Hour})}
+	f := &fixture{max: maxPerUser, rdb: rdb, st: st, backend: b, mgr: sandbox.NewManager(b, st, redisx.NewCoordinator(rdb), sandbox.ManagerOptions{MaxPerUser: maxPerUser, Timeout: time.Hour})}
 	return &lifecycle{fixture: f, mr: mr}
 }
 
@@ -41,7 +42,7 @@ func (l *lifecycle) process(opts sandbox.ManagerOptions) *sandbox.DefaultManager
 	if opts.Timeout == 0 {
 		opts.Timeout = time.Hour
 	}
-	return sandbox.NewManager(l.backend, l.st, l.rdb, opts)
+	return sandbox.NewManager(l.backend, l.st, redisx.NewCoordinator(l.rdb), opts)
 }
 
 func TestQuotaIgnoresSandboxesThatNoLongerExist(t *testing.T) {

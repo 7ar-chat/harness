@@ -18,6 +18,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/features/artifacts"
 	"github.com/GhaziBenDahmane/harness/features/workspace"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/store"
@@ -74,7 +75,7 @@ func newRig(t *testing.T, o workspace.Options) *rig {
 
 // newManager builds the sandbox manager with the OnCreate restore of cmd/work (history, then files).
 func (r *rig) newManager() {
-	r.mgr = sandbox.NewManager(r.backend, r.st, r.rdb, sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour,
+	r.mgr = sandbox.NewManager(r.backend, r.st, redisx.NewCoordinator(r.rdb), sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour,
 		OnCreate: func(ctx context.Context, threadID string, sb sandbox.Sandbox, recreated bool) string {
 			r.ws.OnCreate(ctx, threadID, sb)
 			return r.arts.RestoreWorkspace(ctx, threadID, sb, recreated)
