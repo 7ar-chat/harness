@@ -4,6 +4,7 @@ GOFLAGS_BUILD = -trimpath -ldflags='-s -w'
 .PHONY: build test bench-offline vet
 build:
 	go build $(GOFLAGS_BUILD) -o bin/harness ./cmd/harness
+	go build $(GOFLAGS_BUILD) -o bin/harness-web ./cmd/harness-web
 	go build $(GOFLAGS_BUILD) -o bin/bench ./cmd/bench
 
 vet:
