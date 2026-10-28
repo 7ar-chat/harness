@@ -1,0 +1,545 @@
+[
+  {
+    "name": "execute_command",
+    "description": "Run a bash command in this conversation's isolated Linux sandbox (cwd /workspace; python3, node, LibreOffice and\nthe skill scripts are installed). Returns JSON {stdout, stderr, exitCode, truncated?, outputPath?}; a non-zero exitCode is\nreported, not raised. Prefer writing a script with write_file and running it over long one-liners.\nOutput: stdout keeps its first 4,000 and last 8,000 bytes, stderr its first 1,000 and last 3,000; when cut, truncated is true\nand outputPath (and stderrPath) name the file holding the full output: page it with read_file or search_files.\nLong commands: a command still running after timeoutSeconds (default 120, max 1800) is not killed; it keeps running as a\nbackground job and the result is {jobId, status: \"running\", stdoutTail, stderrTail}. background: true returns that at once.\nThen use job_output (wait for it, read its output) and job_kill. Use search_files rather than grep, read_file rather than cat.\n/workspace/.work/jobs/ holds the commands' output files: never delete it (no rm -rf /workspace/.work).",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "background": {
+          "description": "Start the command as a background job and return its jobId at once (servers, long batches)",
+          "type": "boolean"
+        },
+        "command": {
+          "description": "The bash command (or script) to run",
+          "type": "string"
+        },
+        "timeoutSeconds": {
+          "description": "Seconds to wait for the command (default 120, max 1800); a command still running then becomes a background job",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "job_output",
+    "description": "Get the status and the latest output of a background job started by execute_command, optionally waiting up to\nwaitSeconds (max 300) for it to finish. Returns JSON {jobId, status: \"running\" | \"finished\" | \"killed\", exitCode?, stdoutTail,\nstderrTail, outputPath}; the full output stays in outputPath (stdout) next to the stderr file.",
+    "readOnly": true,
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "jobId": {
+          "description": "The jobId returned by execute_command",
+          "type": "string"
+        },
+        "waitSeconds": {
+          "description": "Wait up to this many seconds for the job to finish (default 0, max 300)",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "jobId"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "job_kill",
+    "description": "Stop a background job started by execute_command (its whole process group). Returns JSON {jobId, status: \"killed\"}.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "jobId": {
+          "description": "The jobId returned by execute_command",
+          "type": "string"
+        }
+      },
+      "required": [
+        "jobId"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "read_file",
+    "description": "Read a file from the sandbox. path is absolute or relative to /workspace.\n- Text files: numbered lines like \"cat -n\". offset is the 1-based first line (default 1), limit the number of lines (default 2000);\n  a page also stops at about 18,000 characters. When there is more, the last line tells you the exact offset to continue with.\n- Documents (PDF, DOCX, PPTX, XLSX, ODT/ODS/ODP, DOC/XLS/PPT): their text, extracted with markitdown, paged the same way, after a\n  header \"[document: N pages/slides/sheets; showing …]\". pages selects PDF pages or PPTX slides (\"1-3,7\"); sheet selects one XLSX sheet.\n- Images (PNG, JPEG, WEBP, GIF up to 5 MiB): returns {path, image: true} and shows you the image (models that can see images).\nTo check how a document looks (layout, overflow, charts), use view_file. Other binary files are refused: inspect them with execute_command.",
+    "readOnly": true,
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "description": "Maximum number of lines to return (default 2000; a page also stops at about 18,000 characters)",
+          "type": "integer"
+        },
+        "offset": {
+          "description": "1-based line to start from (default 1); use the offset given at the end of the previous page",
+          "type": "integer"
+        },
+        "pages": {
+          "description": "PDF pages or PPTX slides to extract, e.g. \"1-3,7\" (documents only; default all)",
+          "type": "string"
+        },
+        "path": {
+          "description": "File path, absolute or relative to /workspace",
+          "type": "string"
+        },
+        "sheet": {
+          "description": "Name of the XLSX sheet to extract (default all sheets)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "view_file",
+    "description": "Look at a document the way the user will see it: renders pages of a PDF, DOCX, PPTX or XLSX (LibreOffice, then PNG at\n110 dpi, at most 6 pages per call) into /workspace/.work/renders/ and shows you the images. pages selects pages or slides (\"1-3,7\";\ndefault the first 6). Returns JSON {path, pages: [{page, imagePath}], totalPages}. Use it to check layout, overflow, charts and\nstyling before you call a document done; use read_file for its text. An image file (PNG, JPEG, WEBP, GIF) is shown as is.",
+    "readOnly": true,
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "pages": {
+          "description": "Pages or slides to render, e.g. \"1-3,7\" (default the first 6; at most 6 per call)",
+          "type": "string"
+        },
+        "path": {
+          "description": "Document or image path, absolute or relative to /workspace",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "search_files",
+    "description": "Search file contents with a regular expression (ripgrep) and get the matching lines with their line numbers.\npath is a directory or a file (default /workspace); glob filters file names (e.g. \"*.csv\", \"reports/**/*.md\"); ignoreCase\nmakes the search case-insensitive. Hidden directories such as /workspace/.work/ are searched (saved tool outputs live there);\n.git is not. Returns JSON {matches: [{path, line, text}], truncated} with at most maxResults matches (default 100, max 500).\nUse it instead of grep in execute_command, then read_file with offset to see the context of a match.",
+    "readOnly": true,
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "glob": {
+          "description": "Only search files matching this glob, e.g. \"*.py\" or \"data/**/*.csv\"",
+          "type": "string"
+        },
+        "ignoreCase": {
+          "description": "Case-insensitive search (default false)",
+          "type": "boolean"
+        },
+        "maxResults": {
+          "description": "Maximum number of matches to return (default 100, max 500)",
+          "type": "integer"
+        },
+        "path": {
+          "description": "Directory or file to search (default /workspace)",
+          "type": "string"
+        },
+        "pattern": {
+          "description": "Regular expression to search for (ripgrep/Rust syntax; escape special characters for a literal search)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pattern"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "write_file",
+    "description": "Create or overwrite a file in the sandbox with the full content given (parent directories are created).\nReturns JSON {path, bytesWritten}. Save deliverables under /workspace/outputs/ (or where the user asked); /workspace/.work/ is scratch space that is not kept.\nFor a large file, write it in several parts (several files, or write then edit_file) rather than one huge call. Do not use it to change a file the user uploaded: write a new version next to it.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "description": "The complete new content of the file",
+          "type": "string"
+        },
+        "path": {
+          "description": "File path, absolute or relative to /workspace",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "content"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "edit_file",
+    "description": "Replace text in an existing file. oldText is matched exactly first; when it is not found, a match that ignores\ntrailing spaces and indentation is used, but only if it is unique (the replacement then keeps the file's indentation).\noldText must appear exactly once unless replaceAll is true (replaceAll needs an exact match). Returns JSON {path, replacements, matched}.\nRead the file with read_file first and copy oldText from it: an edit is refused when you have not read the file in this\nconversation, or when it changed since you last read or wrote it (re-read it then). On a miss the error shows the closest lines.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "newText": {
+          "description": "The replacement text",
+          "type": "string"
+        },
+        "oldText": {
+          "description": "The text to replace, copied from the file (include enough surrounding lines to make it unique)",
+          "type": "string"
+        },
+        "path": {
+          "description": "File path, absolute or relative to /workspace",
+          "type": "string"
+        },
+        "replaceAll": {
+          "description": "Replace every exact occurrence instead of requiring exactly one",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "oldText",
+        "newText"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "list_files",
+    "description": "List files and directories in the sandbox. path defaults to /workspace, depth to 2 (at most 5).\nReturns JSON {path, entries: [{path, type, size}], truncated?} with at most 500 entries. Use search_files to find text inside files.",
+    "readOnly": true,
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "depth": {
+          "description": "Recursion depth (default 2, max 5)",
+          "type": "integer"
+        },
+        "path": {
+          "description": "Directory to list (default /workspace)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
+    "name": "load_skill",
+    "description": "Load a skill: returns its SKILL.md and file list. Loading a skill starts nothing; a skill's folder /skills/\u003cname\u003e/ (read-only, with its helper scripts) appears once you load it (load_skill) or name its path in a command.\nCall it before creating or editing a file of the kind the skill covers (see the skills listed in your instructions), then follow it: it names the scripts to use and the checks to run before you call the work done.",
+    "readOnly": true,
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "The skill name as listed in the system prompt (e.g. docx)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "update_plan",
+    "description": "Create or update your plan: the todo list of a multi-step task, shown to the user.\nSend the complete list every time (it replaces the previous one). Keep exactly one item \"in_progress\" while you work,\nmark items \"completed\" as soon as they are done, and add items when you discover new work. Not needed for simple one-step requests.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "explanation": {
+          "description": "Optional note on what changed",
+          "type": "string"
+        },
+        "items": {
+          "description": "The complete plan, in order",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "description": "Stable identifier of the item (e.g. 1, 2, 3)",
+                "type": "string"
+              },
+              "status": {
+                "description": "pending, in_progress (exactly one item while you work) or completed",
+                "enum": [
+                  "pending",
+                  "in_progress",
+                  "completed"
+                ],
+                "type": "string"
+              },
+              "title": {
+                "description": "Short description of the step",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "status"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "ask_user",
+    "description": "Ask the user a question and wait for the answer. Use it only when you cannot continue without the user:\na decision with several reasonable options, missing information you cannot find or infer, or a confirmation before an\nirreversible action. Offer 2-5 short options when they make answering easy. The run stops after this call; the user's\nanswer is returned as this tool's result when they reply. Ask one question at a time.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "allowFreeText": {
+          "description": "Whether the user may type another answer (default true)",
+          "type": "boolean"
+        },
+        "options": {
+          "description": "Optional answer choices (2-5 recommended)",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "description": "Optional detail on this choice",
+                "type": "string"
+              },
+              "label": {
+                "description": "Short answer choice",
+                "type": "string"
+              }
+            },
+            "required": [
+              "label"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "question": {
+          "description": "The question, self-contained and short",
+          "type": "string"
+        }
+      },
+      "required": [
+        "question"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "memory_search",
+    "description": "Search memory entries with scope, filters, and provenance.",
+    "parameters": {
+      "properties": {
+        "filters": {
+          "type": "object"
+        },
+        "query": {
+          "type": "string"
+        },
+        "repository": {
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "personal",
+            "repository",
+            "workspace"
+          ],
+          "type": "string"
+        },
+        "top_k": {
+          "maximum": 50,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "memory_get",
+    "description": "Get a specific memory entry by id or path.",
+    "parameters": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "include_metadata": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
+    "name": "memory_create",
+    "description": "Create a durable memory entry.",
+    "parameters": {
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object"
+        },
+        "path": {
+          "type": "string"
+        },
+        "repository": {
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "personal",
+            "repository",
+            "workspace"
+          ],
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "memory_update",
+    "description": "Update durable memory content and/or metadata.",
+    "parameters": {
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object"
+        },
+        "path": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
+    "name": "memory_delete",
+    "description": "Delete a durable memory entry with policy checks.",
+    "parameters": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
+    "name": "memory_create_batch",
+    "description": "Create multiple durable memory entries.",
+    "parameters": {
+      "properties": {
+        "entries": {
+          "items": {
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "metadata": {
+                "type": "object"
+              },
+              "path": {
+                "type": "string"
+              },
+              "repository": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              },
+              "tags": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "content"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "entries"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "memory_delete_batch",
+    "description": "Delete multiple durable memory entries, given by ids, paths or both.",
+    "parameters": {
+      "properties": {
+        "ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
+    "name": "memory_capabilities",
+    "description": "Return backend capability flags for this memory proxy.",
+    "parameters": {
+      "properties": {},
+      "type": "object"
+    }
+  }
+]

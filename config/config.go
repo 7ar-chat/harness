@@ -1,0 +1,332 @@
+// Package config loads the service configuration from environment variables.
+package config
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/caarlos0/env/v11"
+)
+
+// MCPServer is one entry of WORK_MCP_SERVERS.
+type MCPServer struct {
+	Name            string            `json:"name"`
+	URL             string            `json:"url"`
+	ForwardIdentity bool              `json:"forwardIdentity"`
+	Tools           []string          `json:"tools,omitempty"`
+	Headers         map[string]string `json:"headers,omitempty"`
+}
+
+// Config is the whole service configuration. See README "Configuration".
+type Config struct {
+	Port     int    `env:"PORT" envDefault:"8000"`
+	BasePath string `env:"BASE_PATH" envDefault:"/studio/work/api"`
+	// Production is on when DJANGO_PRODUCTION has any non-empty value (house
+	// convention, like Django's os.environ.get: "1", "true", "yes" alike).
+	Production    bool   `env:"-"`
+	ProductionRaw string `env:"DJANGO_PRODUCTION"`
+
+	PostgresHost     string `env:"POSTGRES_HOST" envDefault:"postgres"`
+	PostgresPort     string `env:"POSTGRES_PORT" envDefault:"5432"`
+	PostgresDB       string `env:"POSTGRES_DB" envDefault:"db"`
+	PostgresUser     string `env:"POSTGRES_USER" envDefault:"postgres"`
+	PostgresPassword string `env:"POSTGRES_PASSWORD" envDefault:""`
+	PostgresSchema   string `env:"POSTGRES_SCHEMA" envDefault:"work"`
+	PostgresSSLMode  string `env:"POSTGRES_SSLMODE" envDefault:"require"`
+	DBPoolMaxConns   int    `env:"DB_POOL_MAX_CONNS" envDefault:"20"`
+	// PingDBAtStartup=false starts without touching Postgres/Redis (lazy connections), like authn.
+	PingDBAtStartup bool `env:"PING_DB_AT_STARTUP" envDefault:"true"`
+
+	UseSentinel        bool   `env:"USE_SENTINEL" envDefault:"false"`
+	RedisSentinelHosts string `env:"REDIS_SENTINEL_HOSTS"`
+	RedisMasterName    string `env:"REDIS_MASTER_NAME" envDefault:"mymaster"`
+	RedisPassword      string `env:"REDIS_PASSWORD"`
+	RedisHost          string `env:"REDIS_HOST" envDefault:"redis"`
+	RedisPort          string `env:"REDIS_PORT" envDefault:"6379"`
+	RedisDB            int    `env:"REDIS_DB" envDefault:"0"`
+	// RedisPoolSize must exceed concurrent SSE tailers (each holds a connection during XREAD BLOCK).
+	RedisPoolSize int `env:"REDIS_POOL_SIZE" envDefault:"256"`
+
+	LLMProvider     string   `env:"LLM_PROVIDER" envDefault:"gateway"`
+	LLMGatewayURL   string   `env:"LLM_GATEWAY_URL" envDefault:"http://llm-gateway:5000/"`
+	LLMUseCase      string   `env:"LLM_USE_CASE" envDefault:"5"`
+	LLMAPIVersion   string   `env:"LLM_API_VERSION" envDefault:"2025-04-01-preview"`
+	LLMBaseURL      string   `env:"LLM_BASE_URL"`
+	LLMAPIKey       string   `env:"LLM_API_KEY"`
+	LLMDefaultModel string   `env:"LLM_DEFAULT_MODEL" envDefault:"gpt-5.6-terra"`
+	LLMModels       []string `env:"LLM_MODELS" envDefault:"gpt-5.6-sol,gpt-5.6-terra" envSeparator:","`
+	LLMTimeout      int      `env:"LLM_TIMEOUT_SECONDS" envDefault:"300"`
+
+	AgentMaxSteps           int `env:"AGENT_MAX_STEPS" envDefault:"60"`
+	AgentMaxToolOutputChars int `env:"AGENT_MAX_TOOL_OUTPUT_CHARS" envDefault:"30000"`
+
+	RuntimeConcurrency   int `env:"RUNTIME_CONCURRENCY" envDefault:"16"`
+	RuntimeShutdownGrace int `env:"RUNTIME_SHUTDOWN_GRACE_SECONDS" envDefault:"15"`
+
+	OpenSandboxURL            string   `env:"OPENSANDBOX_URL"`
+	OpenSandboxAPIKey         string   `env:"OPENSANDBOX_API_KEY"`
+	OpenSandboxImage          string   `env:"OPENSANDBOX_IMAGE" envDefault:"python:3.11-slim"`
+	OpenSandboxUseServerProxy bool     `env:"OPENSANDBOX_USE_SERVER_PROXY" envDefault:"false"`
+	SandboxTimeoutSeconds     int      `env:"SANDBOX_TIMEOUT_SECONDS" envDefault:"1800"`
+	SandboxCommandTimeout     int      `env:"SANDBOX_COMMAND_TIMEOUT_SECONDS" envDefault:"120"`
+	SandboxCPU                string   `env:"SANDBOX_CPU" envDefault:"1"`
+	SandboxMemory             string   `env:"SANDBOX_MEMORY" envDefault:"2Gi"`
+	SandboxEgressAllowlist    []string `env:"SANDBOX_EGRESS_ALLOWLIST" envSeparator:","`
+	// SandboxEgressUnrestricted explicitly accepts unrestricted sandbox egress in production.
+	SandboxEgressUnrestricted bool `env:"SANDBOX_EGRESS_UNRESTRICTED" envDefault:"false"`
+	// SandboxEgressDenyCIDRs are blocked in unrestricted mode (other sandboxes, host, proxy, metadata;
+	// CGNAT pod ranges, "this network", IPv6 ULA and link-local, IPv4-mapped IPv6). Validated at load (C-19).
+	SandboxEgressDenyCIDRs []string `env:"SANDBOX_EGRESS_DENY_CIDRS" envDefault:"172.16.0.0/12,10.0.0.0/8,192.168.0.0/16,169.254.0.0/16,100.64.0.0/10,0.0.0.0/8,fc00::/7,fe80::/10,::ffff:0:0/96" envSeparator:","`
+	// SandboxUnhealthyRecreate: a sandbox unhealthy for longer (and checked ≥ 3 times) is recreated.
+	SandboxUnhealthyRecreate int `env:"SANDBOX_UNHEALTHY_RECREATE_SECONDS" envDefault:"300"`
+	MaxSandboxesPerUser      int `env:"MAX_SANDBOXES_PER_USER" envDefault:"5"`
+
+	MCPServersJSON string `env:"WORK_MCP_SERVERS"`
+	MCPServers     []MCPServer
+
+	GlitchtipDSN string `env:"GLITCHTIP_API_DSN"`
+
+	// Harness v2 §1–§3: artifacts, attachments (classification: FILE_CLASSIFICATION_*, see README).
+	ArtifactsS3Bucket    string `env:"ARTIFACTS_S3_BUCKET"`
+	ArtifactsS3Endpoint  string `env:"ARTIFACTS_S3_ENDPOINT"`
+	ArtifactsS3Region    string `env:"ARTIFACTS_S3_REGION" envDefault:"us-east-1"`
+	ArtifactsS3PathStyle bool   `env:"ARTIFACTS_S3_PATH_STYLE" envDefault:"true"`
+	ArtifactsS3Prefix    string `env:"ARTIFACTS_S3_PREFIX" envDefault:"work/"`
+	// ArtifactsS3CreateBucket creates the bucket at startup when missing (local RustFS; production buckets are provisioned).
+	ArtifactsS3CreateBucket bool   `env:"ARTIFACTS_S3_CREATE_BUCKET"`
+	AWSAccessKeyID          string `env:"AWS_ACCESS_KEY_ID"`
+	AWSSecretAccessKey      string `env:"AWS_SECRET_ACCESS_KEY"`
+	// MaxUploadBytes bounds one attachment (413 file_too_large beyond).
+	MaxUploadBytes int64 `env:"WORK_MAX_UPLOAD_BYTES" envDefault:"104857600"`
+	// MaxConcurrentUploads bounds uploads per api process (429 too_many_uploads beyond).
+	MaxConcurrentUploads int `env:"WORK_MAX_CONCURRENT_UPLOADS" envDefault:"4"`
+	// MaxConcurrentUploadsPerUser bounds one user's uploads per api process (429 too_many_uploads beyond).
+	// Default 4: the composer uploads 4 files in parallel (like Studio Work).
+	MaxConcurrentUploadsPerUser int `env:"WORK_MAX_CONCURRENT_UPLOADS_PER_USER" envDefault:"4"`
+	// PreviewMaxConcurrency bounds the Office → PDF conversions per api process.
+	PreviewMaxConcurrency int `env:"PREVIEW_MAX_CONCURRENCY" envDefault:"2"`
+	// PurgeAfterDays: deleted threads are hard-deleted (with their artifacts and
+	// unreferenced blobs) this many days after deletion (≤ 0 disables the purge).
+	PurgeAfterDays int `env:"WORK_PURGE_AFTER_DAYS" envDefault:"30"`
+	// BlobGCGraceHours: a content blob is only deleted once it has had no
+	// artifact version referencing it for this many hours (≤ 0: 24), so content
+	// reused by a concurrent upload or snapshot is never collected.
+	BlobGCGraceHours int `env:"WORK_BLOB_GC_GRACE_HOURS" envDefault:"24"`
+	// Work Chat files (README "Workspace checkpoints"): a local Git checkpoint of
+	// /workspace before every AI turn, per-file history / diff / restore, and the
+	// .git history archived (tar.gz, at most WORK_GIT_ARCHIVE_MAX_BYTES; a larger
+	// one is not archived) into the blob store after each run, restored into
+	// every new sandbox of the thread. Files larger than
+	// WORK_WORKSPACE_CHECKPOINT_MAX_FILE_BYTES (default 20 MiB, ≤ 0: no limit)
+	// are kept out of the checkpoints (large uploads would exceed the archive cap).
+	WorkspaceCheckpoints bool  `env:"WORK_WORKSPACE_CHECKPOINTS" envDefault:"true"`
+	GitArchiveMaxBytes   int64 `env:"WORK_GIT_ARCHIVE_MAX_BYTES" envDefault:"52428800"`
+	CheckpointMaxFile    int64 `env:"WORK_WORKSPACE_CHECKPOINT_MAX_FILE_BYTES" envDefault:"20971520"`
+
+	// Skills (parity with Work, README "Skills catalog"): who may publish,
+	// unpublish and tag global skills — X-Userinfo logins and/or roles (claims
+	// roles, groups, realm_access.roles, resource_access.<own client>.roles), comma-separated;
+	// both empty = nobody (global skills are then read-only).
+	SkillAdminLogins []string `env:"WORK_SKILL_ADMIN_LOGINS" envSeparator:","`
+	SkillAdminRoles  []string `env:"WORK_SKILL_ADMIN_ROLES" envSeparator:","`
+	// SkillAdminClientID (stream A, B-03): the Keycloak client whose
+	// resource_access roles count for WORK_SKILL_ADMIN_ROLES (default
+	// OIDC_RP_CLIENT_ID, Studio's own client); roles of any other client only
+	// match an explicit "client:role" entry.
+	SkillAdminClientID string `env:"WORK_SKILL_ADMIN_CLIENT_ID"`
+	OIDCClientID       string `env:"OIDC_RP_CLIENT_ID"`
+
+	// Skills marketplace sync (AstraForge's ASTRAFORGE_SKILLS_MARKETPLACE_*,
+	// README "Skills marketplace sync"): the skills/ of a GitLab repository
+	// become global skills. Enabled when a source path, a token or a
+	// username + password is set; the runtime syncs every interval (one
+	// replica, Redis lock) and `work skills-sync` syncs once.
+	SkillsMarketplaceRepoURL      string `env:"WORK_SKILLS_MARKETPLACE_REPO_URL" envDefault:"https://git.intramundi.com/ai-marketplace/vibe-toolbox-market.git"`
+	SkillsMarketplaceBranch       string `env:"WORK_SKILLS_MARKETPLACE_BRANCH" envDefault:"main"`
+	SkillsMarketplaceToken        string `env:"WORK_SKILLS_MARKETPLACE_TOKEN"`
+	SkillsMarketplaceUsername     string `env:"WORK_SKILLS_MARKETPLACE_USERNAME"`
+	SkillsMarketplacePassword     string `env:"WORK_SKILLS_MARKETPLACE_PASSWORD"`
+	SkillsMarketplaceSourcePath   string `env:"WORK_SKILLS_MARKETPLACE_SOURCE_PATH"`
+	SkillsMarketplaceSyncInterval int    `env:"WORK_SKILLS_MARKETPLACE_SYNC_INTERVAL_SECONDS" envDefault:"86400"`
+	SkillsMarketplaceTimeout      int    `env:"WORK_SKILLS_MARKETPLACE_TIMEOUT_SECONDS" envDefault:"300"`
+
+	// Memory (Work parity, README "Memory"): write policy (warn records missing
+	// triggers, strict blocks them), delete mode (soft keeps the entry as
+	// deleted until the retention, hard removes it), default scope, embedding
+	// backend (simple = Work's bag-of-words cosine; disabled|none|keyword only
+	// change the reported capabilities, like Work), the "[Repository Memory
+	// Recall]" block in the system prompt, the limits (≤ 0 entries: no limit)
+	// and the consolidation job (dedup + purge of deleted entries; ≤ 0 hours disables it).
+	MemoryWriteMode            string `env:"WORK_MEMORY_WRITE_MODE" envDefault:"warn"`
+	MemoryDeleteMode           string `env:"WORK_MEMORY_DELETE_MODE" envDefault:"soft"`
+	MemoryDefaultScope         string `env:"WORK_MEMORY_DEFAULT_SCOPE" envDefault:"personal"`
+	MemoryEmbeddingBackend     string `env:"WORK_MEMORY_EMBEDDING_BACKEND" envDefault:"simple"`
+	MemoryRecallInjection      bool   `env:"WORK_MEMORY_RECALL_INJECTION" envDefault:"true"`
+	MemoryMaxEntries           int    `env:"WORK_MEMORY_MAX_ENTRIES" envDefault:"1000"`
+	MemoryMaxContentBytes      int    `env:"WORK_MEMORY_MAX_CONTENT_BYTES" envDefault:"200000"`
+	MemoryConsolidationHours   int    `env:"WORK_MEMORY_CONSOLIDATION_HOURS" envDefault:"168"`
+	MemoryDeletedRetentionDays int    `env:"WORK_MEMORY_DELETED_RETENTION_DAYS" envDefault:"30"`
+	// Harness v2 §4–§9 (context windows, reasoning/vision models — LLM_VISION_MODELS
+	// also decides which models receive attached images —, compaction).
+	Harness
+	// Harness v3 loop & context (loop.go): stream idle timeout, step retries, tool
+	// output spill, in-run masking, output reserve, reasoning passback, MCP call
+	// timeout, DeepSeek defaults.
+	Loop
+	// Harness v3 (stream C2): LLM_PROMPT_VARIANTS, LLM_REASONING_EFFORTS (prompts.go).
+	PromptAndEfforts
+	// Stream R: models called through the Responses API (LLM_RESPONSES_MODELS, responses.go).
+	Responses
+	// Web search (Tavily MCP, parity with Work): WEB_SEARCH_ENABLED, WEB_SEARCH_MCP_URL,
+	// WORK_MANAGED_TOKEN_MODE, WORK_TOKEN_EXCHANGE_*, WORK_MANAGED_TOKEN_MIN_VALIDITY_SECONDS,
+	// WORK_TOKEN_ENCRYPTION_KEY (websearch.go, README "Web search").
+	WebSearch
+	// Harness v3 runtime & API (stream B): RUNTIME_TERMINATION_GRACE_SECONDS,
+	// MAX_STREAMS_PER_USER, APPROVAL_TTL_HOURS, APPROVAL_RISKY_TOOL_PATTERNS (runtime_api.go).
+	RuntimeAPI
+}
+
+// Load parses the environment.
+func Load() (*Config, error) {
+	cfg := &Config{}
+	if err := env.Parse(cfg); err != nil {
+		return nil, err
+	}
+	if err := cfg.normalize(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+func (c *Config) normalize() error {
+	c.Production = strings.TrimSpace(c.ProductionRaw) != "" // C-16
+	c.BasePath = "/" + strings.Trim(c.BasePath, "/")
+	if c.BasePath == "/" {
+		c.BasePath = ""
+	}
+	c.LLMModels = trimAll(c.LLMModels)
+	if err := c.validateMemory(); err != nil {
+		return err
+	}
+	c.SandboxEgressAllowlist = trimAll(c.SandboxEgressAllowlist)
+	c.SandboxEgressDenyCIDRs = trimAll(c.SandboxEgressDenyCIDRs)
+	if err := c.validateEgress(); err != nil { // stream A (C-19)
+		return err
+	}
+	if c.LLMDefaultModel != "" && !c.ModelAllowed(c.LLMDefaultModel) {
+		c.LLMModels = append([]string{c.LLMDefaultModel}, c.LLMModels...)
+	}
+	switch c.LLMProvider {
+	case "gateway", "openai":
+	default:
+		return fmt.Errorf("LLM_PROVIDER must be gateway or openai, got %q", c.LLMProvider)
+	}
+	if strings.TrimSpace(c.MCPServersJSON) != "" {
+		if err := json.Unmarshal([]byte(c.MCPServersJSON), &c.MCPServers); err != nil {
+			return fmt.Errorf("WORK_MCP_SERVERS: %w", err)
+		}
+		seen := map[string]bool{}
+		for _, s := range c.MCPServers {
+			if s.Name == "" || s.URL == "" {
+				return fmt.Errorf("WORK_MCP_SERVERS: every server needs name and url")
+			}
+			if seen[s.Name] {
+				return fmt.Errorf("WORK_MCP_SERVERS: duplicate server name %q", s.Name)
+			}
+			seen[s.Name] = true
+			if _, err := url.Parse(s.URL); err != nil {
+				return fmt.Errorf("WORK_MCP_SERVERS: server %q: %w", s.Name, err)
+			}
+		}
+	}
+	if err := c.normalizePromptAndEfforts(); err != nil { // before the presets (efforts per model)
+		return err
+	}
+	if err := c.normalizeHarness(); err != nil {
+		return err
+	}
+	if err := c.normalizeWebSearch(); err != nil {
+		return err
+	}
+	if err := c.normalizeRuntimeAPI(); err != nil {
+		return err
+	}
+	if c.RuntimeConcurrency < 1 {
+		c.RuntimeConcurrency = 1
+	}
+	if c.AgentMaxSteps < 1 {
+		c.AgentMaxSteps = 1
+	}
+	return nil
+}
+
+func trimAll(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// IsDebug mirrors the house convention: debug unless DJANGO_PRODUCTION is set.
+func (c *Config) IsDebug() bool { return !c.Production }
+
+// ModelAllowed reports whether a model id is in the LLM_MODELS allow-list.
+func (c *Config) ModelAllowed(model string) bool {
+	for _, m := range c.LLMModels {
+		if m == model {
+			return true
+		}
+	}
+	return false
+}
+
+// SandboxEnabled reports whether sandbox tools are configured.
+func (c *Config) SandboxEnabled() bool { return strings.TrimSpace(c.OpenSandboxURL) != "" }
+
+// EgressMode is the effective sandbox egress: "disabled" (no sandbox), "allowlist"
+// or "unrestricted". In production unrestricted egress must be explicitly accepted
+// with SANDBOX_EGRESS_UNRESTRICTED=true; otherwise an error is returned.
+func (c *Config) EgressMode() (string, error) {
+	switch {
+	case !c.SandboxEnabled():
+		return "disabled", nil
+	case len(c.SandboxEgressAllowlist) > 0:
+		return "allowlist", nil
+	case !c.IsDebug() && !c.SandboxEgressUnrestricted:
+		return "", fmt.Errorf("SANDBOX_EGRESS_ALLOWLIST is empty in production: set it, or set SANDBOX_EGRESS_UNRESTRICTED=true to accept unrestricted sandbox egress")
+	default:
+		return "unrestricted", nil
+	}
+}
+
+// SandboxTimeout is the idle lifetime of a sandbox.
+func (c *Config) SandboxTimeout() time.Duration {
+	return time.Duration(c.SandboxTimeoutSeconds) * time.Second
+}
+
+// CommandTimeout is the default execute_command timeout.
+func (c *Config) CommandTimeout() time.Duration {
+	return time.Duration(c.SandboxCommandTimeout) * time.Second
+}
+
+// PostgresDSN builds the pgx DSN.
+func (c *Config) PostgresDSN() string {
+	u := url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(c.PostgresUser, c.PostgresPassword),
+		Host:   c.PostgresHost + ":" + c.PostgresPort,
+		Path:   "/" + c.PostgresDB,
+	}
+	q := url.Values{}
+	q.Set("search_path", c.PostgresSchema)
+	q.Set("sslmode", c.PostgresSSLMode)
+	q.Set("application_name", "studio-work")
+	u.RawQuery = q.Encode()
+	return u.String()
+}

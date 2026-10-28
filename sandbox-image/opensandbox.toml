@@ -1,0 +1,64 @@
+# OpenSandbox lifecycle server — LOCAL docker-compose configuration (profile `work`).
+# Reference: https://github.com/alibaba/OpenSandbox/blob/main/server/configuration.md
+#
+# Isolation model (verified locally, see compose `opensandbox` / `opensandbox-relay`):
+#   - The Docker runtime ALWAYS publishes execd (44772) and 8080 of every sandbox on a host
+#     port (no option to disable it), and the egress sidecar needs network_mode = "bridge".
+#     So ports are published on 127.0.0.1 only, and the server runs in the host network
+#     namespace (compose `network_mode: host`) to reach them. Sandboxes cannot reach
+#     host-loopback ports, nor anything on the compose network.
+#   - The server listens on 127.0.0.1:18090; `opensandbox-relay` exposes it to the compose
+#     containers on the default-bridge gateway (172.17.0.1:8090 = host.docker.internal).
+#     work-api / work-runtime use OPENSANDBOX_USE_SERVER_PROXY=true, so all execd traffic
+#     goes through this server.
+#   - Sandbox-to-sandbox / sandbox-to-host isolation comes from the per-sandbox network policy
+#     (egress sidecar, mode "dns+nft": default deny at DNS *and* IP level). work-runtime always
+#     sends one (SANDBOX_EGRESS_ALLOWLIST). A sandbox created WITHOUT a policy sits on the
+#     default bridge with inter-container traffic allowed: it can reach other sandboxes' execd.
+# The API key is NOT set here: it comes from OPENSANDBOX_SERVER_API_KEY (compose env).
+
+[server]
+# Loopback bind: the server-side proxy then targets [docker].host_ip (127.0.0.1) host ports.
+host = "127.0.0.1"
+port = 18090
+max_sandbox_timeout_seconds = 86400
+
+[proxy]
+# Proxy to the host-mapped (127.0.0.1) port, not the bridge IP: with an egress sidecar the
+# server always uses the host-mapped endpoint anyway.
+resolve_internal = false
+
+[log]
+level = "INFO"
+
+[runtime]
+type = "docker"
+execd_image = "opensandbox/execd:v1.1.0"
+
+[store]
+type = "sqlite"
+path = "/var/lib/opensandbox/opensandbox.db"
+
+[docker]
+# Required by the egress sidecar (networkPolicy rejects user-defined networks).
+network_mode = "bridge"
+# The server shares the host network namespace: host-mapped ports answer on 127.0.0.1.
+host_ip = "127.0.0.1"
+# Never publish sandbox ports on a reachable interface (execd runs commands unauthenticated).
+publish_host = "127.0.0.1"
+port_range_min = 40000
+port_range_max = 60000
+drop_capabilities = ["AUDIT_WRITE", "MKNOD", "NET_ADMIN", "NET_RAW", "SYS_ADMIN", "SYS_MODULE", "SYS_PTRACE", "SYS_TIME", "SYS_TTY_CONFIG"]
+no_new_privileges = true
+pids_limit = 4096
+
+[ingress]
+mode = "direct"
+
+# Used when a sandbox is created with a networkPolicy (SANDBOX_EGRESS_ALLOWLIST).
+# dns+nft: unlisted domains fail to resolve AND every IP not resolved from an allowed domain
+# (other sandboxes, 172.17.0.1, compose services, raw IPs) is dropped by nftables.
+[egress]
+image = "opensandbox/egress:v1.1.7"
+mode = "dns+nft"
+readiness_timeout_seconds = 30.0
