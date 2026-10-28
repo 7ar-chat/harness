@@ -93,6 +93,9 @@ type Options struct {
 	Redis redis.UniversalClient
 	// BuiltinSkills holds <name>/SKILL.md folders (default: skills/skillsfs).
 	BuiltinSkills fs.FS
+	// ExtraSkills holds more <name>/SKILL.md folders, added after the built-ins
+	// and before the user directory (config SKILLS_DIR): the host's own skills.
+	ExtraSkills fs.FS
 	// Tools are extra tool providers (host-defined tools).
 	Tools []tools.Provider
 	// Hooks run at the end of every run, after the harness' own.
@@ -195,7 +198,9 @@ func New(o Options) (*Harness, error) {
 		builtin = skillsfs.Builtin()
 	}
 	reg := skills.NewRegistry(builtin, st)
-	installer := &skills.Installer{Registry: reg, Store: st, Redis: o.Redis, Messages: st}
+	reg.AddFS(skills.SourceExtra, o.ExtraSkills)
+	reg.AddDir(skills.SourceUser, cfg.SkillsPath())
+	installer := &skills.Installer{Registry: reg, Redis: o.Redis, Messages: st}
 	h.Sandboxes, h.Artifacts, h.Skills, h.Workspace = mgr, artSvc, reg, wsSvc
 
 	mcpProvider := mcptools.New(cfg.MCPServers, o.Version, mcptools.MaxResultChars)

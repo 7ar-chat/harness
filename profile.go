@@ -107,7 +107,7 @@ func isBuiltin(name string) bool {
 }
 
 // hasUserSkills reports whether the run has a skill beyond the built-in ones:
-// an installed (user or global) skill, or one requested for the run.
+// a skill from the user directory, the project or the host, or one requested for the run.
 func (p *profile) hasUserSkills(ctx context.Context, run *store.Run) bool {
 	if p.reg == nil {
 		return false
@@ -122,7 +122,7 @@ func (p *profile) hasUserSkills(ctx context.Context, run *store.Run) bool {
 		}
 	}
 	for _, s := range plan.Catalog {
-		if s.Source == skills.SourceUser || s.Source == skills.SourceGlobal {
+		if s.Source != skills.SourceBuiltin {
 			return true
 		}
 	}

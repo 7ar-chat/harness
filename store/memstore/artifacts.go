@@ -20,8 +20,6 @@ type extras struct {
 	artifacts map[string]*store.Artifact
 	versions  map[string][]store.ArtifactVersion
 	blobs     map[string][]byte
-	skills    map[string]*store.UserSkill
-	settings  map[string]map[string]bool
 	runSkills map[string][]string
 	// blobGC is the garbage collection queue: key → last reference.
 	blobGC map[string]time.Time
@@ -38,8 +36,7 @@ func (s *Store) x() *extras {
 	s.extrasOnce.Do(func() {
 		s.ext = &extras{
 			artifacts: map[string]*store.Artifact{}, versions: map[string][]store.ArtifactVersion{},
-			blobs: map[string][]byte{}, skills: map[string]*store.UserSkill{}, settings: map[string]map[string]bool{},
-			runSkills: map[string][]string{}, blobGC: map[string]time.Time{}, locks: map[string]chan struct{}{},
+			blobs: map[string][]byte{}, runSkills: map[string][]string{}, blobGC: map[string]time.Time{}, locks: map[string]chan struct{}{},
 		}
 	})
 	return s.ext
@@ -340,106 +337,6 @@ func (s *Store) BlobCount() int {
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	return len(x.blobs)
-}
-
-// UpsertUserSkill implements store.SkillStore.
-func (s *Store) UpsertUserSkill(_ context.Context, u store.UserSkill) (*store.UserSkill, error) {
-	if badText(u.Name, u.Description) {
-		return nil, ErrInvalidText
-	}
-	x := s.x()
-	x.mu.Lock()
-	defer x.mu.Unlock()
-	now := s.now()
-	for _, cur := range x.skills {
-		if cur.UserLogin == u.UserLogin && cur.Name == u.Name {
-			cur.Description, cur.SHA256, cur.Package, cur.Files, cur.SizeBytes = u.Description, u.SHA256, u.Package, u.Files, u.SizeBytes
-			cur.DisplayName = u.DisplayName
-			cur.Version++
-			cur.UpdatedAt = now
-			s.recordUploadVersion(cur)
-			cp := *cur
-			cp.Package = nil
-			return &cp, nil
-		}
-	}
-	n := u
-	n.ID, n.Version, n.CreatedAt, n.UpdatedAt = uuid.NewString(), 1, now, now
-	x.skills[n.ID] = &n
-	s.recordUploadVersion(&n)
-	cp := n
-	cp.Package = nil
-	return &cp, nil
-}
-
-// ListUserSkills implements store.SkillStore.
-func (s *Store) ListUserSkills(_ context.Context, login string) ([]*store.UserSkill, error) {
-	x := s.x()
-	x.mu.Lock()
-	defer x.mu.Unlock()
-	var out []*store.UserSkill
-	for _, u := range x.skills {
-		if u.UserLogin == login {
-			cp := *u
-			cp.Package = nil
-			out = append(out, &cp)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	return out, nil
-}
-
-// GetUserSkill implements store.SkillStore.
-func (s *Store) GetUserSkill(_ context.Context, login, id string) (*store.UserSkill, error) {
-	x := s.x()
-	x.mu.Lock()
-	defer x.mu.Unlock()
-	u, ok := x.skills[id]
-	if !ok || u.UserLogin != login {
-		return nil, store.ErrNotFound
-	}
-	cp := *u
-	cp.Package = append([]byte(nil), u.Package...)
-	return &cp, nil
-}
-
-// DeleteUserSkill implements store.SkillStore.
-func (s *Store) DeleteUserSkill(_ context.Context, login, id string) error {
-	x := s.x()
-	x.mu.Lock()
-	defer x.mu.Unlock()
-	u, ok := x.skills[id]
-	if !ok || u.UserLogin != login {
-		return store.ErrNotFound
-	}
-	delete(x.skills, id)
-	delete(x.settings[login], id)
-	s.dropVersions(id)
-	return nil
-}
-
-// SkillSettings implements store.SkillStore.
-func (s *Store) SkillSettings(_ context.Context, login string) (map[string]bool, error) {
-	x := s.x()
-	x.mu.Lock()
-	defer x.mu.Unlock()
-	out := map[string]bool{}
-	for k, v := range x.settings[login] {
-		out[k] = v
-	}
-	return out, nil
-}
-
-// SetSkillEnabled implements store.SkillStore.
-func (s *Store) SetSkillEnabled(_ context.Context, login, skillID string, enabled bool) error {
-	x := s.x()
-	x.mu.Lock()
-	defer x.mu.Unlock()
-	if x.settings[login] == nil {
-		x.settings[login] = map[string]bool{}
-	}
-	x.settings[login][skillID] = enabled
-	return nil
 }
 
 // AppendRunArtifacts implements store.ArtifactStore.

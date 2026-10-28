@@ -35,9 +35,7 @@ type Store struct {
 	extrasOnce sync.Once
 	ext        *extras // artifacts, blobs, skills (artifacts.go)
 
-	ideaUsage []*store.IdeaUsage // ideas.go
-	catOnce   sync.Once
-	cat       *catalog                 // skill versions, global skills, sessions (skills_catalog.go)
+	ideaUsage []*store.IdeaUsage       // ideas.go
 	renders   map[string]*store.Render // by thread id + "\x00" + render id (renders.go)
 }
 

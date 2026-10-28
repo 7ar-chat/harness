@@ -167,8 +167,8 @@ ss.Delete(ctx, "alice", threadID)
 
 `store/filestore` wraps the in-memory store and appends every change to
 `<dir>/journal.jsonl` (JSON lines, upsert records, one `write(2)` per batch). Threads, messages,
-runs, plans, summaries, compactions, goals, approvals and event logs persist; artifacts, blobs, the
-skills catalog and sandbox ids stay in memory. A `kill -9` loses nothing and can only tear the last
+runs, plans, summaries, compactions, goals, approvals and event logs persist; artifacts, blobs
+and sandbox ids stay in memory. A `kill -9` loses nothing and can only tear the last
 line, which is cut at the next start; fsync happens every 500 ms and on `Close` (`SyncAlways` /
 `SyncNever` via `filestore.Open(dir, filestore.Options{…})`). Runs that were in flight when the
 process died are marked `interrupted` (with a terminal `RUN_ERROR`) at the next start. One process
@@ -223,6 +223,35 @@ index or stash change) and `gitsafe.Restore(ctx, dir, ref)` / `gitsafe.Undo(ctx,
 HEAD and the staged state back, saving the current state under `refs/harness/backups/` first.
 Nothing happens outside a git repository.
 
+## Skills
+
+A skill is a folder with a `SKILL.md` (frontmatter `name` and `description`, then the instructions)
+and optional `scripts/`, `reference/` files. The model sees an index of them in its system prompt,
+reads one with `load_skill`, and its folder appears read-only under `/skills/<name>/` in the sandbox
+(installed lazily, only for the skills a run loads or names in a command).
+
+Skills are discovered from, lowest to highest precedence (a later source replaces a skill of the same name):
+
+| Source | Where | Notes |
+| --- | --- | --- |
+| `builtin` | embedded in the binary (`skills/skillsfs/builtin`) | `docx`, `pptx`, `xlsx`, `pdf`, `charts`; `Options.BuiltinSkills` replaces them |
+| `extra` | `Options.ExtraSkills` (an `fs.FS`) | the embedding product's own skills |
+| `user` | `SKILLS_DIR`, default `~/.config/harness/skills` | one folder per skill |
+| `project` | `<workspace>/.harness/skills` | not wired yet (see Status); fenced as untrusted text |
+
+```
+~/.config/harness/skills/
+  release-notes/
+    SKILL.md          # ---\nname: release-notes\ndescription: Draft release notes from merged PRs.\n---\n…
+    scripts/collect.py
+```
+
+The folder name is the skill name. `RunOptions.Skills: []string{"release-notes"}` attaches a skill to a
+run (its `SKILL.md` goes into the system prompt and its files are installed before the first sandbox
+command); the built-ins are only listed and installed on demand. An optional `requires: [other-skill]`
+frontmatter list installs dependencies with a skill. Packages are validated (entry count, depth, file
+and total size, safe paths) when loaded; an invalid folder is logged and skipped.
+
 ## Packages
 
 | Package | Role |
@@ -235,9 +264,9 @@ Nothing happens outside a git repository.
 | `compaction` | Context summarisation and token estimates |
 | `sandbox`, `tools/sandboxtools` | Remote sandbox contract/manager and the file/exec/search/view tools |
 | `tools/{skill,memory,harness,mcp}tools` | Skills, memory, plan/ask_user/goal and MCP tools |
-| `skills`, `skills/skillsfs` | Skill packages, registry, lazy install; built-in skills (embedded) |
+| `skills`, `skills/skillsfs` | Filesystem skills: registry, lazy install into the sandbox; built-in skills (embedded) |
 | `artifacts`, `workspace`, `renders` | Versioned deliverables, workspace git checkpoints, document renders |
-| `approvals`, `goals`, `verify`, `titles`, `memory`, `ideas`, `websearch`, `classification` | Product features of Work Chat, usable as plugins |
+| `approvals`, `goals`, `verify`, `titles`, `memory`, `ideas`, `classification` | Product features of Work Chat, usable as plugins |
 | `runtime` | Run claiming, heartbeat, sweeper, end-of-run hooks |
 | `store`, `store/memstore`, `store/pgstore` | Types + interface; in-memory and Postgres implementations |
 | `eventlog`, `queue` | Per-run durable event log and run queue/bus (memory and Redis) |
@@ -260,7 +289,8 @@ because it keeps the symbol table and DWARF). Idle resident memory is about 20 M
   (`go test ./...`). `store/pgstore` tests need a Postgres (`WORK_TEST_DATABASE_URL`) and skip otherwise.
 * `classification` still encodes Studio's MSIP confidentiality policy (labels `C4`, `C3-Amundi-Only`);
   swap it for your own policy before using the upload/derive paths outside Studio.
-* The Anthropic skill packages and Studio's marketplace sync are not bundled (licensing /
-  internal); `skills.Registry.LoadAnthropic(fs)` takes your own catalogue. Web search is not wired
-  by `harness.New` yet (`websearch` package is there).
+* Project skills (`<workspace>/.harness/skills`) are not discovered yet: the registry supports the
+  `project` source (`Registry.AddFS` / `AddDir`, fenced as untrusted data) but nothing feeds it a
+  workspace directory per run. Follow-up.
+* Web search is not built in: configure any web-search MCP server in `MCP_SERVERS`.
 * The sandbox image was adapted for public base images and not built here.

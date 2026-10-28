@@ -7,27 +7,10 @@ import (
 )
 
 // PurgeDeletedThreads implements store.ArtifactStore: like the Postgres
-// cascade, everything of the thread goes — runs and their credentials,
-// approvals, the skill creation session — while idea usage keeps its rows
-// without the thread (ON DELETE SET NULL); memories are per user and stay.
+// cascade, everything of the thread goes — runs and their
+// approvals — while idea usage keeps its rows without the thread (ON DELETE SET NULL); memories are per user and stay.
 func (s *Store) PurgeDeletedThreads(_ context.Context, olderThan time.Duration, limit int) (int, error) {
-	n, purge, runIDs := s.purgeThreads(olderThan, limit)
-	if n == 0 {
-		return 0, nil
-	}
-	// Separate locks, taken after the store's (never nested with them).
-	t := s.creds()
-	t.mu.Lock()
-	for _, id := range runIDs {
-		delete(t.rows, id)
-	}
-	t.mu.Unlock()
-	c := s.c()
-	c.mu.Lock()
-	for id := range purge {
-		delete(c.sessions, id)
-	}
-	c.mu.Unlock()
+	n, _, _ := s.purgeThreads(olderThan, limit)
 	return n, nil
 }
 

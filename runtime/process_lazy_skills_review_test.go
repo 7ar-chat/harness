@@ -1,8 +1,6 @@
 package runtime_test
 
 import (
-	"archive/zip"
-	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -14,7 +12,6 @@ import (
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/skills"
 	"github.com/GhaziBenDahmane/harness/store"
-	"github.com/GhaziBenDahmane/harness/verify"
 )
 
 // Lazy skills, review fixes: explicit defaults, the /skills folder, implicit
@@ -55,8 +52,8 @@ func TestAMentionedDefaultSkillIsInstalledBeforeTheFirstCommand(t *testing.T) {
 
 	// Assert
 	sb := r.sandbox()
-	if got := installedSkills(sb); !equal(got, []string{"docx", "studio-brand"}) {
-		t.Fatalf("installed %v, want docx and studio-brand", got)
+	if got := installedSkills(sb); !equal(got, []string{"docx"}) {
+		t.Fatalf("installed %v, want docx", got)
 	}
 	if install, command := execAt(sb, "a-w /skills/docx"), execAt(sb, "ls /workspace"); install < 0 || command < install {
 		t.Fatalf("install at %d, command at %d", install, command)
@@ -85,21 +82,19 @@ func TestListingTheSkillsFolderInstallsTheIndexedSkills(t *testing.T) {
 	}
 }
 
-const brandingScript = "import sys\nsys.path.insert(0, '/skills/studio-brand/scripts')\nimport brand\n"
+const chartsScript = "import sys\nsys.path.insert(0, '/skills/charts/scripts')\nimport make_chart\n"
 
 func TestAUserSkillUsingABuiltinWithoutDeclaringItGetsItInstalled(t *testing.T) {
-	// A user skill whose script imports /skills/studio-brand/scripts (no "requires") gets studio-brand installed with it.
+	// A user-directory skill whose script imports /skills/charts/scripts (no "requires") gets charts installed with it.
 	// Arrange
 	r := newLazyRig(t,
 		llmtest.Turn{Chunks: streamedCall("call_1", "execute_command", `{"command":"python3 /skills/my-tool/scripts/x.py"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Done")},
 	)
-	if _, err := r.reg.Upload(context.Background(), "alice", skillZip(t, map[string]string{
-		"SKILL.md":     "---\nname: my-tool\ndescription: My branded tool.\n---\n\nRun scripts/x.py.\n",
-		"scripts/x.py": brandingScript,
-	})); err != nil {
-		t.Fatal(err)
-	}
+	r.reg.AddFS(skills.SourceUser, fstest.MapFS{
+		"my-tool/SKILL.md":     {Data: []byte("---\nname: my-tool\ndescription: My charting tool.\n---\n\nRun scripts/x.py.\n")},
+		"my-tool/scripts/x.py": {Data: []byte(chartsScript)},
+	})
 	_, run := r.queued("use my tool")
 
 	// Act
@@ -110,48 +105,8 @@ func TestAUserSkillUsingABuiltinWithoutDeclaringItGetsItInstalled(t *testing.T) 
 	if _, ok := sb.File("/skills/my-tool/scripts/x.py"); !ok {
 		t.Fatal("my-tool not installed")
 	}
-	if got := installedSkills(sb); !equal(got, []string{"studio-brand"}) {
-		t.Fatalf("installed built-ins %v, want studio-brand", got)
-	}
-}
-
-func TestAnAnthropicSkillUsingABuiltinWithoutDeclaringItGetsItInstalled(t *testing.T) {
-	// An (enabled) Anthropic skill whose script names /skills/studio-brand/ gets studio-brand installed with it.
-	// Arrange
-	r := newLazyRig(t,
-		llmtest.Turn{Chunks: streamedCall("call_1", "execute_command", `{"command":"python3 /skills/anthropic-demo/scripts/run.py"}`)},
-		llmtest.Turn{Chunks: llmtest.Text("Done")},
-	)
-	var zbuf bytes.Buffer
-	zw := zip.NewWriter(&zbuf)
-	for name, content := range map[string]string{
-		"SKILL.md":       "---\nname: anthropic-demo\ndescription: A demo skill.\n---\n\nRun scripts/run.py.\n",
-		"scripts/run.py": brandingScript,
-	} {
-		w, _ := zw.Create(name)
-		_, _ = w.Write([]byte(content))
-	}
-	_ = zw.Close()
-	fsys := fstest.MapFS{
-		"manifest.json":               {Data: []byte(`{"version":"1","skills":[{"slug":"anthropic-demo","display_name":"Demo","summary":"A demo skill.","package":"packages/anthropic-demo.zip"}]}`)},
-		"packages/anthropic-demo.zip": {Data: zbuf.Bytes()},
-	}
-	if n, err := r.reg.LoadAnthropic(fsys); err != nil || n != 1 {
-		t.Fatalf("loaded %d: %v", n, err)
-	}
-	_ = r.st.SetSkillEnabled(context.Background(), "alice", skills.AnthropicID("anthropic-demo"), true)
-	_, run := r.queued("run the demo")
-
-	// Act
-	r.process(run)
-
-	// Assert
-	sb := r.sandbox()
-	if _, ok := sb.File("/skills/anthropic-demo/scripts/run.py"); !ok {
-		t.Fatal("anthropic-demo not installed")
-	}
-	if got := installedSkills(sb); !equal(got, []string{"studio-brand"}) {
-		t.Fatalf("installed built-ins %v, want studio-brand", got)
+	if got := installedSkills(sb); !equal(got, []string{"charts"}) {
+		t.Fatalf("installed built-ins %v, want charts", got)
 	}
 }
 
@@ -212,28 +167,6 @@ func TestASkillRecordedInRedisButMissingInTheSandboxIsInstalledAgain(t *testing.
 	}
 }
 
-func TestACheckerOfADisabledSkillGetsItsDependenciesToo(t *testing.T) {
-	// The .docx checker installs docx and its dependency studio-brand even when the user disabled both (resolved from the registry, not the run's plan).
-	// Arrange
-	r := newLazyRig(t,
-		llmtest.Turn{Chunks: streamedCall("call_1", "write_file", `{"path":"/workspace/outputs/memo.docx","content":"not really a docx"}`)},
-		llmtest.Turn{Chunks: llmtest.Text("Done")},
-	)
-	ctx := context.Background()
-	_ = r.st.SetSkillEnabled(ctx, "alice", skills.BuiltinID("docx"), false)
-	_ = r.st.SetSkillEnabled(ctx, "alice", skills.BuiltinID("studio-brand"), false)
-	r.agent.Harness.Checker = verify.New(verify.Options{Sandbox: r.mgr, Messages: r.st, EnsureSkill: r.inst.EnsureSkill})
-	_, run := r.queued("write a memo")
-
-	// Act
-	r.process(run)
-
-	// Assert
-	if got := installedSkills(r.sandbox()); !equal(got, []string{"docx", "studio-brand"}) {
-		t.Fatalf("installed %v, want docx and studio-brand", got)
-	}
-}
-
 func TestASymlinkedScriptIsNotFollowedWhenScanned(t *testing.T) {
 	// The scan of the scripts a command runs never follows a symlink: a /workspace link to a file naming /skills/xlsx/ installs nothing.
 	// Arrange
@@ -262,7 +195,7 @@ func TestScriptsAreReadOnceUnlessTheyChange(t *testing.T) {
 	// Arrange
 	cmd := `{"command":"python3 .work/w.py && python3 .work/c.py"}`
 	r := newLazyRig(t,
-		llmtest.Turn{Chunks: streamedCall("call_1", "write_file", `{"path":".work/w.py","content":"`+strings.ReplaceAll(brandingScript, "\n", `\n`)+`"}`)},
+		llmtest.Turn{Chunks: streamedCall("call_1", "write_file", `{"path":".work/w.py","content":"`+strings.ReplaceAll(chartsScript, "\n", `\n`)+`"}`)},
 		llmtest.Turn{Chunks: streamedCall("call_2", "execute_command", cmd)},
 		llmtest.Turn{Chunks: streamedCall("call_3", "execute_command", cmd)},
 		llmtest.Turn{Chunks: llmtest.Text("Done")},
@@ -281,15 +214,15 @@ func TestScriptsAreReadOnceUnlessTheyChange(t *testing.T) {
 	if n := sb.FileReads(); n != 1 {
 		t.Fatalf("%d script downloads, want 1 (c.py once)", n)
 	}
-	if got := installedSkills(sb); !equal(got, []string{"studio-brand"}) {
-		t.Fatalf("installed %v, want studio-brand", got)
+	if got := installedSkills(sb); !equal(got, []string{"charts"}) {
+		t.Fatalf("installed %v, want charts", got)
 	}
 }
 
 func TestSkillsFoundInWrittenFilesAndFailedCommandsComeBackInALaterRun(t *testing.T) {
-	// Skills discovered from a written file (xlsx) and from a failed command's note (studio-brand) are installed again in the new sandbox of a later run.
+	// Skills discovered from a written file (xlsx) and from a failed command's note (charts) are installed again in the new sandbox of a later run.
 	// Arrange
-	heredoc := `cat > /workspace/.work/b.py <<'EOF'\nimport os, sys\nsys.path.insert(0, os.path.join(\"/skills\", \"studio-brand\", \"scripts\"))\nimport brand\nEOF\npython3 /workspace/.work/b.py`
+	heredoc := `cat > /workspace/.work/b.py <<'EOF'\nimport os, sys\nsys.path.insert(0, os.path.join(\"/skills\", \"charts\", \"scripts\"))\nimport make_chart\nEOF\npython3 /workspace/.work/b.py`
 	r := newLazyRig(t,
 		llmtest.Turn{Chunks: streamedCall("call_1", "execute_command", `{"command":"`+heredoc+`"}`)},
 		llmtest.Turn{Chunks: streamedCall("call_2", "write_file", `{"path":"/workspace/.work/x.py","content":"import sys\nsys.path.insert(0, '/skills/xlsx/scripts')\n"}`)},
@@ -307,8 +240,8 @@ func TestSkillsFoundInWrittenFilesAndFailedCommandsComeBackInALaterRun(t *testin
 
 	// Assert
 	sb := r.sandbox()
-	if got := installedSkills(sb); len(r.backend.Created()) != 2 || !equal(got, []string{"studio-brand", "xlsx"}) {
-		t.Fatalf("sandboxes %d, installed %v, want studio-brand and xlsx", len(r.backend.Created()), got)
+	if got := installedSkills(sb); len(r.backend.Created()) != 2 || !equal(got, []string{"charts", "xlsx"}) {
+		t.Fatalf("sandboxes %d, installed %v, want charts and xlsx", len(r.backend.Created()), got)
 	}
 	if install, command := execAt(sb, "a-w /skills/"), execAt(sb, "ls /workspace"); install < 0 || command < install {
 		t.Fatalf("install at %d, command at %d", install, command)

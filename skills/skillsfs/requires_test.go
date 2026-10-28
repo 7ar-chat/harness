@@ -16,7 +16,7 @@ import (
 // Lazy skills: a sandbox gets only the skills a run needs, each with the
 // skills its frontmatter "requires". A built-in whose scripts (or documented
 // imports) use another skill's files must declare it, so installing it alone
-// never breaks or silently unbrands its output.
+// never breaks. (None of the built-ins depends on another today.)
 
 var (
 	// An absolute skill path: /skills/<name>/... (also a sys.path entry).
@@ -39,7 +39,7 @@ func TestEveryBuiltinDeclaresTheSkillsItsScriptsUse(t *testing.T) {
 	requires := map[string][]string{}
 	for _, md := range names {
 		name := strings.TrimSuffix(md, "/SKILL.md")
-		_, pkg, err := reg.ByName(context.Background(), "alice", name)
+		_, pkg, err := reg.ByName(context.Background(), name)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -80,8 +80,5 @@ func TestEveryBuiltinDeclaresTheSkillsItsScriptsUse(t *testing.T) {
 				t.Errorf("%s requires %q, which is not a built-in skill", name, d)
 			}
 		}
-	}
-	if len(used) == 0 {
-		t.Fatal("no cross-skill use found: the scan is broken")
 	}
 }

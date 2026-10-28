@@ -47,7 +47,7 @@ func allTools(t *testing.T) []renderedTool {
 	reg := skills.NewRegistry(os.DirFS(filepath.Join("..", "skills", "testdata", "builtin")), st)
 	registry := tools.NewRegistry(
 		sandboxtools.New(mgr, sandboxtools.Options{CommandTimeout: time.Minute}),
-		&skilltools.Provider{Registry: reg, Installer: &skills.Installer{Registry: reg, Store: st, Redis: rdb}, Sandbox: mgr},
+		&skilltools.Provider{Registry: reg, Installer: &skills.Installer{Registry: reg, Redis: rdb}, Sandbox: mgr},
 		harnesstools.New(st),
 		memorytools.New(memory.New(st, memory.Options{})),
 	)

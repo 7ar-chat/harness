@@ -27,9 +27,9 @@ func TestLoadAppliesDocumentedDefaults(t *testing.T) {
 }
 
 func TestLoadParsesMCPServersAndLists(t *testing.T) {
-	// WORK_MCP_SERVERS JSON and comma lists are parsed; the default model joins the allow-list.
+	// MCP_SERVERS JSON and comma lists are parsed; the default model joins the allow-list.
 	// Arrange
-	t.Setenv("WORK_MCP_SERVERS", `[{"name":"kb","url":"http://kb-mcp:8000/mcp","forwardIdentity":true,"tools":["search"]}]`)
+	t.Setenv("MCP_SERVERS", `[{"name":"kb","url":"http://kb-mcp:8000/mcp","forwardIdentity":true,"tools":["search"]}]`)
 	t.Setenv("SANDBOX_EGRESS_ALLOWLIST", "pypi.org, files.pythonhosted.org")
 	t.Setenv("LLM_MODELS", "a,b")
 	t.Setenv("LLM_DEFAULT_MODEL", "c")
@@ -53,7 +53,7 @@ func TestLoadRejectsInvalidSettings(t *testing.T) {
 	// Act
 	_, providerErr := config.Load()
 	t.Setenv("LLM_PROVIDER", "openai")
-	t.Setenv("WORK_MCP_SERVERS", `[{"name":""}]`)
+	t.Setenv("MCP_SERVERS", `[{"name":""}]`)
 	_, mcpErr := config.Load()
 
 	// Assert

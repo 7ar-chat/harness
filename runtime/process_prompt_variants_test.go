@@ -19,7 +19,6 @@ import (
 	skillsfs "github.com/GhaziBenDahmane/harness/skills/skillsfs"
 	"github.com/GhaziBenDahmane/harness/store"
 	"github.com/GhaziBenDahmane/harness/tools/harnesstools"
-	"github.com/GhaziBenDahmane/harness/websearch"
 	"github.com/GhaziBenDahmane/harness/workspace"
 )
 
@@ -166,7 +165,7 @@ func TestPromptSizesOfATypicalRun(t *testing.T) {
 		h.Sections[0] = r.reg.PromptSection
 		h.Sections = append(h.Sections,
 			agent.Part(prompts.Git, agent.Legacy(func(_ context.Context, in agent.Input) string { return workspace.GitPrompt }, prompts.GitCheckpoints)),
-			agent.Part(prompts.Web, agent.Legacy(func(context.Context, agent.Input) string { return websearch.Instructions }, prompts.WebSearch)))
+			agent.Part(prompts.Web, agent.Legacy(func(context.Context, agent.Input) string { return prompts.WebSearch }, prompts.WebSearch)))
 		legacyOrder := h.Sections
 		if variant == prompts.Legacy { // v2 order: skills, file refs, git, plans, memory, goal, web
 			legacyOrder = []agent.PromptSection{h.Sections[0], h.Sections[1], h.Sections[5], h.Sections[2], h.Sections[3], h.Sections[4], h.Sections[6]}

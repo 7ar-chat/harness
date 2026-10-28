@@ -16,10 +16,10 @@ Skills: these skills contain step-by-step instructions and tested helper scripts
 Before producing or editing a document of one of these kinds, call load_skill with the skill name and follow its instructions exactly. Loading a skill starts nothing: load_skill returns its instructions, and a skill's folder /skills/<name>/ appears once you load it (load_skill) or name its path in a command (read-only: never modify it; write final deliverables to /workspace/outputs/).
 
 ## Attached Skills
-The following marketplace skills are attached to this request and are available inside the workspace.
+The following skills are attached to this request and are available inside the workspace.
 Apply them in the exact order shown below.
 
-- fixture-doc @ 1
+- fixture-doc
   Description: Create fixture documents for tests.
   Path: /skills/fixture-doc (installed with its scripts and assets once you load it or before a command that uses it; load_skill fixture-doc returns its instructions)
 

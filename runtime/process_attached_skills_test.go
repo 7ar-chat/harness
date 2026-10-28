@@ -1,23 +1,20 @@
 package runtime_test
 
 import (
-	"archive/zip"
-	"bytes"
 	"context"
-	"io/fs"
 	"strings"
 	"testing"
 	"testing/fstest"
 
 	"github.com/GhaziBenDahmane/harness/agent/prompts"
 	"github.com/GhaziBenDahmane/harness/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/skills"
 	"github.com/GhaziBenDahmane/harness/store"
 )
 
-// Materialization of attached skills (Work: codex.py "Attached Skills" section
-// and _sync_attached_skills_to_workspace): the session's skill-creator and
-// selected versions are installed with their files before the first sandbox
-// command; defaults only once loaded or used (lazy skills).
+// Materialization of attached skills: the skills requested for a run are
+// installed with their files before the first sandbox command; defaults only
+// once loaded or used (lazy skills).
 
 func protectCount(execs []string, dir string) int {
 	n := 0
@@ -40,7 +37,7 @@ func (v *v2rig) execCommands() []string {
 }
 
 func TestDefaultSkillsAreListedButInstalledOnlyWhenACommandUsesThem(t *testing.T) {
-	// Built-ins are Work Chat's studio-work-default skills: listed once in the skills index (no "Attached Skills" block, A-08) but not installed
+	// Built-ins are listed once in the skills index (no "Attached Skills" block, A-08) but not installed
 	// with every sandbox (lazy skills): the first command naming /skills/fixture-doc installs it, and later commands and runs reinstall nothing.
 	// Arrange
 	r := newV2Rig(t, false,
@@ -75,117 +72,52 @@ func TestDefaultSkillsAreListedButInstalledOnlyWhenACommandUsesThem(t *testing.T
 	}
 }
 
-func TestDisabledDefaultSkillsAreNotAttached(t *testing.T) {
-	// The user's toggle still applies: a disabled built-in is neither listed nor installed.
+func TestRequestedUserDirectorySkillIsInstalledAndInjected(t *testing.T) {
+	// A skill found in a skills directory (here the user source) and requested by name for the run is installed before the first command and its SKILL.md is injected; it is not fenced (the user's own skill).
 	// Arrange
 	r := newV2Rig(t, false,
-		llmtest.Turn{Chunks: streamedCall("call_1", "execute_command", `{"command":"ls"}`)},
+		llmtest.Turn{Chunks: streamedCall("call_1", "execute_command", `{"command":"cat /skills/my-notes/SKILL.md"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Done")},
 	)
-	_ = r.st.SetSkillEnabled(context.Background(), "alice", "builtin:fixture-doc", false)
+	r.reg.AddFS(skills.SourceUser, fstest.MapFS{
+		"my-notes/SKILL.md":         {Data: []byte("---\nname: my-notes\ndescription: Notes.\n---\n\nUser notes text.\n")},
+		"my-notes/scripts/count.py": {Data: []byte("print(1)\n")},
+	})
+	ctx := context.Background()
+	th, _ := r.st.CreateThread(ctx, "alice", "t")
+	run := r.create(th, store.NewRun{Message: store.Message{Role: store.RoleUser, Content: "go"}, Skills: []string{"my-notes"}})
+
+	// Act
+	r.process(run)
+
+	// Assert
+	prompt := r.model.Calls()[0].Messages[0].Content
+	if !strings.Contains(prompt, "- my-notes: Notes.") || !strings.Contains(prompt, "User notes text.") || strings.Contains(prompt, `<skill source="user"`) {
+		t.Fatalf("prompt %q", prompt)
+	}
+	sb := r.sandbox()
+	if md, _ := sb.File("/skills/my-notes/SKILL.md"); !strings.Contains(md, "User notes text.") {
+		t.Fatalf("installed %q", md)
+	}
+	if _, ok := sb.File("/skills/my-notes/scripts/count.py"); !ok {
+		t.Fatal("script not installed")
+	}
+}
+
+func TestUserDirectorySkillOverridesABuiltinOfTheSameName(t *testing.T) {
+	// Later sources win: a user skill named like a built-in replaces it in the index.
+	// Arrange
+	r := newV2Rig(t, false, llmtest.Turn{Chunks: llmtest.Text("Done")})
+	r.reg.AddFS(skills.SourceUser, fstest.MapFS{
+		"fixture-doc/SKILL.md": {Data: []byte("---\nname: fixture-doc\ndescription: My own fixture doc.\n---\n\nMine.\n")},
+	})
 	_, run := r.queued("hello")
 
 	// Act
 	r.process(run)
 
 	// Assert
-	if prompt := r.model.Calls()[0].Messages[0].Content; strings.Contains(prompt, "Attached Skills") {
+	if prompt := r.model.Calls()[0].Messages[0].Content; !strings.Contains(prompt, "- fixture-doc: My own fixture doc.") || strings.Contains(prompt, "Create fixture documents for tests.") {
 		t.Fatalf("prompt %q", prompt)
-	}
-	if _, ok := r.sandbox().File("/skills/fixture-doc/SKILL.md"); ok {
-		t.Fatal("disabled skill installed")
-	}
-}
-
-func TestSelectedSkillVersionIsTheOneMaterialized(t *testing.T) {
-	// A run attaching "name@versionId" installs and injects that version (here a draft), not the published one.
-	// Arrange
-	r := newV2Rig(t, false,
-		llmtest.Turn{Chunks: streamedCall("call_1", "execute_command", `{"command":"cat /skills/my-notes/SKILL.md"}`)},
-		llmtest.Turn{Chunks: llmtest.Text("Done")},
-	)
-	ctx := context.Background()
-	s, err := r.reg.Upload(ctx, "alice", skillZip(t, map[string]string{"SKILL.md": "---\nname: my-notes\ndescription: Notes.\n---\n\nPublished text.\n"}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	draft, err := r.reg.AddEditorVersion(ctx, "alice", s.ID, "2.0.0", "---\nname: my-notes\ndescription: Notes.\n---\n\nDraft text.\n", false, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	th, _ := r.st.CreateThread(ctx, "alice", "t")
-	run := r.create(th, store.NewRun{Message: store.Message{Role: store.RoleUser, Content: "go"}, Skills: []string{"my-notes@" + draft.Latest.ID}})
-
-	// Act
-	r.process(run)
-
-	// Assert
-	prompt := r.model.Calls()[0].Messages[0].Content
-	if !strings.Contains(prompt, "- my-notes: <skill") || !strings.Contains(prompt, "Draft text.") || strings.Contains(prompt, "Published text.") {
-		t.Fatalf("prompt %q", prompt)
-	}
-	if md, _ := r.sandbox().File("/skills/my-notes/SKILL.md"); !strings.Contains(md, "Draft text.") {
-		t.Fatalf("installed %q", md)
-	}
-}
-
-func TestSkillCreationSessionAttachesTheSkillCreator(t *testing.T) {
-	// A thread in mode skill_creation gets Work's skill-creator attached (with its scripts) and the package instruction.
-	// Arrange
-	r := newV2Rig(t, false,
-		llmtest.Turn{Chunks: streamedCall("call_1", "execute_command", `{"command":"ls /skills/anthropic-skill-creator"}`)},
-		llmtest.Turn{Chunks: llmtest.Text("Done")},
-	)
-	if _, err := r.reg.LoadAnthropic(skillCreatorFixture(t)); err != nil {
-		t.Fatal(err)
-	}
-	ctx := context.Background()
-	th, _ := r.st.CreateThread(ctx, "alice", "t")
-	if err := r.st.CreateSkillCreationSession(ctx, store.SkillCreationSession{ThreadID: th.ID, UserLogin: "alice", PackageRoot: "/workspace/generated-skill"}); err != nil {
-		t.Fatal(err)
-	}
-	run := r.queuedOn(th, "Help me create a new skill.")
-
-	// Act
-	r.process(run)
-
-	// Assert
-	prompt := r.model.Calls()[0].Messages[0].Content
-	if !strings.Contains(prompt, "- anthropic-skill-creator: ") || !strings.Contains(prompt, "## Skill creation") ||
-		!strings.Contains(prompt, "Store every complete generated skill package only under /workspace/generated-skill/<skill-name>.") {
-		t.Fatalf("prompt %q", prompt)
-	}
-	sb := r.sandbox()
-	for _, p := range []string{"SKILL.md", "LICENSE.txt", "scripts/package_skill.py"} {
-		if _, ok := sb.File("/skills/anthropic-skill-creator/" + p); !ok {
-			t.Errorf("missing /skills/anthropic-skill-creator/%s", p)
-		}
-	}
-}
-
-// skillCreatorFixture is a one-skill Anthropic catalog (manifest + zip package)
-// standing in for the licensed skill-creator package.
-func skillCreatorFixture(t *testing.T) fs.FS {
-	t.Helper()
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
-	for name, body := range map[string]string{
-		"SKILL.md":                 "---\nname: skill-creator\ndescription: Create skills.\n---\nCreate skills.\n",
-		"LICENSE.txt":              "test license",
-		"scripts/package_skill.py": "print('package')\n",
-	} {
-		w, err := zw.Create(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, _ = w.Write([]byte(body))
-	}
-	if err := zw.Close(); err != nil {
-		t.Fatal(err)
-	}
-	manifest := `{"version":"test","skills":[{"slug":"anthropic-skill-creator","display_name":"Skill Creator","package":"packages/anthropic-skill-creator.zip","summary":"Create skills."}]}`
-	return fstest.MapFS{
-		"manifest.json":                        {Data: []byte(manifest)},
-		"packages/anthropic-skill-creator.zip": {Data: buf.Bytes()},
 	}
 }

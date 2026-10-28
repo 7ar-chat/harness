@@ -64,12 +64,12 @@ func (p *Provider) load(ctx context.Context, rc tools.RunContext, name string) (
 		if names := plan.Names(); len(names) > 0 {
 			list = strings.Join(names, ", ")
 		}
-		return "", tools.Errorf("unknown or disabled skill %q; available skills: %s", name, list)
+		return "", tools.Errorf("unknown skill %q; available skills: %s", name, list)
 	}
 	var pkg *skills.Package
 	if att != nil {
 		pkg = att.Package
-	} else if s, pkg, err = p.Registry.ByName(ctx, rc.Login, name); err != nil {
+	} else if s, pkg, err = p.Registry.ByName(ctx, name); err != nil {
 		return "", fmt.Errorf("loading skill %s: %w", name, err)
 	}
 	if p.Sandbox == nil || !p.Sandbox.Enabled() {
