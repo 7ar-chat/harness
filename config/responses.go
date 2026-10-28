@@ -2,7 +2,6 @@ package config
 
 import (
 	"slices"
-	"strings"
 )
 
 // Responses selects the models called through the OpenAI Responses API
@@ -10,15 +9,12 @@ import (
 // across tool steps and runs. Other models stay on Chat Completions.
 type Responses struct {
 	// LLMResponsesModels are the LLM_MODELS ids called through the Responses API
-	// ("none": every model uses Chat Completions). Only models of the gateway's
-	// openai provider qualify (DeepSeek stays on Chat Completions).
+	// ("none": every model uses Chat Completions). Only the openai provider
+	// (LLM_BASE_URL/responses) has a Responses API.
 	LLMResponsesModels []string `env:"LLM_RESPONSES_MODELS" envDefault:"gpt-5.6-sol,gpt-5.6-terra" envSeparator:","`
 }
 
 // UsesResponses reports whether a model is called through the Responses API.
 func (c *Config) UsesResponses(model string) bool {
-	if provider, _, ok := strings.Cut(model, "/"); ok && provider != "openai" {
-		return false
-	}
 	return slices.Contains(trimAll(c.LLMResponsesModels), model)
 }

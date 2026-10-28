@@ -32,8 +32,6 @@ import (
 type Caller struct {
 	// Login owns threads and runs.
 	Login string
-	// Userinfo is forwarded to the LLM gateway and MCP servers (optional).
-	Userinfo string
 }
 
 // Options configures the handler.
@@ -128,7 +126,7 @@ func (s *server) createRun(w http.ResponseWriter, r *http.Request, c Caller) {
 		model = s.o.DefaultModel
 	}
 	run, err := s.h.Send(r.Context(), c.Login, r.PathValue("id"), body.Message, harness.RunOptions{
-		Model: model, ReasoningEffort: body.ReasoningEffort, Skills: body.Skills, Interactive: body.Interactive, Userinfo: c.Userinfo,
+		Model: model, ReasoningEffort: body.ReasoningEffort, Skills: body.Skills, Interactive: body.Interactive,
 	})
 	if err != nil {
 		fail(w, err)

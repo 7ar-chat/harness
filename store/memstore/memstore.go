@@ -262,7 +262,7 @@ func (s *Store) CreateRun(_ context.Context, in store.NewRun) (*store.Run, *stor
 		mode = store.InteractionAutomatic
 	}
 	r := &store.Run{ID: in.RunID, ThreadID: in.ThreadID, UserLogin: in.UserLogin, Status: store.StatusQueued,
-		Model: in.Model, Userinfo: in.Userinfo, CreatedAt: now, Kind: runKind(in.Kind), ReasoningEffort: in.ReasoningEffort,
+		Model: in.Model, CreatedAt: now, Kind: runKind(in.Kind), ReasoningEffort: in.ReasoningEffort,
 		InteractionMode: mode}
 	s.runs[r.ID] = r
 	apply(r.ID)

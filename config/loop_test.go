@@ -11,7 +11,6 @@ import (
 func TestLoadAppliesLoopAndContextDefaults(t *testing.T) {
 	// Without environment: 90 s stream idle, 3 step retries, 20k spill, 6 unmasked tool results, 120 s MCP calls, and GPT-5.6 compacting at window − (max output + 20k) of a 272k window.
 	// Arrange
-	t.Setenv("BASE_PATH", "/studio/work/api/")
 
 	// Act
 	cfg, err := config.Load()
@@ -97,7 +96,6 @@ func TestTheSpillThresholdCannotExceedTheToolOutputCap(t *testing.T) {
 func TestLoadReadsTheMaskFractionAndTheCallCeiling(t *testing.T) {
 	// Round 3: masking starts at COMPACTION_MASK_FROM_FRACTION (default 0.5) of the window and a model call never lasts longer than LLM_CALL_MAX_SECONDS (default 1200); a fraction outside [0, 1) or a ceiling below 1 is refused.
 	// Arrange
-	t.Setenv("BASE_PATH", "/studio/work/api/")
 
 	// Act
 	cfg, err := config.Load()

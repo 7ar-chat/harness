@@ -162,13 +162,13 @@ func (s *PG) DeleteThread(ctx context.Context, login, id string) (*store.Thread,
 }
 
 const runCols = `id::text, thread_id::text, user_login, status, model, coalesce(error, ''), coalesce(error_code, ''), cancel_requested,
-	coalesce(runtime_id, ''), heartbeat_at, last_seq, userinfo, created_at, started_at, finished_at, kind, coalesce(reasoning_effort, ''),
+	coalesce(runtime_id, ''), heartbeat_at, last_seq, created_at, started_at, finished_at, kind, coalesce(reasoning_effort, ''),
 	coalesce(interaction_mode, ''), approved_tools`
 
 func scanRun(row pgx.Row) (*store.Run, error) {
 	var r store.Run
 	if err := row.Scan(&r.ID, &r.ThreadID, &r.UserLogin, &r.Status, &r.Model, &r.Error, &r.ErrorCode, &r.CancelRequested,
-		&r.RuntimeID, &r.HeartbeatAt, &r.LastSeq, &r.Userinfo, &r.CreatedAt, &r.StartedAt, &r.FinishedAt, &r.Kind, &r.ReasoningEffort,
+		&r.RuntimeID, &r.HeartbeatAt, &r.LastSeq, &r.CreatedAt, &r.StartedAt, &r.FinishedAt, &r.Kind, &r.ReasoningEffort,
 		&r.InteractionMode, &r.ApprovedTools); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, store.ErrNotFound
@@ -195,10 +195,10 @@ func (s *PG) CreateRun(ctx context.Context, in store.NewRun) (*store.Run, *store
 	if tag.RowsAffected() == 0 {
 		return nil, nil, store.ErrNotFound
 	}
-	run, err := scanRun(tx.QueryRow(ctx, `INSERT INTO work_runs (id, thread_id, user_login, status, model, userinfo, kind, reasoning_effort, interaction_mode)
-		VALUES ($1, $2, $3, 'queued', $4, $5, $6, nullif($7, ''),
-			coalesce(nullif($8, ''), (SELECT interaction_mode FROM work_threads WHERE id = $2), 'automatic')) RETURNING `+runCols,
-		in.RunID, in.ThreadID, in.UserLogin, in.Model, in.Userinfo, runKind(in.Kind), store.CleanText(in.ReasoningEffort), in.InteractionMode))
+	run, err := scanRun(tx.QueryRow(ctx, `INSERT INTO work_runs (id, thread_id, user_login, status, model, kind, reasoning_effort, interaction_mode)
+		VALUES ($1, $2, $3, 'queued', $4, $5, nullif($6, ''),
+			coalesce(nullif($7, ''), (SELECT interaction_mode FROM work_threads WHERE id = $2), 'automatic')) RETURNING `+runCols,
+		in.RunID, in.ThreadID, in.UserLogin, in.Model, runKind(in.Kind), store.CleanText(in.ReasoningEffort), in.InteractionMode))
 	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, nil, store.ErrRunActive

@@ -10,18 +10,17 @@ import (
 func TestLoadAppliesDocumentedDefaults(t *testing.T) {
 	// Without environment, Load returns the README defaults.
 	// Arrange
-	t.Setenv("BASE_PATH", "/studio/work/api/")
 
 	// Act
 	cfg, err := config.Load()
 
 	// Assert
-	if err != nil || cfg.Port != 8000 || cfg.BasePath != "/studio/work/api" || cfg.PostgresSchema != "work" || cfg.PostgresSSLMode != "require" ||
-		cfg.LLMProvider != "gateway" || cfg.LLMDefaultModel != "gpt-5.6-terra" || len(cfg.LLMModels) != 2 || cfg.AgentMaxSteps != 60 ||
+	if err != nil || cfg.Port != 8000 || cfg.PostgresSchema != "work" || cfg.PostgresSSLMode != "require" ||
+		cfg.LLMProvider != "openai" || cfg.LLMDefaultModel != "gpt-5.6-terra" || len(cfg.LLMModels) != 2 || cfg.AgentMaxSteps != 60 ||
 		cfg.RuntimeConcurrency != 16 || cfg.RuntimeShutdownGrace != 15 || cfg.SandboxEnabled() || cfg.MaxSandboxesPerUser != 5 || !cfg.PingDBAtStartup || !cfg.IsDebug() {
 		t.Fatalf("err %v cfg %+v", err, cfg)
 	}
-	if dsn := cfg.PostgresDSN(); !strings.Contains(dsn, "search_path=work") || !strings.Contains(dsn, "application_name=studio-work") || !strings.Contains(dsn, "sslmode=require") {
+	if dsn := cfg.PostgresDSN(); !strings.Contains(dsn, "search_path=work") || !strings.Contains(dsn, "application_name=harness") || !strings.Contains(dsn, "sslmode=require") {
 		t.Fatalf("dsn %s", dsn)
 	}
 }
@@ -29,7 +28,7 @@ func TestLoadAppliesDocumentedDefaults(t *testing.T) {
 func TestLoadParsesMCPServersAndLists(t *testing.T) {
 	// WORK_MCP_SERVERS JSON and comma lists are parsed; the default model joins the allow-list.
 	// Arrange
-	t.Setenv("WORK_MCP_SERVERS", `[{"name":"kb","url":"http://kb-mcp:8000/mcp","forwardIdentity":true,"tools":["search"]}]`)
+	t.Setenv("WORK_MCP_SERVERS", `[{"name":"kb","url":"http://kb-mcp:8000/mcp","tools":["search"]}]`)
 	t.Setenv("SANDBOX_EGRESS_ALLOWLIST", "pypi.org, files.pythonhosted.org")
 	t.Setenv("LLM_MODELS", "a,b")
 	t.Setenv("LLM_DEFAULT_MODEL", "c")
@@ -39,7 +38,7 @@ func TestLoadParsesMCPServersAndLists(t *testing.T) {
 	cfg, err := config.Load()
 
 	// Assert
-	if err != nil || len(cfg.MCPServers) != 1 || !cfg.MCPServers[0].ForwardIdentity || cfg.MCPServers[0].Tools[0] != "search" ||
+	if err != nil || len(cfg.MCPServers) != 1 || cfg.MCPServers[0].Tools[0] != "search" ||
 		len(cfg.SandboxEgressAllowlist) != 2 || cfg.SandboxEgressAllowlist[1] != "files.pythonhosted.org" || !cfg.ModelAllowed("c") || cfg.IsDebug() {
 		t.Fatalf("err %v cfg %+v", err, cfg)
 	}
@@ -161,7 +160,6 @@ func TestLoadRejectsInvalidHarnessSettings(t *testing.T) {
 func TestLoadDefaultsToWorkGPT56Models(t *testing.T) {
 	// Without environment, Work Chat offers Work's GPT-5.6 Sol and Terra (default Terra) with a 272k window, reasoning and vision.
 	// Arrange
-	t.Setenv("BASE_PATH", "/studio/work/api/")
 
 	// Act
 	cfg, err := config.Load()
@@ -187,7 +185,6 @@ func TestLoadDefaultsToWorkGPT56Models(t *testing.T) {
 func TestLoadRejectsMalformedModelLabels(t *testing.T) {
 	// LLM_MODEL_LABELS entries must be model=Label; custom labels replace the defaults.
 	// Arrange
-	t.Setenv("BASE_PATH", "/studio/work/api/")
 
 	// Act
 	t.Setenv("LLM_MODEL_LABELS", "gpt-5.6-sol")

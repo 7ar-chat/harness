@@ -15,7 +15,6 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/GhaziBenDahmane/harness/auth"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/tools"
 )
@@ -50,18 +49,14 @@ func New(servers []config.MCPServer, version string, maxResultChars int) *Provid
 func (p *Provider) Name() string { return "mcp" }
 
 type headerTransport struct {
-	base     http.RoundTripper
-	headers  map[string]string
-	userinfo string
+	base    http.RoundTripper
+	headers map[string]string
 }
 
 func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req = req.Clone(req.Context())
 	for k, v := range t.headers {
 		req.Header.Set(k, v)
-	}
-	if t.userinfo != "" {
-		req.Header.Set(auth.HeaderName, t.userinfo)
 	}
 	return t.base.RoundTrip(req)
 }
@@ -117,9 +112,6 @@ func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]tool.BaseT
 
 func (p *Provider) connect(ctx context.Context, s config.MCPServer, rc tools.RunContext, taken map[string]bool) ([]tool.BaseTool, *mcp.ClientSession, error) {
 	tr := &headerTransport{base: http.DefaultTransport, headers: s.Headers}
-	if s.ForwardIdentity {
-		tr.userinfo = rc.Userinfo
-	}
 	return Connect(ctx, Server{Name: s.Name, URL: s.URL, Tools: s.Tools, Transport: tr, CallTimeout: p.CallTimeout, taken: taken},
 		p.version, p.ConnectTimeout, p.MaxResultChars)
 }
@@ -146,7 +138,7 @@ func Connect(ctx context.Context, s Server, version string, connectTimeout time.
 	if tr == nil {
 		tr = http.DefaultTransport
 	}
-	client := mcp.NewClient(&mcp.Implementation{Name: "studio-work", Version: version}, nil)
+	client := mcp.NewClient(&mcp.Implementation{Name: "harness", Version: version}, nil)
 	cctx, cancel := context.WithTimeout(ctx, connectTimeout)
 	defer cancel()
 	// The session outlives the connect timeout: it is bound to the transport, not cctx.

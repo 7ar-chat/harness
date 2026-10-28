@@ -116,7 +116,6 @@ type Run struct {
 	RuntimeID       string
 	HeartbeatAt     *time.Time
 	LastSeq         int64
-	Userinfo        string
 	CreatedAt       time.Time
 	StartedAt       *time.Time
 	FinishedAt      *time.Time
@@ -189,7 +188,6 @@ type NewRun struct {
 	ThreadID  string
 	UserLogin string
 	Model     string
-	Userinfo  string
 	Message   Message
 	// AutoTitle is used as the thread title when the thread has none.
 	AutoTitle string

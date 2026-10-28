@@ -55,7 +55,7 @@ func newPGPool(t *testing.T) (*pgstore.PG, *pgxpool.Pool) {
 }
 
 func newRun(threadID, content string) store.NewRun {
-	return store.NewRun{RunID: uuid.NewString(), ThreadID: threadID, UserLogin: "alice", Model: "m", Userinfo: "ui",
+	return store.NewRun{RunID: uuid.NewString(), ThreadID: threadID, UserLogin: "alice", Model: "m",
 		Message: store.Message{Role: store.RoleUser, Content: content}, AutoTitle: content}
 }
 

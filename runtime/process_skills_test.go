@@ -103,7 +103,7 @@ func TestRequestedSkillsArePreloadedAndInstalledOnFirstSandboxUse(t *testing.T) 
 	_ = r.st.SetSkillEnabled(ctx, "alice", "builtin:fixture-doc", false)
 	th, _ := r.st.CreateThread(ctx, "alice", "t")
 	run, _, err := r.st.CreateRun(ctx, store.NewRun{RunID: newID(), ThreadID: th.ID, UserLogin: "alice", Model: "gpt-test",
-		Userinfo: userinfo("alice", "Alice"), Message: store.Message{Role: store.RoleUser, Content: "use it"}, Skills: []string{"fixture-doc"}})
+		Message: store.Message{Role: store.RoleUser, Content: "use it"}, Skills: []string{"fixture-doc"}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -11,7 +11,6 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 
-	"github.com/GhaziBenDahmane/harness/auth"
 	"github.com/GhaziBenDahmane/harness/llm"
 )
 
@@ -71,8 +70,6 @@ type Call struct {
 	ReasoningEffort string
 	// PromptCacheKey is the llm.WithPromptCacheKey option, if any.
 	PromptCacheKey string
-	// Userinfo is the X-Userinfo the call would forward to the gateway.
-	Userinfo string
 }
 
 // Model is a scripted model.ToolCallingChatModel.
@@ -121,8 +118,7 @@ func (m *Model) next(ctx context.Context, msgs []*schema.Message, opts []model.O
 	common := model.GetCommonOptions(nil, opts...)
 	impl := model.GetImplSpecificOptions(&llm.CallOptions{}, opts...)
 	call := Call{Messages: append([]*schema.Message(nil), msgs...), Tools: m.tools, ToolChoice: common.ToolChoice, ReasoningEffort: impl.ReasoningEffort,
-		PromptCacheKey: impl.PromptCacheKey,
-		Userinfo:       auth.UserinfoFromContext(ctx)}
+		PromptCacheKey: impl.PromptCacheKey}
 	r.calls = append(r.calls, call)
 	if r.fn != nil {
 		return r.fn(call)

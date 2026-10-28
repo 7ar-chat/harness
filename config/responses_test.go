@@ -24,7 +24,7 @@ func TestLoadCallsGPTModelsThroughTheResponsesAPI(t *testing.T) {
 func TestLoadResponsesModelsOverride(t *testing.T) {
 	// LLM_RESPONSES_MODELS replaces the list; "none" keeps every model on Chat Completions; a DeepSeek id never qualifies.
 	// Arrange
-	t.Setenv("LLM_RESPONSES_MODELS", "gpt-4.1, deepseek/DeepSeek-V4-Flash")
+	t.Setenv("LLM_RESPONSES_MODELS", "gpt-4.1")
 	listed, err := config.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +35,7 @@ func TestLoadResponsesModelsOverride(t *testing.T) {
 	none, err := config.Load()
 
 	// Assert
-	if err != nil || !listed.UsesResponses("gpt-4.1") || listed.UsesResponses("gpt-5.6-terra") || listed.UsesResponses("deepseek/DeepSeek-V4-Flash") ||
+	if err != nil || !listed.UsesResponses("gpt-4.1") || listed.UsesResponses("gpt-5.6-terra") ||
 		none.UsesResponses("gpt-5.6-terra") {
 		t.Fatalf("err %v listed %v none %v", err, listed.LLMResponsesModels, none.LLMResponsesModels)
 	}

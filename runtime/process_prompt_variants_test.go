@@ -47,7 +47,7 @@ func promptRig(t *testing.T, variant string, turns ...llmtest.Turn) (*v2rig, *st
 	if err != nil {
 		t.Fatal(err)
 	}
-	run, _, err := r.st.CreateRun(ctx, goals.NewRun(g, "alice", userinfo("alice", "Alice"), "gpt-test", "", "", goals.StartMessage(g.Text)))
+	run, _, err := r.st.CreateRun(ctx, goals.NewRun(g, "alice", "gpt-test", "", "", goals.StartMessage(g.Text)))
 	if err != nil {
 		t.Fatal(err)
 	}

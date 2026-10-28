@@ -34,7 +34,7 @@ type Loop struct {
 	// LLMReasoningPassbackModels get their reasoning_content back on assistant
 	// messages (default: the DeepSeek models of LLM_MODELS).
 	LLMReasoningPassbackModels []string `env:"LLM_REASONING_PASSBACK_MODELS" envSeparator:","`
-	// LLMPromptCacheKey sends prompt_cache_key (the thread id) to the openai gateway provider.
+	// LLMPromptCacheKey sends prompt_cache_key (the thread id) to the openai provider (disable for endpoints that reject unknown fields).
 	LLMPromptCacheKey bool `env:"LLM_PROMPT_CACHE_KEY" envDefault:"true"`
 	// MCPCallTimeoutSeconds bounds one MCP tool call.
 	MCPCallTimeoutSeconds int `env:"MCP_CALL_TIMEOUT_SECONDS" envDefault:"120"`
@@ -149,8 +149,8 @@ func (c *Config) ReasoningPassback(model string) bool {
 	return slices.Contains(c.LLMReasoningPassbackModels, model)
 }
 
-// PromptCacheKey reports whether calls of a model send prompt_cache_key: only
-// models of the gateway's openai provider accept it (DeepSeek rejects unknown fields).
+// PromptCacheKey reports whether calls of a model send prompt_cache_key
+// (DeepSeek rejects unknown fields).
 func (c *Config) PromptCacheKey(model string) bool {
-	return c.LLMPromptCacheKey && !strings.Contains(model, "/")
+	return c.LLMPromptCacheKey && !IsDeepSeek(model)
 }

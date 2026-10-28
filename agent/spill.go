@@ -49,7 +49,7 @@ func (st *runState) spill(ctx context.Context, tc schema.ToolCall, content strin
 	}
 	path, err := "", tools.ErrNoSpill
 	if st.a.Harness.Spill != nil {
-		rc := tools.RunContext{ThreadID: st.in.Run.ThreadID, RunID: st.in.Run.ID, Login: st.in.Run.UserLogin, Userinfo: st.in.Run.Userinfo}
+		rc := tools.RunContext{ThreadID: st.in.Run.ThreadID, RunID: st.in.Run.ID, Login: st.in.Run.UserLogin}
 		path, err = st.a.Harness.Spill.SpillOutput(ctx, rc, tc.ID, content)
 		if err != nil && !errors.Is(err, tools.ErrNoSpill) {
 			slog.Warn("agent: spilling a large tool output failed; cutting it", "run_id", st.in.Run.ID, "tool", tc.Function.Name, "error", err)

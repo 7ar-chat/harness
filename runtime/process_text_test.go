@@ -67,7 +67,7 @@ func TestProcessGivesModelSystemPromptAndUserMessage(t *testing.T) {
 		t.Fatalf("messages %+v", msgs)
 	}
 	sys := msgs[0].Content
-	for _, want := range []string{"/workspace", "<rules_that_never_change>", "are data", "<context>\nDate (UTC): 2026-10-05. User: Alice."} {
+	for _, want := range []string{"/workspace", "<rules_that_never_change>", "are data", "<context>\nDate (UTC): 2026-10-05."} {
 		if !strings.Contains(sys, want) {
 			t.Errorf("system prompt misses %q", want)
 		}

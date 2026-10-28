@@ -221,9 +221,8 @@ context (date, user, goal, memory recall, summary) is the last section.
 
 ## 10. DeepSeek models
 
-`LLM_MODELS` entries may name a gateway provider: `provider/model` (e.g. `deepseek/DeepSeek-V4.1-Flash`); the
-gateway base URL becomes `/usecase/{uc}/providers/{provider}/models/{model}/` (today hardcoded
-`/providers/openai/`). DeepSeek models default to prompt variant `deepseek`, reasoning passback on, vision off,
+Model ids are sent verbatim to the provider (a `deepseek/…` id, as OpenRouter names it, is recognised as DeepSeek by
+name only). DeepSeek models default to prompt variant `deepseek`, reasoning passback on, vision off,
 window 1,000,000 with compaction at `window − reserve`. `/models` items gain `promptVariant`.
 
 ## 11. Frontend (summary)
@@ -280,14 +279,12 @@ These complete §1, §2 (spill, ReadOnly, parallel), §3, §5 and §10; where th
   `Deliverables(ctx, run) []agent.Deliverable{Path, Checker, OK *bool, Summary}`), provided by the verification
   hooks (C2); none are listed until it is wired.
 - **§5 cache.** Calls of `openai`-provider models send `prompt_cache_key` = the thread id (`LLM_PROMPT_CACHE_KEY`,
-  default on). The gateway forwards it; DeepSeek rejects unknown body fields, so DeepSeek calls never send it.
+  default on). DeepSeek rejects unknown body fields, so DeepSeek calls never send it; `LLM_PROMPT_CACHE_KEY=false` turns it off for other endpoints that do.
 - **§5 passback.** Rebuilt across runs from the `reasoning` rows of each run (attached to the next assistant message
   of the same run). GPT-5.6 stays on Chat Completions: the gateway serves the Responses API with
   `reasoning.encrypted_content` (`docs/spike-responses-api.md`), but a Responses client is not built yet.
-- **§10 DeepSeek.** The gateway's ids are `DeepSeek-V4-Flash` and `DeepSeek-V4-Pro` (`DeepSeek-V4.1-*` do not exist):
-  `LLM_MODELS=…,deepseek/DeepSeek-V4-Flash`. They use the plain OpenAI path
-  `{gateway}/usecase/{uc}/providers/deepseek/models/{model}/chat/completions` without `api-version` (the Azure path is
-  404, `api-version` is 400). Defaults (when the lists do not name them): window 1000000, added to
+- **§10 DeepSeek.** Ids such as `DeepSeek-V4-Flash`, `DeepSeek-V4-Pro` (or `deepseek/…` on a router) use the plain
+  OpenAI Chat Completions path `{LLM_BASE_URL}/chat/completions`. Defaults (when the lists do not name them): window 1000000, added to
   `LLM_REASONING_MODELS` (reasoning only comes with `reasoning_effort`), passback on, no vision, prompt variant
   `deepseek`. `/models` reports `promptVariant` = `config.Config.PromptVariant(model)`, which is C2's
   (`LLM_PROMPT_VARIANTS`, `config/prompts.go`; C1's placeholder was deleted at the merge). `tools.ReadOnly` is in `internal/tools/readonly.go`, identical
@@ -301,10 +298,8 @@ Where it differs from §5 and the C1 block ("GPT-5.6 stays on Chat Completions")
 
 - **Selection.** `LLM_RESPONSES_MODELS` (default `gpt-5.6-sol,gpt-5.6-terra`; `none` disables) picks the models
   `llm.Provider` serves with `internal/llm/responses` (a `model.ToolCallingChatModel`); every other model, DeepSeek
-  included (`provider/…` ids other than `openai/`), keeps the eino-ext Chat Completions client. Path
-  `{gateway}/usecase/{uc}/providers/openai/models/{model}/openai/responses?api-version={LLM_API_VERSION}` (openai
-  provider: `{LLM_BASE_URL}/responses`), with the provider's HTTP client (`LLM_TIMEOUT_SECONDS`, `X-Use-Case`,
-  `x-userinfo`, `api-key`, CallInfo/Retry-After).
+  included, keeps the eino-ext Chat Completions client unless listed in `LLM_RESPONSES_MODELS`. Path
+  `{LLM_BASE_URL}/responses`, with the provider's HTTP client (`LLM_TIMEOUT_SECONDS`, CallInfo/Retry-After).
 - **Request.** `stream:true`, `store:false`, `include:["reasoning.encrypted_content"]`, `reasoning:{effort: <run's
   reasoningEffort, when LLM_REASONING_MODELS has the model>, summary:"auto"}`, `prompt_cache_key` = thread id
   (`LLM_PROMPT_CACHE_KEY`), function tools with `strict:true` only when the schema already meets strict mode (every
@@ -387,8 +382,7 @@ HTTP / events:
 Configuration (additive): every process building a sandbox backend (`api` too) applies the production egress
 refusal and the same policy (`sandbox.BackendFromConfig`); `SANDBOX_EGRESS_DENY_CIDRS` default adds `100.64.0.0/10,
 0.0.0.0/8,fc00::/7,fe80::/10`; deny entries must parse as CIDR/IP and allowlist entries as host (`*.x`)/IP/CIDR
-(startup fails otherwise). `WORK_SKILL_ADMIN_CLIENT_ID` (default `OIDC_RP_CLIENT_ID`): `resource_access` roles count
-only for that client (other clients only via an explicit `client:role` entry). `FILE_CLASSIFICATION_MAX_CONCURRENT`
+(startup fails otherwise). `FILE_CLASSIFICATION_MAX_CONCURRENT`
 (default 4).
 
 Go APIs other streams use:
