@@ -323,15 +323,6 @@ process died are marked `interrupted` (with a terminal `RUN_ERROR`) at the next 
 per directory (flock). The journal is compacted on open when it holds many superseded records or
 deleted threads.
 
-### Where a key may be sent
-
-A repository you clone can contain a `.har/config.yml`. It may choose models, headers, the profile and most
-other settings, but **not the address your API key goes to**: if the project file alone sets a provider's
-`base_url` (and a key would be sent there, from `auth.json`, `LLM_API_KEY` or an `api_key_env` variable), the
-harness refuses to start and says so. Put the address in `~/.har/config.yml` (`providers.<name>.base_url`) or set
-`LLM_BASE_URL` in the environment if you trust it. A project may repeat the address your user file already
-defines, and local addresses (`localhost`) need no trust.
-
 ## Sandbox definition
 
 `sandbox-image/` holds the sandbox image (`Dockerfile`: Python/Node/LibreOffice/pandoc/… toolchain,
@@ -361,6 +352,9 @@ commands asked), `yolo` (no prompts, deny rules still apply), `yolo-unsafe` (not
 `readonly` (only read-only commands, no edits). Rules go in `.har/permissions.yml` (workspace) and
 `~/.har/permissions.yml`, or in `AGENT_PERMISSIONS_ALLOW|ASK|DENY` (entries separated by
 newlines or `;;`); deny beats ask beats allow, and a user allow overrides a built-in ask:
+A project's permissions (`.har/permissions.yml` and `permissions.*` of its `config.yml`) can only **tighten**: its `ask` and
+`deny` rules and a `mode` as strict as yours (or stricter) are honoured; its `allow` rules and a looser `mode` are
+ignored unless the project is trusted (`harness trust`). The ignored items are logged once and listed by `-config-dump`.
 
 ```yaml
 mode: ask
@@ -570,7 +564,7 @@ code (and `~/.har/` for the user), and the de-facto standards for agent instruct
   AGENTS.md                  agent instructions (https://agents.md); else CLAUDE.md, else GEMINI.md
   .mcp.json                  MCP servers, the format Claude Code and others share
   .har/
-    config.yml               project settings (this section); no secrets
+    config.yml               project settings: selections and tuning only (see below); no secrets
     permissions.yml          allow/ask/deny rules (see Permissions)
     instructions.md          extra instructions, always loaded, highest priority
     mcp.json                 MCP servers, same format as .mcp.json
@@ -583,7 +577,8 @@ there and never in a repository.
 
 ```
 ~/.har/                      $HAR_HOME when set
-  config.yml                 general settings and named providers (same schema as the project file); no secrets
+  config.yml                 your settings: endpoints, providers, model catalog, sandbox (full schema); no secrets
+  trust.json                 the projects you trust, mode 0600 (written by `harness trust`)
   auth.json                  API keys by provider, mode 0600 (written by `harness auth login`)
   AGENTS.md                  your own instructions, loaded for every project (local backend)
   permissions.yml            allow/ask/deny rules for every project
@@ -614,13 +609,72 @@ root. `harness -config-dump` prints the effective configuration with the source 
 | 5 | built-in defaults | |
 
 Scalars and lists are replaced by the higher layer as a whole. Exceptions: `permissions.allow|ask|deny` add up across the two
-files (a user `deny` is never lost) unless the matching `AGENT_PERMISSIONS_*` variable is set, and MCP servers merge by name
-(see below). Unknown keys are an error naming the key and the file (`.har/config.yml: unknown key "sandbox.bakend"`), a
+files (a user `deny` is never lost; a project's `allow` only counts when it is trusted) unless the matching `AGENT_PERMISSIONS_*`
+variable is set, and MCP servers merge by name (see below). Unknown keys are an error naming the key and the file (`.har/config.yml: unknown key "sandbox.bakend"`), a
 plain `api_key` is refused, and a value of the wrong type is an error.
+
+### What a project file may and may not do
+
+The **user** (`~/.har/config.yml`, the environment, the flags) owns every endpoint, key and model catalog. A **project**
+(`<repo>/.har/config.yml`) may only *select* among what you configured and *tune* behaviour. A key in the right-hand column in a
+project file is an error naming the file, the key and where it belongs (`~/.har/config.yml`).
+
+| A project file may (selection and tuning) | Only you may (user file, environment, flags) |
+|---|---|
+| `provider: <name>`: one you defined, or `openai` / `anthropic` | `providers` (any definition), `base_url`, `api_key_env`, `api_key` |
+| `default_model`, `explore_model`, `limits.compaction_model` and the `agents:` section, each checked against **your** model list | `models`, `presets`, `default_preset` (which models exist) |
+| `profile`, `tools`, `code_checks` | `session_header`, `cache_ttl`, `timeout_seconds` |
+| `limits.*`, `skills.*`, `memory.*`, `context_windows`, `prompt_variants`, ... | the whole `sandbox:` section (`backend`, `url`, `image`, `api_key_env`, `workspace`, `egress_*`, limits ...) and `env:` |
+| `permissions`: `ask`, `deny` and a `mode` as strict as yours or stricter | `mcp.allow_stdio` |
+| instruction files, skills, nested `AGENTS.md` (data, as before) | `permissions.allow` and looser modes (unless trusted), MCP servers (unless trusted) |
+
+A selected model that is not in your list is an error: `model X (project .har/config.yml agents.explore.model) is not configured by you:
+add it to providers.<p>.models in ~/.har/config.yml`. A project cannot switch the provider of a role: roles use models of the
+selected provider.
+
+**Trust.** `~/.har/trust.json` (`{"projects": ["/abs/path"]}`, mode 0600, written atomically) lists the project roots you trust. A
+trusted project may also add permission `allow` rules and loosen the mode, and define MCP servers (`<repo>/.mcp.json`,
+`<repo>/.har/mcp.json`, `mcp.servers` of its `config.yml`; `http`/`sse` freely, `stdio` still needs your `mcp.allow_stdio` and the
+local backend). An untrusted project's MCP servers are not started; `-config-dump` lists them with the hint to run `harness trust`.
+Your own `~/.har/mcp.json`, `mcp.servers` of your file and `MCP_SERVERS` are always trusted.
+
+```
+harness trust            # trust the project of the current directory (its git root / .har parent)
+harness trust ~/src/app  # or a given directory
+harness trust list       # the trusted projects
+harness untrust          # stop trusting (a path may be given)
+HARNESS_TRUST_PROJECT=1 harness -p "..."   # trust the current project for this process only (CI)
+```
+
+Trust is by project root; `HARNESS_NO_USER_DIR=1` ignores `trust.json` (only the environment variable can trust then).
+
+#### The `agents:` section
+
+Maps roles to the model (and profile) they use; it is allowed in both files, and a project's choices are validated against your catalog.
+
+| Key | Sets | Notes |
+|---|---|---|
+| `agents.default.model` | `LLM_DEFAULT_MODEL` | the model of new runs |
+| `agents.default.profile` | `AGENT_PROFILE` | `work`, `coding` or `minimal` |
+| `agents.explore.model` | `EXPLORE_MODEL` | the read-only explore sub-agent |
+| `agents.compaction.model` | `COMPACTION_MODEL` | summarising old context |
+| `agents.title`, `agents.goal_judge`, `agents.default.reasoning_effort` | | not available yet (the title and goal-judge calls use the model of the run; the effort comes from `default_preset`): rejected |
+
+```yaml
+# <repo>/.har/config.yml
+provider: opencode            # must be defined in ~/.har/config.yml
+agents:
+  default:    {model: deepseek-v4.1-pro, profile: coding}
+  explore:    {model: deepseek-v4.1-flash}
+  compaction: {model: deepseek-v4.1-flash}
+permissions:
+  mode: readonly              # only counts when as strict as yours
+  deny: ["Bash(terraform apply*)"]
+```
 
 ### config.yml
 
-Keys are translated to the environment variables of the "Configuration" section, so every existing setting works;
+This table is the schema of the **user file**; a project file accepts the subset allowed above. Keys are translated to the environment variables of the "Configuration" section, so every existing setting works;
 `env:` is the escape hatch for the ones without a nice key (`env: {HARNESS_MEMORY_MAX_ENTRIES: 500}`; secret-looking names such as
 `*_KEY`, `*_PASSWORD`, `*_TOKEN` are refused).
 
@@ -658,13 +712,14 @@ Keys are translated to the environment variables of the "Configuration" section,
 | `memory.write_mode`, `.delete_mode`, `.default_scope`, `.embedding_backend`, `.recall_injection`, `.max_entries`, `.max_content_bytes`, `.consolidation_hours`, `.deleted_retention_days`, `.in_coding` | `HARNESS_MEMORY_*`, `MEMORY_IN_CODING` | |
 | `mcp.servers` | `MCP_SERVERS` (merged) | map `name: {command,args,env}` or `{type,url,headers,tools}` |
 | `mcp.allow_stdio` | `HARNESS_MCP_STDIO` | `true`; **user file only** (a project file that sets it is an error) |
+| `agents.<role>.<key>` | see above | roles `default`, `explore`, `compaction` |
 | `mcp.call_timeout_seconds` | `MCP_CALL_TIMEOUT_SECONDS` | |
 | `env` | any setting | `ENV_NAME: value` |
 
 Server and infrastructure settings (`POSTGRES_*`, `REDIS_*`, `ARTIFACTS_*`, `PORT`) stay in the environment.
 
 ```yaml
-# <repo>/.har/config.yml
+# ~/.har/config.yml  (the user file: the full schema)
 provider: anthropic
 api_key_env: ANTHROPIC_API_KEY
 models: [claude-sonnet-5-5]
@@ -682,8 +737,8 @@ mcp:
 
 ### Named providers and API keys
 
-`providers:` (user and project file; the project overrides the user's by name, field by field) defines providers you
-select with `provider: <name>` or `harness -provider <name>`. `type` is `openai` (any OpenAI-compatible endpoint) or
+`providers:` (user file only; a project file that has it is an error) defines providers you
+select with `provider: <name>` (a project file may select one of yours) or `harness -provider <name>`. `type` is `openai` (any OpenAI-compatible endpoint) or
 `anthropic`; a bare `provider: openai|anthropic` stays the built-in type with the `LLM_BASE_URL` default, and the flat
 keys (`base_url`, `api_key_env`, ...) and every environment variable keep working. The values of the selected provider
 sit above the flat keys of the files and below the environment (`LLM_BASE_URL` still wins).
@@ -785,6 +840,10 @@ Sources, lowest to highest (a later one replaces a server of the same name): `~/
 `${VAR}` (or `${VAR:-default}`) in `url`, `headers`, `env`, `command` and `args` comes from the process environment; an unset one
 without a default is an error naming the server and the variable. The harness adds an optional `tools` allow-list.
 
+The three project sources (`<repo>/.mcp.json`, `<repo>/.har/mcp.json`, `mcp.servers` of the project `config.yml`) are only started
+when the project is **trusted** (`harness trust`, see above); otherwise they are listed by `-config-dump`. Your own `~/.har/mcp.json`,
+`mcp.servers` in `~/.har/config.yml` and `MCP_SERVERS` are always trusted.
+
 Stdio servers (`command`) start a child process, so they are the dangerous kind (a cloned repository can bring a `.mcp.json`).
 The rules:
 
@@ -827,6 +886,7 @@ names are read); the model, sandbox and storage settings keep their descriptive 
 | `HARNESS_MEMORY_DELETED_RETENTION_DAYS` | `30` | Soft-deleted entries are purged after this many days |
 | `HARNESS_MCP_STDIO` | unset | `1` allows MCP servers that are local programs (stdio); local backend only. Wins over the user file's `mcp.allow_stdio` |
 | `HARNESS_USER_INSTRUCTIONS` | unset | `1` reads the host user's `~/.har/AGENTS.md` also with a remote sandbox backend (always read with the local one) |
+| `HARNESS_TRUST_PROJECT` | unset | `1` trusts the current project for this process (its `allow` permission rules and MCP servers apply); see `harness trust` |
 | `HARNESS_TEST_DATABASE_URL` | unset | Postgres used by the `store/pgstore` tests (skipped when unset) |
 | `HARNESS_TEST_S3_ENDPOINT`, `_ACCESS_KEY`, `_SECRET_KEY` | unset | S3-compatible endpoint for the artifact blob tests (skipped when unset) |
 
