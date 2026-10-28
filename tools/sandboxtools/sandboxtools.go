@@ -187,18 +187,18 @@ const (
 )
 
 // sweepScript removes, best effort, the staged uploads older than
-// WORK_STAGING_MINUTES (writes that failed without cleaning up) and the
+// HARNESS_STAGING_MINUTES (writes that failed without cleaning up) and the
 // shadow records (/tmp/work-jobs/<id>) of ended jobs older than
-// WORK_JOBS_MINUTES or past the WORK_JOBS_KEEP newest; a running job's record stays.
+// HARNESS_JOBS_MINUTES or past the HARNESS_JOBS_KEEP newest; a running job's record stays.
 const sweepScript = `# work:sweep
-S="$WORK_STAGING_DIR"; J="${WORK_JOBS_SHADOW_ROOT:-` + jobShadowRoot + `}"
-[ -d "$S" ] && find "$S" -mindepth 1 -maxdepth 1 -type f -mmin +"$WORK_STAGING_MINUTES" -delete 2>/dev/null
+S="$HARNESS_STAGING_DIR"; J="${HARNESS_JOBS_SHADOW_ROOT:-` + jobShadowRoot + `}"
+[ -d "$S" ] && find "$S" -mindepth 1 -maxdepth 1 -type f -mmin +"$HARNESS_STAGING_MINUTES" -delete 2>/dev/null
 [ -d "$J" ] || exit 0
 ended() { [ -f "$1/exit" ] || [ -f "$1/killed" ] || ! { [ -s "$1/pid" ] && kill -0 "$(cat "$1/pid" 2>/dev/null)" 2>/dev/null; }; }
-find "$J" -mindepth 1 -maxdepth 1 -type d -mmin +"$WORK_JOBS_MINUTES" 2>/dev/null | while IFS= read -r d; do
+find "$J" -mindepth 1 -maxdepth 1 -type d -mmin +"$HARNESS_JOBS_MINUTES" 2>/dev/null | while IFS= read -r d; do
   ended "$d" && rm -rf -- "$d"
 done
-ls -1dt -- "$J"/*/ 2>/dev/null | tail -n +"$((WORK_JOBS_KEEP + 1))" | while IFS= read -r d; do
+ls -1dt -- "$J"/*/ 2>/dev/null | tail -n +"$((HARNESS_JOBS_KEEP + 1))" | while IFS= read -r d; do
   ended "$d" && rm -rf -- "$d"
 done
 exit 0
@@ -220,10 +220,10 @@ func (b *binding) sweepLeftovers(ctx context.Context, sb sandbox.Sandbox) {
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	_, err := sb.Exec(cctx, sandbox.ExecRequest{Command: sweepScript, Cwd: "/", Timeout: 5 * time.Second, Env: map[string]string{
-		"WORK_STAGING_DIR":     sandbox.StagingDir,
-		"WORK_STAGING_MINUTES": strconv.Itoa(int(stagingMaxAge.Minutes())),
-		"WORK_JOBS_MINUTES":    strconv.Itoa(int(endedJobMaxAge.Minutes())),
-		"WORK_JOBS_KEEP":       strconv.Itoa(maxEndedJobs),
+		"HARNESS_STAGING_DIR":     sandbox.StagingDir,
+		"HARNESS_STAGING_MINUTES": strconv.Itoa(int(stagingMaxAge.Minutes())),
+		"HARNESS_JOBS_MINUTES":    strconv.Itoa(int(endedJobMaxAge.Minutes())),
+		"HARNESS_JOBS_KEEP":       strconv.Itoa(maxEndedJobs),
 	}})
 	if err != nil && ctx.Err() == nil {
 		slog.Debug("sandboxtools: sweeping leftovers failed", "thread_id", b.rc.ThreadID, "error", err)

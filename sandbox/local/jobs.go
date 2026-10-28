@@ -19,7 +19,7 @@ import (
 )
 
 // Background jobs: the files are those of the job scripts the tools run in a
-// container (cmd.sh, pid, stdout, stderr, exit, killed under WORK_JOB_DIR).
+// container (cmd.sh, pid, stdout, stderr, exit, killed under HARNESS_JOB_DIR).
 
 func atoi(s string) int { n, _ := strconv.Atoi(s); return n }
 
@@ -39,13 +39,13 @@ func readInt(p string) (int, bool) {
 func alive(pid int) bool { return pid > 0 && syscall.Kill(pid, 0) == nil }
 
 func (in *Instance) jobDir(req sandbox.ExecRequest) (string, bool) {
-	d, err := in.host(req.Env["WORK_JOB_DIR"])
-	return d, err == nil && req.Env["WORK_JOB_DIR"] != ""
+	d, err := in.host(req.Env["HARNESS_JOB_DIR"])
+	return d, err == nil && req.Env["HARNESS_JOB_DIR"] != ""
 }
 
 func (in *Instance) jobStart(ctx context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
 	dir, ok := in.jobDir(req)
-	raw, err := base64.StdEncoding.DecodeString(req.Env["WORK_JOB_CMD_B64"])
+	raw, err := base64.StdEncoding.DecodeString(req.Env["HARNESS_JOB_CMD_B64"])
 	if !ok || err != nil {
 		return exit(2)
 	}
@@ -89,9 +89,9 @@ func (in *Instance) jobStart(ctx context.Context, req sandbox.ExecRequest) (sand
 	return in.follow(ctx, dir, req)
 }
 
-// follow streams the job's output until it ends or WORK_JOB_WAIT seconds pass.
+// follow streams the job's output until it ends or HARNESS_JOB_WAIT seconds pass.
 func (in *Instance) follow(ctx context.Context, dir string, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	wait := atoi(req.Env["WORK_JOB_WAIT"])
+	wait := atoi(req.Env["HARNESS_JOB_WAIT"])
 	if wait <= 0 {
 		return exit(0)
 	}
@@ -159,7 +159,7 @@ func (in *Instance) jobStatus(_ context.Context, req sandbox.ExecRequest) (sandb
 	}
 	var out strings.Builder
 	fmt.Fprintf(&out, "status %s\ncode %s\n", status, code)
-	head, tail := atoi(req.Env["WORK_HEAD"]), atoi(req.Env["WORK_TAIL"])
+	head, tail := atoi(req.Env["HARNESS_HEAD"]), atoi(req.Env["HARNESS_TAIL"])
 	small := true
 	dash := func(s string) string {
 		if s == "" {
@@ -183,7 +183,7 @@ func (in *Instance) jobStatus(_ context.Context, req sandbox.ExecRequest) (sandb
 		}
 		fmt.Fprintf(&out, "%s %d %s %s\n", name, len(data), dash(hs), dash(ts))
 	}
-	if req.Env["WORK_JOB_CLEAN"] == "1" && status == "finished" && small {
+	if req.Env["HARNESS_JOB_CLEAN"] == "1" && status == "finished" && small {
 		_ = os.RemoveAll(dir)
 	}
 	in.out(req, out.String())

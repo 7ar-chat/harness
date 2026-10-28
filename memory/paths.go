@@ -9,13 +9,13 @@ import (
 )
 
 // pathPrefix is the memory root of Work's file layout; paths given with it are accepted.
-const pathPrefix = ".astraforge/memory/"
+const pathPrefix = ".harness/memory/"
 
 // SemanticKinds are the folders of memories/semantic/ (and shared/memories/semantic/).
 var SemanticKinds = []string{"decisions", "facts", "constraints", "preferences", "procedures", "notes"}
 
 // NormalizePath applies Work's _normalize_relative_path: a relative path
-// without "..", not under proxy/ (the root prefix .astraforge/memory/ is stripped).
+// without "..", not under proxy/ (the root prefix .harness/memory/ is stripped).
 func NormalizePath(raw string) (string, *Error) {
 	p := strings.ReplaceAll(strings.TrimSpace(raw), "\\", "/")
 	p = strings.TrimPrefix(p, pathPrefix)

@@ -1,5 +1,4 @@
-// Package memory is Work Chat's port of Work's memory (AstraForge memory
-// proxy, codex-memory-proxy + agent_memory_runtime): per-user entries with a
+// Package memory is the harness's memory service: per-user entries with a
 // path, title, content, tags, importance and metadata, searched with Work's
 // hybrid ranking, written under Work's policy (triggers, warn/strict write
 // mode, secret redaction, soft/hard delete), recalled in the system prompt and
@@ -39,10 +38,10 @@ const (
 	MaxRecallItems    = 4
 )
 
-// Scopes of Work's memory proxy; Work Chat memory is per user ("personal" by default).
+// Scopes of the memory; it is per user ("personal" by default).
 var allowedScopes = map[string]bool{"repository": true, "workspace": true, "personal": true}
 
-// Options configure the service (WORK_MEMORY_*, see config.Memory).
+// Options configure the service (HARNESS_MEMORY_*, see config.Memory).
 type Options struct {
 	WriteMode        string
 	DeleteMode       string

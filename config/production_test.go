@@ -6,12 +6,12 @@ import (
 	"github.com/GhaziBenDahmane/harness/config"
 )
 
-func TestDjangoProductionIsOnWhenSetToAnyValue(t *testing.T) {
-	// DJANGO_PRODUCTION follows the house convention: any non-empty value means production, unset or empty means debug.
+func TestProductionIsOnWhenSetToAnyValue(t *testing.T) {
+	// HARNESS_PRODUCTION works as: any non-empty value means production, unset or empty means debug.
 	// Arrange
-	t.Setenv("DJANGO_PRODUCTION", "yes")
+	t.Setenv("HARNESS_PRODUCTION", "yes")
 	yes, yesErr := config.Load()
-	t.Setenv("DJANGO_PRODUCTION", "")
+	t.Setenv("HARNESS_PRODUCTION", "")
 
 	// Act
 	empty, emptyErr := config.Load()

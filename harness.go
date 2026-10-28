@@ -1,4 +1,4 @@
-// Package harness is the embeddable agent harness behind Studio's Work Chat:
+// Package harness is an embeddable agent harness:
 // a ReAct loop (eino) whose tools run in a remote sandbox (OpenSandbox), with
 // compaction, steering, skills, artifacts, memory and approvals, streaming
 // AG-UI events.
@@ -399,11 +399,13 @@ func harnessOptions(cfg *config.Config, st store.Store, reg *skills.Registry, ar
 		Sections: []agent.PromptSection{
 			prof.skillsSection(reg.PromptSection),
 			projectdocs.Section(mgr),
-			agent.Legacy(artifacts.PromptSection, ""),
-			agent.Part(prompts.Git, agent.Legacy(wsSvc.PromptSection, prompts.GitCheckpoints)),
-			agent.Legacy(func(context.Context, agent.Input) string { return harnesstools.Instructions }, ""),
+			agent.Part(prompts.Git, func(ctx context.Context, in agent.Input) string {
+				if wsSvc.PromptSection(ctx, in) == "" {
+					return ""
+				}
+				return prompts.GitCheckpoints
+			}),
 			prof.memorySection(memory.PromptSection(memSvc)),
-			goals.PromptSection(st),
 		},
 		Context:               []agent.PromptSection{goals.ContextSection(st), prof.memorySection(memory.RecallSection(memSvc))},
 		Tail:                  []agent.PromptSection{goals.TurnsSection(st)},

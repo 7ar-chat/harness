@@ -293,7 +293,7 @@ the coding profile does not use it.
 ## Status / known gaps
 
 * Lifted from `studio/work` (Go 1.26); behaviour and tests are unchanged except for the decoupling
-  (`go test ./...`). `store/pgstore` tests need a Postgres (`WORK_TEST_DATABASE_URL`) and skip otherwise.
+  (`go test ./...`). `store/pgstore` tests need a Postgres (`HARNESS_TEST_DATABASE_URL`) and skip otherwise.
 * Project skills (`<workspace>/.harness/skills`) are not discovered yet: the registry supports the
   `project` source (`Registry.AddFS` / `AddDir`, fenced as untrusted data) but nothing feeds it a
   workspace directory per run. Follow-up.

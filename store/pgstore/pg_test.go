@@ -16,7 +16,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/store/pgstore/migrate"
 )
 
-// newPG migrates a fresh schema of WORK_TEST_DATABASE_URL; skipped when unset.
+// newPG migrates a fresh schema of HARNESS_TEST_DATABASE_URL; skipped when unset.
 func newPG(t *testing.T) *pgstore.PG {
 	t.Helper()
 	s, _ := newPGPool(t)
@@ -26,9 +26,9 @@ func newPG(t *testing.T) *pgstore.PG {
 // newPGPool is newPG with the pool of its schema (to age rows in tests).
 func newPGPool(t *testing.T) (*pgstore.PG, *pgxpool.Pool) {
 	t.Helper()
-	dsn := os.Getenv("WORK_TEST_DATABASE_URL")
+	dsn := os.Getenv("HARNESS_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("WORK_TEST_DATABASE_URL not set")
+		t.Skip("HARNESS_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
 	schema := fmt.Sprintf("work_test_%d", time.Now().UnixNano())
@@ -284,9 +284,9 @@ func TestPGFinishRunStoresErrorCode(t *testing.T) {
 func TestPGMigrateUpgradesDatabaseThatAppliedTheFirstMigration(t *testing.T) {
 	// A database that applied the original 0001 gets work_runs.error_code from later migrations (idempotently).
 	// Arrange
-	dsn := os.Getenv("WORK_TEST_DATABASE_URL")
+	dsn := os.Getenv("HARNESS_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("WORK_TEST_DATABASE_URL not set")
+		t.Skip("HARNESS_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
 	schema := fmt.Sprintf("work_upgrade_%d", time.Now().UnixNano())

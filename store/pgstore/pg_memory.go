@@ -134,7 +134,7 @@ func (s *PG) ListMemoryEntries(ctx context.Context, login string, statuses ...st
 
 func (s *PG) GetMemoryEntry(ctx context.Context, login, id string) (*store.MemoryEntry, error) {
 	return scanMemoryEntry(s.pool.QueryRow(ctx, `SELECT `+memoryEntryCols+` FROM work_memory_entries WHERE user_login = $1 AND id = $2`,
-		login, store.LegacyMemoryID(id)))
+		login, id))
 }
 
 func (s *PG) GetMemoryEntryByPath(ctx context.Context, login, path string) (*store.MemoryEntry, error) {
@@ -253,7 +253,6 @@ func (s *PG) memoryMissOrConflict(ctx context.Context, login, id string) error {
 }
 
 func (s *PG) DeleteMemoryEntry(ctx context.Context, login, id, expectStatus string) error {
-	id = store.LegacyMemoryID(id)
 	tag, err := s.pool.Exec(ctx, `DELETE FROM work_memory_entries WHERE user_login = $1 AND id = $2 AND ($3 = '' OR status = $3)`,
 		login, id, expectStatus)
 	if err != nil {
@@ -266,15 +265,6 @@ func (s *PG) DeleteMemoryEntry(ctx context.Context, login, id, expectStatus stri
 		return s.memoryMissOrConflict(ctx, login, id)
 	}
 	return nil
-}
-
-func (s *PG) ListMemoryEntriesToBackfill(ctx context.Context) ([]*store.MemoryEntry, error) {
-	rows, err := s.pool.Query(ctx, `SELECT `+memoryEntryCols+` FROM work_memory_entries WHERE metadata ? 'legacy_backfill'
-		ORDER BY user_login, created_at, id`)
-	if err != nil {
-		return nil, err
-	}
-	return scanMemoryEntries(rows)
 }
 
 func (s *PG) ListMemoryUsers(ctx context.Context) ([]string, error) {

@@ -7,7 +7,7 @@ import (
 )
 
 func TestS3PutStreamRoundTripsOnARealBucket(t *testing.T) {
-	// On an S3-compatible bucket (WORK_TEST_S3_ENDPOINT), streamed content above the multipart threshold round-trips intact.
+	// On an S3-compatible bucket (HARNESS_TEST_S3_ENDPOINT), streamed content above the multipart threshold round-trips intact.
 	// Arrange
 	b := s3Blobs(t)
 	ctx := context.Background()

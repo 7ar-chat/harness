@@ -24,12 +24,12 @@ func TestLoadResolvesPromptVariantsPerModel(t *testing.T) {
 			t.Errorf("%s: variant %q, want %q", model, got, want)
 		}
 	}
-	t.Setenv("LLM_PROMPT_VARIANTS", "gpt-5.6-sol=legacy")
-	if cfg, err = config.Load(); err != nil || cfg.PromptVariant("gpt-5.6-sol") != "legacy" || cfg.PromptVariant("gpt-5.6-terra") != "default" {
+	t.Setenv("LLM_PROMPT_VARIANTS", "gpt-5.6-sol=deepseek")
+	if cfg, err = config.Load(); err != nil || cfg.PromptVariant("gpt-5.6-sol") != "deepseek" || cfg.PromptVariant("gpt-5.6-terra") != "default" {
 		t.Fatalf("override: %v", err)
 	}
 	t.Setenv("LLM_PROMPT_VARIANTS", "gpt-5.6-sol=fancy")
-	if _, err = config.Load(); err == nil || !strings.Contains(err.Error(), "deepseek, default, gpt-5.6, legacy") {
+	if _, err = config.Load(); err == nil || !strings.Contains(err.Error(), "coding, deepseek, default, gpt-5.6") {
 		t.Fatalf("unknown variant accepted: %v", err)
 	}
 }

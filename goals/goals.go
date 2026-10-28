@@ -18,7 +18,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/GhaziBenDahmane/harness/agent"
-	"github.com/GhaziBenDahmane/harness/agent/prompts"
 	"github.com/GhaziBenDahmane/harness/agui"
 	"github.com/GhaziBenDahmane/harness/llm"
 	"github.com/GhaziBenDahmane/harness/queue"
@@ -116,12 +115,9 @@ func activeGoal(ctx context.Context, st Store, in agent.Input) *store.Goal {
 	return g
 }
 
-// ContextSection puts the active goal in the dynamic context of the v3 prompts.
+// ContextSection puts the active goal in the dynamic context of the prompt.
 func ContextSection(st Store) agent.PromptSection {
 	return func(ctx context.Context, in agent.Input) string {
-		if prompts.IsLegacy(in.Variant) {
-			return ""
-		}
 		g := activeGoal(ctx, st, in)
 		if g == nil {
 			return ""
@@ -132,34 +128,15 @@ func ContextSection(st Store) agent.PromptSection {
 	}
 }
 
-// TurnsSection is the active goal's turn counter in the v3 prompts
+// TurnsSection is the active goal's turn counter
 // (agent.Harness.Tail: after the history, not in the system prompt).
 func TurnsSection(st Store) agent.PromptSection {
 	return func(ctx context.Context, in agent.Input) string {
-		if prompts.IsLegacy(in.Variant) {
-			return ""
-		}
 		g := activeGoal(ctx, st, in)
 		if g == nil {
 			return ""
 		}
 		return fmt.Sprintf("Goal: %d of %d automatic goal turns used.", g.TurnsUsed, g.MaxTurns)
-	}
-}
-
-// PromptSection adds the active goal to the legacy (v2) system prompt.
-func PromptSection(st Store) agent.PromptSection {
-	return func(ctx context.Context, in agent.Input) string {
-		if !prompts.IsLegacy(in.Variant) {
-			return ""
-		}
-		g := activeGoal(ctx, st, in)
-		if g == nil {
-			return ""
-		}
-		return fmt.Sprintf("## Current goal\n%s\n\nWork toward it; when you believe it is met, say so explicitly and explain. "+
-			"After each of your answers the goal is checked automatically; if it is not met you get another turn (%d of %d automatic turns used).",
-			g.Text, g.TurnsUsed, g.MaxTurns)
 	}
 }
 

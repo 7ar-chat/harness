@@ -71,7 +71,6 @@ func (s *Store) ListMemoryEntries(_ context.Context, login string, statuses ...s
 func (s *Store) GetMemoryEntry(_ context.Context, login, id string) (*store.MemoryEntry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	id = store.LegacyMemoryID(id)
 	for _, e := range s.mem.entries {
 		if e.UserLogin == login && e.ID == id {
 			return e.Clone(), nil
@@ -212,7 +211,6 @@ func (s *Store) UpdateMemoryEntry(_ context.Context, e *store.MemoryEntry, limit
 func (s *Store) DeleteMemoryEntry(_ context.Context, login, id, expectStatus string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	id = store.LegacyMemoryID(id)
 	for i, e := range s.mem.entries {
 		if e.UserLogin == login && e.ID == id {
 			if expectStatus != "" && e.Status != expectStatus {
@@ -223,18 +221,6 @@ func (s *Store) DeleteMemoryEntry(_ context.Context, login, id, expectStatus str
 		}
 	}
 	return store.ErrNotFound
-}
-
-func (s *Store) ListMemoryEntriesToBackfill(_ context.Context) ([]*store.MemoryEntry, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []*store.MemoryEntry
-	for _, e := range s.mem.entries {
-		if _, ok := e.Metadata["legacy_backfill"]; ok {
-			out = append(out, e.Clone())
-		}
-	}
-	return out, nil
 }
 
 func (s *Store) ListMemoryUsers(_ context.Context) ([]string, error) {

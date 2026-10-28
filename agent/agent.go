@@ -1,4 +1,4 @@
-// Package agent is the Work Chat agent loop: an own ReAct loop on eino
+// Package agent is the agent loop: an own ReAct loop on eino
 // ToolCallingChatModel that streams AG-UI events and checkpoints messages.
 package agent
 

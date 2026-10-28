@@ -94,7 +94,7 @@ func newRig(t *testing.T, turns ...llmtest.Turn) *rig {
 		RetryBackoff:       time.Millisecond,
 		Now:                func() time.Time { return time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC) },
 		Harness: agent.Harness{
-			Sections:            []agent.PromptSection{memory.PromptSection(r.mem), goals.PromptSection(st)},
+			Sections:            []agent.PromptSection{memory.PromptSection(r.mem)},
 			Context:             []agent.PromptSection{goals.ContextSection(st), memory.RecallSection(r.mem)},
 			Tail:                []agent.PromptSection{goals.TurnsSection(st)},
 			Summaries:           st,

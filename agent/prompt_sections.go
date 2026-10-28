@@ -11,7 +11,7 @@ import (
 
 // PromptSection adds a section to a run's system prompt ("" adds nothing).
 // Sections are appended in order after the base prompt; in.Variant tells
-// which prompt variant they render for (see prompts and Legacy).
+// which prompt variant they render for (see prompts).
 type PromptSection func(ctx context.Context, in Input) string
 
 type taintKey struct{}
@@ -22,19 +22,6 @@ type taintKey struct{}
 func ReportUntrusted(ctx context.Context) {
 	if f, ok := ctx.Value(taintKey{}).(*atomic.Bool); ok {
 		f.Store(true)
-	}
-}
-
-// Legacy renders s in the legacy (v2) prompt and, in the other variants,
-// replacement when s has something to say ("" leaves the section out):
-// e.g. a v2 section whose rule moved into the base prompt (replacement "").
-func Legacy(s PromptSection, replacement string) PromptSection {
-	return func(ctx context.Context, in Input) string {
-		text := s(ctx, in)
-		if prompts.IsLegacy(in.Variant) || strings.TrimSpace(text) == "" {
-			return text
-		}
-		return replacement
 	}
 }
 

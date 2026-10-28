@@ -13,9 +13,8 @@ import (
 	"github.com/GhaziBenDahmane/harness/store"
 )
 
-// Consolidation of Work's memory (astraforge/memory: deduplication strategy
-// and the cleanup task), run periodically by the runtime sweeper. The other
-// Work strategies need data Work Chat does not have: episodic summaries
+// Consolidation of the memory (deduplication strategy and the cleanup task), run periodically by the runtime sweeper. The other
+// Other strategies need data the harness does not have: episodic summaries
 // (memories/episodic/ run journals), promotion (runs/*/summary.md candidates)
 // and indexing (tags/entities/timeline YAML files, which Postgres replaces
 // with queries on the entries).
@@ -137,8 +136,6 @@ type Report struct {
 	Duplicates   int
 	Skipped      int
 	Purged       int
-	// Backfilled counts the migrated facts normalized (BackfillLegacy).
-	Backfilled int
 }
 
 // Consolidator is the periodic memory job.
@@ -159,23 +156,18 @@ func (c Consolidator) now() time.Time {
 // Run implements the runtime job.
 func (c Consolidator) Run(ctx context.Context) error {
 	r, err := c.Consolidate(ctx)
-	if r.ItemsRemoved+r.Duplicates+r.Skipped+r.Purged+r.Backfilled > 0 {
+	if r.ItemsRemoved+r.Duplicates+r.Skipped+r.Purged > 0 {
 		slog.Info("memory: consolidated", "users", r.Users, "processed", r.Processed, "items_removed", r.ItemsRemoved,
-			"duplicates", r.Duplicates, "skipped", r.Skipped, "purged", r.Purged, "backfilled", r.Backfilled)
+			"duplicates", r.Duplicates, "skipped", r.Skipped, "purged", r.Purged)
 	}
 	return err
 }
 
-// Consolidate normalizes the migrated facts still flagged (BackfillLegacy),
-// deduplicates every user's semantic memory, then purges old deleted entries.
+// Consolidate deduplicates every user's semantic memory, then purges old
+// deleted entries.
 func (c Consolidator) Consolidate(ctx context.Context) (Report, error) {
 	var r Report
 	var errs []error
-	if n, err := BackfillLegacy(ctx, c.Store); err != nil {
-		errs = append(errs, fmt.Errorf("legacy backfill: %w", err))
-	} else {
-		r.Backfilled = n
-	}
 	users, err := c.Store.ListMemoryUsers(ctx)
 	if err != nil {
 		return r, errors.Join(append(errs, err)...)

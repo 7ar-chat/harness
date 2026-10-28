@@ -16,22 +16,22 @@ const PlaceMarker = "# work:place"
 // UnstageMarker is the first line of the unstage script (sandboxtest fakes it).
 const UnstageMarker = "# work:unstage"
 
-// unstageScript removes WORK_STAGED (a write that failed before or while
+// unstageScript removes HARNESS_STAGED (a write that failed before or while
 // moving it into place; final review of round 3, F7).
 const unstageScript = UnstageMarker + `
-rm -f -- "$WORK_STAGED"
+rm -f -- "$HARNESS_STAGED"
 `
 
 // StagingDir receives the uploads WriteFileNoFollow moves into place.
 const StagingDir = ScratchDir + "/.staging"
 
-// placeScript moves WORK_STAGED onto WORK_TARGET in one exec, unless the target
+// placeScript moves HARNESS_STAGED onto HARNESS_TARGET in one exec, unless the target
 // is a symbolic link or its directory resolves elsewhere (a symlinked
 // component; /workspace itself may be a mount point under another name). It
 // prints the real directory and exits 4 when it refuses, 3 on other failures.
 const placeScript = PlaceMarker + `
 set -u
-T="$WORK_TARGET"; S="$WORK_STAGED"; D=$(dirname -- "$T")
+T="$HARNESS_TARGET"; S="$HARNESS_STAGED"; D=$(dirname -- "$T")
 W=$(realpath -m -- /workspace) || W=/workspace
 case "$D" in /workspace|/workspace/*) WANT="$W${D#/workspace}";; *) WANT="$D";; esac
 R=$(realpath -m -- "$D") || { rm -f -- "$S"; exit 3; }
@@ -73,7 +73,7 @@ func WriteFileNoFollow(ctx context.Context, sb Sandbox, p string, data []byte) e
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	res, err := sb.Exec(cctx, ExecRequest{Command: placeScript, Cwd: "/", Timeout: 20 * time.Second,
-		Env: map[string]string{"WORK_TARGET": p, "WORK_STAGED": staged},
+		Env: map[string]string{"HARNESS_TARGET": p, "HARNESS_STAGED": staged},
 		OnStdout: func(t string) {
 			if out.Len() < 4096 {
 				out.WriteString(t)
@@ -100,5 +100,5 @@ func WriteFileNoFollow(ctx context.Context, sb Sandbox, p string, data []byte) e
 func unstage(ctx context.Context, sb Sandbox, staged string) {
 	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
-	_, _ = sb.Exec(cctx, ExecRequest{Command: unstageScript, Cwd: "/", Timeout: 5 * time.Second, Env: map[string]string{"WORK_STAGED": staged}})
+	_, _ = sb.Exec(cctx, ExecRequest{Command: unstageScript, Cwd: "/", Timeout: 5 * time.Second, Env: map[string]string{"HARNESS_STAGED": staged}})
 }

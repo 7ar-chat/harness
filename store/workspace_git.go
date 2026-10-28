@@ -39,7 +39,7 @@ type WorkspaceGitIssue struct {
 // WorkspaceGitStore persists the thread's archived Git history. The archive
 // blobs are never referenced by an artifact version: a replaced archive and
 // the archive of a purged thread are queued for the blob garbage collection
-// (work_blob_gc, collected after WORK_BLOB_GC_GRACE_HOURS).
+// (work_blob_gc, collected after HARNESS_BLOB_GC_GRACE_HOURS).
 type WorkspaceGitStore interface {
 	// WorkspaceGit returns the thread's archive (ErrNotFound when none).
 	WorkspaceGit(ctx context.Context, threadID string) (*WorkspaceGitArchive, error)

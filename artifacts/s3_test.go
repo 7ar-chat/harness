@@ -20,14 +20,14 @@ import (
 	"github.com/GhaziBenDahmane/harness/store/memstore"
 )
 
-// s3Blobs returns the S3 backend on a fresh bucket of WORK_TEST_S3_ENDPOINT (e.g. local RustFS); skipped when unset.
+// s3Blobs returns the S3 backend on a fresh bucket of HARNESS_TEST_S3_ENDPOINT (e.g. local RustFS); skipped when unset.
 func s3Blobs(t *testing.T) *s3blobs.Blobs {
 	t.Helper()
-	endpoint := os.Getenv("WORK_TEST_S3_ENDPOINT")
+	endpoint := os.Getenv("HARNESS_TEST_S3_ENDPOINT")
 	if endpoint == "" {
-		t.Skip("WORK_TEST_S3_ENDPOINT not set")
+		t.Skip("HARNESS_TEST_S3_ENDPOINT not set")
 	}
-	key, secret := os.Getenv("WORK_TEST_S3_ACCESS_KEY"), os.Getenv("WORK_TEST_S3_SECRET_KEY")
+	key, secret := os.Getenv("HARNESS_TEST_S3_ACCESS_KEY"), os.Getenv("HARNESS_TEST_S3_SECRET_KEY")
 	bucket := "work-test-" + uuid.NewString()[:8]
 	admin := s3.New(s3.Options{Region: "us-east-1", BaseEndpoint: aws.String(endpoint), UsePathStyle: true,
 		Credentials: credentials.NewStaticCredentialsProvider(key, secret, "")})
@@ -111,11 +111,11 @@ func TestS3PurgeDeletesTheBlobsOfPurgedThreadsOnly(t *testing.T) {
 func TestS3BlobsEnsureBucketCreatesAMissingBucketOnce(t *testing.T) {
 	// EnsureBucket creates a missing bucket (local RustFS starts empty) and is a no-op once it exists.
 	// Arrange
-	endpoint := os.Getenv("WORK_TEST_S3_ENDPOINT")
+	endpoint := os.Getenv("HARNESS_TEST_S3_ENDPOINT")
 	if endpoint == "" {
-		t.Skip("WORK_TEST_S3_ENDPOINT not set")
+		t.Skip("HARNESS_TEST_S3_ENDPOINT not set")
 	}
-	key, secret := os.Getenv("WORK_TEST_S3_ACCESS_KEY"), os.Getenv("WORK_TEST_S3_SECRET_KEY")
+	key, secret := os.Getenv("HARNESS_TEST_S3_ACCESS_KEY"), os.Getenv("HARNESS_TEST_S3_SECRET_KEY")
 	b, err := s3blobs.New(s3blobs.Options{Bucket: "work-test-" + uuid.NewString()[:8], Endpoint: endpoint, AccessKey: key, SecretKey: secret,
 		PathStyle: true, Prefix: "work/"})
 	if err != nil {

@@ -22,10 +22,10 @@ type MCPServer struct {
 // Config is the whole service configuration. See README "Configuration".
 type Config struct {
 	Port int `env:"PORT" envDefault:"8000"`
-	// Production is on when DJANGO_PRODUCTION has any non-empty value (house
-	// convention, like Django's os.environ.get: "1", "true", "yes" alike).
+	// Production is on when HARNESS_PRODUCTION has any non-empty value
+	// ("1", "true", "yes" alike).
 	Production    bool   `env:"-"`
-	ProductionRaw string `env:"DJANGO_PRODUCTION"`
+	ProductionRaw string `env:"HARNESS_PRODUCTION"`
 
 	PostgresHost     string `env:"POSTGRES_HOST" envDefault:"postgres"`
 	PostgresPort     string `env:"POSTGRES_PORT" envDefault:"5432"`
@@ -117,31 +117,31 @@ type Config struct {
 	AWSAccessKeyID          string `env:"AWS_ACCESS_KEY_ID"`
 	AWSSecretAccessKey      string `env:"AWS_SECRET_ACCESS_KEY"`
 	// MaxUploadBytes bounds one attachment (413 file_too_large beyond).
-	MaxUploadBytes int64 `env:"WORK_MAX_UPLOAD_BYTES" envDefault:"104857600"`
+	MaxUploadBytes int64 `env:"HARNESS_MAX_UPLOAD_BYTES" envDefault:"104857600"`
 	// MaxConcurrentUploads bounds uploads per api process (429 too_many_uploads beyond).
-	MaxConcurrentUploads int `env:"WORK_MAX_CONCURRENT_UPLOADS" envDefault:"4"`
+	MaxConcurrentUploads int `env:"HARNESS_MAX_CONCURRENT_UPLOADS" envDefault:"4"`
 	// MaxConcurrentUploadsPerUser bounds one user's uploads per api process (429 too_many_uploads beyond).
-	// Default 4: the composer uploads 4 files in parallel (like Studio Work).
-	MaxConcurrentUploadsPerUser int `env:"WORK_MAX_CONCURRENT_UPLOADS_PER_USER" envDefault:"4"`
+	// Default 4: the composer uploads 4 files in parallel .
+	MaxConcurrentUploadsPerUser int `env:"HARNESS_MAX_CONCURRENT_UPLOADS_PER_USER" envDefault:"4"`
 	// PreviewMaxConcurrency bounds the Office → PDF conversions per api process.
 	PreviewMaxConcurrency int `env:"PREVIEW_MAX_CONCURRENCY" envDefault:"2"`
 	// PurgeAfterDays: deleted threads are hard-deleted (with their artifacts and
 	// unreferenced blobs) this many days after deletion (≤ 0 disables the purge).
-	PurgeAfterDays int `env:"WORK_PURGE_AFTER_DAYS" envDefault:"30"`
+	PurgeAfterDays int `env:"HARNESS_PURGE_AFTER_DAYS" envDefault:"30"`
 	// BlobGCGraceHours: a content blob is only deleted once it has had no
 	// artifact version referencing it for this many hours (≤ 0: 24), so content
 	// reused by a concurrent upload or snapshot is never collected.
-	BlobGCGraceHours int `env:"WORK_BLOB_GC_GRACE_HOURS" envDefault:"24"`
-	// Work Chat files (README "Workspace checkpoints"): a local Git checkpoint of
+	BlobGCGraceHours int `env:"HARNESS_BLOB_GC_GRACE_HOURS" envDefault:"24"`
+	// Workspace checkpoints (README "Workspace checkpoints"): a local Git checkpoint of
 	// /workspace before every AI turn, per-file history / diff / restore, and the
-	// .git history archived (tar.gz, at most WORK_GIT_ARCHIVE_MAX_BYTES; a larger
+	// .git history archived (tar.gz, at most HARNESS_GIT_ARCHIVE_MAX_BYTES; a larger
 	// one is not archived) into the blob store after each run, restored into
 	// every new sandbox of the thread. Files larger than
-	// WORK_WORKSPACE_CHECKPOINT_MAX_FILE_BYTES (default 20 MiB, ≤ 0: no limit)
+	// HARNESS_WORKSPACE_CHECKPOINT_MAX_FILE_BYTES (default 20 MiB, ≤ 0: no limit)
 	// are kept out of the checkpoints (large uploads would exceed the archive cap).
-	WorkspaceCheckpoints bool  `env:"WORK_WORKSPACE_CHECKPOINTS" envDefault:"true"`
-	GitArchiveMaxBytes   int64 `env:"WORK_GIT_ARCHIVE_MAX_BYTES" envDefault:"52428800"`
-	CheckpointMaxFile    int64 `env:"WORK_WORKSPACE_CHECKPOINT_MAX_FILE_BYTES" envDefault:"20971520"`
+	WorkspaceCheckpoints bool  `env:"HARNESS_WORKSPACE_CHECKPOINTS" envDefault:"true"`
+	GitArchiveMaxBytes   int64 `env:"HARNESS_GIT_ARCHIVE_MAX_BYTES" envDefault:"52428800"`
+	CheckpointMaxFile    int64 `env:"HARNESS_WORKSPACE_CHECKPOINT_MAX_FILE_BYTES" envDefault:"20971520"`
 
 	// SkillsDir is the user skills directory (SKILLS_DIR; "" = ~/.config/harness/skills,
 	// see SkillsPath): one <name>/SKILL.md folder per skill.
@@ -154,15 +154,15 @@ type Config struct {
 	// change the reported capabilities, like Work), the "[Repository Memory
 	// Recall]" block in the system prompt, the limits (≤ 0 entries: no limit)
 	// and the consolidation job (dedup + purge of deleted entries; ≤ 0 hours disables it).
-	MemoryWriteMode            string `env:"WORK_MEMORY_WRITE_MODE" envDefault:"warn"`
-	MemoryDeleteMode           string `env:"WORK_MEMORY_DELETE_MODE" envDefault:"soft"`
-	MemoryDefaultScope         string `env:"WORK_MEMORY_DEFAULT_SCOPE" envDefault:"personal"`
-	MemoryEmbeddingBackend     string `env:"WORK_MEMORY_EMBEDDING_BACKEND" envDefault:"simple"`
-	MemoryRecallInjection      bool   `env:"WORK_MEMORY_RECALL_INJECTION" envDefault:"true"`
-	MemoryMaxEntries           int    `env:"WORK_MEMORY_MAX_ENTRIES" envDefault:"1000"`
-	MemoryMaxContentBytes      int    `env:"WORK_MEMORY_MAX_CONTENT_BYTES" envDefault:"200000"`
-	MemoryConsolidationHours   int    `env:"WORK_MEMORY_CONSOLIDATION_HOURS" envDefault:"168"`
-	MemoryDeletedRetentionDays int    `env:"WORK_MEMORY_DELETED_RETENTION_DAYS" envDefault:"30"`
+	MemoryWriteMode            string `env:"HARNESS_MEMORY_WRITE_MODE" envDefault:"warn"`
+	MemoryDeleteMode           string `env:"HARNESS_MEMORY_DELETE_MODE" envDefault:"soft"`
+	MemoryDefaultScope         string `env:"HARNESS_MEMORY_DEFAULT_SCOPE" envDefault:"personal"`
+	MemoryEmbeddingBackend     string `env:"HARNESS_MEMORY_EMBEDDING_BACKEND" envDefault:"simple"`
+	MemoryRecallInjection      bool   `env:"HARNESS_MEMORY_RECALL_INJECTION" envDefault:"true"`
+	MemoryMaxEntries           int    `env:"HARNESS_MEMORY_MAX_ENTRIES" envDefault:"1000"`
+	MemoryMaxContentBytes      int    `env:"HARNESS_MEMORY_MAX_CONTENT_BYTES" envDefault:"200000"`
+	MemoryConsolidationHours   int    `env:"HARNESS_MEMORY_CONSOLIDATION_HOURS" envDefault:"168"`
+	MemoryDeletedRetentionDays int    `env:"HARNESS_MEMORY_DELETED_RETENTION_DAYS" envDefault:"30"`
 	// Harness v2 §4–§9 (context windows, reasoning/vision models — LLM_VISION_MODELS
 	// also decides which models receive attached images —, compaction).
 	Harness
@@ -261,7 +261,7 @@ func trimAll(in []string) []string {
 	return out
 }
 
-// IsDebug mirrors the house convention: debug unless DJANGO_PRODUCTION is set.
+// IsDebug reports debug mode: on unless HARNESS_PRODUCTION is set.
 func (c *Config) IsDebug() bool { return !c.Production }
 
 // ModelAllowed reports whether a model id is in the LLM_MODELS allow-list.

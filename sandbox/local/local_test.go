@@ -156,7 +156,7 @@ func TestBackgroundJobScriptsRunNatively(t *testing.T) {
 	sb, _ := newSandbox(t)
 	ctx := context.Background()
 	dir := "/workspace/.work/jobs/j1"
-	env := map[string]string{"WORK_JOB_DIR": dir, "WORK_JOB_CMD_B64": b64("echo started; sleep 0.3; echo done; exit 3"), "WORK_JOB_WAIT": "0"}
+	env := map[string]string{"HARNESS_JOB_DIR": dir, "HARNESS_JOB_CMD_B64": b64("echo started; sleep 0.3; echo done; exit 3"), "HARNESS_JOB_WAIT": "0"}
 
 	// Act
 	var status strings.Builder
@@ -165,7 +165,7 @@ func TestBackgroundJobScriptsRunNatively(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(700 * time.Millisecond)
-	_, err := sb.Exec(ctx, sandbox.ExecRequest{Command: script("# work:job-status"), Env: map[string]string{"WORK_JOB_DIR": dir, "WORK_HEAD": "100", "WORK_TAIL": "100"},
+	_, err := sb.Exec(ctx, sandbox.ExecRequest{Command: script("# work:job-status"), Env: map[string]string{"HARNESS_JOB_DIR": dir, "HARNESS_HEAD": "100", "HARNESS_TAIL": "100"},
 		OnStdout: func(s string) { status.WriteString(s) }})
 
 	// Assert
@@ -182,8 +182,8 @@ func TestToolPathsPassedInTheEnvironmentAreMapped(t *testing.T) {
 	var out strings.Builder
 
 	// Act
-	res, err := sb.Exec(context.Background(), sandbox.ExecRequest{Command: `ls -d "$WORK_PATH" && echo "$WORK_PATTERN"`,
-		Env: map[string]string{"WORK_PATH": "/workspace", "WORK_PATTERN": "/workspace/x"}, OnStdout: func(s string) { out.WriteString(s) }})
+	res, err := sb.Exec(context.Background(), sandbox.ExecRequest{Command: `ls -d "$HARNESS_PATH" && echo "$HARNESS_PATTERN"`,
+		Env: map[string]string{"HARNESS_PATH": "/workspace", "HARNESS_PATTERN": "/workspace/x"}, OnStdout: func(s string) { out.WriteString(s) }})
 
 	// Assert
 	if err != nil || res.ExitCode != 0 || out.String() != "/workspace\n/workspace/x\n" {

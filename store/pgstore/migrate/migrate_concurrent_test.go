@@ -15,9 +15,9 @@ import (
 
 func TestTwoConcurrentMigrateRunsBothSucceed(t *testing.T) {
 	// Two `work migrate` jobs started together on a fresh schema both succeed (serialized by an advisory lock), five rounds in a row.
-	dsn := os.Getenv("WORK_TEST_DATABASE_URL")
+	dsn := os.Getenv("HARNESS_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("WORK_TEST_DATABASE_URL not set")
+		t.Skip("HARNESS_TEST_DATABASE_URL not set")
 	}
 	for round := 0; round < 5; round++ {
 		// Arrange
@@ -59,9 +59,9 @@ func TestTwoConcurrentMigrateRunsBothSucceed(t *testing.T) {
 
 func TestMigrateSucceedsWithAOneConnectionPool(t *testing.T) {
 	// With DB_POOL_MAX_CONNS=1 the migration lock does not hold the only connection: migrate completes instead of deadlocking (review round 1).
-	dsn := os.Getenv("WORK_TEST_DATABASE_URL")
+	dsn := os.Getenv("HARNESS_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("WORK_TEST_DATABASE_URL not set")
+		t.Skip("HARNESS_TEST_DATABASE_URL not set")
 	}
 	// Arrange
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

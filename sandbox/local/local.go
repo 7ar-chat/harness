@@ -197,10 +197,10 @@ func (in *Instance) mapCommand(s string) string {
 	return mapRoot(s, "/skills", filepath.Join(in.sys, "skills"))
 }
 
-// mapEnv maps the sandbox paths the tools pass in WORK_* variables (the search
-// path, the glob); WORK_PATTERN and other free text are left alone.
+// mapEnv maps the sandbox paths the tools pass in HARNESS_* variables (the search
+// path, the glob); HARNESS_PATTERN and other free text are left alone.
 func (in *Instance) mapEnv(key, v string) string {
-	if strings.HasPrefix(key, "WORK_") && key != "WORK_PATTERN" && !strings.HasSuffix(key, "_B64") {
+	if strings.HasPrefix(key, "HARNESS_") && key != "HARNESS_PATTERN" && !strings.HasSuffix(key, "_B64") {
 		return in.mapCommand(v)
 	}
 	return v
@@ -495,11 +495,11 @@ func (in *Instance) native(marker string) handler {
 
 func exit(code int) (sandbox.ExecResult, error) { return sandbox.ExecResult{ExitCode: code}, nil }
 
-// place moves WORK_STAGED onto WORK_TARGET unless the target is a symlink or
+// place moves HARNESS_STAGED onto HARNESS_TARGET unless the target is a symlink or
 // its directory resolves elsewhere (exit 4, the real directory on stdout).
 func (in *Instance) place(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	target, err1 := in.host(req.Env["WORK_TARGET"])
-	staged, err2 := in.host(req.Env["WORK_STAGED"])
+	target, err1 := in.host(req.Env["HARNESS_TARGET"])
+	staged, err2 := in.host(req.Env["HARNESS_STAGED"])
 	if err1 != nil || err2 != nil {
 		return exit(3)
 	}
@@ -526,17 +526,17 @@ func (in *Instance) place(_ context.Context, req sandbox.ExecRequest) (sandbox.E
 }
 
 func (in *Instance) unstage(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	if p, err := in.host(req.Env["WORK_STAGED"]); err == nil {
+	if p, err := in.host(req.Env["HARNESS_STAGED"]); err == nil {
 		_ = os.Remove(p)
 	}
 	return exit(0)
 }
 
 func (in *Instance) realpath(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	n := atoi(req.Env["WORK_N"])
+	n := atoi(req.Env["HARNESS_N"])
 	var b strings.Builder
 	for i := 0; i < n; i++ {
-		h, err := in.host(req.Env[fmt.Sprintf("WORK_PATH_%d", i)])
+		h, err := in.host(req.Env[fmt.Sprintf("HARNESS_PATH_%d", i)])
 		if err != nil {
 			return exit(1)
 		}
@@ -548,10 +548,10 @@ func (in *Instance) realpath(_ context.Context, req sandbox.ExecRequest) (sandbo
 }
 
 func (in *Instance) readFiles(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	budget := int64(atoi(req.Env["WORK_BUDGET"]))
+	budget := int64(atoi(req.Env["HARNESS_BUDGET"]))
 	var b strings.Builder
-	for i := 0; i < atoi(req.Env["WORK_N"]); i++ {
-		vp := req.Env[fmt.Sprintf("WORK_PATH_%d", i)]
+	for i := 0; i < atoi(req.Env["HARNESS_N"]); i++ {
+		vp := req.Env[fmt.Sprintf("HARNESS_PATH_%d", i)]
 		h, err := in.host(vp)
 		if err != nil {
 			continue
@@ -561,7 +561,7 @@ func (in *Instance) readFiles(_ context.Context, req sandbox.ExecRequest) (sandb
 			continue
 		}
 		stamp := fmt.Sprintf("%d %d", st.Size(), st.ModTime().Unix())
-		if k := req.Env[fmt.Sprintf("WORK_KNOWN_%d", i)]; k != "" && (k == stamp || k == fmt.Sprintf("%d -", st.Size())) {
+		if k := req.Env[fmt.Sprintf("HARNESS_KNOWN_%d", i)]; k != "" && (k == stamp || k == fmt.Sprintf("%d -", st.Size())) {
 			fmt.Fprintf(&b, "%d %s U -\n", i, stamp)
 			continue
 		}
@@ -582,11 +582,11 @@ func (in *Instance) readFiles(_ context.Context, req sandbox.ExecRequest) (sandb
 }
 
 func (in *Instance) sweep(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	dir, err := in.host(req.Env["WORK_STAGING_DIR"])
+	dir, err := in.host(req.Env["HARNESS_STAGING_DIR"])
 	if err != nil {
 		return exit(0)
 	}
-	cutoff := time.Now().Add(-time.Duration(atoi(req.Env["WORK_STAGING_MINUTES"])) * time.Minute)
+	cutoff := time.Now().Add(-time.Duration(atoi(req.Env["HARNESS_STAGING_MINUTES"])) * time.Minute)
 	entries, _ := os.ReadDir(dir)
 	for _, e := range entries {
 		if st, err := e.Info(); err == nil && st.Mode().IsRegular() && st.ModTime().Before(cutoff) {

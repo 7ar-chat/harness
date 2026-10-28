@@ -79,29 +79,29 @@ type execOutput struct {
 // jobShadow is the job's second record outside /workspace (pid, exit,
 // killed): a command that deletes /workspace/.work (its own job directory)
 // still gets its exit status, and the result says what happened (round 3, A11).
-const jobShadow = `S="${WORK_JOBS_SHADOW_ROOT:-` + jobShadowRoot + `}/$(basename "$D")"
+const jobShadow = `S="${HARNESS_JOBS_SHADOW_ROOT:-` + jobShadowRoot + `}/$(basename "$D")"
 `
 
 // jobShadowRoot holds the jobs' second records (reset with the sandbox, like
-// the job; WORK_JOBS_SHADOW_ROOT in the sandbox's environment moves it, for tests).
+// the job; HARNESS_JOBS_SHADOW_ROOT in the sandbox's environment moves it, for tests).
 const jobShadowRoot = "/tmp/work-jobs"
 
-// jobStartScript starts WORK_JOB_CMD_B64 (base64 bash) detached in its own
-// session under WORK_JOB_DIR (cmd.sh, pid, stdout, stderr, exit; pid and exit
+// jobStartScript starts HARNESS_JOB_CMD_B64 (base64 bash) detached in its own
+// session under HARNESS_JOB_DIR (cmd.sh, pid, stdout, stderr, exit; pid and exit
 // also in the shadow directory), then follows its output for up to
-// WORK_JOB_WAIT seconds (live output of the call).
+// HARNESS_JOB_WAIT seconds (live output of the call).
 const jobStartScript = `# work:job-start
 set -u
-D="$WORK_JOB_DIR"
+D="$HARNESS_JOB_DIR"
 ` + jobShadow + `mkdir -p "$D" "$S"
-printf '%s' "$WORK_JOB_CMD_B64" | base64 -d > "$D/cmd.sh"
+printf '%s' "$HARNESS_JOB_CMD_B64" | base64 -d > "$D/cmd.sh"
 : > "$D/stdout"; : > "$D/stderr"
 cd /workspace
 setsid bash -c 'echo $$ > "$1/pid"; echo $$ > "$2/pid"; bash "$1/cmd.sh" > "$1/stdout" 2> "$1/stderr" < /dev/null; c=$?; echo $c > "$2/exit"; if [ -d "$1" ]; then echo $c > "$1/exit.tmp"; mv "$1/exit.tmp" "$1/exit"; fi' work-job "$D" "$S" > /dev/null 2>&1 < /dev/null &
 ` + jobFollow
 
-// jobFollow streams the job's files until it exits or WORK_JOB_WAIT seconds pass.
-const jobFollow = `W="${WORK_JOB_WAIT:-0}"
+// jobFollow streams the job's files until it exits or HARNESS_JOB_WAIT seconds pass.
+const jobFollow = `W="${HARNESS_JOB_WAIT:-0}"
 if [ "$W" -gt 0 ]; then
   tail -n +1 -F -s 0.2 "$D/stdout" 2>/dev/null & T1=$!
   tail -n +1 -F -s 0.2 "$D/stderr" 1>&2 2>/dev/null & T2=$!
@@ -116,19 +116,19 @@ exit 0
 
 const jobWaitScript = `# work:job-wait
 set -u
-D="$WORK_JOB_DIR"
+D="$HARNESS_JOB_DIR"
 ` + jobShadow + `[ -d "$D" ] || [ -d "$S" ] || exit 0
 ` + jobFollow
 
 // jobStatusScript prints "status S", "code N" and, per stream, "name size
-// head-b64 tail-b64" ("-" for empty); WORK_JOB_CLEAN=1 removes the directory
+// head-b64 tail-b64" ("-" for empty); HARNESS_JOB_CLEAN=1 removes the directory
 // of a finished job whose output was returned whole. A job whose directory was
 // deleted reports from its shadow: "removed" once it ended (with its exit
 // code), "running" or "killed" before; "missing" when neither exists (the
 // sandbox was recreated).
 const jobStatusScript = `# work:job-status
 set -u
-D="$WORK_JOB_DIR"
+D="$HARNESS_JOB_DIR"
 ` + jobShadow + `if [ ! -d "$D" ]; then
   if [ -f "$S/killed" ]; then echo "status killed"; echo "code "
   elif [ -f "$S/exit" ]; then echo "status removed"; echo "code $(cat "$S/exit")"
@@ -147,7 +147,7 @@ if [ "$st" = running ] && [ -s "$D/pid" ] && ! kill -0 "$(cat "$D/pid")" 2>/dev/
 fi
 echo "status $st"
 echo "code $code"
-H="$WORK_HEAD"; T="$WORK_TAIL"; small=1
+H="$HARNESS_HEAD"; T="$HARNESS_TAIL"; small=1
 for s in stdout stderr; do
   f="$D/$s"; n=$(stat -c %s "$f" 2>/dev/null || echo 0)
   if [ "$n" -le $((H + T)) ]; then
@@ -157,12 +157,12 @@ for s in stdout stderr; do
   fi
   echo "$s $n ${h:--} ${t:--}"
 done
-if [ "${WORK_JOB_CLEAN:-}" = 1 ] && [ "$st" = finished ] && [ "$small" = 1 ]; then rm -rf "$D" "$S"; fi
+if [ "${HARNESS_JOB_CLEAN:-}" = 1 ] && [ "$st" = finished ] && [ "$small" = 1 ]; then rm -rf "$D" "$S"; fi
 `
 
 const jobKillScript = `# work:job-kill
 set -u
-D="$WORK_JOB_DIR"
+D="$HARNESS_JOB_DIR"
 ` + jobShadow + `[ -d "$D" ] || [ -d "$S" ] || exit 1
 [ -f "$D/exit" ] || [ -f "$S/exit" ] && exit 0
 [ -d "$D" ] && touch "$D/killed"
@@ -339,7 +339,7 @@ func (b *binding) start(ctx context.Context, sb sandbox.Sandbox, command string,
 	id := newJobID()
 	dir := jobDir(id)
 	live := newLiveOutput(ctx)
-	env := map[string]string{"WORK_JOB_DIR": dir, "WORK_JOB_CMD_B64": base64.StdEncoding.EncodeToString([]byte(command)), "WORK_JOB_WAIT": strconv.Itoa(wait)}
+	env := map[string]string{"HARNESS_JOB_DIR": dir, "HARNESS_JOB_CMD_B64": base64.StdEncoding.EncodeToString([]byte(command)), "HARNESS_JOB_WAIT": strconv.Itoa(wait)}
 	err := b.follow(ctx, sb, jobStartScript, env, wait, live)
 	if err != nil {
 		if ctx.Err() != nil && wait > 0 {
@@ -370,7 +370,7 @@ func (b *binding) kill(ctx context.Context, sb sandbox.Sandbox, dir string) {
 	kctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), killTimeout)
 	defer cancel()
 	if _, err := sb.Exec(kctx, sandbox.ExecRequest{Command: jobKillScript, Cwd: sandbox.Workspace, Timeout: killTimeout,
-		Env: map[string]string{"WORK_JOB_DIR": dir}}); err != nil {
+		Env: map[string]string{"HARNESS_JOB_DIR": dir}}); err != nil {
 		slog.Warn("sandboxtools: killing a cancelled command failed", "thread_id", b.rc.ThreadID, "job_dir", dir, "error", err)
 	}
 }
@@ -398,9 +398,9 @@ func (b *binding) follow(ctx context.Context, sb sandbox.Sandbox, script string,
 
 func (b *binding) status(ctx context.Context, sb sandbox.Sandbox, dir string, clean bool) (jobStatus, error) {
 	var stdout strings.Builder
-	env := map[string]string{"WORK_JOB_DIR": dir, "WORK_HEAD": strconv.Itoa(stdoutHead), "WORK_TAIL": strconv.Itoa(stdoutTail)}
+	env := map[string]string{"HARNESS_JOB_DIR": dir, "HARNESS_HEAD": strconv.Itoa(stdoutHead), "HARNESS_TAIL": strconv.Itoa(stdoutTail)}
 	if clean {
-		env["WORK_JOB_CLEAN"] = "1"
+		env["HARNESS_JOB_CLEAN"] = "1"
 	}
 	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), statusTimeout)
 	defer cancel()
@@ -486,7 +486,7 @@ func (b *binding) jobOutput(ctx context.Context, in jobOutputInput) (*jobOutput,
 	dir := jobDir(id)
 	if wait := min(max(in.WaitSeconds, 0), maxJobWait); wait > 0 {
 		live := newLiveOutput(ctx)
-		err := b.follow(ctx, sb, jobWaitScript, map[string]string{"WORK_JOB_DIR": dir, "WORK_JOB_WAIT": strconv.Itoa(wait)}, wait, live)
+		err := b.follow(ctx, sb, jobWaitScript, map[string]string{"HARNESS_JOB_DIR": dir, "HARNESS_JOB_WAIT": strconv.Itoa(wait)}, wait, live)
 		if err != nil {
 			return nil, err
 		}
@@ -535,7 +535,7 @@ func (b *binding) jobKill(ctx context.Context, in jobKillInput) (*jobKilled, err
 	cctx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
 	res, err := sb.Exec(cctx, sandbox.ExecRequest{Command: jobKillScript, Cwd: sandbox.Workspace, Timeout: statusTimeout,
-		Env: map[string]string{"WORK_JOB_DIR": jobDir(id)}})
+		Env: map[string]string{"HARNESS_JOB_DIR": jobDir(id)}})
 	if err != nil {
 		return nil, fmt.Errorf("stopping the job failed: %w", err)
 	}

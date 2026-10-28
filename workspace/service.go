@@ -21,7 +21,7 @@ import (
 
 // Options configure the service.
 type Options struct {
-	// Disabled turns checkpoints off (WORK_WORKSPACE_CHECKPOINTS=false): no
+	// Disabled turns checkpoints off (HARNESS_WORKSPACE_CHECKPOINTS=false): no
 	// repository, no archive; the endpoints answer from an absent history.
 	Disabled bool
 	// ArchiveMaxBytes caps the archived .git (tar.gz; default 50 MiB, also
@@ -29,7 +29,7 @@ type Options struct {
 	// (the previous archive is kept).
 	ArchiveMaxBytes int64
 	// MaxFileBytes keeps larger files out of the checkpoints (≤ 0: no limit;
-	// WORK_WORKSPACE_CHECKPOINT_MAX_FILE_BYTES).
+	// HARNESS_WORKSPACE_CHECKPOINT_MAX_FILE_BYTES).
 	MaxFileBytes int64
 	// Timeout bounds one git script (default 30 s, like Work).
 	Timeout time.Duration

@@ -403,7 +403,7 @@ func hardLink(extra []byte) bool {
 }
 
 // reroot strips a single top-level folder when SKILL.md is only inside it
-// (a zipped skill folder), a convenience over the Cowork reader.
+// (a zipped skill folder).
 func reroot(files []File) []File {
 	top := ""
 	for _, f := range files {

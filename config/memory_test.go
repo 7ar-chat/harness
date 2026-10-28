@@ -22,7 +22,7 @@ func TestLoadAppliesTheMemoryDefaults(t *testing.T) {
 func TestLoadRejectsUnknownMemoryModes(t *testing.T) {
 	// Unknown write / delete modes or scopes stop the service, like Work's memory proxy; case and spaces are tolerated.
 	for _, c := range []struct{ name, value string }{
-		{"WORK_MEMORY_WRITE_MODE", "lenient"}, {"WORK_MEMORY_DELETE_MODE", "archive"}, {"WORK_MEMORY_DEFAULT_SCOPE", "global"},
+		{"HARNESS_MEMORY_WRITE_MODE", "lenient"}, {"HARNESS_MEMORY_DELETE_MODE", "archive"}, {"HARNESS_MEMORY_DEFAULT_SCOPE", "global"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			// Arrange
@@ -37,7 +37,7 @@ func TestLoadRejectsUnknownMemoryModes(t *testing.T) {
 			}
 		})
 	}
-	t.Setenv("WORK_MEMORY_WRITE_MODE", " Strict ")
+	t.Setenv("HARNESS_MEMORY_WRITE_MODE", " Strict ")
 	if cfg, err := config.Load(); err != nil || cfg.MemoryWriteMode != "strict" {
 		t.Fatalf("strict: %v %+v", err, cfg)
 	}

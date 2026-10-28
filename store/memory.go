@@ -3,10 +3,7 @@ package store
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // Memory entry statuses: pending entries were written by the model after it
@@ -19,11 +16,10 @@ const (
 )
 
 // Memory entry sources: written by the agent's memory tools, by the user in
-// Settings > Memory, or migrated from the former per-user facts.
+// Settings > Memory.
 const (
-	MemorySourceProxy  = "proxy"
-	MemorySourceUser   = "user"
-	MemorySourceLegacy = "legacy"
+	MemorySourceProxy = "proxy"
+	MemorySourceUser  = "user"
 )
 
 // MemoryLimits caps a user's entries per status (≤ 0: no limit): active ones,
@@ -159,15 +155,6 @@ func cloneValue(v any) any {
 	}
 }
 
-// LegacyMemoryID maps the uuid of a former work_memories row to the id of the
-// entry migration 0010 created for it (so links from old conversations work).
-func LegacyMemoryID(id string) string {
-	if u, err := uuid.Parse(id); err == nil {
-		return "mem_" + strings.ReplaceAll(u.String(), "-", "")
-	}
-	return id
-}
-
 // MemoryStore is the persistence of the memory entries (per user).
 type MemoryStore interface {
 	// MemoryEnabled is the user's memory setting (default on).
@@ -196,9 +183,6 @@ type MemoryStore interface {
 	// otherwise); with expectStatus set, only when the entry still has this
 	// status (ErrMemoryConflict otherwise).
 	DeleteMemoryEntry(ctx context.Context, login, id, expectStatus string) error
-	// ListMemoryEntriesToBackfill returns the entries of every user flagged
-	// metadata.legacy_backfill by migration 0014 (memory.BackfillLegacy).
-	ListMemoryEntriesToBackfill(ctx context.Context) ([]*MemoryEntry, error)
 	// ListMemoryUsers returns the users with active entries (consolidation).
 	ListMemoryUsers(ctx context.Context) ([]string, error)
 	// PurgeDeletedMemoryEntries hard-deletes entries soft-deleted before before.

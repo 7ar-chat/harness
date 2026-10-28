@@ -166,7 +166,7 @@ func TestCheckpointInitializesTheRepositoryAndCommitsOnlyChanges(t *testing.T) {
 		len(list[0].ChangedFiles) != 1 || list[0].ChangedFiles[0] != "/workspace/a.txt" {
 		t.Fatalf("newest %+v", list[0])
 	}
-	if email, _ := sb.File("/workspace/.git/config"); !strings.Contains(email, "work-chat@local") {
+	if email, _ := sb.File("/workspace/.git/config"); !strings.Contains(email, "harness@local") {
 		t.Fatalf("local identity missing: %s", email)
 	}
 }
@@ -547,7 +547,7 @@ func TestBrokenArchiveStartsANewHistory(t *testing.T) {
 }
 
 func TestDisabledCheckpointsDoNothing(t *testing.T) {
-	// WORK_WORKSPACE_CHECKPOINTS=false: no repository, no prompt section.
+	// HARNESS_WORKSPACE_CHECKPOINTS=false: no repository, no prompt section.
 	// Arrange
 	r := newRig(t, workspace.Options{Disabled: true})
 	sb := r.sandbox()

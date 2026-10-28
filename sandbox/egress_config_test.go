@@ -54,7 +54,7 @@ func fakeCreateServer(t *testing.T) (*httptest.Server, func() map[string]any) {
 func TestEveryProcessRefusesUnrestrictedEgressInProduction(t *testing.T) {
 	// The backend every process (api included) builds from the configuration refuses production without an allowlist (C-02).
 	// Arrange
-	t.Setenv("DJANGO_PRODUCTION", "1")
+	t.Setenv("HARNESS_PRODUCTION", "1")
 	t.Setenv("OPENSANDBOX_URL", "http://opensandbox:8090")
 	cfg, err := config.Load()
 	if err != nil {
@@ -74,7 +74,7 @@ func TestSandboxCreatedFromConfigCarriesTheAllowlist(t *testing.T) {
 	// A sandbox created by any process (e.g. the api for an Office preview) is created with the configured deny-by-default allowlist.
 	// Arrange
 	srv, created := fakeCreateServer(t)
-	t.Setenv("DJANGO_PRODUCTION", "1")
+	t.Setenv("HARNESS_PRODUCTION", "1")
 	t.Setenv("OPENSANDBOX_URL", srv.URL)
 	t.Setenv("OPENSANDBOX_USE_SERVER_PROXY", "true")
 	t.Setenv("SANDBOX_EGRESS_ALLOWLIST", "pypi.org,mirror.example.com")

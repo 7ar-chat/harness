@@ -142,11 +142,11 @@ func (s *Sandbox) RealPathCalls() int {
 	return s.realpaths
 }
 
-// place emulates the place script: WORK_STAGED moves onto WORK_TARGET unless
+// place emulates the place script: HARNESS_STAGED moves onto HARNESS_TARGET unless
 // the target is a symlink or its directory resolves elsewhere (exit 4, the
 // real directory on stdout).
 func (s *Sandbox) place(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	target, staged := req.Env["WORK_TARGET"], req.Env["WORK_STAGED"]
+	target, staged := req.Env["HARNESS_TARGET"], req.Env["HARNESS_STAGED"]
 	dir := path.Dir(target)
 	s.mu.Lock()
 	data, ok := s.files[staged]
@@ -167,20 +167,20 @@ func (s *Sandbox) place(_ context.Context, req sandbox.ExecRequest) (sandbox.Exe
 	return sandbox.ExecResult{}, nil
 }
 
-// unstage emulates the unstage script: WORK_STAGED is removed.
+// unstage emulates the unstage script: HARNESS_STAGED is removed.
 func (s *Sandbox) unstage(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
 	s.mu.Lock()
-	delete(s.files, req.Env["WORK_STAGED"])
+	delete(s.files, req.Env["HARNESS_STAGED"])
 	s.mu.Unlock()
 	return sandbox.ExecResult{}, nil
 }
 
 // sweep emulates the sweep script's staging part: the files directly under
-// WORK_STAGING_DIR older than WORK_STAGING_MINUTES are removed (the fake's
+// HARNESS_STAGING_DIR older than HARNESS_STAGING_MINUTES are removed (the fake's
 // jobs keep no shadow records to prune).
 func (s *Sandbox) sweep(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	dir := strings.TrimSuffix(req.Env["WORK_STAGING_DIR"], "/") + "/"
-	cutoff := time.Now().Add(-time.Duration(atoiEnv(req.Env, "WORK_STAGING_MINUTES")) * time.Minute)
+	dir := strings.TrimSuffix(req.Env["HARNESS_STAGING_DIR"], "/") + "/"
+	cutoff := time.Now().Add(-time.Duration(atoiEnv(req.Env, "HARNESS_STAGING_MINUTES")) * time.Minute)
 	s.mu.Lock()
 	for p := range s.files {
 		if dir != "/" && strings.HasPrefix(p, dir) && !strings.Contains(p[len(dir):], "/") && s.mtimes[p].Before(cutoff) {
@@ -194,19 +194,19 @@ func (s *Sandbox) sweep(_ context.Context, req sandbox.ExecRequest) (sandbox.Exe
 // readFiles emulates sandbox.ReadRegularFiles' script over the in-memory
 // files: symlinked paths (or under a symlink) and missing ones are skipped.
 func (s *Sandbox) readFiles(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	n := atoiEnv(req.Env, "WORK_N")
-	budget, _ := strconv.ParseInt(req.Env["WORK_BUDGET"], 10, 64)
+	n := atoiEnv(req.Env, "HARNESS_N")
+	budget, _ := strconv.ParseInt(req.Env["HARNESS_BUDGET"], 10, 64)
 	var out strings.Builder
 	s.mu.Lock()
 	for i := 0; i < n; i++ {
-		p := req.Env["WORK_PATH_"+strconv.Itoa(i)]
+		p := req.Env["HARNESS_PATH_"+strconv.Itoa(i)]
 		data, ok := s.files[p]
 		if !ok || s.realLocked(p) != p {
 			continue
 		}
 		size := int64(len(data))
 		st := fmt.Sprintf("%d %d", size, s.mtimes[p].Unix())
-		k := req.Env["WORK_KNOWN_"+strconv.Itoa(i)]
+		k := req.Env["HARNESS_KNOWN_"+strconv.Itoa(i)]
 		if k != "" && (k == st || k == fmt.Sprintf("%d -", size)) {
 			fmt.Fprintf(&out, "%d %s U -\n", i, st)
 			continue
@@ -239,8 +239,8 @@ func (s *Sandbox) job(dir string) *fakeJob {
 }
 
 func (s *Sandbox) jobStart(ctx context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	dir := req.Env["WORK_JOB_DIR"]
-	raw, err := base64.StdEncoding.DecodeString(req.Env["WORK_JOB_CMD_B64"])
+	dir := req.Env["HARNESS_JOB_DIR"]
+	raw, err := base64.StdEncoding.DecodeString(req.Env["HARNESS_JOB_CMD_B64"])
 	if err != nil || dir == "" {
 		return sandbox.ExecResult{ExitCode: 2}, nil
 	}
@@ -271,7 +271,7 @@ func (s *Sandbox) jobStart(ctx context.Context, req sandbox.ExecRequest) (sandbo
 			return res.ExitCode
 		}
 	}
-	wait := atoiEnv(req.Env, "WORK_JOB_WAIT")
+	wait := atoiEnv(req.Env, "HARNESS_JOB_WAIT")
 	if wait > 0 {
 		j.onOutput = forward(req)
 	}
@@ -317,7 +317,7 @@ func (s *Sandbox) follow(ctx context.Context, j *fakeJob, req sandbox.ExecReques
 }
 
 func (s *Sandbox) jobWait(ctx context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	j := s.job(req.Env["WORK_JOB_DIR"])
+	j := s.job(req.Env["HARNESS_JOB_DIR"])
 	if j == nil {
 		return sandbox.ExecResult{}, nil
 	}
@@ -329,11 +329,11 @@ func (s *Sandbox) jobWait(ctx context.Context, req sandbox.ExecRequest) (sandbox
 	j.mu.Lock()
 	j.onOutput = forward(req)
 	j.mu.Unlock()
-	return s.follow(ctx, j, req, atoiEnv(req.Env, "WORK_JOB_WAIT"))
+	return s.follow(ctx, j, req, atoiEnv(req.Env, "HARNESS_JOB_WAIT"))
 }
 
 func (s *Sandbox) jobKill(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	j := s.job(req.Env["WORK_JOB_DIR"])
+	j := s.job(req.Env["HARNESS_JOB_DIR"])
 	if j == nil {
 		return sandbox.ExecResult{ExitCode: 1}, nil
 	}
@@ -349,9 +349,9 @@ func (s *Sandbox) jobKill(_ context.Context, req sandbox.ExecRequest) (sandbox.E
 }
 
 // jobStatus prints the job-status report: status, exit code, then per stream
-// its size and the base64 head and tail (WORK_HEAD / WORK_TAIL bytes).
+// its size and the base64 head and tail (HARNESS_HEAD / HARNESS_TAIL bytes).
 func (s *Sandbox) jobStatus(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	j := s.job(req.Env["WORK_JOB_DIR"])
+	j := s.job(req.Env["HARNESS_JOB_DIR"])
 	var b strings.Builder
 	removed := false
 	if j != nil {
@@ -382,7 +382,7 @@ func (s *Sandbox) jobStatus(_ context.Context, req sandbox.ExecRequest) (sandbox
 			status, code = "killed", ""
 		}
 		fmt.Fprintf(&b, "status %s\ncode %s\n", status, code)
-		head, tail := atoiEnv(req.Env, "WORK_HEAD"), atoiEnv(req.Env, "WORK_TAIL")
+		head, tail := atoiEnv(req.Env, "HARNESS_HEAD"), atoiEnv(req.Env, "HARNESS_TAIL")
 		for _, st := range []struct{ name, data string }{{"stdout", j.stdout.String()}, {"stderr", j.stderr.String()}} {
 			h, t := st.data, ""
 			if len(st.data) > head+tail {
@@ -463,7 +463,7 @@ func reply(req sandbox.ExecRequest, v any) (sandbox.ExecResult, error) {
 
 // extract emulates the markitdown extraction script.
 func (s *Sandbox) extract(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	p := req.Env["WORK_PATH"]
+	p := req.Env["HARNESS_PATH"]
 	d, ok := s.doc(p)
 	if !ok {
 		return reply(req, map[string]any{"error": "cannot extract text from " + p})
@@ -471,7 +471,7 @@ func (s *Sandbox) extract(_ context.Context, req sandbox.ExecRequest) (sandbox.E
 	ext := strings.TrimPrefix(path.Ext(p), ".")
 	unit := map[string]string{"pdf": "pages", "pptx": "slides", "xlsx": "sheets"}[ext]
 	out := map[string]any{"kind": ext, "unit": unit, "total": len(d.Parts)}
-	if sheet := req.Env["WORK_SHEET"]; sheet != "" {
+	if sheet := req.Env["HARNESS_SHEET"]; sheet != "" {
 		for i, n := range d.Names {
 			if n == sheet {
 				out["shown"], out["text"] = "sheet "+n, "## "+n+"\n"+d.Parts[i]
@@ -480,9 +480,9 @@ func (s *Sandbox) extract(_ context.Context, req sandbox.ExecRequest) (sandbox.E
 		}
 		return reply(req, map[string]any{"error": fmt.Sprintf("no sheet %q (sheets: %s)", sheet, strings.Join(d.Names, ", "))})
 	}
-	pages, ok := selectParts(req.Env["WORK_PAGES"], len(d.Parts))
-	if !ok || (unit == "" && req.Env["WORK_PAGES"] != "") {
-		return reply(req, map[string]any{"error": "invalid pages " + req.Env["WORK_PAGES"]})
+	pages, ok := selectParts(req.Env["HARNESS_PAGES"], len(d.Parts))
+	if !ok || (unit == "" && req.Env["HARNESS_PAGES"] != "") {
+		return reply(req, map[string]any{"error": "invalid pages " + req.Env["HARNESS_PAGES"]})
 	}
 	var parts []string
 	var shown []string
@@ -505,20 +505,20 @@ func (s *Sandbox) extract(_ context.Context, req sandbox.ExecRequest) (sandbox.E
 
 // render emulates the page renderer: one fake PNG per selected page.
 func (s *Sandbox) render(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	p := req.Env["WORK_PATH"]
+	p := req.Env["HARNESS_PATH"]
 	d, ok := s.doc(p)
 	if !ok {
 		return reply(req, map[string]any{"error": "cannot render " + p})
 	}
-	pages, ok := selectParts(req.Env["WORK_PAGES"], len(d.Parts))
+	pages, ok := selectParts(req.Env["HARNESS_PAGES"], len(d.Parts))
 	if !ok {
-		return reply(req, map[string]any{"error": "invalid pages " + req.Env["WORK_PAGES"]})
+		return reply(req, map[string]any{"error": "invalid pages " + req.Env["HARNESS_PAGES"]})
 	}
-	max := atoiEnv(req.Env, "WORK_MAX")
+	max := atoiEnv(req.Env, "HARNESS_MAX")
 	if max > 0 && len(pages) > max {
 		pages = pages[:max]
 	}
-	out := req.Env["WORK_OUT"]
+	out := req.Env["HARNESS_OUT"]
 	var list []map[string]any
 	for _, pg := range pages {
 		img := fmt.Sprintf("%s/p%d.png", out, pg)
@@ -530,8 +530,8 @@ func (s *Sandbox) render(_ context.Context, req sandbox.ExecRequest) (sandbox.Ex
 
 // search emulates `rg --json` over the in-memory files (match lines only).
 func (s *Sandbox) search(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	pattern := req.Env["WORK_PATTERN"]
-	if req.Env["WORK_ICASE"] == "1" {
+	pattern := req.Env["HARNESS_PATTERN"]
+	if req.Env["HARNESS_ICASE"] == "1" {
 		pattern = "(?i)" + pattern
 	}
 	re, err := regexp.Compile(pattern)
@@ -541,8 +541,8 @@ func (s *Sandbox) search(_ context.Context, req sandbox.ExecRequest) (sandbox.Ex
 		}
 		return sandbox.ExecResult{ExitCode: 2}, nil
 	}
-	root := path.Clean(req.Env["WORK_PATH"])
-	glob := req.Env["WORK_GLOB"]
+	root := path.Clean(req.Env["HARNESS_PATH"])
+	glob := req.Env["HARNESS_GLOB"]
 	s.mu.Lock()
 	var paths []string
 	for p := range s.files {

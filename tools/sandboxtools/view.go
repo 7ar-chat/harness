@@ -62,20 +62,20 @@ type rendered struct {
 	Size    string `json:"size"`
 }
 
-// renderScript renders WORK_PATH (converted to PDF by LibreOffice unless it is
-// one) to WORK_OUT/p<N>.png at WORK_DPI for the WORK_PAGES selection (at most
-// WORK_MAX). Harness v3 review round 2 (A4): a flock on WORK_OUT serializes
+// renderScript renders HARNESS_PATH (converted to PDF by LibreOffice unless it is
+// one) to HARNESS_OUT/p<N>.png at HARNESS_DPI for the HARNESS_PAGES selection (at most
+// HARNESS_MAX). Harness v3 review round 2 (A4): a flock on HARNESS_OUT serializes
 // renders of one file version (parallel view_file calls of the same file in
-// one step raced on WORK_OUT/<name>.pdf: "LibreOffice could not render …"),
+// one step raced on HARNESS_OUT/<name>.pdf: "LibreOffice could not render …"),
 // LibreOffice converts a private copy into a private directory with its own
 // profile, a failed conversion is retried once and reported with soffice's
 // exit code and output (not the harmless javaldx warning), and pages past the
 // end are named with the valid range.
 const renderScript = `# work:render
-python3 - <<'WORK_EOF'
+python3 - <<'HARNESS_EOF'
 import fcntl, json, os, shutil, subprocess, sys, tempfile, time
-p, spec, outdir = os.environ["WORK_PATH"], os.environ.get("WORK_PAGES", ""), os.environ["WORK_OUT"]
-dpi, cap = os.environ.get("WORK_DPI", "110"), int(os.environ.get("WORK_MAX", "6"))
+p, spec, outdir = os.environ["HARNESS_PATH"], os.environ.get("HARNESS_PAGES", ""), os.environ["HARNESS_OUT"]
+dpi, cap = os.environ.get("HARNESS_DPI", "110"), int(os.environ.get("HARNESS_MAX", "6"))
 def out(**kw):
     print(json.dumps(kw)); sys.exit(0)
 def ranges(nums):
@@ -162,7 +162,7 @@ for i in pages[:cap]:
     if os.path.exists(base + ".png"):
         res.append({"page": i, "imagePath": base + ".png"})
 out(totalPages=n, pages=res, pastEnd=ranges(past), size=size)
-WORK_EOF
+HARNESS_EOF
 `
 
 var unsafeName = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
@@ -208,8 +208,8 @@ func (b *binding) view(ctx context.Context, in viewInput) (*viewOutput, error) {
 		if err := sb.MkdirAll(ctx, dir); err != nil { // the sandbox may predate the layout, or .work was removed
 			return err
 		}
-		res, err := runJSON[rendered](ctx, sb, renderScript, map[string]string{"WORK_PATH": p, "WORK_PAGES": in.Pages,
-			"WORK_OUT": dir, "WORK_DPI": fmt.Sprint(renderDPI), "WORK_MAX": fmt.Sprint(maxViewPages)}, renderWait)
+		res, err := runJSON[rendered](ctx, sb, renderScript, map[string]string{"HARNESS_PATH": p, "HARNESS_PAGES": in.Pages,
+			"HARNESS_OUT": dir, "HARNESS_DPI": fmt.Sprint(renderDPI), "HARNESS_MAX": fmt.Sprint(maxViewPages)}, renderWait)
 		if err != nil {
 			return err
 		}

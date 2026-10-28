@@ -13,17 +13,17 @@ import (
 // ReadFilesMarker is the first line of the read-files script (sandboxtest fakes it).
 const ReadFilesMarker = "# work:read-files"
 
-// readFilesScript prints, for each WORK_PATH_<i> (i < WORK_N) that is a
+// readFilesScript prints, for each HARNESS_PATH_<i> (i < HARNESS_N) that is a
 // regular file reached without a symlink (symlinks, FIFOs, devices,
 // directories and missing paths print nothing), "<i> <size> <mtime> U -" when
-// its stamp matches WORK_KNOWN_<i> ("size mtime", or "size -" to match the
+// its stamp matches HARNESS_KNOWN_<i> ("size mtime", or "size -" to match the
 // size only), else "<i> <size> <mtime> F <base64 of its first bytes>", the
-// contents read sharing WORK_BUDGET bytes.
+// contents read sharing HARNESS_BUDGET bytes.
 const readFilesScript = ReadFilesMarker + `
 set -u
-B="$WORK_BUDGET"; i=0
-while [ "$i" -lt "$WORK_N" ]; do
-  eval "p=\${WORK_PATH_$i}; k=\${WORK_KNOWN_$i:-}"
+B="$HARNESS_BUDGET"; i=0
+while [ "$i" -lt "$HARNESS_N" ]; do
+  eval "p=\${HARNESS_PATH_$i}; k=\${HARNESS_KNOWN_$i:-}"
   if [ -f "$p" ] && [ ! -L "$p" ] && [ "$(realpath -e -- "$p" 2>/dev/null)" = "$p" ]; then
     st=$(stat -c '%s %Y' -- "$p" 2>/dev/null) || st=""
     if [ -n "$st" ]; then
@@ -61,14 +61,14 @@ func ReadRegularFiles(ctx context.Context, sb Sandbox, paths, known []string, bu
 	if len(paths) == 0 {
 		return nil, nil
 	}
-	env := map[string]string{"WORK_N": strconv.Itoa(len(paths)), "WORK_BUDGET": strconv.FormatInt(budget, 10)}
+	env := map[string]string{"HARNESS_N": strconv.Itoa(len(paths)), "HARNESS_BUDGET": strconv.FormatInt(budget, 10)}
 	for i, p := range paths {
 		if !strings.HasPrefix(p, "/") || path.Clean(p) != p || strings.ContainsAny(p, "\x00\n") {
 			return nil, fmt.Errorf("read files: %q is not a clean absolute path", p)
 		}
-		env["WORK_PATH_"+strconv.Itoa(i)] = p
+		env["HARNESS_PATH_"+strconv.Itoa(i)] = p
 		if i < len(known) {
-			env["WORK_KNOWN_"+strconv.Itoa(i)] = known[i]
+			env["HARNESS_KNOWN_"+strconv.Itoa(i)] = known[i]
 		}
 	}
 	var out strings.Builder

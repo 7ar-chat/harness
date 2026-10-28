@@ -52,7 +52,7 @@ type Options struct {
 	// LockWait bounds the wait for a thread's artifact lock (default 2 min).
 	LockWait time.Duration
 	// BlobGCGrace is how long a content blob must have had no reference before
-	// the retention purge deletes it (default 24 h, WORK_BLOB_GC_GRACE_HOURS).
+	// the retention purge deletes it (default 24 h, HARNESS_BLOB_GC_GRACE_HOURS).
 	BlobGCGrace time.Duration
 }
 

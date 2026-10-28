@@ -1,4 +1,4 @@
-// Package workspace keeps a thread's /workspace history like Studio Work: a
+// Package workspace keeps a thread's /workspace history: a
 // local Git repository with an automatic checkpoint before every AI turn,
 // per-file history, diffs and restores, persisted across sandbox expiry (the
 // .git directory is archived into the blob store after each run and restored
@@ -54,10 +54,10 @@ type GitError struct{ Detail string }
 func (e *GitError) Error() string { return "workspace checkpoint failed: " + e.Detail }
 
 // excludePatterns are kept out of checkpoints (.git/info/exclude): Work's list
-// plus Work Chat's scratch directory and the artifact snapshot's exclusions.
+// plus the harness's scratch directory and the artifact snapshot's exclusions.
 var excludePatterns = []string{
-	".astraforge/tmp/",
-	".astraforge/runtime/",
+	".harness/tmp/",
+	".harness/runtime/",
 	".codex/.tmp/",
 	".codex/log/",
 	".claude/log/",
@@ -166,8 +166,8 @@ done
 // Markers of the managed block of .git/info/exclude listing the files too
 // large to checkpoint.
 const (
-	largeBegin = "# >>> work-chat: files too large to checkpoint"
-	largeEnd   = "# <<< work-chat: files too large to checkpoint"
+	largeBegin = "# >>> harness: files too large to checkpoint"
+	largeEnd   = "# <<< harness: files too large to checkpoint"
 )
 
 // largeFileLines keep files larger than limit bytes out of the checkpoints
@@ -197,8 +197,8 @@ mv .git/info/exclude.wc .git/info/exclude
 }
 
 // identityLines set the local identity of the checkpoint repository.
-const identityLines = `g config user.email work-chat@local
-g config user.name 'Work Chat'
+const identityLines = `g config user.email harness@local
+g config user.name 'Harness'
 `
 
 // checkpointScript initializes the repository when needed (Work's

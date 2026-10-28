@@ -56,7 +56,7 @@ func TestTheFirstToolCallOfARunSweepsOldStagedFilesAndEndedJobRecords(t *testing
 	put(filepath.Join(shadow, "job_killed", "killed"), "", twoDays)
 	put(filepath.Join(shadow, "job_recent", "exit"), "0", time.Now())
 	put(filepath.Join(shadow, "job_running", "pid"), strconv.Itoa(os.Getpid()), twoDays) // a live process
-	f, _ := newHostFixtureAt(t, base, map[string]string{"WORK_JOBS_SHADOW_ROOT": shadow})
+	f, _ := newHostFixtureAt(t, base, map[string]string{"HARNESS_JOBS_SHADOW_ROOT": shadow})
 
 	// Act
 	_, err := f.call(context.Background(), "list_files", `{"path":"/workspace"}`)

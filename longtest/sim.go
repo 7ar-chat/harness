@@ -216,7 +216,7 @@ func Run(tb testing.TB, sc Scenario) *Outcome {
 	for k, v := range map[string]string{
 		"LLM_PROVIDER": "openai", "LLM_MODELS": "sim", "LLM_DEFAULT_MODEL": "sim",
 		"SANDBOX_BACKEND": "local", "LOCAL_WORKSPACE": ws, "LOCAL_STATE_DIR": state,
-		"AGENT_PROFILE": "coding", "WORK_WORKSPACE_CHECKPOINTS": "false",
+		"AGENT_PROFILE": "coding", "HARNESS_WORKSPACE_CHECKPOINTS": "false",
 		"LLM_CONTEXT_WINDOWS": "sim=" + strconv.Itoa(sc.Window), "COMPACTION_THRESHOLD": strconv.FormatFloat(sc.Threshold, 'f', -1, 64),
 		"AGENT_MAX_STEPS": strconv.Itoa(sc.MaxSteps), "LLM_STEP_RETRIES": strconv.Itoa(sc.StepRetries),
 	} {

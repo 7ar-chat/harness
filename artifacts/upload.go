@@ -20,7 +20,7 @@ import (
 
 var controlChars = regexp.MustCompile(`[\x00-\x1f\x7f]+`)
 
-// SanitizeFilename keeps a safe single path component (like Cowork's sanitize_filename).
+// SanitizeFilename keeps a safe single path component.
 func SanitizeFilename(name string) string {
 	name = strings.ReplaceAll(name, "\\", "/")
 	name = path.Base("/" + name)
@@ -109,7 +109,7 @@ func checkType(name, declared string, data []byte) error {
 }
 
 // UploadDir is where attachments land in the sandbox by default (the
-// workspace root, like Studio Work: /workspace/<name>, "name (n).ext" when taken).
+// workspace root, e.g. /workspace/<name>, "name (n).ext" when taken).
 const UploadDir = sandbox.Workspace
 
 // ErrInvalidTargetPath means an upload's targetPath is not a file path under /workspace.
@@ -272,7 +272,7 @@ func (s *Service) putContent(ctx context.Context, key string, c content) error {
 
 // Upload validates and stores an attachment as an artifact of kind upload at
 // /workspace/<name> or the validated TargetPath (de-duplicated as
-// "name (2).ext", "name (3).ext"… like Studio Work), and writes it into the
+// "name (2).ext", "name (3).ext"… ), and writes it into the
 // thread's sandbox when one is running.
 func (s *Service) Upload(ctx context.Context, in UploadInput) (*store.Artifact, error) {
 	dir, name := UploadDir, SanitizeFilename(in.Filename)

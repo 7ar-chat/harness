@@ -15,7 +15,7 @@ import (
 // GitPromptHeading heads the local Git section of the system prompt.
 const GitPromptHeading = "## Local Git Checkpoints"
 
-// GitPrompt is Work's Cowork local Git prompt section, adapted to Work Chat.
+// GitPrompt is the local Git prompt section.
 const GitPrompt = GitPromptHeading + `
 
 This conversation's /workspace has a local private Git repository used only for organizing and reviewing workspace file changes. You may use local git commands such as status, diff, add, and commit to group meaningful file changes with clear commit messages when helpful. Do not push, fetch, pull, create remotes, or treat this as a user repository. Keep commits small and descriptive so the user can inspect or roll back file changes later.`

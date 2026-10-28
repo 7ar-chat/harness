@@ -178,7 +178,7 @@ func TestRecallItemsFollowWorksOrder(t *testing.T) {
 	// Act
 	items := memory.RecallItems(entries, 4)
 	two := memory.RecallItems(entries, 2)
-	block := memory.RecallBlock(items[:1])
+	block := memory.RecallContext(items[:1])
 
 	// Assert
 	want := []string{"memories/semantic/facts.md: Uses Go", "memories/semantic/facts.md: Ships Fridays",
@@ -186,7 +186,7 @@ func TestRecallItemsFollowWorksOrder(t *testing.T) {
 	if !reflect.DeepEqual(items, want) || len(two) != 2 {
 		t.Fatalf("items %v", items)
 	}
-	if block != memory.RecallHeading+"\n<memory_recall>\n- memories/semantic/facts.md: Uses Go\n</memory_recall>" || memory.RecallBlock(nil) != "" {
+	if block != "<user_memories>\n- memories/semantic/facts.md: Uses Go\n</user_memories>" || memory.RecallContext(nil) != "" {
 		t.Fatalf("block %q", block)
 	}
 }
@@ -201,7 +201,7 @@ func TestRecallLinesAndBlockAreBounded(t *testing.T) {
 
 	// Act
 	items := memory.RecallItems(entries, 4)
-	block := memory.RecallBlock(items)
+	block := memory.RecallContext(items)
 
 	// Assert
 	if len(items) != 4 {
@@ -220,7 +220,7 @@ func TestRecallLinesAndBlockAreBounded(t *testing.T) {
 	for i := range huge {
 		huge[i] = strings.Repeat("p", 500) + ": " + strings.Repeat("x", 240)
 	}
-	if n := len([]rune(memory.RecallBlock(huge))); n > memory.MaxRecallChars {
+	if n := len([]rune(memory.RecallContext(huge))); n > memory.MaxRecallChars {
 		t.Fatalf("unbounded block of %d chars", n)
 	}
 }

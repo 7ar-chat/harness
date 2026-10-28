@@ -18,9 +18,9 @@ import (
 func TestPGMigrateUpgradesDatabaseAtTheSecondMigration(t *testing.T) {
 	// A database with only 0001 + 0002 applied gets both harness v2 migrations (artifacts/skills, harness) without conflicts.
 	// Arrange
-	dsn := os.Getenv("WORK_TEST_DATABASE_URL")
+	dsn := os.Getenv("HARNESS_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("WORK_TEST_DATABASE_URL not set")
+		t.Skip("HARNESS_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
 	schema := fmt.Sprintf("work_v1_%d", time.Now().UnixNano())
@@ -149,9 +149,9 @@ func TestPGAppendRunArtifactsKeepsArtifactsAfterCompaction(t *testing.T) {
 func TestPGMigrate0005GivesUntitledThreadsAutoTitlesAndTracksLiveArtifacts(t *testing.T) {
 	// Upgrading a database at 0004: threads that predate 0004 without a title get title_source auto, live artifacts are materialized in the thread's sandbox.
 	// Arrange
-	dsn := os.Getenv("WORK_TEST_DATABASE_URL")
+	dsn := os.Getenv("HARNESS_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("WORK_TEST_DATABASE_URL not set")
+		t.Skip("HARNESS_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
 	schema := fmt.Sprintf("work_v4_%d", time.Now().UnixNano())

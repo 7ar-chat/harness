@@ -226,8 +226,3 @@ func (b *binding) askUser(_ context.Context, in askInput) (string, error) {
 	}
 	return "", intr
 }
-
-// Instructions is the system prompt section that goes with these tools.
-const Instructions = `## Plans and questions
-- For a task with several steps, call update_plan first with the steps, keep exactly one item in_progress, and update the plan as you go (mark each item completed as soon as it is done). Skip it for simple requests.
-- If you cannot continue without the user (a decision between reasonable options, missing information you cannot find), call ask_user with one short question and a few options. Otherwise make a sensible assumption, state it, and continue.`

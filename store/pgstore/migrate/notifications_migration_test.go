@@ -13,9 +13,9 @@ import (
 
 func TestNotificationsMigrationLeavesExistingThreadsRead(t *testing.T) {
 	// 0100 counts the threads that existed before it as seen: a deploy does not flood users with unread threads.
-	dsn := os.Getenv("WORK_TEST_DATABASE_URL")
+	dsn := os.Getenv("HARNESS_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("WORK_TEST_DATABASE_URL not set")
+		t.Skip("HARNESS_TEST_DATABASE_URL not set")
 	}
 	// Arrange
 	ctx := context.Background()

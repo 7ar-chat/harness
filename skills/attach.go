@@ -17,8 +17,8 @@ const (
 	AttachRequested = "requested"
 )
 
-// Attachment is a skill attached to a run, listed in the prompt ("Attached
-// Skills" in the legacy prompt). Requested ones (RunOptions.Skills) are
+// Attachment is a skill attached to a run, listed in the prompt.
+// Requested ones (RunOptions.Skills) are
 // installed under /skills/<name>/ when the run's sandbox starts; defaults
 // (the built-ins) only once loaded or used (Installer, lazy skills).
 type Attachment struct {
@@ -130,13 +130,10 @@ func (r *Registry) PromptSection(ctx context.Context, in agent.Input) string {
 			agent.ReportUntrusted(ctx)
 		}
 	}
-	if !prompts.IsLegacy(in.Variant) {
-		return indexOf(plan, sandbox)
-	}
-	return promptOf(plan, sandbox)
+	return indexOf(plan, sandbox)
 }
 
-// indexOf is the skills section of the v3 prompts: the index, then the
+// indexOf is the skills section: the index, then the
 // skill-creation instructions and the explicitly requested SKILL.md files.
 func indexOf(plan RunPlan, sandbox bool) string {
 	entries := listed(plan)
@@ -200,68 +197,4 @@ func writeRequested(b *strings.Builder, plan RunPlan, sandbox bool) {
 		}
 		fmt.Fprintf(b, "\n\n## Skill %q (requested for this run; %s)\n\n%s", a.Skill.Name, where, body)
 	}
-}
-
-// promptOf is the harness v2 skills section (legacy prompt), verbatim.
-func promptOf(plan RunPlan, sandbox bool) string {
-	listed := map[string]bool{}
-	var entries []Skill
-	for _, s := range plan.Catalog {
-		listed[s.Name] = true
-		entries = append(entries, s)
-	}
-	for _, a := range plan.Attached {
-		if !listed[a.Skill.Name] {
-			listed[a.Skill.Name] = true
-			entries = append(entries, a.Skill)
-		}
-	}
-	if len(entries) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString("Skills: these skills contain step-by-step instructions and tested helper scripts:\n")
-	untrusted := false
-	for _, s := range entries {
-		desc := oneLine(s.Description)
-		if s.Untrusted() {
-			desc, untrusted = Fence(s.Name, desc), true
-		}
-		fmt.Fprintf(&b, "- %s — %s — %s/%s/SKILL.md\n", s.Name, desc, Root, s.Name)
-	}
-	b.WriteString("Before producing or editing a document of one of these kinds, call load_skill with the skill name and follow its instructions exactly. ")
-	if sandbox {
-		b.WriteString("Loading a skill starts nothing: load_skill returns its instructions, and a skill's folder /skills/<name>/ appears once you load it (load_skill) or name its path in a command (read-only: never modify it; write final deliverables to /workspace/outputs/).")
-	}
-	if untrusted {
-		b.WriteString("\n" + UserSkillNote)
-	}
-	if len(plan.Attached) > 0 {
-		b.WriteString("\n\n## Attached Skills\n")
-		b.WriteString("The following skills are attached to this request and are available inside the workspace.\n")
-		b.WriteString("Apply them in the exact order shown below.\n\n")
-		for _, a := range plan.Attached {
-			name := a.Skill.Name
-			desc := strings.TrimSpace(a.Skill.Description)
-			if a.Skill.Untrusted() {
-				// Uploaded text: its fenced description is in the list above.
-				name, desc = a.Skill.Name, ""
-			}
-			fmt.Fprintf(&b, "- %s\n", oneLine(name))
-			if desc != "" {
-				fmt.Fprintf(&b, "  Description: %s\n", oneLine(desc))
-			}
-			if sandbox {
-				when := "before your first sandbox command"
-				if a.Reason == AttachDefault {
-					when = "once you load it or before a command that uses it"
-				}
-				fmt.Fprintf(&b, "  Path: %s/%s (installed with its scripts and assets %s; load_skill %s returns its instructions)\n", Root, a.Skill.Name, when, a.Skill.Name)
-			} else {
-				fmt.Fprintf(&b, "  Instructions: call load_skill %s (no sandbox: follow them without running its scripts)\n", a.Skill.Name)
-			}
-		}
-	}
-	writeRequested(&b, plan, sandbox)
-	return b.String()
 }

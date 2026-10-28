@@ -38,7 +38,7 @@ type Status struct {
 
 // HistoryIssue explains an unsaved checkpoint history.
 type HistoryIssue struct {
-	// Reason is too_large (over WORK_GIT_ARCHIVE_MAX_BYTES) or failed.
+	// Reason is too_large (over HARNESS_GIT_ARCHIVE_MAX_BYTES) or failed.
 	Reason    string `json:"reason"`
 	SizeBytes int64  `json:"sizeBytes,omitempty"`
 	At        string `json:"at"`

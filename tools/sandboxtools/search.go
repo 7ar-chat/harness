@@ -44,26 +44,26 @@ type searchOutput struct {
 	Notice    string        `json:"notice,omitempty"`
 }
 
-// searchScript runs ripgrep (--json) for WORK_PATTERN under WORK_PATH; without
-// rg (or with WORK_SEARCH_ENGINE=python) a Python fallback prints the same
+// searchScript runs ripgrep (--json) for HARNESS_PATTERN under HARNESS_PATH; without
+// rg (or with HARNESS_SEARCH_ENGINE=python) a Python fallback prints the same
 // "match" events. Exit 0: matches, 1: none, 2: error (stderr).
 const searchScript = `# work:search
 set -u
-if [ "${WORK_SEARCH_ENGINE:-}" != python ] && command -v rg >/dev/null 2>&1; then
+if [ "${HARNESS_SEARCH_ENGINE:-}" != python ] && command -v rg >/dev/null 2>&1; then
   set -- --json --hidden --glob '!.git' --max-columns 2000 --max-filesize 50M
-  [ "${WORK_ICASE:-}" = 1 ] && set -- "$@" --ignore-case
-  [ -n "${WORK_GLOB:-}" ] && set -- "$@" --glob "$WORK_GLOB"
-  rg "$@" -e "$WORK_PATTERN" -- "$WORK_PATH" | head -c 8000000
+  [ "${HARNESS_ICASE:-}" = 1 ] && set -- "$@" --ignore-case
+  [ -n "${HARNESS_GLOB:-}" ] && set -- "$@" --glob "$HARNESS_GLOB"
+  rg "$@" -e "$HARNESS_PATTERN" -- "$HARNESS_PATH" | head -c 8000000
   exit "${PIPESTATUS[0]}"
 fi
-python3 - <<'WORK_EOF'
+python3 - <<'HARNESS_EOF'
 import fnmatch, json, os, re, sys
-pat, root, glob = os.environ["WORK_PATTERN"], os.environ["WORK_PATH"], os.environ.get("WORK_GLOB", "")
+pat, root, glob = os.environ["HARNESS_PATTERN"], os.environ["HARNESS_PATH"], os.environ.get("HARNESS_GLOB", "")
 try:
-    rx = re.compile(pat, re.IGNORECASE if os.environ.get("WORK_ICASE") == "1" else 0)
+    rx = re.compile(pat, re.IGNORECASE if os.environ.get("HARNESS_ICASE") == "1" else 0)
 except re.error as e:
     sys.stderr.write("regex parse error: %s\n" % e); sys.exit(2)
-limit, found = int(os.environ.get("WORK_MAX", "500")) + 1, 0
+limit, found = int(os.environ.get("HARNESS_MAX", "500")) + 1, 0
 def files():
     if os.path.isfile(root):
         yield root; return
@@ -92,7 +92,7 @@ for p in files():
             if found >= limit:
                 sys.exit(0)
 sys.exit(0 if found else 1)
-WORK_EOF
+HARNESS_EOF
 `
 
 func (b *binding) search(ctx context.Context, in searchInput) (*searchOutput, error) {
@@ -142,7 +142,7 @@ func (b *binding) search(ctx context.Context, in searchInput) (*searchOutput, er
 		cctx, cancel := context.WithTimeout(ctx, searchWait+5*time.Second)
 		defer cancel()
 		res, err := sb.Exec(cctx, sandbox.ExecRequest{Command: searchScript, Cwd: sandbox.Workspace, Timeout: searchWait,
-			Env:      map[string]string{"WORK_PATTERN": in.Pattern, "WORK_PATH": p, "WORK_GLOB": in.Glob, "WORK_ICASE": icase, "WORK_MAX": fmt.Sprint(limit)},
+			Env:      map[string]string{"HARNESS_PATTERN": in.Pattern, "HARNESS_PATH": p, "HARNESS_GLOB": in.Glob, "HARNESS_ICASE": icase, "HARNESS_MAX": fmt.Sprint(limit)},
 			OnStdout: feed,
 			OnStderr: func(t string) {
 				if stderr.Len() < 2000 {

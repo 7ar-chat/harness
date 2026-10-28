@@ -161,13 +161,13 @@ type extracted struct {
 	Error string `json:"error"`
 }
 
-// extractScript prints {kind, unit, total, shown, text} or {error} for WORK_PATH:
+// extractScript prints {kind, unit, total, shown, text} or {error} for HARNESS_PATH:
 // markitdown for Office files (LibreOffice converts legacy/ODF formats first),
-// pdftotext per page for PDFs; WORK_PAGES selects pages/slides, WORK_SHEET a sheet.
+// pdftotext per page for PDFs; HARNESS_PAGES selects pages/slides, HARNESS_SHEET a sheet.
 const extractScript = `# work:extract
-python3 - <<'WORK_EOF'
+python3 - <<'HARNESS_EOF'
 import json, os, re, shutil, subprocess, sys, tempfile
-p, pages, sheet = os.environ["WORK_PATH"], os.environ.get("WORK_PAGES", ""), os.environ.get("WORK_SHEET", "")
+p, pages, sheet = os.environ["HARNESS_PATH"], os.environ.get("HARNESS_PAGES", ""), os.environ.get("HARNESS_SHEET", "")
 def out(**kw):
     print(json.dumps(kw)); sys.exit(0)
 def sel(spec, n, unit="pages"):
@@ -240,7 +240,7 @@ except ValueError as e:
     out(error="invalid pages %r" % pages)
 except Exception as e:
     out(error="cannot extract text from %s: %s" % (p, str(e)[:300]))
-WORK_EOF
+HARNESS_EOF
 `
 
 func (b *binding) readDocument(ctx context.Context, p string, in readInput) (string, error) {
@@ -250,7 +250,7 @@ func (b *binding) readDocument(ctx context.Context, p string, in readInput) (str
 			return mapFileErr(err, p)
 		}
 		var err error
-		res, err = runJSON[extracted](ctx, sb, extractScript, map[string]string{"WORK_PATH": p, "WORK_PAGES": in.Pages, "WORK_SHEET": in.Sheet}, extractWait)
+		res, err = runJSON[extracted](ctx, sb, extractScript, map[string]string{"HARNESS_PATH": p, "HARNESS_PAGES": in.Pages, "HARNESS_SHEET": in.Sheet}, extractWait)
 		return err
 	})
 	if err != nil {
@@ -336,7 +336,7 @@ func ExtractText(ctx context.Context, sb sandbox.Sandbox, p string, maxChars int
 	}
 	var text string
 	if documentExt[ext] {
-		res, err := runJSON[extracted](ctx, sb, extractScript, map[string]string{"WORK_PATH": p}, extractWait)
+		res, err := runJSON[extracted](ctx, sb, extractScript, map[string]string{"HARNESS_PATH": p}, extractWait)
 		if err != nil {
 			return "", err
 		}

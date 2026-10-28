@@ -23,17 +23,17 @@ cat "$d/$t"
 `
 
 // realpath runs sandbox.RealPaths' script itself with sh, its realpath a stub
-// printing the fake's resolutions of WORK_PATH_0 … (symlinks followed by
+// printing the fake's resolutions of HARNESS_PATH_0 … (symlinks followed by
 // realLocked, like realpath -m): the script's own handling of the output and
 // of the exit status is the real one, and Exec delivers the output like
 // OpenSandbox does.
 func (s *Sandbox) realpath(ctx context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
-	n := atoiEnv(req.Env, "WORK_N")
+	n := atoiEnv(req.Env, "HARNESS_N")
 	var z, nl strings.Builder
 	s.mu.Lock()
 	s.realpaths++
 	for i := 0; i < n; i++ {
-		real := s.realLocked(req.Env["WORK_PATH_"+strconv.Itoa(i)])
+		real := s.realLocked(req.Env["HARNESS_PATH_"+strconv.Itoa(i)])
 		z.WriteString(real + "\x00")
 		nl.WriteString(real + "\n")
 	}

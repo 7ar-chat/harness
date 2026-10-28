@@ -13,7 +13,7 @@ import (
 // RealPathMarker is the first line of the realpath script (sandboxtest fakes it).
 const RealPathMarker = "# work:realpath"
 
-// realPathScript resolves WORK_PATH_0 … WORK_PATH_{WORK_N-1} with `realpath -m`
+// realPathScript resolves HARNESS_PATH_0 … HARNESS_PATH_{HARNESS_N-1} with `realpath -m`
 // (every symlink of the existing components resolved; missing components
 // allowed) and prints the results one per line, in order, then the line "ok"
 // when realpath succeeded (sh is dash in the sandbox: no pipefail, the pipe
@@ -24,7 +24,7 @@ const RealPathMarker = "# work:realpath"
 // resolved path becomes a NUL RealPaths refuses.
 const realPathScript = RealPathMarker + `
 set -- ; i=0
-while [ "$i" -lt "$WORK_N" ]; do eval "set -- \"\$@\" \"\${WORK_PATH_$i}\""; i=$((i+1)); done
+while [ "$i" -lt "$HARNESS_N" ]; do eval "set -- \"\$@\" \"\${HARNESS_PATH_$i}\""; i=$((i+1)); done
 { realpath -m -z -- "$@" && printf 'ok\0'; } | tr '\0\n' '\n\0'
 `
 
@@ -40,12 +40,12 @@ func RealPaths(ctx context.Context, sb Sandbox, paths []string) ([]string, error
 	if len(paths) == 0 {
 		return nil, nil
 	}
-	env := map[string]string{"WORK_N": strconv.Itoa(len(paths))}
+	env := map[string]string{"HARNESS_N": strconv.Itoa(len(paths))}
 	for i, p := range paths {
 		if !strings.HasPrefix(p, "/") || strings.ContainsAny(p, "\x00\n\r") {
 			return nil, fmt.Errorf("%w: %q is not an absolute path", ErrRealPath, p)
 		}
-		env["WORK_PATH_"+strconv.Itoa(i)] = p
+		env["HARNESS_PATH_"+strconv.Itoa(i)] = p
 	}
 	var out strings.Builder
 	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)

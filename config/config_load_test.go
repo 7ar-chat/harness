@@ -32,7 +32,7 @@ func TestLoadParsesMCPServersAndLists(t *testing.T) {
 	t.Setenv("SANDBOX_EGRESS_ALLOWLIST", "pypi.org, files.pythonhosted.org")
 	t.Setenv("LLM_MODELS", "a,b")
 	t.Setenv("LLM_DEFAULT_MODEL", "c")
-	t.Setenv("DJANGO_PRODUCTION", "true")
+	t.Setenv("HARNESS_PRODUCTION", "true")
 
 	// Act
 	cfg, err := config.Load()
@@ -64,7 +64,7 @@ func TestLoadRejectsInvalidSettings(t *testing.T) {
 func TestRuntimeRefusesUnrestrictedEgressInProduction(t *testing.T) {
 	// In production a runtime with sandboxes needs SANDBOX_EGRESS_ALLOWLIST, unless unrestricted egress is explicitly accepted.
 	// Arrange
-	t.Setenv("DJANGO_PRODUCTION", "1")
+	t.Setenv("HARNESS_PRODUCTION", "1")
 	t.Setenv("OPENSANDBOX_URL", "http://host.docker.internal:8090")
 	cfg, _ := config.Load()
 	t.Setenv("SANDBOX_EGRESS_UNRESTRICTED", "true")
@@ -90,7 +90,7 @@ func TestDevelopmentAllowsUnrestrictedEgress(t *testing.T) {
 	t.Setenv("OPENSANDBOX_URL", "http://host.docker.internal:8090")
 	dev, _ := config.Load()
 	t.Setenv("OPENSANDBOX_URL", "")
-	t.Setenv("DJANGO_PRODUCTION", "1")
+	t.Setenv("HARNESS_PRODUCTION", "1")
 	noSandbox, _ := config.Load()
 
 	// Act
@@ -158,7 +158,7 @@ func TestLoadRejectsInvalidHarnessSettings(t *testing.T) {
 }
 
 func TestLoadDefaultsToWorkGPT56Models(t *testing.T) {
-	// Without environment, Work Chat offers Work's GPT-5.6 Sol and Terra (default Terra) with a 272k window, reasoning and vision.
+	// Without environment, the harness offers Work's GPT-5.6 Sol and Terra (default Terra) with a 272k window, reasoning and vision.
 	// Arrange
 
 	// Act

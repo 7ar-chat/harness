@@ -14,7 +14,7 @@ import (
 // PromptAndEfforts is the prompt variant and reasoning effort configuration (harness v3 §6, A-29).
 type PromptAndEfforts struct {
 	// LLMPromptVariantsRaw is LLM_PROMPT_VARIANTS: "model=variant,…" with the
-	// variants of internal/agent/prompts (default, gpt-5.6, deepseek, legacy).
+	// variants of internal/agent/prompts (default, gpt-5.6, deepseek, coding).
 	// Models not listed use deepseek when their name contains "deepseek",
 	// else default.
 	// AgentProfile is AGENT_PROFILE: "work" (default, documents and data) or "coding": models not

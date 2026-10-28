@@ -6,7 +6,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/config"
 )
 
-// OptionsFromConfig maps the WORK_MEMORY_* settings.
+// OptionsFromConfig maps the HARNESS_MEMORY_* settings.
 func OptionsFromConfig(cfg *config.Config) Options {
 	return Options{
 		WriteMode: cfg.MemoryWriteMode, DeleteMode: cfg.MemoryDeleteMode, DefaultScope: cfg.MemoryDefaultScope,

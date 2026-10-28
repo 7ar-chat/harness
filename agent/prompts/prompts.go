@@ -21,8 +21,6 @@ const (
 	DeepSeek = "deepseek"
 	// Coding is the software-engineering prompt (AGENT_PROFILE=coding).
 	Coding = "coding"
-	// Legacy is the harness v2 prompt, kept verbatim for A/B comparisons.
-	Legacy = "legacy"
 )
 
 // Part is an optional section of the prompt that a variant may leave out.
@@ -46,7 +44,6 @@ var registry = map[string]variant{
 	GPT56:    {base: gpt56Base, parts: map[Part]bool{Memory: true, Git: true, Web: true}},
 	DeepSeek: {base: deepseekBase, parts: map[Part]bool{Memory: true, Git: true, Web: true}},
 	Coding:   {base: codingBase, parts: map[Part]bool{Memory: true, Web: true}},
-	Legacy:   {parts: map[Part]bool{Memory: true, Git: true, Web: true}},
 }
 
 // Names lists the variants, sorted.
@@ -76,9 +73,6 @@ func Resolve(name string) string {
 // Has reports whether a variant includes an optional part.
 func Has(name string, p Part) bool { return registry[Resolve(name)].parts[p] }
 
-// IsLegacy reports whether name selects the v2 prompt.
-func IsLegacy(name string) bool { return name == Legacy }
-
 // Prompt is a run's system prompt before the conversation summary: the
 // variant, the facts of the dynamic context and the rendered sections.
 type Prompt struct {
@@ -104,18 +98,6 @@ const summaryIntro = "The older messages of this conversation are not shown any 
 func (p Prompt) Render(summary string) string {
 	var b strings.Builder
 	name := Resolve(p.Variant)
-	if name == Legacy {
-		b.WriteString(legacyBase(p.Now, p.FirstName, p.Sandbox))
-		for _, s := range append(append([]string{}, p.Sections...), p.Context...) {
-			if s = strings.TrimSpace(s); s != "" {
-				b.WriteString("\n\n" + s)
-			}
-		}
-		if summary != "" {
-			b.WriteString("\n\n" + SummaryHeading + "\n" + summaryIntro + "\n\n" + FenceData("conversation_summary", summary))
-		}
-		return b.String()
-	}
 	b.WriteString(registry[name].base(p.Sandbox, p.Vision))
 	for _, s := range p.Sections {
 		if s = strings.TrimSpace(s); s != "" {
