@@ -244,6 +244,9 @@ func New(o Options) (*Harness, error) {
 	providers = append(providers, o.Tools...)
 
 	hs := harnessOptions(cfg, st, reg, artSvc, wsSvc, mgr, memSvc)
+	if hs, err = wirePermissions(cfg, hs); err != nil { // local/coding only: permission rules + git snapshots
+		return nil, err
+	}
 	if cfg.SandboxEnabled() || backend != nil {
 		hs.Spill = tools.SandboxSpiller{Sandboxes: mgr}
 	}
