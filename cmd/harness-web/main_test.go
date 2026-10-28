@@ -1,0 +1,80 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"io"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+)
+
+func env(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
+
+func TestNonLoopbackBindWithoutATokenIsRefused(t *testing.T) {
+	for _, addr := range []string{"0.0.0.0:8080", ":8080", "192.168.1.5:8080", "example.com:80"} {
+		var out, errb bytes.Buffer
+
+		code := run(context.Background(), []string{"-addr", addr}, env(nil), &out, &errb)
+
+		if code != 1 || !strings.Contains(errb.String(), "HARNESS_WEB_TOKEN") {
+			t.Errorf("%s: code %d stderr %q", addr, code, errb.String())
+		}
+	}
+}
+
+func TestLoopbackDetection(t *testing.T) {
+	for addr, want := range map[string]bool{
+		"127.0.0.1:8080": true, "[::1]:8080": true, "localhost:9": true,
+		"0.0.0.0:80": false, ":80": false, "[::]:80": false, "10.0.0.1:80": false, "garbage": false,
+	} {
+		if got := isLoopback(addr); got != want {
+			t.Errorf("isLoopback(%q) = %v, want %v", addr, got, want)
+		}
+	}
+}
+
+func TestServesTheUIUntilTheContextEnds(t *testing.T) {
+	// Arrange: a loopback server on a free port with the local sandbox and the in-process store.
+	t.Setenv("LLM_PROVIDER", "openai")
+	t.Setenv("LLM_MODELS", "gpt-test")
+	t.Setenv("LLM_DEFAULT_MODEL", "gpt-test")
+	t.Setenv("LOCAL_WORKSPACE", t.TempDir())
+	t.Setenv("LOCAL_STATE_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	ctx, cancel := context.WithCancel(context.Background())
+	pr, pw := io.Pipe()
+	done := make(chan int, 1)
+
+	// Act
+	go func() { done <- run(ctx, []string{"-local", "-addr", "127.0.0.1:0"}, env(nil), pw, io.Discard) }()
+	line := make([]byte, 200)
+	n, _ := pr.Read(line)
+	url := strings.Fields(strings.TrimPrefix(string(line[:n]), "harness-web: "))[0]
+	resp, err := http.Get(url + "healthz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	models, err := http.Get(url + "api/models")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(models.Body)
+	models.Body.Close()
+	cancel()
+
+	// Assert
+	if resp.StatusCode != 200 || models.StatusCode != 200 || !strings.Contains(string(body), "gpt-test") {
+		t.Fatalf("healthz %d, models %d %s", resp.StatusCode, models.StatusCode, body)
+	}
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Fatalf("exit code %d", code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the server did not stop")
+	}
+}

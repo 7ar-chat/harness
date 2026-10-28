@@ -13,7 +13,7 @@ a terminal client (`cmd/harness`), a `net/http` + SSE server package and a bench
 HTTP APIs (authentication, multi-tenant routing) are left to the embedding application.
 
 ```
-        web UI ──► httpserver (net/http, SSE) ─┐
+        web UI ──► hosts/web (net/http, SSE) ──┐
         TUI    ──► cmd/harness (reference)  ───┤
         your app ──────────────────────────────┤
                                                ▼
@@ -47,8 +47,9 @@ h.Steer(ctx, "alice", run.ID, "use blue instead")   // message to a running run
 h.Cancel(ctx, "alice", run.ID)
 ```
 
-* **Web**: `httpserver.New(h, httpserver.Options{User: …})` serves threads/runs as JSON and the
-  run's events as SSE (`id` = seq, so `EventSource` reconnects resume without loss).
+* **Web**: `httpserver.New(h, httpserver.Options{…})` (`hosts/web`) serves threads, runs, approvals,
+  files and the run's events as SSE (`id` = seq, so reconnects resume without loss), plus a built-in
+  browser UI; `cmd/harness-web` runs it (see [Web host](#web-host)).
 * **TUI**: `cmd/harness` is a Bubble Tea terminal client with a print mode (see
   [Terminal UI](#terminal-ui)); package `tui` has the model and renderers to embed.
 * **Single process** (default): store, event log and queue live in memory — nothing to run
@@ -160,6 +161,45 @@ and the run's elapsed time. `edit_file` calls show a diff of `oldText`/`newText`
 `harness.Harness`), with one render function per event type and golden tests in `tui/testdata`
 (`go test ./tui -update` rewrites them). The facade has no call to answer an interrupt, so
 `HarnessBackend.Resume` creates the resume run through `h.Store` and `h.Queue`.
+
+## Web host
+
+`hosts/web` (package `httpserver`) is a standalone HTTP server for any web front end, with a small browser UI
+embedded. `cmd/harness-web` runs it:
+
+```
+harness-web -local                      # in a repository: coding agent on this directory, UI at http://127.0.0.1:8080/
+HARNESS_WEB_ADDR=0.0.0.0:8080 HARNESS_WEB_TOKEN=secret OPENSANDBOX_URL=… harness-web   # remote sandbox, shared
+```
+
+`-local` sets `SANDBOX_BACKEND=local` and `AGENT_PROFILE=coding` (unless already set) and keeps sessions on disk
+(`harness.OpenLocalStore`). Flags: `-addr` (default `HARNESS_WEB_ADDR`, else `127.0.0.1:8080`), `-model`, `-local`,
+`-user` (the single user's login, default `local`). A non-loopback address is refused unless `HARNESS_WEB_TOKEN` is set.
+
+**Routes** (all under `/api`, also served without the prefix; errors are `{"error":{"code","message"}}`; the full
+table with bodies is the doc comment of `hosts/web/httpserver.go`):
+
+| Route | |
+|---|---|
+| `GET /healthz` | liveness, no auth |
+| `GET /api/models` | allowed models and the default |
+| `GET /api/sessions` | saved conversations (durable file store only, else 501) |
+| `POST/GET /api/threads`, `GET/PATCH/DELETE /api/threads/{id}` | create, list, read with messages, rename, delete |
+| `POST /api/threads/{id}/runs` | send a message, 202 with the run |
+| `POST /api/threads/{id}/resume` | answer an approval (`decision` approve/deny, `always`) or an `ask_user` question (`text`) |
+| `GET /api/threads/{id}/files?path=`, `.../files/download?path=` | list and download `/workspace` of the thread's sandbox (read-only, confined, `attachment`) |
+| `GET /api/runs/{id}`, `GET /api/runs/{id}/events?after=` | run state; AG-UI events as SSE, resumed with `Last-Event-ID` or `after` |
+| `POST /api/runs/{id}/cancel`, `/steer` | stop a run; add a message to a running one |
+
+A foreign thread or run id is always a 404. **Auth**: `Options.Authenticate` (`func(*http.Request) (user string, err error)`)
+decides who calls; the default is one local user, with an optional static bearer token (`HARNESS_WEB_TOKEN`).
+`HARNESS_WEB_ORIGINS` is a comma-separated CORS allowlist; other cross-origin requests are refused (403), and without a
+token the server only answers loopback `Host` names. Every response carries a strict CSP (`default-src 'self'`).
+
+**UI** (`hosts/web/ui`, `go:embed`, about 450 lines of plain HTML/CSS/JS, no build step, no CDN): conversation list,
+streamed transcript with basic markdown, collapsible tool calls (edit diffs), status line (model, steps, tokens,
+cache %), send / steer / cancel, approval and question prompts, a file panel with downloads, light and dark themes,
+phone-width layout. With a token set the UI asks for it once and keeps it for the tab.
 
 ## Sessions
 
@@ -285,9 +325,9 @@ features/                      optional capabilities a host switches on
   permissions/ gitsafe/ codecheck/ projectdocs/ explore/ plan/ mcp/
   memory/ skills/ goals/ titles/ verify/ artifacts/ workspace/
 hosts/                         ways to drive the engine
-  tui/ (terminal)   web/ (HTTP + SSE)   worker/ (headless queue consumer + admin endpoints)
+  tui/ (terminal)   web/ (HTTP + SSE + embedded UI)   worker/ (headless queue consumer + admin endpoints)
 harness.go                     the facade: New / Send / Events / Steer / Cancel / Resume
-cmd/harness  cmd/harness-worker  cmd/bench   binaries;  bench/ longtest/ = benchmark and long-session tests
+cmd/harness  cmd/harness-web  cmd/harness-worker  cmd/bench   binaries;  bench/ longtest/ = benchmark and long-session tests
 ```
 
 ## Worker
