@@ -57,6 +57,9 @@ func NewWithTransport(cfg *config.Config, base http.RoundTripper) *Provider {
 	if cfg.LLMProvider == "gateway" {
 		rt = &gatewayTransport{base: rt, useCase: cfg.LLMUseCase}
 	}
+	if cfg.LLMSessionHeader != "" {
+		rt = &sessionTransport{base: rt, header: cfg.LLMSessionHeader}
+	}
 	return &Provider{cfg: cfg, client: &http.Client{Transport: rt}, models: map[string]model.ToolCallingChatModel{}}
 }
 

@@ -70,6 +70,17 @@ AGENT_PROFILE=coding SANDBOX_BACKEND=local LLM_PROVIDER=anthropic LLM_API_KEY=�
 LLM_MODELS=claude-sonnet-5-5 LLM_DEFAULT_MODEL=claude-sonnet-5-5 harness
 ```
 
+## Providers that route by session
+
+`LLM_SESSION_HEADER=x-opencode-session` sends the thread id in that header on every model call. OpenCode Go
+requires it (it routes a conversation to one backend, which keeps the prompt cache warm: 86% cached on the
+benchmark against 58–68% through a router without it):
+
+```
+LLM_PROVIDER=openai LLM_BASE_URL=https://opencode.ai/zen/go/v1 LLM_API_KEY=… \
+LLM_SESSION_HEADER=x-opencode-session LLM_MODELS=deepseek-v4.1-flash LLM_DEFAULT_MODEL=deepseek-v4.1-flash
+```
+
 ## Benchmark
 
 `bench/` runs coding tasks through the real harness (local sandbox, coding profile) and reports pass/fail,

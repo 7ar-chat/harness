@@ -135,3 +135,25 @@ func TestOpenAIProviderSendsTheModelIdWithItsSlashes(t *testing.T) {
 		t.Fatalf("err %v sent model %q", err, sent)
 	}
 }
+
+func TestSessionHeaderCarriesTheThreadIdWhenConfigured(t *testing.T) {
+	// Arrange
+	var headers []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		headers = append(headers, r.Header.Get("x-opencode-session"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"1","object":"chat.completion","model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"pong"},"finish_reason":"stop"}]}`))
+	}))
+	t.Cleanup(ts.Close)
+	f := llm.New(&config.Config{LLMProvider: "openai", LLMBaseURL: ts.URL + "/v1", LLMAPIKey: "k", LLMModels: []string{"m"}, LLMTimeout: 10, LLMSessionHeader: "x-opencode-session"})
+	m, _ := f.Model(context.Background(), "m")
+
+	// Act
+	_, err := m.Generate(llm.WithSession(context.Background(), "thread-42"), []*schema.Message{schema.UserMessage("ping")})
+	_, err2 := m.Generate(context.Background(), []*schema.Message{schema.UserMessage("ping")})
+
+	// Assert
+	if err != nil || err2 != nil || len(headers) != 2 || headers[0] != "thread-42" || headers[1] != "" {
+		t.Fatalf("errs %v %v; headers %q", err, err2, headers)
+	}
+}

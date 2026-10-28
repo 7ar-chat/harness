@@ -259,6 +259,7 @@ func (st *runState) attempt(ctx context.Context, m model.ToolCallingChatModel, m
 	actx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	actx, info := llm.WithCallInfo(actx)
+	actx = llm.WithSession(actx, st.in.Run.ThreadID)
 	wd := startWatchdog(cancel, st.firstChunkBudget(), st.a.streamIdle(), st.callCeiling())
 	defer wd.stop()
 	info.OnActivity(wd.activity)

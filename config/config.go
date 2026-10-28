@@ -62,6 +62,9 @@ type Config struct {
 	// CodeChecks is CODE_CHECKS: ".ext=command;…" syntax checks run after write_file/edit_file ({path} is the
 	// file; see codecheck.Defaults). They are on with AGENT_PROFILE=coding, or whenever this is set.
 	CodeChecks string `env:"CODE_CHECKS"`
+	// LLMSessionHeader is LLM_SESSION_HEADER: the name of a request header that carries the thread id, for
+	// providers that route a conversation to one backend by session (OpenCode Go: x-opencode-session).
+	LLMSessionHeader string `env:"LLM_SESSION_HEADER"`
 	// LLMCacheTTL is the prompt-cache lifetime of the anthropic provider: "5m" (default) or "1h".
 	LLMCacheTTL     string   `env:"LLM_CACHE_TTL"`
 	LLMDefaultModel string   `env:"LLM_DEFAULT_MODEL" envDefault:"gpt-5.6-terra"`
