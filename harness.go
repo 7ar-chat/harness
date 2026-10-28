@@ -36,7 +36,6 @@ import (
 	"github.com/GhaziBenDahmane/harness/agui"
 	"github.com/GhaziBenDahmane/harness/approvals"
 	"github.com/GhaziBenDahmane/harness/artifacts"
-	"github.com/GhaziBenDahmane/harness/classification"
 	"github.com/GhaziBenDahmane/harness/codecheck"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/eventlog"
@@ -45,7 +44,6 @@ import (
 	"github.com/GhaziBenDahmane/harness/memory"
 	"github.com/GhaziBenDahmane/harness/projectdocs"
 	"github.com/GhaziBenDahmane/harness/queue"
-	"github.com/GhaziBenDahmane/harness/renders"
 	"github.com/GhaziBenDahmane/harness/runtime"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/skills"
@@ -156,18 +154,7 @@ func New(o Options) (*Harness, error) {
 		h.Log, h.Queue, h.Bus, runQueue = eventlog.NewMemory(st), q, q, q
 	}
 
-	rawCls, err := classification.RawFromEnv(os.Getenv)
-	if err != nil {
-		return nil, err
-	}
-	clsSettings, err := classification.Load(rawCls)
-	if err != nil {
-		return nil, err
-	}
-	classifier, err := classification.New(clsSettings)
-	if err != nil {
-		return nil, err
-	}
+	var err error
 	blobs := o.Blobs
 	if blobs == nil {
 		blobs = artifacts.PGBlobs{S: st}
@@ -186,7 +173,7 @@ func New(o Options) (*Harness, error) {
 			return artSvc.RestoreWorkspace(ctx, threadID, sb, recreated)
 		},
 	})
-	artSvc = artifacts.New(st, blobs, mgr, classifier, artifacts.Options{Actor: clsSettings.Actor, PreviewConcurrency: cfg.PreviewMaxConcurrency,
+	artSvc = artifacts.New(st, blobs, mgr, artifacts.Options{PreviewConcurrency: cfg.PreviewMaxConcurrency,
 		BlobGCGrace: time.Duration(cfg.BlobGCGraceHours) * time.Hour})
 	wsSvc = workspace.New(mgr, st, st, artSvc, workspace.Options{Disabled: !cfg.WorkspaceCheckpoints || cfg.LocalSandbox(), ArchiveMaxBytes: cfg.GitArchiveMaxBytes,
 		MaxFileBytes: cfg.CheckpointMaxFile})
@@ -210,7 +197,6 @@ func New(o Options) (*Harness, error) {
 		BeforeCommand:      installer.EnsureCommandSkills,
 		OnWrite:            installer.NoteContent,
 		AfterFailedCommand: installer.AfterFailedCommand,
-		Renders:            renderRecorder(st, mgr),
 	}
 	if strings.EqualFold(strings.TrimSpace(cfg.AgentProfile), "coding") || strings.TrimSpace(cfg.CodeChecks) != "" {
 		extra, err := codecheck.Parse(cfg.CodeChecks)
@@ -440,13 +426,6 @@ func harnessOptions(cfg *config.Config, st store.Store, reg *skills.Registry, ar
 		BeforeTool:            []agent.BeforeToolHook{&approvals.Gate{Store: st, RiskyToolPattern: cfg.RiskyToolPattern, Resolver: gateResolver(mgr)}},
 		Approvals:             st,
 	}
-}
-
-func renderRecorder(st store.RenderStore, mgr sandbox.Manager) sandboxtools.RenderRecorder {
-	if r := renders.New(st, mgr); r != nil {
-		return r
-	}
-	return nil
 }
 
 func gateResolver(mgr sandbox.Manager) approvals.PathResolver {

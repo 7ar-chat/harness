@@ -10,10 +10,8 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/agent"
 	"github.com/GhaziBenDahmane/harness/artifacts"
-	"github.com/GhaziBenDahmane/harness/classification"
 	"github.com/GhaziBenDahmane/harness/goals"
 	"github.com/GhaziBenDahmane/harness/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/renders"
 	"github.com/GhaziBenDahmane/harness/runtime"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
@@ -43,14 +41,8 @@ func newV2RigWith(t *testing.T, builtin fs.FS, vision bool, turns ...llmtest.Tur
 	t.Helper()
 	r := newRig(t, turns...)
 	v := &v2rig{rig: r}
-	raw, _ := classification.RawFromEnv(func(string) string { return "" })
-	settings, err := classification.Load(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cls, _ := classification.New(settings)
 	r.backend.OnCreate = func(sb *sandboxtest.Sandbox) { sb.SetExec(sandboxtest.FindExec(sb, nil)) }
-	v.arts = artifacts.New(r.st, artifacts.PGBlobs{S: r.st}, nil, cls, artifacts.Options{Actor: "work"})
+	v.arts = artifacts.New(r.st, artifacts.PGBlobs{S: r.st}, nil, artifacts.Options{})
 	v.reg = skills.NewRegistry(builtin, r.st)
 	v.inst = &skills.Installer{Registry: v.reg, Store: r.st, Redis: r.rdb}
 	h := &r.agent.Harness
@@ -79,7 +71,7 @@ func (v *v2rig) wire() {
 	v.inst = &skills.Installer{Registry: v.reg, Store: v.st, Redis: v.rdb, Messages: v.st}
 	v.agent.Tools = tools.NewRegistry(
 		sandboxtools.New(v.mgr, sandboxtools.Options{CommandTimeout: 5 * time.Second, MaxSandboxesPerUser: 5, OnAcquire: v.inst.EnsureRunSkills,
-			BeforeCommand: v.inst.EnsureCommandSkills, OnWrite: v.inst.NoteContent, AfterFailedCommand: v.inst.AfterFailedCommand, Renders: renders.New(v.st, v.mgr)}),
+			BeforeCommand: v.inst.EnsureCommandSkills, OnWrite: v.inst.NoteContent, AfterFailedCommand: v.inst.AfterFailedCommand}),
 		&skilltools.Provider{Registry: v.reg, Installer: v.inst, Sandbox: v.mgr},
 		harnesstools.New(v.st),
 		memorytools.New(v.mem),

@@ -18,7 +18,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/GhaziBenDahmane/harness/agui"
-	"github.com/GhaziBenDahmane/harness/classification"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/store"
 	"github.com/GhaziBenDahmane/harness/syncx"
@@ -34,27 +33,12 @@ const CustomArtifactSkipped = "work.artifact_skipped"
 
 // Errors mapped to HTTP codes by the API.
 var (
-	ErrNotPreviewable        = errors.New("this file type cannot be previewed")
-	ErrPreviewFailed         = errors.New("the preview could not be generated")
-	ErrClassificationFailed  = errors.New("the file could not be classified")
-	ErrTypeMismatch          = errors.New("file extension, declared type and content disagree")
-	ErrConfidentialityDenied = errors.New("the file's confidentiality label does not allow uploading it")
-	ErrTooLarge              = errors.New("the file exceeds the storage limit")
-	ErrSandboxDisabled       = errors.New("no sandbox is configured")
-	ErrArchiveUnreadable     = errors.New("the archive cannot be checked for confidential documents")
-	// ErrSignedDocument is a digitally signed Office file (refused; C-27).
-	ErrSignedDocument = errors.New("digitally signed Office documents are not supported")
+	ErrNotPreviewable  = errors.New("this file type cannot be previewed")
+	ErrPreviewFailed   = errors.New("the preview could not be generated")
+	ErrTypeMismatch    = errors.New("file extension, declared type and content disagree")
+	ErrTooLarge        = errors.New("the file exceeds the storage limit")
+	ErrSandboxDisabled = errors.New("no sandbox is configured")
 )
-
-// ConfidentialityError is ErrConfidentialityDenied for an entry of an uploaded archive.
-type ConfidentialityError struct{ Path string }
-
-func (e *ConfidentialityError) Error() string {
-	return ErrConfidentialityDenied.Error() + ": " + e.Path
-}
-
-// Is makes errors.Is(err, ErrConfidentialityDenied) hold.
-func (e *ConfidentialityError) Is(target error) bool { return target == ErrConfidentialityDenied }
 
 // Options are the limits of the contract (§2).
 type Options struct {
@@ -67,8 +51,6 @@ type Options struct {
 	PreviewConcurrency int
 	// LockWait bounds the wait for a thread's artifact lock (default 2 min).
 	LockWait time.Duration
-	// Actor is the classification actor of deliveries (default: settings actor).
-	Actor string
 	// BlobGCGrace is how long a content blob must have had no reference before
 	// the retention purge deletes it (default 24 h, WORK_BLOB_GC_GRACE_HOURS).
 	BlobGCGrace time.Duration
@@ -79,11 +61,10 @@ const DefaultBlobGCGrace = 24 * time.Hour
 
 // Service implements artifacts on top of the metadata store, a blob store and the sandbox manager.
 type Service struct {
-	Store      store.ArtifactStore
-	Blobs      Blobs
-	Sandbox    sandbox.Manager
-	Classifier *classification.Service
-	Opts       Options
+	Store   store.ArtifactStore
+	Blobs   Blobs
+	Sandbox sandbox.Manager
+	Opts    Options
 
 	locks   syncx.KeyedMutex
 	semOnce sync.Once
@@ -112,7 +93,7 @@ func SkippedEvent(s Skipped, toolCallID string) agui.Event {
 }
 
 // New returns a service with defaults applied.
-func New(st store.ArtifactStore, blobs Blobs, mgr sandbox.Manager, cls *classification.Service, o Options) *Service {
+func New(st store.ArtifactStore, blobs Blobs, mgr sandbox.Manager, o Options) *Service {
 	if o.MaxFileBytes <= 0 {
 		o.MaxFileBytes = 50 << 20
 	}
@@ -137,7 +118,7 @@ func New(st store.ArtifactStore, blobs Blobs, mgr sandbox.Manager, cls *classifi
 	if o.BlobGCGrace <= 0 {
 		o.BlobGCGrace = DefaultBlobGCGrace
 	}
-	return &Service{Store: st, Blobs: blobs, Sandbox: mgr, Classifier: cls, Opts: o}
+	return &Service{Store: st, Blobs: blobs, Sandbox: mgr, Opts: o}
 }
 
 // lockThread serializes the artifact changes of a thread across every api and
@@ -695,27 +676,11 @@ func (s *Service) ListArtifactVersions(ctx context.Context, artifactID string) (
 type Delivery struct {
 	Data        []byte
 	ContentType string
-	// Classified is set when the bytes carry classification labels.
-	Classified *classification.Result
 }
 
-// Deliver applies the classification policy of Studio Work downloads: PDF and
-// Office files (by extension, MIME type or signature) are labelled, and a file
-// that cannot be labelled is never delivered (ErrClassificationFailed).
-func (s *Service) Deliver(ctx context.Context, name string, data []byte) (*Delivery, error) {
-	ct := MimeType(name)
-	if !classification.RequiresClassification(name, ct, data) {
-		return &Delivery{Data: data, ContentType: ct}, nil
-	}
-	if s.Classifier == nil {
-		return nil, ErrClassificationFailed
-	}
-	res, err := s.Classifier.Classify(ctx, name, ct, data, s.Opts.Actor)
-	if err != nil {
-		slog.Warn("artifacts: classification failed; file not delivered", "name_ext", path.Ext(name), "error", err)
-		return nil, fmt.Errorf("%w: %v", ErrClassificationFailed, err)
-	}
-	return &Delivery{Data: res.Content, ContentType: res.Format.ContentType(), Classified: res}, nil
+// Deliver returns a file as is, with the content type of its name.
+func (s *Service) Deliver(_ context.Context, name string, data []byte) (*Delivery, error) {
+	return &Delivery{Data: data, ContentType: MimeType(name)}, nil
 }
 
 // previewKey is the cached preview of content sum rendered for owner: the PDF
@@ -731,7 +696,7 @@ func previewKey(owner, sum string) string {
 func legacyPreviewKey(sum string) string { return "preview/" + sum + ".pdf" }
 
 // Preview returns the preview of a version: PDF (Office files converted in the
-// sandbox, cached per source sha256, then classified like a download), images
+// sandbox, cached per source sha256), images
 // as-is and text/html as text/plain.
 func (s *Service) Preview(ctx context.Context, a *store.Artifact, version int) (*Delivery, error) {
 	kind := PreviewableAs(a.Name, a.MimeType)
@@ -742,7 +707,7 @@ func (s *Service) Preview(ctx context.Context, a *store.Artifact, version int) (
 	if err != nil {
 		return nil, err
 	}
-	if kind != "pdf" && classification.RequiresClassification(a.Name, MimeType(a.Name), data) {
+	if kind != "pdf" && isDocument(a.Name, MimeType(a.Name), data) {
 		// PDF/Office bytes behind a text or image extension: never served raw
 		// (the version may predate the signature-aware content type).
 		return nil, ErrNotPreviewable
@@ -755,11 +720,6 @@ func (s *Service) Preview(ctx context.Context, a *store.Artifact, version int) (
 	}
 	pdf := data
 	if isOffice(a.Name) {
-		// The conversion drops the label and delivery would stamp the default
-		// one: a disallowed source is never converted (review round 1 P2 #2).
-		if !classification.SourceAllowed(data) {
-			return nil, classification.ErrSourceNotAllowed
-		}
 		if pdf, err = s.officePDF(ctx, a, v.SHA256, data); err != nil {
 			return nil, err
 		}

@@ -4,8 +4,6 @@ import (
 	"mime"
 	"path"
 	"strings"
-
-	"github.com/GhaziBenDahmane/harness/classification"
 )
 
 var extraTypes = map[string]string{
@@ -90,11 +88,11 @@ func Previewable(name string) string {
 // application/octet-stream when the signature is a broken one).
 func ContentMime(name string, data []byte) string {
 	byName := MimeType(name)
-	if classification.FormatForFilename(name) != "" || !classification.RequiresClassification(name, byName, data) {
+	if formatForFilename(name) != "" || !isDocument(name, byName, data) {
 		return byName
 	}
-	if f := classification.Signature(data); f != "" {
-		return f.ContentType()
+	if f := signature(data); f != "" {
+		return f.contentType()
 	}
 	return "application/octet-stream"
 }
@@ -114,8 +112,8 @@ func classifiedMime(mt string) bool {
 	case "application/octet-stream":
 		return true
 	}
-	for _, f := range []classification.Format{classification.PDF, classification.DOCX, classification.XLSX, classification.PPTX} {
-		if f.ContentType() == mt {
+	for _, f := range []docFormat{fmtPDF, fmtDOCX, fmtXLSX, fmtPPTX} {
+		if f.contentType() == mt {
 			return true
 		}
 	}

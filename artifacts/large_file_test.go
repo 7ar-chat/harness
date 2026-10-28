@@ -27,7 +27,7 @@ func TestSnapshotSaysOnceWhenAFileIsTooLargeToSave(t *testing.T) {
 	st := memstore.New()
 	backend := sandboxtest.NewBackend()
 	mgr := sandbox.NewManager(backend, st, rdb, sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour})
-	svc := artifacts.New(st, artifacts.PGBlobs{S: st}, mgr, nil, artifacts.Options{MaxFileBytes: 1024})
+	svc := artifacts.New(st, artifacts.PGBlobs{S: st}, mgr, artifacts.Options{MaxFileBytes: 1024})
 	th, _ := st.CreateThread(ctx, "alice", "t")
 	if _, err := mgr.Acquire(ctx, th.ID, "alice"); err != nil {
 		t.Fatal(err)

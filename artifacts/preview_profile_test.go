@@ -13,7 +13,6 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/GhaziBenDahmane/harness/artifacts"
-	"github.com/GhaziBenDahmane/harness/classification"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
@@ -29,19 +28,13 @@ func TestEachOfficePreviewConvertsWithItsOwnLibreOfficeProfile(t *testing.T) {
 	st := memstore.New()
 	backend := sandboxtest.NewBackend()
 	mgr := sandbox.NewManager(backend, st, rdb, sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour})
-	raw, _ := classification.RawFromEnv(func(string) string { return "" })
-	settings, err := classification.Load(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cls, _ := classification.New(settings)
-	svc := artifacts.New(st, artifacts.PGBlobs{S: st}, mgr, cls, artifacts.Options{Actor: "work"})
+	svc := artifacts.New(st, artifacts.PGBlobs{S: st}, mgr, artifacts.Options{})
 	th, _ := st.CreateThread(ctx, "alice", "t")
 	if _, err := mgr.Acquire(ctx, th.ID, "alice"); err != nil {
 		t.Fatal(err)
 	}
 	sb := backend.Created()[0]
-	pdf, _ := os.ReadFile(filepath.Join("..", "classification", "testdata", "memo.pdf"))
+	pdf, _ := os.ReadFile(filepath.Join("testdata", "memo.pdf"))
 	var mu sync.Mutex
 	var conversions []string
 	sb.SetExec(sandboxtest.FindExec(sb, func(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
@@ -57,7 +50,7 @@ func TestEachOfficePreviewConvertsWithItsOwnLibreOfficeProfile(t *testing.T) {
 		return sandbox.ExecResult{}, nil
 	}))
 	for _, name := range []string{"report.docx", "deck.pptx"} {
-		data, _ := os.ReadFile(filepath.Join("..", "classification", "testdata", name))
+		data, _ := os.ReadFile(filepath.Join("testdata", name))
 		sb.Put("/workspace/"+name, string(data))
 	}
 	changes, err := svc.Snapshot(ctx, sb, artifacts.RunRef{ThreadID: th.ID, Login: "alice"})

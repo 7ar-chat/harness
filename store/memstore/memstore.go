@@ -37,8 +37,7 @@ type Store struct {
 
 	ideaUsage []*store.IdeaUsage // ideas.go
 	catOnce   sync.Once
-	cat       *catalog                 // skill versions, global skills, sessions (skills_catalog.go)
-	renders   map[string]*store.Render // by thread id + "\x00" + render id (renders.go)
+	cat       *catalog // skill versions, global skills, sessions (skills_catalog.go)
 }
 
 type thread struct {

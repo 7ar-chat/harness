@@ -236,8 +236,8 @@ Nothing happens outside a git repository.
 | `sandbox`, `tools/sandboxtools` | Remote sandbox contract/manager and the file/exec/search/view tools |
 | `tools/{skill,memory,harness,mcp}tools` | Skills, memory, plan/ask_user/goal and MCP tools |
 | `skills`, `skills/skillsfs` | Skill packages, registry, lazy install; built-in skills (embedded) |
-| `artifacts`, `workspace`, `renders` | Versioned deliverables, workspace git checkpoints, document renders |
-| `approvals`, `goals`, `verify`, `titles`, `memory`, `ideas`, `websearch`, `classification` | Product features of Work Chat, usable as plugins |
+| `artifacts`, `workspace` | Versioned deliverables, workspace git checkpoints, document renders |
+| `approvals`, `goals`, `verify`, `titles`, `memory`, `ideas`, `websearch` | Product features of Work Chat, usable as plugins |
 | `runtime` | Run claiming, heartbeat, sweeper, end-of-run hooks |
 | `store`, `store/memstore`, `store/pgstore` | Types + interface; in-memory and Postgres implementations |
 | `eventlog`, `queue` | Per-run durable event log and run queue/bus (memory and Redis) |
@@ -251,15 +251,13 @@ its internal copy.
 ## Building
 
 `make build` produces stripped binaries in `bin/` (`cmd/harness` is about 30 MB; a plain `go build` is 44 MB
-because it keeps the symbol table and DWARF). Idle resident memory is about 20 MB. The PDF/OLE readers of
-`classification` (Studio's confidentiality policy) and go-redis remain linked; the coding profile does not use them.
+because it keeps the symbol table and DWARF). Idle resident memory is about 20 MB. go-redis remains linked;
+the coding profile does not use it.
 
 ## Status / known gaps
 
 * Lifted from `studio/work` (Go 1.26); behaviour and tests are unchanged except for the decoupling
   (`go test ./...`). `store/pgstore` tests need a Postgres (`WORK_TEST_DATABASE_URL`) and skip otherwise.
-* `classification` still encodes Studio's MSIP confidentiality policy (labels `C4`, `C3-Amundi-Only`);
-  swap it for your own policy before using the upload/derive paths outside Studio.
 * The Anthropic skill packages and Studio's marketplace sync are not bundled (licensing /
   internal); `skills.Registry.LoadAnthropic(fs)` takes your own catalogue. Web search is not wired
   by `harness.New` yet (`websearch` package is there).

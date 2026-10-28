@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/classification"
 	"github.com/GhaziBenDahmane/harness/ideas"
 )
 
@@ -92,17 +91,14 @@ func TestCatalogEveryDemoFileIsKnownAndUploadable(t *testing.T) {
 		for _, f := range idea.DemoFiles() {
 			t.Run(idea.ID+"/"+f.Name, func(t *testing.T) {
 				// Act
-				format, err := classification.Detect(f.Name, f.ContentType, f.Data)
+				signed := bytes.HasPrefix(f.Data, []byte("%PDF-")) || bytes.HasPrefix(f.Data, []byte("PK"))
 
 				// Assert
 				if strings.HasPrefix(f.Content, "Demo file: ") {
 					t.Fatalf("no demo content for %s", f.Name)
 				}
-				if err != nil {
-					t.Fatalf("detect: %v", err)
-				}
-				if f.Binary() != (format != "") {
-					t.Fatalf("binary %v, format %q", f.Binary(), format)
+				if f.Binary() != signed {
+					t.Fatalf("binary %v, document signature %v", f.Binary(), signed)
 				}
 				if !f.Binary() && string(f.Data) != f.Content {
 					t.Fatal("text data differs from content")
@@ -142,7 +138,6 @@ func TestCatalogGeneratedDocumentsHoldTheDemoText(t *testing.T) {
 	// Act
 	sheet := zipEntry(t, xlsx.DemoFiles()[0].Data, "xl/worksheets/sheet1.xml")
 	doc := zipEntry(t, docx.DemoFiles()[1].Data, "word/document.xml")
-	info, err := classification.PDFInfo(pdf.DemoFiles()[0].Data)
 
 	// Assert
 	if !strings.Contains(sheet, `<c r="A1" t="inlineStr"><is><t xml:space="preserve">Region</t></is></c>`) || !strings.Contains(sheet, `<c r="E9"><v>33000</v></c>`) {
@@ -151,8 +146,8 @@ func TestCatalogGeneratedDocumentsHoldTheDemoText(t *testing.T) {
 	if !strings.Contains(doc, "Remote work policy V2") || !strings.Contains(doc, "MFA enabled.") {
 		t.Fatalf("doc = %s", doc)
 	}
-	if err != nil || info["/Title"] != "Demo supplier contract" {
-		t.Fatalf("pdf info %v %v", info, err)
+	if !bytes.Contains(pdf.DemoFiles()[0].Data, []byte("/Title (Demo supplier contract)")) {
+		t.Fatal("pdf misses its title")
 	}
 	if !bytes.Contains(pdf.DemoFiles()[0].Data, []byte("(Negotiation point: annual security audit and liability cap.) Tj")) {
 		t.Fatal("pdf misses the text")

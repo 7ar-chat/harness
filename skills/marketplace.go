@@ -488,9 +488,6 @@ func packageMarketplaceDir(fsys fs.FS, dir string) (*Package, error) {
 	if len(issues) > 0 {
 		return nil, invalidIssues(issues)
 	}
-	if err := checkConfidentiality(pkg); err != nil {
-		return nil, err
-	}
 	return pkg, nil
 }
 

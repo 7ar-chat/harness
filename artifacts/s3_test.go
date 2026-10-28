@@ -72,7 +72,7 @@ func TestS3PurgeDeletesTheBlobsOfPurgedThreadsOnly(t *testing.T) {
 	st := memstore.New()
 	clock := time.Now()
 	st.Now = func() time.Time { return clock }
-	svc := artifacts.New(st, b, nil, nil, artifacts.Options{BlobGCGrace: 24 * time.Hour})
+	svc := artifacts.New(st, b, nil, artifacts.Options{BlobGCGrace: 24 * time.Hour})
 	put := func(th *store.Thread, path, content string) string {
 		sum := sha256.Sum256([]byte(content))
 		key := hex.EncodeToString(sum[:])

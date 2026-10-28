@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/renders"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/tools"
 )
@@ -250,9 +249,6 @@ func (b *binding) readDocument(ctx context.Context, p string, in readInput) (str
 		if _, err := sb.Stat(ctx, p); err != nil {
 			return mapFileErr(err, p)
 		}
-		if _, err := renders.CheckSource(ctx, sb, p); err != nil { // review round 1: no text of a C4 source
-			return sourceErr(err, p)
-		}
 		var err error
 		res, err = runJSON[extracted](ctx, sb, extractScript, map[string]string{"WORK_PATH": p, "WORK_PAGES": in.Pages, "WORK_SHEET": in.Sheet}, extractWait)
 		return err
@@ -291,14 +287,6 @@ func shownOf(r extracted) string {
 		return "slides " + r.Shown
 	}
 	return r.Shown
-}
-
-// sourceErr is the tool error of a document CheckSource refused (or could not read).
-func sourceErr(err error, p string) error {
-	if renders.IsNotAllowed(err) {
-		return tools.Errorf("%s: %s", p, renders.NotAllowedMessage)
-	}
-	return mapFileErr(err, p)
 }
 
 // runJSON runs a sandbox script and decodes the last JSON object it prints.
@@ -348,9 +336,6 @@ func ExtractText(ctx context.Context, sb sandbox.Sandbox, p string, maxChars int
 	}
 	var text string
 	if documentExt[ext] {
-		if _, err := renders.CheckSource(ctx, sb, p); err != nil {
-			return "", err
-		}
 		res, err := runJSON[extracted](ctx, sb, extractScript, map[string]string{"WORK_PATH": p}, extractWait)
 		if err != nil {
 			return "", err

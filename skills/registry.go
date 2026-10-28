@@ -535,9 +535,6 @@ func (r *Registry) Upload(ctx context.Context, login string, data []byte) (Skill
 	if r.reserved(name) {
 		return Skill{}, invalid(fmt.Sprintf("name_conflict: %q is the name of a Studio skill; choose another name.", name))
 	}
-	if err := checkConfidentiality(pkg); err != nil {
-		return Skill{}, err
-	}
 	canonical, err := pkg.Zip()
 	if err != nil {
 		return Skill{}, err

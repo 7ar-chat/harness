@@ -5,13 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"log/slog"
 	"path"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/renders"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/tools"
 )
@@ -20,13 +18,6 @@ const viewDesc = `Look at a document the way the user will see it: renders pages
 110 dpi, at most 6 pages per call) into /workspace/.work/renders/ and shows you the images. pages selects pages or slides ("1-3,7";
 default the first 6). Returns JSON {path, pages: [{page, imagePath}], totalPages}. Use it to check layout, overflow, charts and
 styling before you call a document done; use read_file for its text. An image file (PNG, JPEG, WEBP, GIF) is shown as is.`
-
-// RenderRecorder records the pages view_file rendered into
-// sandbox.RendersDir/renderID (the renders endpoint serves them when the
-// source's label allows it; harness v3 "Review round 1"; renders.Service).
-type RenderRecorder interface {
-	RecordRender(ctx context.Context, threadID, sourcePath, renderID string, pages []int) error
-}
 
 // NoVisionError is the view_file error for models that cannot see images.
 const NoVisionError = "this model cannot view images; use read_file and the skill's inspect script"
@@ -212,9 +203,6 @@ func (b *binding) view(ctx context.Context, in viewInput) (*viewOutput, error) {
 		if err != nil {
 			return mapFileErr(err, p)
 		}
-		if _, err := renders.CheckSource(ctx, sb, p); err != nil { // review round 1: no render of a C4 source
-			return sourceErr(err, p)
-		}
 		dir := renderDir(p, fi)
 		out.RenderID = path.Base(dir)
 		if err := sb.MkdirAll(ctx, dir); err != nil { // the sandbox may predate the layout, or .work was removed
@@ -253,15 +241,6 @@ func (b *binding) view(ctx context.Context, in viewInput) (*viewOutput, error) {
 	}
 	if len(out.Pages) == 0 {
 		return nil, tools.Errorf("no page of %s could be rendered (pages %q of %d)", p, in.Pages, out.TotalPages)
-	}
-	if rec := b.p.opts.Renders; rec != nil {
-		nums := make([]int, 0, len(out.Pages))
-		for _, pg := range out.Pages {
-			nums = append(nums, pg.Page)
-		}
-		if err := rec.RecordRender(ctx, b.rc.ThreadID, p, out.RenderID, nums); err != nil {
-			slog.Warn("view_file: recording the render failed", "thread_id", b.rc.ThreadID, "error", err)
-		}
 	}
 	for _, img := range images {
 		tools.AttachImage(ctx, img)

@@ -152,6 +152,8 @@ replaces the "/workspace was reset" recreation notice. Text and HTML previews ar
 
 ### 2.2 Classification labels
 
+> Removed: the confidentiality-label policy described here and in the upload rules was dropped. Downloads return files unchanged; uploads only check size, name, path and type.
+
 Downloads of docx/pptx/xlsx/pdf (artifact content and v1 `files/content`) must carry the same classification
 labels Studio Work delivers. Port `ai/file_classification` (fail-closed: if labelling fails the file is not
 delivered → `502 classification_failed`) to Go: same detection (extension + signature agreement), same OOXML

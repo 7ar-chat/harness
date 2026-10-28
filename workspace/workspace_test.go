@@ -61,7 +61,7 @@ func newRig(t *testing.T, o workspace.Options) *rig {
 	r.rdb = redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = r.rdb.Close() })
 	r.backend.OnCreate = func(sb *sandboxtest.Sandbox) { sb.SetExec(sandboxtest.FindExec(sb, sandboxtest.ShellExec(sb))) }
-	r.arts = artifacts.New(r.st, artifacts.PGBlobs{S: r.st}, nil, nil, artifacts.Options{BlobGCGrace: time.Hour})
+	r.arts = artifacts.New(r.st, artifacts.PGBlobs{S: r.st}, nil, artifacts.Options{BlobGCGrace: time.Hour})
 	r.ws = workspace.New(nil, r.st, r.st, r.arts, o)
 	r.newManager()
 	th, err := r.st.CreateThread(r.ctx, "alice", "")

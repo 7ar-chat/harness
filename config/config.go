@@ -110,7 +110,7 @@ type Config struct {
 
 	GlitchtipDSN string `env:"GLITCHTIP_API_DSN"`
 
-	// Harness v2 §1–§3: artifacts, attachments (classification: FILE_CLASSIFICATION_*, see README).
+	// Harness v2 §1–§3: artifacts, attachments.
 	ArtifactsS3Bucket    string `env:"ARTIFACTS_S3_BUCKET"`
 	ArtifactsS3Endpoint  string `env:"ARTIFACTS_S3_ENDPOINT"`
 	ArtifactsS3Region    string `env:"ARTIFACTS_S3_REGION" envDefault:"us-east-1"`

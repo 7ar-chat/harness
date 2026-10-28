@@ -93,7 +93,7 @@ func TestPlainUploadsAreStreamedToTheBlobStore(t *testing.T) {
 	st := memstore.New()
 	th, _ := st.CreateThread(context.Background(), "alice", "")
 	blobs := newStreamBlobs()
-	svc := artifacts.New(st, blobs, nil, nil, artifacts.Options{})
+	svc := artifacts.New(st, blobs, nil, artifacts.Options{})
 	text := bytes.Repeat([]byte("line of text\n"), 20000) // 260 kB
 	zipData := zipBytes(t, map[string]string{"a.txt": "a"})
 
@@ -120,7 +120,7 @@ func TestStreamedUploadAboveTheDatabaseCapIsRefusedWithoutReadingIt(t *testing.T
 	// Arrange
 	st := memstore.New()
 	th, _ := st.CreateThread(context.Background(), "alice", "")
-	svc := artifacts.New(st, artifacts.PGBlobs{S: st}, nil, nil, artifacts.Options{})
+	svc := artifacts.New(st, artifacts.PGBlobs{S: st}, nil, artifacts.Options{})
 
 	// Act
 	_, err := svc.Upload(context.Background(), artifacts.UploadInput{ThreadID: th.ID, Login: "alice", Filename: "video.bin",

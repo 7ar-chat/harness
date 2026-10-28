@@ -263,7 +263,6 @@ type Store interface {
 	IdeaStore
 	MemoryStore
 	NotificationStore
-	RenderStore
 }
 
 // SandboxStore is the subset used by the sandbox manager.

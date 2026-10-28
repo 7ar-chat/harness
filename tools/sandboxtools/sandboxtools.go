@@ -69,8 +69,6 @@ type Options struct {
 	// JobKeepAliveMax bounds the keep-alive of one job (default 6 h).
 	JobPollEvery    time.Duration
 	JobKeepAliveMax time.Duration
-	// Renders records view_file renders with their source's label (review round 1; nil: not recorded).
-	Renders RenderRecorder
 	// Jobs persists the running background jobs (nil: in memory only, their
 	// keep-alives end with the process).
 	Jobs JobList

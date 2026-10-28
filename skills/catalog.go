@@ -177,9 +177,6 @@ func (r *Registry) addVersion(ctx context.Context, cat store.SkillCatalogStore, 
 	if len(issues) > 0 {
 		return Skill{}, invalidIssues(issues)
 	}
-	if err := checkConfidentiality(pkg); err != nil {
-		return Skill{}, err
-	}
 	v, err := versionOf(pkg, label, sourceType, login)
 	if err != nil {
 		return Skill{}, err
@@ -259,9 +256,6 @@ func (r *Registry) CreateDrafts(ctx context.Context, login, command, key, revisi
 	for _, p := range pkgs {
 		total += p.Package.Size
 		hash.Write([]byte(p.Root + "\x00" + p.SourceType + "\x00" + p.Package.Revision + "\x00"))
-		if err := checkConfidentiality(p.Package); err != nil {
-			return nil, err
-		}
 	}
 	if total > MaxDraftBatchBytes {
 		return nil, invalid("package_too_large: The draft batch exceeds the 64 MiB limit.")
@@ -392,9 +386,6 @@ func (r *Registry) createGlobal(ctx context.Context, login string, pkg *Package,
 		return Skill{}, err
 	}
 	if tags, err = CleanTags(tags); err != nil {
-		return Skill{}, err
-	}
-	if err := checkConfidentiality(pkg); err != nil {
 		return Skill{}, err
 	}
 	name := Slug(pkg.Name)

@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"path"
@@ -15,7 +14,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/GhaziBenDahmane/harness/classification"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/store"
 )
@@ -81,10 +79,7 @@ func normalizeMIME(ct string) string {
 // checkType enforces extension / declared MIME / magic-byte agreement for
 // known types: PDF and OOXML with the ported detection, images and zip by signature.
 func checkType(name, declared string, data []byte) error {
-	if _, err := classification.Detect(name, declared, data); err != nil {
-		if errors.Is(err, classification.ErrSignedDocument) {
-			return ErrSignedDocument
-		}
+	if _, ok := detectFormat(name, declared, data); !ok {
 		return ErrTypeMismatch
 	}
 	ext := strings.ToLower(path.Ext(name))
@@ -196,11 +191,11 @@ func (c content) reader() io.Reader {
 }
 
 // inMemory reports uploads whose checks need the whole content: PDF / Office
-// documents (by name, declared type or content: confidentiality label, format
-// detection) and archives (entries scan), whatever their name (C-05, C-20).
+// documents (by name, declared type or content: format detection) and zip
+// archives, whatever their name.
 func inMemory(name, declared string, head, tail []byte) bool {
-	return classification.RequiresClassification(name, declared, head) ||
-		classification.NeedsInspection(head, tail) || strings.EqualFold(path.Ext(name), ".zip") ||
+	return isDocument(name, declared, head) ||
+		needsWholeContent(head, tail) || strings.EqualFold(path.Ext(name), ".zip") ||
 		normalizeMIME(declared) == "application/zip"
 }
 
@@ -238,22 +233,8 @@ func (s *Service) prepare(name string, in UploadInput) (content, string, error) 
 			head = data
 		}
 	}
-	if c.data != nil && classification.DocumentDisallowed(name, c.data) {
-		// Any label of the content (whatever the name), the most restrictive deciding.
-		return content{}, "", ErrConfidentialityDenied
-	}
 	if err := checkType(name, in.DeclaredMIME, head); err != nil {
 		return content{}, "", err
-	}
-	if c.data != nil && classification.IsArchive(c.data) {
-		// The documents inside a zip get the same confidentiality rule (skill package zip limits).
-		found, err := classification.ScanArchive(c.data, classification.DefaultArchiveLimits)
-		if err != nil {
-			return content{}, "", fmt.Errorf("%w: %v", ErrArchiveUnreadable, err)
-		}
-		if found != "" {
-			return content{}, "", &ConfidentialityError{Path: found}
-		}
 	}
 	if max := s.Blobs.MaxBytes(); max > 0 && c.size > max {
 		return content{}, "", ErrTooLarge

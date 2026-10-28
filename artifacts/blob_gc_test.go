@@ -103,7 +103,7 @@ func newGCRig(t *testing.T, blobs artifacts.Blobs) *gcRig {
 	if blobs == nil {
 		blobs = artifacts.PGBlobs{S: r.st}
 	}
-	r.svc = artifacts.New(r.st, blobs, nil, nil, artifacts.Options{BlobGCGrace: 24 * time.Hour})
+	r.svc = artifacts.New(r.st, blobs, nil, artifacts.Options{BlobGCGrace: 24 * time.Hour})
 	return r
 }
 

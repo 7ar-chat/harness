@@ -26,8 +26,6 @@ import (
 
 	"golang.org/x/text/unicode/norm"
 	"gopkg.in/yaml.v3"
-
-	"github.com/GhaziBenDahmane/harness/classification"
 )
 
 // Limits, copied from Work (ai/cowork/skill_packages.py): the frontmatter name
@@ -79,35 +77,6 @@ func invalidIssues(issues []Issue) error {
 		e.Details = append(e.Details, d)
 	}
 	return e
-}
-
-// ConfidentialityError means a package entry is a document whose
-// confidentiality label Studio refuses (C4, C3-Amundi-Only).
-type ConfidentialityError struct{ Path string }
-
-func (e *ConfidentialityError) Error() string {
-	return "the skill package contains a document too confidential to upload: " + e.Path
-}
-
-// checkConfidentiality applies the upload confidentiality rule to every entry
-// (and to the entries of nested zip archives).
-func checkConfidentiality(pkg *Package) error {
-	for _, f := range pkg.Files {
-		if classification.DocumentDisallowed(f.Path, f.Data) {
-			return &ConfidentialityError{Path: f.Path}
-		}
-		if !classification.IsArchive(f.Data) {
-			continue
-		}
-		found, err := classification.ScanArchive(f.Data, classification.DefaultArchiveLimits)
-		if err != nil {
-			return invalid("archive_unreadable: A ZIP archive inside the package cannot be checked (" + f.Path + ").")
-		}
-		if found != "" {
-			return &ConfidentialityError{Path: f.Path + "/" + found}
-		}
-	}
-	return nil
 }
 
 // File is one package entry.
@@ -783,10 +752,6 @@ func Slug(name string) string {
 
 // ErrBuiltin means the operation is not allowed on built-in skills.
 var ErrBuiltin = errors.New("built-in skills cannot be deleted")
-
-// CheckConfidentiality applies the upload confidentiality rule to a package
-// (ConfidentialityError for a C4 / C3-Amundi-Only document entry).
-func CheckConfidentiality(pkg *Package) error { return checkConfidentiality(pkg) }
 
 // Digest is the hex sha256 of data.
 func Digest(data []byte) string {
