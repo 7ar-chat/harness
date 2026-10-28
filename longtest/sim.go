@@ -106,6 +106,10 @@ type Scenario struct {
 	// NoMask turns tool-output masking off (COMPACTION_KEEP_RECENT_TOOL_RESULTS=0), so
 	// the context grows until compaction has to cut it.
 	NoMask bool
+	// CancelAtStep, when > 0, cancels the run CancelDelay after the model call of that step
+	// (to cut a tool that hangs).
+	CancelAtStep int
+	CancelDelay  time.Duration
 	// NoFinish makes the model never answer: it keeps calling tools (step budget tests).
 	NoFinish bool
 }
@@ -133,7 +137,9 @@ type Outcome struct {
 	Events         []store.Event
 	Steps          int
 	Wall           time.Duration
-	ModelTime      time.Duration
+	// Shutdown is how long h.Run took to return after the run finished.
+	Shutdown  time.Duration
+	ModelTime time.Duration
 	// Heap samples (bytes in use) at each model call when Sample is set.
 	Heap                              []uint64
 	HeapBefore, HeapAfter             uint64
@@ -226,12 +232,13 @@ func Run(tb testing.TB, sc Scenario) *Outcome {
 
 	out := &Outcome{Dir: ws}
 	var (
-		mu       sync.Mutex
-		agentN   int
-		runIDc   = make(chan string, 1)
-		runID    string
-		hv       *harness.Harness
-		modelDur time.Duration
+		mu        sync.Mutex
+		agentN    int
+		runIDc    = make(chan string, 1)
+		cancelRun = make(chan string, 1)
+		runID     string
+		hv        *harness.Harness
+		modelDur  time.Duration
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), sc.Timeout)
 	defer cancel()
@@ -275,7 +282,10 @@ func Run(tb testing.TB, sc Scenario) *Outcome {
 		}
 		usage := compaction.EstimateMessages(call.Messages) + compaction.EstimateTools(call.Tools)
 		var t llmtest.Turn
+		forbidden := call.ToolChoice != nil && *call.ToolChoice == schema.ToolChoiceForbidden
 		switch {
+		case forbidden: // the last step, or a forced answer: tools are not allowed
+			t = llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.Finish(&schema.Message{Role: schema.Assistant, Content: "Out of budget; partial work done."}, "stop"), usage, 20)}}
 		case n == 1:
 			t = llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.Finish(llmtest.ToolCall(0, "c1", "update_plan",
 				`{"items":[{"id":"1","title":"`+PlanTitle+`","status":"in_progress"},{"id":"2","title":"Verify","status":"pending"}]}`), "tool_calls"), usage, 20)}}
@@ -294,6 +304,17 @@ func Run(tb testing.TB, sc Scenario) *Outcome {
 		}
 		if sc.Wrap != nil {
 			t = sc.Wrap(n, t)
+		}
+		if t.Err != nil || t.FailAfter != nil {
+			mu.Lock()
+			agentN-- // a failed attempt does not consume a scripted step: the retry plays it again
+			mu.Unlock()
+		}
+		if sc.CancelAtStep == n {
+			go func() {
+				time.Sleep(sc.CancelDelay)
+				_ = hv.Cancel(context.Background(), "sim", <-cancelRun)
+			}()
 		}
 		mu.Lock()
 		out.Replies = append(out.Replies, t)
@@ -325,6 +346,7 @@ func Run(tb testing.TB, sc Scenario) *Outcome {
 	}
 	out.RunID = run.ID
 	runIDc <- run.ID
+	cancelRun <- run.ID
 	out.Status = "no terminal event"
 	for ev := range h.Events(ctx, run.ID, 0) {
 		out.Events = append(out.Events, ev)
@@ -359,8 +381,10 @@ func Run(tb testing.TB, sc Scenario) *Outcome {
 	mu.Lock()
 	out.ModelTime = modelDur
 	mu.Unlock()
+	tdStart := time.Now()
 	cancel()
 	<-done
+	out.Shutdown = time.Since(tdStart)
 
 	runtime.GC()
 	runtime.ReadMemStats(&ms)
