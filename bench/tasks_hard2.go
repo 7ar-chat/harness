@@ -1170,7 +1170,7 @@ var nodeCSV = Task{
 	Prompt: "csv.js parses CSV with a naive split. Make it handle RFC 4180 input and add stringify:\n" +
 		"- parse(text) returns an array of rows (arrays of strings). Quoted fields may contain commas, doubled quotes (\"\" is one quote) and line breaks. Rows end with LF or CRLF; a final line break does not add an empty row; completely empty lines are skipped; empty fields are kept (\"a,,b\" is three fields). An unterminated quote throws an Error whose message contains \"unterminated\".\n" +
 		"- parseObjects(text) uses the first row as the header; a missing cell is the empty string.\n" +
-		"- stringify(rows) writes rows joined by \"\\n\" with a final \"\\n\", quoting a field only when it contains a comma, a quote, CR or LF (quotes doubled), so parse(stringify(rows)) gives rows back.\n" +
+		"- stringify(rows) writes rows joined by \"\\n\" with a final \"\\n\", quoting a field only when it contains a comma, a quote, CR or LF (quotes doubled), so parse(stringify(rows)) gives rows back. stringify([]) is the empty string.\n" +
 		"Run the tests with: node --test test/" + noAsking,
 	Needs: []string{"node"},
 	Files: map[string]string{

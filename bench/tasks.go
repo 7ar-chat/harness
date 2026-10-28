@@ -1,11 +1,18 @@
 package bench
 
-import "sort"
+import (
+	"regexp"
+	"sort"
+	"strings"
+)
 
 // Builtin returns the built-in tasks, by name.
 func Builtin() []Task {
 	ts := append([]Task{goFixBugs, goAddFeature, pyFixBugs, goRename, codeQuestion, agentsMDCheck}, hardTasks()...)
 	ts = append(ts, LongTasks()...)
+	for i := range ts {
+		ts[i] = distinctHiddenTests(ts[i])
+	}
 	sort.Slice(ts, func(i, j int) bool { return ts[i].Name < ts[j].Name })
 	return ts
 }
@@ -575,4 +582,31 @@ func Clamp(v, lo, hi int) int {
 `,
 		"mathx/mathx_test.go": "package mathx\n\nimport \"testing\"\n\nfunc TestAbs(t *testing.T) {\n\tif Abs(-3) != 3 || Abs(3) != 3 {\n\t\tt.Fatal(\"Abs\")\n\t}\n}\n\nfunc TestClamp(t *testing.T) {\n\tfor _, c := range []struct{ v, lo, hi, want int }{{5, 0, 10, 5}, {-3, 0, 10, 0}, {42, 0, 10, 10}} {\n\t\tif got := Clamp(c.v, c.lo, c.hi); got != c.want {\n\t\t\tt.Errorf(\"Clamp(%d, %d, %d) = %d, want %d\", c.v, c.lo, c.hi, got, c.want)\n\t\t}\n\t}\n}\n",
 	},
+}
+
+var goTestFunc = regexp.MustCompile(`(?m)^func (Test\w+)\(`)
+
+// distinctHiddenTests renames the test functions that only the hidden test files have (their name does
+// not occur in the visible file of the same path) with a "Hidden" suffix, so a test the agent writes
+// under the same name does not break the build with "redeclared in this block".
+func distinctHiddenTests(t Task) Task {
+	if len(t.Hidden) == 0 {
+		return t
+	}
+	hidden := make(map[string]string, len(t.Hidden))
+	for path, content := range t.Hidden {
+		if strings.HasSuffix(path, "_test.go") {
+			visible := t.Files[path]
+			content = goTestFunc.ReplaceAllStringFunc(content, func(m string) string {
+				name := goTestFunc.FindStringSubmatch(m)[1]
+				if strings.Contains(visible, "func "+name+"(") {
+					return m
+				}
+				return "func " + name + "Hidden("
+			})
+		}
+		hidden[path] = content
+	}
+	t.Hidden = hidden
+	return t
 }
