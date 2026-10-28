@@ -163,14 +163,15 @@ func (l *MemoryLog) Replay(ctx context.Context, runID string, afterSeq int64) <-
 				return false
 			}
 		}
+		r := l.run(runID) // may not have started yet: wait for its first event
 		l.mu.Lock()
-		r := l.runs[runID]
+		inMemory := len(r.events) > 0
 		l.mu.Unlock()
-		if r == nil && l.st != nil { // a run of a previous process
+		if !inMemory && l.st != nil { // a run of a previous process
 			for {
 				evs, err := l.st.ListEvents(ctx, runID, cursor, 500)
 				if err != nil || len(evs) == 0 {
-					return
+					break
 				}
 				for _, e := range evs {
 					if !send(e) {
@@ -178,9 +179,6 @@ func (l *MemoryLog) Replay(ctx context.Context, runID string, afterSeq int64) <-
 					}
 				}
 			}
-		}
-		if r == nil {
-			return
 		}
 		for {
 			l.mu.Lock()

@@ -144,7 +144,7 @@ type Config struct {
 	// become global skills. Enabled when a source path, a token or a
 	// username + password is set; the runtime syncs every interval (one
 	// replica, Redis lock) and `work skills-sync` syncs once.
-	SkillsMarketplaceRepoURL      string `env:"WORK_SKILLS_MARKETPLACE_REPO_URL" envDefault:"https://git.intramundi.com/ai-marketplace/vibe-toolbox-market.git"`
+	SkillsMarketplaceRepoURL      string `env:"WORK_SKILLS_MARKETPLACE_REPO_URL" envDefault:""`
 	SkillsMarketplaceBranch       string `env:"WORK_SKILLS_MARKETPLACE_BRANCH" envDefault:"main"`
 	SkillsMarketplaceToken        string `env:"WORK_SKILLS_MARKETPLACE_TOKEN"`
 	SkillsMarketplaceUsername     string `env:"WORK_SKILLS_MARKETPLACE_USERNAME"`

@@ -1,21 +1,18 @@
-# OpenSandbox lifecycle server — LOCAL docker-compose configuration (profile `work`).
+# OpenSandbox lifecycle server — local Docker runtime configuration.
 # Reference: https://github.com/alibaba/OpenSandbox/blob/main/server/configuration.md
 #
-# Isolation model (verified locally, see compose `opensandbox` / `opensandbox-relay`):
+# Isolation model:
 #   - The Docker runtime ALWAYS publishes execd (44772) and 8080 of every sandbox on a host
 #     port (no option to disable it), and the egress sidecar needs network_mode = "bridge".
 #     So ports are published on 127.0.0.1 only, and the server runs in the host network
-#     namespace (compose `network_mode: host`) to reach them. Sandboxes cannot reach
-#     host-loopback ports, nor anything on the compose network.
-#   - The server listens on 127.0.0.1:18090; `opensandbox-relay` exposes it to the compose
-#     containers on the default-bridge gateway (172.17.0.1:8090 = host.docker.internal).
-#     work-api / work-runtime use OPENSANDBOX_USE_SERVER_PROXY=true, so all execd traffic
-#     goes through this server.
+#     namespace to reach them. Sandboxes cannot reach host-loopback ports.
+#   - Run the harness with OPENSANDBOX_USE_SERVER_PROXY=true when it is not on the same
+#     host network: all execd traffic then goes through this server.
 #   - Sandbox-to-sandbox / sandbox-to-host isolation comes from the per-sandbox network policy
-#     (egress sidecar, mode "dns+nft": default deny at DNS *and* IP level). work-runtime always
+#     (egress sidecar, mode "dns+nft": default deny at DNS *and* IP level). The harness always
 #     sends one (SANDBOX_EGRESS_ALLOWLIST). A sandbox created WITHOUT a policy sits on the
 #     default bridge with inter-container traffic allowed: it can reach other sandboxes' execd.
-# The API key is NOT set here: it comes from OPENSANDBOX_SERVER_API_KEY (compose env).
+# The API key is NOT set here: it comes from OPENSANDBOX_SERVER_API_KEY.
 
 [server]
 # Loopback bind: the server-side proxy then targets [docker].host_ip (127.0.0.1) host ports.

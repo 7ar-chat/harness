@@ -1,25 +1,31 @@
 # syntax=docker/dockerfile:1
 # =============================================================================
-# Work Chat sandbox image (OPENSANDBOX_IMAGE) — pre-baked so a new sandbox does
-# no package install at start. OpenSandbox injects execd at runtime; this image
-# only provides the toolchain the agent's `execute_command` relies on:
+# Sandbox image (OPENSANDBOX_IMAGE), pre-baked so a new sandbox does no package
+# install at start. OpenSandbox injects execd at runtime; this image only
+# provides the toolchain the agent's `execute_command` relies on:
 #   - Python 3.11: python-pptx, openpyxl, xlsxwriter, python-docx, pypdf,
 #     pdfplumber, reportlab, markitdown, pandas, numpy, matplotlib, seaborn,
 #     plotly, Pillow, lxml, beautifulsoup4, requests
 #   - Node 22 + global pptxgenjs, docx, sharp (resolved through NODE_PATH)
 #   - LibreOffice (soffice headless convert / recalc), poppler (pdftoppm),
-#     pandoc, qpdf, ffmpeg, ripgrep (search_files), common fonts (+ Calibri/Cambria metric clones), git, curl,
-#     file, unzip, column
-# Dropped vs. the upstream tusko image: Playwright + Chromium (~500 MB and a
-# CDN download that does not go through Artifactory).
+#     pandoc, qpdf, ffmpeg, ripgrep (search_files), common fonts (+ Calibri/Cambria
+#     metric clones), git, curl, file, unzip, column
 #
-# Build context is ./work (for the corporate CA certificates):
-#   docker build -f work/sandbox/Dockerfile -t studio/work-sandbox:local work
-# or: docker compose --profile work build work-sandbox-image
+# Build (from this directory):
+#   docker build -t harness-sandbox:local .
+#
+# Behind a TLS-intercepting proxy or with a private mirror, without editing this file:
+#   - drop the extra CA certificates (*.crt) into ./certs/
+#   - --build-arg PIP_INDEX_URL=… --build-arg NPM_REGISTRY=…
+#   - --build-arg NODE_IMAGE=… --build-arg PYTHON_IMAGE=… for mirrored base images
 # =============================================================================
-FROM registry-docker.intramundi.com/amundi/nodejs:22.21.1-dev AS node
+ARG NODE_IMAGE=node:22-bookworm
+ARG PYTHON_IMAGE=python:3.11-bookworm
+FROM ${NODE_IMAGE} AS node
 
-FROM registry-docker.intramundi.com/amundi/python:3.11
+FROM ${PYTHON_IMAGE}
+ARG PIP_INDEX_URL=
+ARG NPM_REGISTRY=
 
 USER root
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -30,12 +36,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
     NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 
-# Trust corporate proxy + Amundi CA certificates
-COPY ca-certificates.crt /usr/local/share/ca-certificates/corporate.crt
-COPY ca-credit-agricole-server.crt /usr/local/share/ca-certificates/ca-credit-agricole-server.crt
-COPY ca-credit-agricole-root.crt /usr/local/share/ca-certificates/ca-credit-agricole-root.crt
-COPY bluecoat-ssl-sg1-global-g3.crt /usr/local/share/ca-certificates/bluecoat-ssl-sg1-global-g3.crt
-COPY bluecoat-cloud-services-ca-g3.crt /usr/local/share/ca-certificates/bluecoat-cloud-services-ca-g3.crt
+# Extra CA certificates (corporate proxy, private registry): any *.crt in ./certs/
+COPY certs/ /usr/local/share/ca-certificates/extra/
 
 # Document tooling: LibreOffice (headless), PDF tools, pandoc, ffmpeg, fonts, and the shell tools
 # the agent reaches for: file (type / encoding checks), unzip, column (bsdextrautils).
@@ -59,17 +61,15 @@ COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
-# Global Node packages for the docx / pptx scripts. The Artifactory npm config
-# of the corporate node image is mounted for this step only, so its credentials
-# are not baked into the sandbox image.
-RUN --mount=type=bind,from=node,source=/root/.npmrc,target=/root/.npmrc \
-    npm install -g --no-fund --no-audit pptxgenjs docx sharp \
-    && npm cache clean --force
+# Global Node packages for the docx / pptx scripts.
+RUN if [ -n "$NPM_REGISTRY" ]; then npm config set registry "$NPM_REGISTRY"; fi \
+    && npm install -g --no-fund --no-audit pptxgenjs docx sharp \
+    && npm cache clean --force \
+    && rm -f /root/.npmrc
 
 # Python office automation, document analysis and data libraries
-# (index from the base image's Artifactory pip.conf).
 RUN pip install --upgrade pip \
-    && pip install \
+    && pip install ${PIP_INDEX_URL:+--index-url "$PIP_INDEX_URL"} \
         python-pptx openpyxl xlsxwriter python-docx \
         pypdf pdfplumber reportlab \
         "markitdown[pptx,docx,xlsx,pdf]" \

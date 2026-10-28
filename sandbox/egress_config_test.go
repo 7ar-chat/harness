@@ -77,7 +77,7 @@ func TestSandboxCreatedFromConfigCarriesTheAllowlist(t *testing.T) {
 	t.Setenv("DJANGO_PRODUCTION", "1")
 	t.Setenv("OPENSANDBOX_URL", srv.URL)
 	t.Setenv("OPENSANDBOX_USE_SERVER_PROXY", "true")
-	t.Setenv("SANDBOX_EGRESS_ALLOWLIST", "pypi.org,artifactory.intramundi.com")
+	t.Setenv("SANDBOX_EGRESS_ALLOWLIST", "pypi.org,mirror.example.com")
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -96,7 +96,7 @@ func TestSandboxCreatedFromConfigCarriesTheAllowlist(t *testing.T) {
 	if err != nil || policy["defaultAction"] != "deny" || len(rules) != 2 {
 		t.Fatalf("err %v policy %v", err, created()["networkPolicy"])
 	}
-	if r, _ := rules[1].(map[string]any); r["action"] != "allow" || r["target"] != "artifactory.intramundi.com" {
+	if r, _ := rules[1].(map[string]any); r["action"] != "allow" || r["target"] != "mirror.example.com" {
 		t.Fatalf("rules %v", rules)
 	}
 }

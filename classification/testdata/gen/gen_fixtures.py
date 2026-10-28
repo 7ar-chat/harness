@@ -8,7 +8,7 @@ property-for-property parity.
 Run from the repository root (needs the ai image dependencies):
 
     docker run --rm -v "$PWD:/src" -w /src --entrypoint python \
-        registry-docker-poc.intramundi.com/alto/studio/ai/api:<tag> \
+        <studio-api-image>:<tag> \
         work/internal/classification/testdata/gen/gen_fixtures.py
 
 Outputs (work/internal/classification/testdata/):

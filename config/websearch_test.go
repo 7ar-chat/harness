@@ -55,7 +55,7 @@ func TestWebSearchStatusRefusesUnsafeOrIncompleteSetups(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Arrange
-			t.Setenv("WEB_SEARCH_MCP_URL", "https://dev-mcp.intramundi.com/mcp/websearch")
+			t.Setenv("WEB_SEARCH_MCP_URL", "https://mcp.example.com/mcp/websearch")
 			t.Setenv("SANDBOX_EGRESS_UNRESTRICTED", "true")
 			for k, v := range tc.env { // may override WEB_SEARCH_MCP_URL
 				t.Setenv(k, v)
