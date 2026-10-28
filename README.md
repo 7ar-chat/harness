@@ -45,7 +45,8 @@ h.Cancel(ctx, "alice", run.ID)
 
 * **Web**: `httpserver.New(h, httpserver.Options{User: …})` serves threads/runs as JSON and the
   run's events as SSE (`id` = seq, so `EventSource` reconnects resume without loss).
-* **TUI**: `cmd/harness` is a 150-line terminal client; render the AG-UI events your way.
+* **TUI**: `cmd/harness` is a Bubble Tea terminal client with a print mode (see
+  [Terminal UI](#terminal-ui)); package `tui` has the model and renderers to embed.
 * **Single process** (default): store, event log and queue live in memory — nothing to run
   except the sandbox server. **Multi process**: pass `Options.Store` (`store/pgstore` +
   `store/pgstore/migrate`) and `Options.Redis`; replicas then share runs, logs, sandbox locks
@@ -54,6 +55,38 @@ h.Cancel(ctx, "alice", run.ID)
   `sandbox.Instance` (Exec, ReadFile, WriteFile, MkdirAll, List, Stat, Healthy…).
   `sandbox/sandboxtest` is an in-memory fake for tests.
 * **Your own tools**: `Options.Tools` takes `tools.Provider`s (eino tools, per-run).
+
+## Terminal UI
+
+`cmd/harness` is a terminal client (Bubble Tea) over one in-process harness and one thread.
+
+```
+harness -model gpt-5                  # interactive UI (stdin is a terminal)
+harness -p "summarise main.go"        # print mode: answer on stdout, tool activity on stderr
+git diff | harness -p "review this"   # print mode, the prompt is -p plus stdin
+echo "what is 2+2" | harness -json    # print mode, AG-UI events as JSON lines on stdout
+```
+
+Flags: `-model` (default `LLM_DEFAULT_MODEL`), `-user`, `-p`, `-json`, `-auto` (UI: do not ask for
+approval of risky tool calls). Print mode exits 0 on success, 1 when the run failed or was
+cancelled, 2 when it ended waiting for an answer or approval (the question goes to stderr).
+
+| Key | Action |
+|---|---|
+| `enter` | send the message; while a run is active, **steer** it |
+| `alt+enter`, `ctrl+j` | new line in the input |
+| `esc`, `ctrl+c` | cancel the active run; `ctrl+c` again (or twice when idle) quits |
+| `ctrl+o` | expand / collapse tool calls (args, longer results, diffs) |
+| `pgup`/`pgdn`, `ctrl+u`/`ctrl+d`, mouse wheel | scroll the transcript |
+| `y` / `a` / `n` (or `esc`) | tool approval: approve once / approve for this run / deny |
+| `1`-`9`, or text + `enter` | answer an `ask_user` question |
+
+The status line shows the model, state, step count, tokens in/out/cached (with the cache share)
+and the run's elapsed time. `edit_file` calls show a diff of `oldText`/`newText`. The UI is a pure
+`tui.Model` fed by `store.Event`s through a `tui.Backend` (`tui.HarnessBackend` for a
+`harness.Harness`), with one render function per event type and golden tests in `tui/testdata`
+(`go test ./tui -update` rewrites them). The facade has no call to answer an interrupt, so
+`HarnessBackend.Resume` creates the resume run through `h.Store` and `h.Queue`.
 
 ## Sandbox definition
 
