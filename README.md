@@ -82,6 +82,14 @@ LLM_PROVIDER=openai LLM_BASE_URL=https://opencode.ai/zen/go/v1 LLM_API_KEY=… \
 LLM_SESSION_HEADER=x-opencode-session LLM_MODELS=deepseek-v4.1-flash LLM_DEFAULT_MODEL=deepseek-v4.1-flash
 ```
 
+## CLI sessions
+
+`harness` saves each conversation under `LOCAL_STATE_DIR` (default `~/.local/state/harness`):
+`harness -continue` resumes the latest, `-resume <id>` a given one, `-sessions` lists them, `-ephemeral`
+keeps nothing. In a git repository the coding profile snapshots the tree before every run;
+`harness -undo` restores the snapshot (the replaced state is kept under `refs/harness/backups/`).
+`harness.Resume` is the facade call that answers a tool approval or an `ask_user` question.
+
 ## Benchmark
 
 `bench/` runs coding tasks through the real harness (local sandbox, coding profile) and reports pass/fail,

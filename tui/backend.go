@@ -2,10 +2,6 @@ package tui
 
 import (
 	"context"
-	"fmt"
-	"strings"
-
-	"github.com/google/uuid"
 
 	"github.com/GhaziBenDahmane/harness"
 	"github.com/GhaziBenDahmane/harness/store"
@@ -50,12 +46,6 @@ type Backend interface {
 }
 
 // HarnessBackend runs one thread of a harness.Harness.
-//
-// Gap: harness.Harness has Send/Events/Cancel/Steer but no call to answer an
-// interrupt (tool approval or ask_user). Resume therefore creates the run
-// through h.Store.CreateRun with store.NewRun.Resume and enqueues it on
-// h.Queue, which is what Send does internally. A harness.Resume(ctx, user,
-// threadID, ResumeRequest) facade method would replace that.
 type HarnessBackend struct {
 	H        *harness.Harness
 	User     string
@@ -98,33 +88,11 @@ func (b *HarnessBackend) Cancel(ctx context.Context, runID string) error {
 
 // Resume implements Backend.
 func (b *HarnessBackend) Resume(ctx context.Context, r ResumeRequest) (string, error) {
-	res := &store.Resume{InterruptID: r.InterruptID}
-	if r.Reason == store.ReasonToolApproval {
-		res.Decision = r.Decision
-		if r.Decision == DecisionRespond {
-			res.Response = store.ApprovalResponse{ResponseText: r.Text}
-		}
-		if r.Decision == DecisionApprove && r.Always {
-			res.Scope = store.ApprovalScopeRun
-		}
-	} else {
-		if strings.TrimSpace(r.Text) == "" {
-			return "", fmt.Errorf("an answer is required")
-		}
-		res.Content = r.Text
-	}
-	mode := ""
-	if b.Interactive {
-		mode = store.InteractionInteractive
-	}
-	run, _, err := b.H.Store.CreateRun(ctx, store.NewRun{
-		RunID: uuid.NewString(), ThreadID: b.ThreadID, UserLogin: b.User, Model: b.ModelID,
-		Resume: res, InteractionMode: mode, ReasoningEffort: b.ReasoningEffort,
+	run, err := b.H.Resume(ctx, b.User, b.ThreadID, harness.ResumeRequest{
+		InterruptID: r.InterruptID, Reason: r.Reason, Decision: r.Decision, Always: r.Always, Text: r.Text,
+		Model: b.ModelID, Interactive: b.Interactive, ReasoningEffort: b.ReasoningEffort,
 	})
 	if err != nil {
-		return "", err
-	}
-	if err := b.H.Queue.Enqueue(ctx, run.ID); err != nil {
 		return "", err
 	}
 	return run.ID, nil
