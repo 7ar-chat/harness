@@ -258,7 +258,6 @@ type Store interface {
 	SkillStore
 	HarnessStore
 	ApprovalStore
-	IdeaStore
 	MemoryStore
 	NotificationStore
 }

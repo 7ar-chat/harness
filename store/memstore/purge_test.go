@@ -13,7 +13,7 @@ import (
 )
 
 func TestPurgeRemovesWhatThePostgresCascadeRemoves(t *testing.T) {
-	// Purging a deleted thread drops its approvals and keeps its idea usage without the thread (ON DELETE SET NULL), like Postgres.
+	// Purging a deleted thread drops its approvals, like Postgres.
 	// Arrange
 	ctx := context.Background()
 	s := memstore.New()
@@ -27,10 +27,6 @@ func TestPurgeRemovesWhatThePostgresCascadeRemoves(t *testing.T) {
 	if err := s.CreateApproval(ctx, a); err != nil {
 		t.Fatal(err)
 	}
-	usage, err := s.RecordIdeaUsage(ctx, store.IdeaUsage{UserLogin: "alice", ThreadID: th.ID, IdeaID: "idea-1", Action: store.IdeaSubmitted, Surface: "composer"})
-	if err != nil {
-		t.Fatal(err)
-	}
 	_, _ = s.DeleteThread(ctx, "alice", th.ID)
 	s.SetThreadDeletedAt(th.ID, time.Now().Add(-48*time.Hour))
 
@@ -39,11 +35,7 @@ func TestPurgeRemovesWhatThePostgresCascadeRemoves(t *testing.T) {
 
 	// Assert
 	_, approvalErr := s.GetApproval(ctx, a.ID)
-	list, _ := s.ListIdeaUsage(ctx, "alice")
 	if err != nil || n != 1 || !errors.Is(approvalErr, store.ErrNotFound) {
 		t.Fatalf("purged %d %v approval %v", n, err, approvalErr)
-	}
-	if len(list) != 1 || list[0].ID != usage.ID || list[0].ThreadID != "" {
-		t.Fatalf("idea usage %+v", list)
 	}
 }

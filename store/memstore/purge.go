@@ -8,7 +8,7 @@ import (
 
 // PurgeDeletedThreads implements store.ArtifactStore: like the Postgres
 // cascade, everything of the thread goes — runs and their
-// approvals — while idea usage keeps its rows without the thread (ON DELETE SET NULL); memories are per user and stay.
+// approvals — memories are per user and stay.
 func (s *Store) PurgeDeletedThreads(_ context.Context, olderThan time.Duration, limit int) (int, error) {
 	n, _, _ := s.purgeThreads(olderThan, limit)
 	return n, nil
@@ -48,11 +48,6 @@ func (s *Store) purgeThreads(olderThan time.Duration, limit int) (int, map[strin
 	for id, a := range s.approvals {
 		if purge[a.ThreadID] {
 			delete(s.approvals, id)
-		}
-	}
-	for _, u := range s.ideaUsage {
-		if purge[u.ThreadID] {
-			u.ThreadID = ""
 		}
 	}
 	compactions := s.h.compactions[:0]

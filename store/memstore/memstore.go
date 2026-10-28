@@ -35,7 +35,6 @@ type Store struct {
 	extrasOnce sync.Once
 	ext        *extras // artifacts, blobs, skills (artifacts.go)
 
-	ideaUsage []*store.IdeaUsage // ideas.go
 }
 
 type thread struct {
