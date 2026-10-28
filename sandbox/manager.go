@@ -9,7 +9,6 @@ import (
 	"io"
 	"log/slog"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -114,7 +113,7 @@ type entry struct {
 type DefaultManager struct {
 	backend Backend
 	store   Store
-	rdb     redis.UniversalClient
+	coord   Coordinator
 	opts    ManagerOptions
 
 	mu    sync.Mutex
@@ -123,6 +122,18 @@ type DefaultManager struct {
 
 // NewManager builds a manager. A nil backend yields a disabled manager.
 func NewManager(backend Backend, st Store, rdb redis.UniversalClient, opts ManagerOptions) *DefaultManager {
+	var coord Coordinator
+	if rdb != nil {
+		coord = RedisCoordinator{RDB: rdb}
+	}
+	return NewManagerWith(backend, st, coord, opts)
+}
+
+// NewManagerWith is NewManager over a Coordinator (nil: in-process state).
+func NewManagerWith(backend Backend, st Store, coord Coordinator, opts ManagerOptions) *DefaultManager {
+	if coord == nil {
+		coord = NewLocalCoordinator()
+	}
 	if opts.RenewEvery <= 0 {
 		opts.RenewEvery = time.Minute
 	}
@@ -150,7 +161,7 @@ func NewManager(backend Backend, st Store, rdb redis.UniversalClient, opts Manag
 	if opts.HealthTimeout <= 0 {
 		opts.HealthTimeout = 10 * time.Second
 	}
-	return &DefaultManager{backend: backend, store: st, rdb: rdb, opts: opts, cache: map[string]*entry{}}
+	return &DefaultManager{backend: backend, store: st, coord: coord, opts: opts, cache: map[string]*entry{}}
 }
 
 var _ Manager = (*DefaultManager)(nil)
@@ -237,7 +248,7 @@ func (m *DefaultManager) connect(ctx context.Context, threadID, id string) (Inst
 			m.mu.Unlock()
 			if !fresh {
 				// A healthy check on any replica ends the unhealthy streak (C-15).
-				_ = m.rdb.Del(context.WithoutCancel(ctx), unhealthyKey(threadID, id)).Err()
+				_, _ = m.coord.Del(context.WithoutCancel(ctx), unhealthyKey(threadID, id))
 			}
 			m.renew(ctx, e)
 			return e.inst, true, nil
@@ -258,7 +269,7 @@ func (m *DefaultManager) connect(ctx context.Context, threadID, id string) (Inst
 		if m.unhealthyTooLong(ctx, threadID, id) {
 			slog.Warn("sandbox unhealthy for too long, recreating it", "thread_id", threadID, "sandbox_id", id)
 			// Whoever creates the replacement (maybe another replica, maybe later) tells the model.
-			if err := m.rdb.Set(context.WithoutCancel(ctx), recreatedKey(threadID), "1", 24*time.Hour).Err(); err != nil {
+			if err := m.coord.Set(context.WithoutCancel(ctx), recreatedKey(threadID), "1", 24*time.Hour); err != nil {
 				slog.Warn("sandbox: storing recreation marker failed", "thread_id", threadID, "error", err)
 			}
 			if err := m.forget(ctx, threadID, id); err != nil {
@@ -268,7 +279,7 @@ func (m *DefaultManager) connect(ctx context.Context, threadID, id string) (Inst
 		}
 		return nil, false, ErrUnavailable
 	}
-	_ = m.rdb.Del(context.WithoutCancel(ctx), unhealthyKey(threadID, id)).Err()
+	_, _ = m.coord.Del(context.WithoutCancel(ctx), unhealthyKey(threadID, id))
 	e := m.put(threadID, inst, time.Time{})
 	m.renew(ctx, e)
 	return inst, true, nil
@@ -278,24 +289,14 @@ func recreatedKey(threadID string) string { return "work:sbx:recreated:" + threa
 
 func unhealthyKey(threadID, id string) string { return "work:sbx:unhealthy:" + threadID + ":" + id }
 
-var unhealthyScript = redis.NewScript(`
-redis.call('HSETNX', KEYS[1], 'first', ARGV[1])
-local checks = redis.call('HINCRBY', KEYS[1], 'checks', 1)
-redis.call('EXPIRE', KEYS[1], ARGV[2])
-return {redis.call('HGET', KEYS[1], 'first'), checks}`)
-
 // unhealthyTooLong records a failed health check (shared by all replicas) and
 // reports whether the streak lasts longer than UnhealthyRecreate with ≥ 3 checks.
 func (m *DefaultManager) unhealthyTooLong(ctx context.Context, threadID, id string) bool {
-	ttl := int(max(2*m.opts.UnhealthyRecreate, time.Hour).Seconds())
-	res, err := unhealthyScript.Run(context.WithoutCancel(ctx), m.rdb, []string{unhealthyKey(threadID, id)},
-		time.Now().UnixMilli(), ttl).Slice()
-	if err != nil || len(res) != 2 {
+	ttl := max(2*m.opts.UnhealthyRecreate, time.Hour)
+	first, checks, err := m.coord.Unhealthy(context.WithoutCancel(ctx), unhealthyKey(threadID, id), time.Now().UnixMilli(), ttl)
+	if err != nil || checks == 0 {
 		return false
 	}
-	firstStr, _ := res[0].(string)
-	first, _ := strconv.ParseInt(firstStr, 10, 64)
-	checks, _ := res[1].(int64)
 	return checks >= 3 && time.Since(time.UnixMilli(first)) >= m.opts.UnhealthyRecreate
 }
 
@@ -340,19 +341,7 @@ func (m *DefaultManager) Get(ctx context.Context, threadID string) (Sandbox, err
 	return m.wrap(inst), nil
 }
 
-var unlockScript = redis.NewScript(`
-if redis.call('GET', KEYS[1]) == ARGV[1] then
-  return redis.call('DEL', KEYS[1])
-end
-return 0`)
-
 func lockKey(threadID string) string { return "work:sbx:lock:" + threadID }
-
-var renewLockScript = redis.NewScript(`
-if redis.call('GET', KEYS[1]) == ARGV[1] then
-  return redis.call('PEXPIRE', KEYS[1], ARGV[2])
-end
-return 0`)
 
 // lock takes a Redis lock (SET NX PX LockTTL), polling until LockWait, and
 // renews it every LockTTL/3 until released (a creation slower than the TTL
@@ -362,7 +351,7 @@ func (m *DefaultManager) lock(ctx context.Context, key string, shortcut func() (
 	token := uuid.NewString()
 	deadline := time.Now().Add(m.opts.LockWait)
 	for {
-		ok, err := m.rdb.SetNX(ctx, key, token, m.opts.LockTTL).Result()
+		ok, err := m.coord.SetNX(ctx, key, token, m.opts.LockTTL)
 		if err != nil {
 			return nil, nil, fmt.Errorf("sandbox lock: %w", err)
 		}
@@ -394,9 +383,9 @@ func (m *DefaultManager) lock(ctx context.Context, key string, shortcut func() (
 				return
 			case <-t.C:
 				rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-				n, err := renewLockScript.Run(rctx, m.rdb, []string{key}, token, m.opts.LockTTL.Milliseconds()).Int()
+				held, err := m.coord.Renew(rctx, key, token, m.opts.LockTTL)
 				cancel()
-				if err == nil && n == 0 {
+				if err == nil && !held {
 					slog.Warn("sandbox: creation lock lost", "key", key)
 					return // the compare-and-set on the thread record still decides
 				}
@@ -408,7 +397,7 @@ func (m *DefaultManager) lock(ctx context.Context, key string, shortcut func() (
 		<-stopped
 		uctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		_ = unlockScript.Run(uctx, m.rdb, []string{key}, token).Err()
+		_ = m.coord.Unlock(uctx, key, token)
 	}, nil, nil
 }
 
@@ -498,7 +487,7 @@ func (m *DefaultManager) Acquire(ctx context.Context, threadID, login string) (S
 	if err := PrepareWorkspace(ctx, created); err != nil {
 		slog.Warn("sandbox: creating the workspace layout failed", "sandbox_id", created.ID(), "error", err)
 	}
-	if n, err := m.rdb.Del(context.WithoutCancel(ctx), recreatedKey(threadID)).Result(); err == nil && n > 0 {
+	if existed, err := m.coord.Del(context.WithoutCancel(ctx), recreatedKey(threadID)); err == nil && existed {
 		wasRecreated = true // consumed: only this creation carries the notice
 	}
 	slog.Info("sandbox created", "thread_id", threadID, "sandbox_id", created.ID(), "replaces_unhealthy", wasRecreated)
@@ -511,7 +500,7 @@ func (m *DefaultManager) Acquire(ctx context.Context, threadID, login string) (S
 	if err != nil || !recorded {
 		m.killAsync(created.ID())
 		if wasRecreated {
-			_ = m.rdb.Set(context.WithoutCancel(ctx), recreatedKey(threadID), "1", 24*time.Hour).Err()
+			_ = m.coord.Set(context.WithoutCancel(ctx), recreatedKey(threadID), "1", 24*time.Hour)
 		}
 		if err != nil {
 			return nil, err
@@ -623,17 +612,12 @@ func Quieted(ctx context.Context) bool { v, _ := ctx.Value(quietKey{}).(bool); r
 
 func noticeKey(threadID string) string { return "work:sbx:notice:" + threadID }
 
-var takeNoticeScript = redis.NewScript(`
-local v = redis.call('GET', KEYS[1])
-if v then redis.call('DEL', KEYS[1]) end
-return v`)
-
 func (m *DefaultManager) keepNotice(ctx context.Context, threadID, notice string, wasRecreated bool) {
 	flag := "0"
 	if wasRecreated {
 		flag = "1"
 	}
-	if err := m.rdb.Set(context.WithoutCancel(ctx), noticeKey(threadID), flag+"|"+notice, 24*time.Hour).Err(); err != nil {
+	if err := m.coord.Set(context.WithoutCancel(ctx), noticeKey(threadID), flag+"|"+notice, 24*time.Hour); err != nil {
 		slog.Warn("sandbox: keeping the restore notice failed", "thread_id", threadID, "error", err)
 	}
 }
@@ -645,7 +629,7 @@ func (m *DefaultManager) deliver(ctx context.Context, threadID string, inst Inst
 	if Quieted(ctx) {
 		return sb
 	}
-	v, err := takeNoticeScript.Run(context.WithoutCancel(ctx), m.rdb, []string{noticeKey(threadID)}).Text()
+	v, err := m.coord.Take(context.WithoutCancel(ctx), noticeKey(threadID))
 	if err != nil || v == "" {
 		return sb
 	}
@@ -764,7 +748,7 @@ func (m *DefaultManager) Invalidate(ctx context.Context, threadID, sandboxID str
 		return // already replaced (or unknown): nothing to forget
 	}
 	// The replacement tells the model that /workspace was reset.
-	if err := m.rdb.Set(context.WithoutCancel(ctx), recreatedKey(threadID), "1", 24*time.Hour).Err(); err != nil {
+	if err := m.coord.Set(context.WithoutCancel(ctx), recreatedKey(threadID), "1", 24*time.Hour); err != nil {
 		slog.Warn("sandbox: storing recreation marker failed", "thread_id", threadID, "error", err)
 	}
 	if err := m.forget(ctx, threadID, sandboxID); err != nil {
