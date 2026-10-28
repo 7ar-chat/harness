@@ -12,6 +12,7 @@
 //	harness -p … -json       print mode emitting the AG-UI events as JSON lines
 //	harness auth login|list|remove   manage the API keys of ~/.har/auth.json
 //	harness config path|init          show / create the configuration directories
+//	harness trust [path] | trust list | untrust [path]   let a project add allow rules and MCP servers
 //
 // Remote mode attaches the same terminal UI (and print mode) to a running
 // harness-web instead of an in-process engine; the server owns the model
@@ -38,6 +39,7 @@ import (
 	"github.com/GhaziBenDahmane/harness"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/features/gitsafe"
+	"github.com/GhaziBenDahmane/harness/features/permissions"
 	"github.com/GhaziBenDahmane/harness/hosts/client"
 	"github.com/GhaziBenDahmane/harness/hosts/tui"
 	"github.com/GhaziBenDahmane/harness/store/filestore"
@@ -114,6 +116,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 			}
 		})
 		cfg.Dump(stdout, flags)
+		dumpPermissionFiles(stdout, cfg)
 		return 0
 	}
 	prompt, err := resolvePrompt(o.prompt, stdin, isTTY)
@@ -310,4 +313,22 @@ func resolvePrompt(flagPrompt string, stdin io.Reader, isTTY bool) (string, erro
 func fail(stderr io.Writer, err error) int {
 	fmt.Fprintln(stderr, "harness:", err)
 	return 1
+}
+
+// dumpPermissionFiles lists what the project's permissions.yml asked for and was not honoured (-config-dump).
+func dumpPermissionFiles(w io.Writer, cfg *config.Config) {
+	ws := cfg.LocalWorkspace
+	if ws == "" {
+		ws, _ = os.Getwd()
+	}
+	p, err := permissions.Load(permissions.Options{
+		Workspace: ws, Mode: cfg.AgentPermissions, Trusted: cfg.Layers != nil && cfg.Layers.Trusted,
+	})
+	if err != nil || len(p.Ignored) == 0 {
+		return
+	}
+	fmt.Fprintln(w, "\nignored (permissions file):")
+	for _, s := range p.Ignored {
+		fmt.Fprintf(w, "  %s\n", s)
+	}
 }

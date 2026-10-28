@@ -325,7 +325,7 @@ func TestLoadMergesFilesAndEnvironment(t *testing.T) {
 	write(filepath.Join(ws, config.DirName, "permissions.yml"), "mode: auto-edit\nallow:\n  - git push origin feature*\ndeny:\n  - \"Bash(docker*)\"\n")
 	write(filepath.Join(home, config.DirName, "permissions.yml"), "mode: yolo\nask:\n  - make deploy*\n")
 
-	p, err := Load(Options{Workspace: ws, Home: home, Deny: "kubectl*;;terraform apply*"})
+	p, err := Load(Options{Workspace: ws, Home: home, Deny: "kubectl*;;terraform apply*", Trusted: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,9 +341,83 @@ func TestLoadMergesFilesAndEnvironment(t *testing.T) {
 	if d, _ := p.Decide("execute_command", cmdArgs("git push origin feature-x")); d.Action != Allow {
 		t.Fatalf("file allow = %v", d)
 	}
-	env, err := Load(Options{Workspace: ws, Home: home, Mode: "readonly"})
+	env, err := Load(Options{Workspace: ws, Home: home, Mode: "readonly", Trusted: true})
 	if err != nil || env.Mode != ModeReadOnly {
 		t.Fatalf("env mode = %v %v", env.Mode, err)
+	}
+}
+
+func writeProjectAndUserPermissions(t *testing.T, project, user string) (ws, home string) {
+	t.Helper()
+	ws, home = t.TempDir(), t.TempDir()
+	for path, body := range map[string]string{
+		filepath.Join(ws, config.DirName, "permissions.yml"):   project,
+		filepath.Join(home, config.DirName, "permissions.yml"): user,
+	} {
+		if body == "" {
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return ws, home
+}
+
+func TestAnUntrustedProjectCannotAllowOrLoosen(t *testing.T) {
+	// Arrange: the project asks to allow a push, to deny docker, to ask for make deploy, and to be in yolo mode.
+	ws, home := writeProjectAndUserPermissions(t,
+		"mode: yolo\nallow:\n  - git push origin feature*\nask:\n  - make deploy*\ndeny:\n  - \"Bash(docker*)\"\n", "")
+
+	// Act
+	untrusted, err := Load(Options{Workspace: ws, Home: home})
+	trusted, err2 := Load(Options{Workspace: ws, Home: home, Trusted: true})
+
+	// Assert
+	if err != nil || err2 != nil {
+		t.Fatal(err, err2)
+	}
+	if untrusted.Mode != ModeAsk || len(untrusted.Ignored) != 2 {
+		t.Fatalf("mode %s ignored %v", untrusted.Mode, untrusted.Ignored)
+	}
+	if d, _ := untrusted.Decide("execute_command", cmdArgs("git push origin feature-x")); d.Action == Allow {
+		t.Fatalf("an untrusted allow rule was honoured: %v", d)
+	}
+	if d, _ := untrusted.Decide("execute_command", cmdArgs("docker run x")); d.Action != Deny {
+		t.Fatalf("a project deny must be honoured: %v", d)
+	}
+	if d, _ := untrusted.Decide("execute_command", cmdArgs("make deploy-prod")); d.Action != Ask {
+		t.Fatalf("a project ask must be honoured: %v", d)
+	}
+	if trusted.Mode != ModeYolo || len(trusted.Ignored) != 0 {
+		t.Fatalf("trusted: mode %s ignored %v", trusted.Mode, trusted.Ignored)
+	}
+	if d, _ := trusted.Decide("execute_command", cmdArgs("git push origin feature-x")); d.Action != Allow {
+		t.Fatalf("a trusted allow rule was ignored: %v", d)
+	}
+}
+
+func TestAnUntrustedProjectMayTightenTheMode(t *testing.T) {
+	// Arrange: the user is in yolo, the project asks for readonly (stricter) and for auto-edit elsewhere.
+	ws, home := writeProjectAndUserPermissions(t, "mode: readonly\n", "mode: yolo\n")
+	ws2, home2 := writeProjectAndUserPermissions(t, "mode: auto-edit\n", "mode: ask\n")
+
+	// Act
+	stricter, err := Load(Options{Workspace: ws, Home: home})
+	looser, err2 := Load(Options{Workspace: ws2, Home: home2})
+
+	// Assert
+	if err != nil || err2 != nil {
+		t.Fatal(err, err2)
+	}
+	if stricter.Mode != ModeReadOnly || len(stricter.Ignored) != 0 {
+		t.Fatalf("a stricter project mode must count: %s %v", stricter.Mode, stricter.Ignored)
+	}
+	if looser.Mode != ModeAsk || len(looser.Ignored) != 1 {
+		t.Fatalf("a looser project mode must be ignored: %s %v", looser.Mode, looser.Ignored)
 	}
 }
 

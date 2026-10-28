@@ -246,20 +246,23 @@ func TestRequireLLMKeyAcceptsLocalEndpointsAndSetKeys(t *testing.T) {
 }
 
 func TestNamedProviderSelectionAndProjectOverride(t *testing.T) {
-	project := "provider: opencode\nproviders:\n  opencode:\n    default_model: project-model\n    base_url: https://proxy.example/v1\n"
+	project := "provider: opencode\ndefault_model: project-model\n"
 
-	cfg, err := keyOf(t, project, openCode+"  claude:\n    type: anthropic\n", "")
+	cfg, err := keyOf(t, project, strings.Replace(openCode, "[deepseek-v4.1-flash]", "[deepseek-v4.1-flash, project-model]", 1), "")
 
 	if err != nil {
 		t.Fatal(err)
 	}
 	p := cfg.Providers["opencode"]
-	if cfg.LLMProviderName != "opencode" || cfg.LLMProvider != "openai" || cfg.LLMBaseURL != "https://proxy.example/v1" ||
+	if cfg.LLMProviderName != "opencode" || cfg.LLMProvider != "openai" || cfg.LLMBaseURL != "https://opencode.ai/zen/go/v1" ||
 		cfg.LLMDefaultModel != "project-model" || cfg.LLMSessionHeader != "x-opencode-session" || p.APIKeyEnv != "OPENCODE_KEY" {
 		t.Fatalf("name %q type %q base %q model %q hdr %q p %+v", cfg.LLMProviderName, cfg.LLMProvider, cfg.LLMBaseURL, cfg.LLMDefaultModel, cfg.LLMSessionHeader, p)
 	}
-	if len(cfg.LLMModels) != 2 || cfg.LLMModels[0] != "project-model" || cfg.LLMModels[1] != "deepseek-v4.1-flash" {
+	if len(cfg.LLMModels) != 2 || cfg.LLMModels[0] != "deepseek-v4.1-flash" || cfg.LLMModels[1] != "project-model" {
 		t.Fatalf("models %v", cfg.LLMModels)
+	}
+	if cfg.Layers.Sources["LLM_DEFAULT_MODEL"] != config.SourceProject {
+		t.Fatalf("the project's selection must win over the provider's default: %v", cfg.Layers.Sources)
 	}
 }
 

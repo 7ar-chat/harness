@@ -24,6 +24,8 @@ func subcommand(args []string, stdin io.Reader, stdout, stderr io.Writer, isTTY 
 		return runAuth(args[1:], stdin, stdout, stderr, isTTY), true
 	case "config":
 		return runConfig(args[1:], stdout, stderr), true
+	case "trust", "untrust":
+		return runTrust(args[0], args[1:], stdout, stderr), true
 	}
 	return 0, false
 }
@@ -146,6 +148,89 @@ func readKey(fromStdin bool, provider string, stdin io.Reader, stderr io.Writer,
 	return key, nil
 }
 
+const trustUsage = `usage:
+  harness trust [path]      trust a project (default: the current one): it may add permission allow rules and MCP servers
+  harness trust list        list the trusted projects
+  harness untrust [path]    stop trusting a project (default: the current one)`
+
+// projectRootArg is the project a trust command is about: the path given, else the project of the working directory.
+func projectRootArg(args []string) (string, error) {
+	if len(args) > 1 {
+		return "", errors.New("too many arguments")
+	}
+	if len(args) == 1 {
+		st, err := os.Stat(args[0])
+		if err != nil {
+			return "", err
+		}
+		if !st.IsDir() {
+			return "", fmt.Errorf("%s is not a directory", args[0])
+		}
+		return config.CanonicalProject(args[0])
+	}
+	start := os.Getenv("LOCAL_WORKSPACE")
+	if start == "" {
+		start, _ = os.Getwd()
+	}
+	_, root, _ := config.FindProjectDir(start)
+	if root == "" {
+		return "", errors.New("no project here: pass a path")
+	}
+	return config.CanonicalProject(root)
+}
+
+func runTrust(cmd string, args []string, stdout, stderr io.Writer) int {
+	dir, err := manageDir()
+	if err != nil {
+		return fail(stderr, err)
+	}
+	if cmd == "trust" && len(args) == 1 && args[0] == "list" {
+		list, err := config.ReadTrust(dir)
+		if err != nil {
+			return fail(stderr, err)
+		}
+		fmt.Fprintln(stdout, config.TrustPath(dir))
+		for _, p := range list {
+			fmt.Fprintln(stdout, p)
+		}
+		if len(list) == 0 {
+			fmt.Fprintln(stdout, "no trusted projects (harness trust [path])")
+		}
+		return 0
+	}
+	if len(args) == 1 && (args[0] == "-h" || args[0] == "-help" || args[0] == "--help") {
+		fmt.Fprintln(stdout, trustUsage)
+		return 0
+	}
+	root, err := projectRootArg(args)
+	if err != nil {
+		fmt.Fprintln(stderr, "harness:", err)
+		fmt.Fprintln(stderr, trustUsage)
+		return 2
+	}
+	if cmd == "untrust" {
+		removed, err := config.RemoveTrust(dir, root)
+		if err != nil {
+			return fail(stderr, err)
+		}
+		if !removed {
+			return fail(stderr, fmt.Errorf("%s is not trusted (see: harness trust list)", root))
+		}
+		fmt.Fprintf(stdout, "no longer trusting %s\n", root)
+		return 0
+	}
+	added, err := config.AddTrust(dir, root)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	if !added {
+		fmt.Fprintf(stdout, "%s is already trusted\n", root)
+		return 0
+	}
+	fmt.Fprintf(stdout, "trusting %s (listed in %s): its permission allow rules and its MCP servers (.mcp.json, .har/mcp.json, mcp.servers) now apply\n", root, config.TrustPath(dir))
+	return 0
+}
+
 func runConfig(args []string, stdout, stderr io.Writer) int {
 	if len(args) != 1 {
 		fmt.Fprintln(stderr, "usage:\n  harness config path   print the user directory and the project directory in use\n  harness config init   write a commented starter config.yml in the user directory")
@@ -203,19 +288,21 @@ func runConfig(args []string, stdout, stderr io.Writer) int {
 }
 
 const starterConfig = `# ~/.har/config.yml: your settings for the harness.
+# You own the endpoints, the keys and the model catalog; a project's .har/config.yml can only choose among
+# what is defined here (provider, models, agents) and tune behaviour. See "What a project file may and may not do".
 # API keys never go here: run "harness auth login <provider>" (stored in auth.json),
 # or name an environment variable with api_key_env.
 # Precedence: flag > environment > <repo>/.har/config.yml > this file > default.
 
 # provider: opencode            # a name defined below, or the built-ins openai / anthropic
-# default_model: gpt-5
+# default_model: deepseek-v4.1-flash
 
 # providers:
 #   opencode:
 #     type: openai              # openai | anthropic
 #     base_url: https://opencode.ai/zen/go/v1
 #     session_header: x-opencode-session
-#     models: [deepseek-v4.1-flash]
+#     models: [deepseek-v4.1-flash, deepseek-v4.1-pro]   # the models a project may select
 #     default_model: deepseek-v4.1-flash
 #     api_key_env: OPENCODE_KEY # optional; otherwise the key of auth.json named "opencode"
 #   anthropic:
@@ -225,5 +312,12 @@ const starterConfig = `# ~/.har/config.yml: your settings for the harness.
 #   backend: local
 
 # mcp:
-#   allow_stdio: false
+#   allow_stdio: false          # MCP servers that are local programs; local backend only
+#   servers: {}                 # your own servers; a project's need "harness trust"
+
+# Roles and the models they use (a project file may select these too, among the models above):
+# agents:
+#   default:    {model: deepseek-v4.1-pro, profile: coding}
+#   explore:    {model: deepseek-v4.1-flash}
+#   compaction: {model: deepseek-v4.1-flash}
 `

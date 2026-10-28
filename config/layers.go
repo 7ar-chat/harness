@@ -64,9 +64,15 @@ type Layers struct {
 	MCPSources []string
 	// MCPSkipped are the MCP servers that were not started and why.
 	MCPSkipped []string
+	// Trusted says the project is trusted (see TrustFile); TrustedBy says how ("trust.json" or the environment).
+	Trusted   bool
+	TrustedBy string
+	// Ignored lists the settings of the project that were not honoured, and why (an untrusted project
+	// cannot loosen the permissions).
+	Ignored []string
 
-	// userBaseURL is the flat base_url of the user file ("" when it sets none).
-	userBaseURL string
+	// paths maps an environment variable name to the key of the project file that set it (agents.explore.model).
+	paths map[string]string
 }
 
 // Load reads the configuration: built-in defaults, then ~/.har/config.yml, then
@@ -87,7 +93,7 @@ func LoadWith(o LoadOptions) (*Config, error) {
 		}
 	}
 	known := knownEnvNames()
-	ly := &Layers{Values: map[string]string{}, Sources: map[string]Source{}}
+	ly := &Layers{Values: map[string]string{}, Sources: map[string]Source{}, paths: map[string]string{}}
 
 	var mcpFiles []mcpDoc
 	var allowStdioUser bool
@@ -111,6 +117,18 @@ func LoadWith(o LoadOptions) (*Config, error) {
 			start, _ = os.Getwd()
 		}
 		ly.ProjectDir, ly.ProjectRoot, _ = FindProjectDir(start)
+		switch {
+		case trustedFromEnv(lookup):
+			ly.Trusted, ly.TrustedBy = true, "env "+TrustEnv
+		case userDir != "" && ly.ProjectRoot != "":
+			ok, err := IsTrusted(userDir, ly.ProjectRoot)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				ly.Trusted, ly.TrustedBy = true, TrustPath(userDir)
+			}
+		}
 		perms := map[string][]string{}
 		for _, layer := range []struct {
 			dir  string
@@ -138,12 +156,15 @@ func LoadWith(o LoadOptions) (*Config, error) {
 			} else {
 				ly.ProjectFile = file
 			}
+			if !layer.user && !ly.Trusted {
+				ly.tightenOnly(doc)
+			}
 			for k, v := range doc.values {
-				if layer.user && k == "LLM_BASE_URL" {
-					ly.userBaseURL = v
-				}
 				ly.Values[k] = v
 				ly.Sources[k] = layer.src
+				if p := doc.paths[k]; p != "" && !layer.user {
+					ly.paths[k] = p
+				}
 			}
 			for name, p := range doc.providers {
 				if prev, ok := providers[name]; ok {
@@ -153,6 +174,7 @@ func LoadWith(o LoadOptions) (*Config, error) {
 			}
 			for k, v := range doc.lists {
 				perms[k] = append(perms[k], v...)
+				ly.Sources[k] = layer.src
 			}
 			if len(doc.mcp) > 0 {
 				mcpFiles = append(mcpFiles, mcpDoc{file: file, servers: doc.mcp, source: layer.src})
@@ -175,6 +197,9 @@ func LoadWith(o LoadOptions) (*Config, error) {
 		}
 	}
 	name, def := selectProvider(o.Provider, procEnv, merged, ly, providers)
+	if err := ly.checkProviderSelection(o.Provider, name, providers); err != nil {
+		return nil, err
+	}
 	cfg := &Config{}
 	cfg.envLookup = func(name string) (string, bool) { v, ok := procEnv[name]; return v, ok }
 	cfg.envSet = func(name string) bool { _, ok := merged[name]; return ok }
@@ -187,6 +212,9 @@ func LoadWith(o LoadOptions) (*Config, error) {
 		if _, set := procEnv["HARNESS_MCP_STDIO"]; !set {
 			cfg.MCPAllowStdio = true
 		}
+	}
+	if err := cfg.validateProjectModels(); err != nil {
+		return nil, err
 	}
 	if err := cfg.normalize(); err != nil {
 		return nil, err
@@ -335,6 +363,7 @@ func knownEnvNames() map[string]bool {
 }
 
 type fileDoc struct {
+	paths      map[string]string // env name -> the key of the file that set it
 	values     map[string]string
 	lists      map[string][]string // permissions allow/ask/deny, appended across files
 	mcp        map[string]any
@@ -350,7 +379,7 @@ func parseConfigFile(file string, data []byte, user bool, procEnv map[string]str
 	if err := dec.Decode(&root); err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("%s: %w", file, err)
 	}
-	doc := &fileDoc{values: map[string]string{}, lists: map[string][]string{}}
+	doc := &fileDoc{values: map[string]string{}, paths: map[string]string{}, lists: map[string][]string{}}
 	errf := func(format string, a ...any) error { return fmt.Errorf("%s: "+format, append([]any{file}, a...)...) }
 
 	var walk func(prefix string, sec map[string]any, sch map[string]any) error
@@ -358,6 +387,11 @@ func parseConfigFile(file string, data []byte, user bool, procEnv map[string]str
 		for _, key := range sortedKeys(sec) {
 			path := prefix + key
 			val := sec[key]
+			if !user {
+				if why, bad := projectForbidden(path); bad {
+					return errf("%s", forbiddenMessage(path, why))
+				}
+			}
 			if key == "api_key" || key == "password" || key == "secret" || key == "token" {
 				return errf("%s: secrets do not belong in a configuration file; set %s_env to the NAME of the environment variable that holds it", path, key)
 			}
@@ -392,6 +426,7 @@ func parseConfigFile(file string, data []byte, user bool, procEnv map[string]str
 					continue
 				}
 				doc.values[e.env] = s
+				doc.paths[e.env] = path
 			case map[string]any:
 				sub, ok := val.(map[string]any)
 				if !ok {
@@ -409,14 +444,28 @@ func parseConfigFile(file string, data []byte, user bool, procEnv map[string]str
 	plain := map[string]any{}
 	for k, v := range root {
 		switch k {
-		case "mcp", "env", "providers":
+		case "mcp", "env", "providers", "agents":
 			special[k] = v
 		default:
 			plain[k] = v
 		}
 	}
+	if !user {
+		for _, k := range []string{"providers", "env"} {
+			if _, ok := special[k]; ok {
+				if why, bad := projectForbidden(k); bad {
+					return nil, errf("%s", forbiddenMessage(k, why))
+				}
+			}
+		}
+	}
 	if err := walk("", plain, schema); err != nil {
 		return nil, err
+	}
+	if v, ok := special["agents"]; ok {
+		if err := parseAgents(doc, v, errf); err != nil {
+			return nil, err
+		}
 	}
 	if v, ok := special["env"]; ok {
 		m, ok := v.(map[string]any)
@@ -438,11 +487,7 @@ func parseConfigFile(file string, data []byte, user bool, procEnv map[string]str
 		}
 	}
 	if v, ok := special["providers"]; ok {
-		src := SourceProject
-		if user {
-			src = SourceUser
-		}
-		ps, err := parseProviders(file, v, src)
+		ps, err := parseProviders(file, v, SourceUser)
 		if err != nil {
 			return nil, err
 		}
@@ -467,7 +512,8 @@ func parseConfigFile(file string, data []byte, user bool, procEnv map[string]str
 					return nil, errf("mcp.allow_stdio must be true or false")
 				}
 				if !user {
-					return nil, errf("mcp.allow_stdio cannot be set in a project file (a repository must not enable running its own programs): set it in the user file %s or export HARNESS_MCP_STDIO=1", filepath.Join(UserDir(), ConfigFile))
+					why, _ := projectForbidden("mcp.allow_stdio")
+					return nil, errf("%s", forbiddenMessage("mcp.allow_stdio", why))
 				}
 				doc.allowStdio = b
 			case "call_timeout_seconds":
@@ -489,6 +535,172 @@ func parseConfigFile(file string, data []byte, user bool, procEnv map[string]str
 		}
 	}
 	return doc, nil
+}
+
+// UserConfigHint is where a setting a project may not make belongs.
+const UserConfigHint = "~/.har/config.yml"
+
+// projectForbidden says whether the key (a dotted path) may not appear in a project config.yml, and why.
+// A repository you clone must never decide where data or credentials go, or which models and providers exist.
+func projectForbidden(path string) (why string, bad bool) {
+	top, _, _ := strings.Cut(path, ".")
+	switch top {
+	case "providers", "base_url", "api_key_env", "api_key", "session_header", "cache_ttl":
+		return "a repository must not choose where your requests and API key are sent", true
+	case "models", "presets", "default_preset":
+		return "a repository must not decide which models exist", true
+	case "timeout_seconds":
+		return "it tunes the connection to your provider, which is yours to configure", true
+	case "sandbox":
+		return "the sandbox backend, its address and its limits belong to you, not to a repository", true
+	case "env":
+		return "env: can set any setting, including the ones a repository may not set", true
+	}
+	if path == "mcp.allow_stdio" {
+		return "a repository must not enable running its own programs", true
+	}
+	return "", false
+}
+
+func forbiddenMessage(path, why string) string {
+	return fmt.Sprintf("%s cannot be set in a project file (%s): put it in %s (or the environment)", path, why, UserConfigHint)
+}
+
+// parseAgents reads the agents section: roles mapped to the model (and profile) they use. Only the roles
+// that have a setting today are available; the others are rejected rather than silently ignored.
+func parseAgents(doc *fileDoc, v any, errf func(string, ...any) error) error {
+	roles, ok := v.(map[string]any)
+	if !ok {
+		return errf("agents must map roles to their settings (agents.default, agents.explore, agents.compaction)")
+	}
+	for _, role := range sortedKeys(roles) {
+		sec, ok := roles[role].(map[string]any)
+		if !ok {
+			return errf("agents.%s must be a section (key: value pairs)", role)
+		}
+		var allowed map[string]string // key -> environment variable
+		switch role {
+		case "default":
+			allowed = map[string]string{"model": "LLM_DEFAULT_MODEL", "profile": "AGENT_PROFILE"}
+		case "explore":
+			allowed = map[string]string{"model": "EXPLORE_MODEL"}
+		case "compaction":
+			allowed = map[string]string{"model": "COMPACTION_MODEL"}
+		case "title", "goal_judge":
+			return errf("agents.%s is not available yet: that role uses the model of the run", role)
+		default:
+			return errf("unknown key %q (roles: default, explore, compaction)", "agents."+role)
+		}
+		for _, key := range sortedKeys(sec) {
+			path := "agents." + role + "." + key
+			if role == "default" && key == "reasoning_effort" {
+				return errf("%s is not available yet: choose a preset (default_preset) in your user file", path)
+			}
+			envName, ok := allowed[key]
+			if !ok {
+				return errf("unknown key %q", path)
+			}
+			s, _, err := convert(sec[key], kStr)
+			if err != nil {
+				return errf("%s: %v", path, err)
+			}
+			doc.values[envName] = strings.TrimSpace(s)
+			doc.paths[envName] = path
+		}
+	}
+	return nil
+}
+
+// PermissionStrictness ranks the permission modes: the higher, the stricter. "" is ask.
+func PermissionStrictness(mode string) (int, bool) {
+	m := strings.ToLower(strings.TrimSpace(mode))
+	m = strings.NewReplacer("_", "-").Replace(m)
+	switch m {
+	case "readonly", "read-only":
+		return 4, true
+	case "", "ask":
+		return 3, true
+	case "auto-edit", "autoedit":
+		return 2, true
+	case "yolo":
+		return 1, true
+	case "yolo-unsafe":
+		return 0, true
+	}
+	return 0, false
+}
+
+// tightenOnly drops from the project file of an untrusted project what would loosen the permissions: allow
+// rules and a mode less strict than the one already in force. The ignored items are recorded.
+func (ly *Layers) tightenOnly(doc *fileDoc) {
+	file := ly.ProjectFile
+	if n := len(doc.lists["AGENT_PERMISSIONS_ALLOW"]); n > 0 {
+		delete(doc.lists, "AGENT_PERMISSIONS_ALLOW")
+		ly.ignore("%s: permissions.allow (%d rule(s)) ignored: the project is not trusted (run `harness trust` to honour it)", file, n)
+	}
+	mode, ok := doc.values["AGENT_PERMISSIONS"]
+	if !ok {
+		return
+	}
+	base := ly.Values["AGENT_PERMISSIONS"] // the user file's, "" is ask
+	pr, pok := PermissionStrictness(mode)
+	br, _ := PermissionStrictness(base)
+	if pok && pr < br {
+		delete(doc.values, "AGENT_PERMISSIONS")
+		if base == "" {
+			base = "ask"
+		}
+		ly.ignore("%s: permissions.mode %q ignored: it is looser than %q and the project is not trusted (run `harness trust` to honour it)", file, mode, base)
+	}
+}
+
+func (ly *Layers) ignore(format string, a ...any) {
+	ly.Ignored = append(ly.Ignored, fmt.Sprintf(format, a...))
+}
+
+// checkProviderSelection refuses a provider chosen by the project that the user did not define.
+func (ly *Layers) checkProviderSelection(flag, name string, defs map[string]Provider) error {
+	if strings.TrimSpace(flag) != "" || ly.Sources["LLM_PROVIDER"] != SourceProject {
+		return nil
+	}
+	if _, ok := defs[name]; ok || name == "openai" || name == "anthropic" {
+		return nil
+	}
+	return fmt.Errorf("%s: provider %q (project .har/config.yml provider) is not configured by you: define it under providers.%s in %s, or choose openai, anthropic or a provider you defined", ly.ProjectFile, name, name, UserConfigHint)
+}
+
+// validateProjectModels checks that every model the project selected is one the user configured: the
+// catalog is the user's model list of the selected provider, plus the models the user set themselves.
+func (c *Config) validateProjectModels() error {
+	ly := c.Layers
+	if ly == nil || ly.ProjectFile == "" {
+		return nil
+	}
+	catalog := map[string]bool{}
+	for _, m := range trimAll(c.LLMModels) {
+		catalog[m] = true
+	}
+	sel := []struct{ env, val string }{
+		{"LLM_DEFAULT_MODEL", c.LLMDefaultModel}, {"EXPLORE_MODEL", c.ExploreModel}, {"COMPACTION_MODEL", c.CompactionModel},
+	}
+	for _, s := range sel {
+		if _, set := ly.Sources[s.env]; set && ly.Sources[s.env] != SourceProject {
+			catalog[strings.TrimSpace(s.val)] = true
+		}
+	}
+	where := "models"
+	if _, ok := c.Providers[c.LLMProviderName]; ok {
+		where = "providers." + c.LLMProviderName + ".models"
+	}
+	for _, s := range sel {
+		v := strings.TrimSpace(s.val)
+		if ly.Sources[s.env] != SourceProject || v == "" || catalog[v] {
+			continue
+		}
+		path := ly.paths[s.env]
+		return fmt.Errorf("model %s (project .har/config.yml %s) is not configured by you: add it to %s in %s", v, path, where, UserConfigHint)
+	}
+	return nil
 }
 
 func sortedKeys(m map[string]any) []string {
@@ -606,6 +818,13 @@ func (c *Config) Dump(w io.Writer, flags map[string]string) {
 	fmt.Fprintf(w, "project file: %s\n", orNone(ly.ProjectFile))
 	fmt.Fprintf(w, "user file:    %s\n", orNone(ly.UserFile))
 	fmt.Fprintf(w, "auth file:    %s\n", orNone(ly.AuthFile))
+	if ly.ProjectRoot != "" {
+		if ly.Trusted {
+			fmt.Fprintf(w, "trust:        project trusted (%s)\n", ly.TrustedBy)
+		} else {
+			fmt.Fprintf(w, "trust:        project not trusted (run `harness trust` to let it add allow rules and MCP servers)\n")
+		}
+	}
 	if c.LLMProviderName != "" {
 		fmt.Fprintf(w, "provider:     %s (type %s)\n", c.LLMProviderName, c.LLMProvider)
 	}
@@ -639,6 +858,18 @@ func (c *Config) Dump(w io.Writer, flags map[string]string) {
 		fmt.Fprintf(w, "\nmcp servers:\n")
 		for _, s := range c.MCPServers {
 			fmt.Fprintf(w, "  %-20s %s (%s)\n", s.Name, s.Describe(), s.Origin)
+		}
+	}
+	if len(ly.MCPSkipped) > 0 {
+		fmt.Fprintf(w, "\nmcp servers not started:\n")
+		for _, s := range ly.MCPSkipped {
+			fmt.Fprintf(w, "  %s\n", s)
+		}
+	}
+	if len(ly.Ignored) > 0 {
+		fmt.Fprintf(w, "\nignored:\n")
+		for _, s := range ly.Ignored {
+			fmt.Fprintf(w, "  %s\n", s)
 		}
 	}
 }

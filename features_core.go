@@ -225,7 +225,7 @@ func Permissions(coding bool) Feature {
 		policy, err := permissions.Load(permissions.Options{
 			Workspace: ws, Mode: mode,
 			Allow: cfg.AgentPermissionsAllow, Ask: cfg.AgentPermissionsAsk, Deny: cfg.AgentPermissionsDeny,
-			AskTools: stdioToolGlobs(cfg),
+			AskTools: stdioToolGlobs(cfg), Trusted: cfg.Layers != nil && cfg.Layers.Trusted,
 		})
 		if err != nil {
 			return fmt.Errorf("%w", err)

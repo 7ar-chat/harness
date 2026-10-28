@@ -183,8 +183,10 @@ func readMCPJSON(file string, lookup func(string) (string, bool)) ([]MCPServer, 
 // loadMCPFiles merges the MCP servers of the files into c.MCPServers. From the
 // lowest priority: user config.yml, ~/.har/mcp.json, <root>/.mcp.json,
 // <root>/.har/mcp.json, project config.yml, then MCP_SERVERS. A server of a
-// later source replaces one of the same name. Stdio servers are dropped unless
-// the local backend and MCPAllowStdio are on.
+// later source replaces one of the same name. The three project sources only
+// count when the project is trusted (see TrustFile); otherwise they are listed in
+// Layers.MCPSkipped. Stdio servers are dropped unless the local backend and
+// MCPAllowStdio are on.
 func (c *Config) loadMCPFiles(yamlDocs []mcpDoc) error {
 	ly := c.Layers
 	lookup := func(name string) (string, bool) { return os.LookupEnv(name) }
@@ -192,9 +194,17 @@ func (c *Config) loadMCPFiles(yamlDocs []mcpDoc) error {
 		lookup = c.envLookup
 	}
 	var sources [][]MCPServer
-	add := func(list []MCPServer, err error, file string) error {
+	// add records a source. project says the file comes from the repository: unless the project is trusted
+	// its servers are not started, only listed (the definitions are read with ${VAR} left as they are).
+	add := func(list []MCPServer, err error, file string, project bool) error {
 		if err != nil {
 			return err
+		}
+		if project && !ly.Trusted {
+			for _, s := range list {
+				ly.MCPSkipped = append(ly.MCPSkipped, fmt.Sprintf("%s (%s): %s: the project is not trusted, run `harness trust` to enable", s.Name, file, s.Describe()))
+			}
+			return nil
 		}
 		if len(list) > 0 {
 			sources = append(sources, list)
@@ -212,34 +222,38 @@ func (c *Config) loadMCPFiles(yamlDocs []mcpDoc) error {
 	}
 	if d, ok := yamlOf(SourceUser); ok {
 		l, err := parseMCPServers(d.file, d.servers, lookup)
-		if err := add(l, err, d.file); err != nil {
+		if err := add(l, err, d.file, false); err != nil {
 			return err
 		}
 	}
 	if ly.UserDir != "" {
 		f := filepath.Join(ly.UserDir, MCPFile)
 		l, err := readMCPJSON(f, lookup)
-		if err := add(l, err, f); err != nil {
+		if err := add(l, err, f, false); err != nil {
 			return err
 		}
 	}
+	projectLookup := lookup
+	if !ly.Trusted {
+		projectLookup = func(n string) (string, bool) { return "${" + n + "}", true }
+	}
 	if ly.ProjectRoot != "" {
 		f := filepath.Join(ly.ProjectRoot, ".mcp.json")
-		l, err := readMCPJSON(f, lookup)
-		if err := add(l, err, f); err != nil {
+		l, err := readMCPJSON(f, projectLookup)
+		if err := add(l, err, f, true); err != nil {
 			return err
 		}
 	}
 	if ly.ProjectDir != "" {
 		f := filepath.Join(ly.ProjectDir, MCPFile)
-		l, err := readMCPJSON(f, lookup)
-		if err := add(l, err, f); err != nil {
+		l, err := readMCPJSON(f, projectLookup)
+		if err := add(l, err, f, true); err != nil {
 			return err
 		}
 	}
 	if d, ok := yamlOf(SourceProject); ok {
-		l, err := parseMCPServers(d.file, d.servers, lookup)
-		if err := add(l, err, d.file); err != nil {
+		l, err := parseMCPServers(d.file, d.servers, projectLookup)
+		if err := add(l, err, d.file, true); err != nil {
 			return err
 		}
 	}

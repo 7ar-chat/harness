@@ -9,6 +9,7 @@ package permissions
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -182,6 +183,11 @@ type Options struct {
 	Files []string
 	// Home is the user's home directory (default os.UserHomeDir).
 	Home string
+	// Trusted says the project is trusted (config.TrustFile): its permissions file may then add allow rules
+	// and loosen the mode. Otherwise only the default workspace file is affected: its allow rules are ignored
+	// and its mode only counts when it is as strict as the one already in force. Files given explicitly in
+	// Files are the caller's own and are always honoured.
+	Trusted bool
 }
 
 // Load builds the policy: the environment's mode and rules, then the workspace
@@ -194,9 +200,11 @@ func Load(o Options) (*Policy, error) {
 		home, _ = os.UserHomeDir()
 	}
 	files := o.Files
+	projectFile := ""
 	if files == nil {
 		if o.Workspace != "" {
-			files = append(files, filepath.Join(o.Workspace, config.DirName, config.PermissionsFile))
+			projectFile = filepath.Join(o.Workspace, config.DirName, config.PermissionsFile)
+			files = append(files, projectFile)
 		}
 		userDir := config.UserDir()
 		if o.Home != "" {
@@ -220,6 +228,12 @@ func Load(o Options) (*Policy, error) {
 			p.Rules = append(p.Rules, r)
 		}
 	}
+	type loaded struct {
+		file  string
+		mode  string
+		rules []Rule
+	}
+	var all []loaded
 	for _, f := range files {
 		data, err := os.ReadFile(f)
 		if errors.Is(err, os.ErrNotExist) {
@@ -232,17 +246,63 @@ func Load(o Options) (*Policy, error) {
 		if err != nil {
 			return nil, fmt.Errorf("permissions: %w", err)
 		}
-		if strings.TrimSpace(modeName) == "" {
-			modeName = m
+		all = append(all, loaded{f, m, rules})
+	}
+	// The mode in force before the project file speaks: the environment's, else the first user file's, else ask.
+	base := o.Mode
+	if strings.TrimSpace(base) == "" {
+		for _, l := range all {
+			if l.file != projectFile && l.mode != "" {
+				base = l.mode
+				break
+			}
 		}
-		p.Rules = append(p.Rules, rules...)
-		p.Files = append(p.Files, f)
+	}
+	for _, l := range all {
+		if l.file == projectFile && !o.Trusted {
+			kept := l.rules[:0:0]
+			dropped := 0
+			for _, r := range l.rules {
+				if r.Action == Allow {
+					dropped++
+					continue
+				}
+				kept = append(kept, r)
+			}
+			if dropped > 0 {
+				p.Ignored = append(p.Ignored, fmt.Sprintf("%s: %d allow rule(s) ignored: the project is not trusted (run `harness trust` to honour them)", l.file, dropped))
+			}
+			l.rules = kept
+			if l.mode != "" {
+				pr, pok := config.PermissionStrictness(l.mode)
+				br, _ := config.PermissionStrictness(base)
+				if pok && pr < br {
+					p.Ignored = append(p.Ignored, fmt.Sprintf("%s: mode %q ignored: it is looser than %q and the project is not trusted (run `harness trust` to honour it)", l.file, l.mode, cmpMode(base)))
+					l.mode = ""
+				}
+			}
+		}
+		if strings.TrimSpace(modeName) == "" {
+			modeName = l.mode
+		}
+		p.Rules = append(p.Rules, l.rules...)
+		p.Files = append(p.Files, l.file)
+	}
+	if len(p.Ignored) > 0 {
+		slog.Warn("permissions: project settings ignored (untrusted project)", "ignored", strings.Join(p.Ignored, "; "))
 	}
 	var err error
 	if p.Mode, err = ParseMode(modeName); err != nil {
 		return nil, err
 	}
 	return p, nil
+}
+
+func cmpMode(m string) string {
+	if strings.TrimSpace(m) == "" {
+		return "ask"
+	}
+	return m
 }
 
 func splitEnv(s string) []string {
@@ -262,6 +322,8 @@ type Policy struct {
 	Workspace string // host directory of /workspace ("" if unknown)
 	Home      string
 	Files     []string // permission files that were read
+	// Ignored says what an untrusted project's permissions file asked for and was not honoured.
+	Ignored []string
 	// AskTools: tools (name globs) that ask, once per run, when no rule matches them.
 	AskTools []string
 }

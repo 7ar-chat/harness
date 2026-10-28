@@ -42,8 +42,8 @@ func load(t *testing.T, dir, userDir string, environ ...string) (*config.Config,
 func TestPrecedenceEnvOverProjectOverUserOverDefault(t *testing.T) {
 	// Arrange
 	dir, user := repo(t,
-		"default_model: from-project\nbase_url: http://project\nsandbox:\n  backend: local\n",
-		"default_model: from-user\nbase_url: http://user\nprovider: anthropic\nmodels: [a, b]\n")
+		"default_model: from-project\n",
+		"default_model: from-user\nbase_url: http://user\nprovider: anthropic\nmodels: [a, b, from-project]\nsandbox:\n  backend: local\n")
 
 	// Act
 	cfg, err := load(t, dir, user, "LLM_BASE_URL=http://env")
@@ -71,33 +71,41 @@ func TestPrecedenceEnvOverProjectOverUserOverDefault(t *testing.T) {
 
 func TestProjectDirIsFoundWalkingUpToTheGitRoot(t *testing.T) {
 	// Arrange
-	dir, user := repo(t, "default_model: m\n", "")
+	dir, user := repo(t, "limits:\n  max_steps: 7\n", "")
 
 	// Act
 	cfg, err := load(t, dir, user)
 
 	// Assert
-	if err != nil || cfg.LLMDefaultModel != "m" || !strings.HasSuffix(cfg.Layers.ProjectDir, filepath.Join("repo", config.DirName)) {
-		t.Fatalf("err %v model %q layers %+v", err, cfg.LLMDefaultModel, cfg.Layers)
+	if err != nil || cfg.AgentMaxSteps != 7 || !strings.HasSuffix(cfg.Layers.ProjectDir, filepath.Join("repo", config.DirName)) {
+		t.Fatalf("err %v layers %+v", err, cfg)
 	}
 }
 
 func TestUnknownKeysAndSecretsAreErrorsNamingTheFile(t *testing.T) {
-	cases := map[string]string{
-		"typo":        "defualt_model: x\n",
-		"nested typo": "sandbox:\n  bakend: local\n",
-		"api_key":     "api_key: sk-123\n",
-		"sandbox key": "sandbox:\n  api_key: sk-123\n",
-		"bad int":     "limits:\n  max_steps: many\n",
-		"bad backend": "sandbox:\n  backend: docker\n",
-		"env secret":  "env:\n  POSTGRES_PASSWORD: x\n",
-		"env unknown": "env:\n  NOT_A_SETTING: x\n",
-		"stdio":       "mcp:\n  allow_stdio: true\n",
+	// project: the file of the repository; otherwise the user file.
+	cases := map[string]struct {
+		project bool
+		body    string
+	}{
+		"typo":        {true, "defualt_model: x\n"},
+		"nested typo": {false, "sandbox:\n  bakend: local\n"},
+		"api_key":     {false, "api_key: sk-123\n"},
+		"sandbox key": {false, "sandbox:\n  api_key: sk-123\n"},
+		"bad int":     {true, "limits:\n  max_steps: many\n"},
+		"bad backend": {false, "sandbox:\n  backend: docker\n"},
+		"env secret":  {false, "env:\n  POSTGRES_PASSWORD: x\n"},
+		"env unknown": {false, "env:\n  NOT_A_SETTING: x\n"},
+		"stdio":       {true, "mcp:\n  allow_stdio: true\n"},
 	}
-	for name, body := range cases {
+	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			// Arrange
-			dir, user := repo(t, body, "")
+			project, userBody := tc.body, ""
+			if !tc.project {
+				project, userBody = "", tc.body
+			}
+			dir, user := repo(t, project, userBody)
 
 			// Act
 			_, err := load(t, dir, user)
@@ -112,7 +120,7 @@ func TestUnknownKeysAndSecretsAreErrorsNamingTheFile(t *testing.T) {
 
 func TestUnknownKeyMessageNamesTheKey(t *testing.T) {
 	// Arrange
-	dir, user := repo(t, "sandbox:\n  bakend: local\n", "")
+	dir, user := repo(t, "", "sandbox:\n  bakend: local\n")
 
 	// Act
 	_, err := load(t, dir, user)
@@ -125,7 +133,7 @@ func TestUnknownKeyMessageNamesTheKey(t *testing.T) {
 
 func TestApiKeyEnvReadsTheNamedVariable(t *testing.T) {
 	// Arrange
-	dir, user := repo(t, "api_key_env: MY_KEY\n", "")
+	dir, user := repo(t, "", "api_key_env: MY_KEY\n")
 
 	// Act
 	cfg, err := load(t, dir, user, "MY_KEY=sekret")
@@ -142,13 +150,13 @@ func TestApiKeyEnvReadsTheNamedVariable(t *testing.T) {
 
 func TestPermissionsListsAddUpAcrossFiles(t *testing.T) {
 	// Arrange
-	dir, user := repo(t, "permissions:\n  mode: auto-edit\n  deny: [\"Bash(rm*)\"]\n", "permissions:\n  deny: [\"Bash(docker*)\"]\n  allow: [\"Bash(make*)\"]\n")
+	dir, user := repo(t, "permissions:\n  mode: readonly\n  deny: [\"Bash(rm*)\"]\n", "permissions:\n  deny: [\"Bash(docker*)\"]\n  allow: [\"Bash(make*)\"]\n")
 
 	// Act
 	cfg, err := load(t, dir, user)
 
 	// Assert
-	if err != nil || cfg.AgentPermissions != "auto-edit" {
+	if err != nil || cfg.AgentPermissions != "readonly" {
 		t.Fatalf("err %v mode %q", err, cfg.AgentPermissions)
 	}
 	if cfg.AgentPermissionsDeny != "Bash(docker*)\nBash(rm*)" || cfg.AgentPermissionsAllow != "Bash(make*)" {
@@ -158,7 +166,7 @@ func TestPermissionsListsAddUpAcrossFiles(t *testing.T) {
 
 func TestDumpShowsSourcesAndMasksSecrets(t *testing.T) {
 	// Arrange
-	dir, user := repo(t, "default_model: m\napi_key_env: MY_KEY\n", "provider: anthropic\n")
+	dir, user := repo(t, "default_model: m\n", "provider: anthropic\napi_key_env: MY_KEY\nmodels: [m]\n")
 	cfg, err := load(t, dir, user, "MY_KEY=sekret", "LLM_LLM_TIMEOUT_SECONDS=1")
 	if err != nil {
 		t.Fatal(err)
@@ -188,9 +196,9 @@ func TestStdioCannotBeEnabledByTheProjectButByTheUserFile(t *testing.T) {
 	}
 
 	// Act
-	local, err1 := load(t, dir, user, "SANDBOX_BACKEND=local")
-	remote, err2 := load(t, dir, user, "SANDBOX_BACKEND=opensandbox", "OPENSANDBOX_URL=http://x")
-	noOptIn, err3 := load(t, dir, user, "SANDBOX_BACKEND=local", "HARNESS_MCP_STDIO=0")
+	local, err1 := load(t, dir, user, "SANDBOX_BACKEND=local", "HARNESS_TRUST_PROJECT=1")
+	remote, err2 := load(t, dir, user, "SANDBOX_BACKEND=opensandbox", "OPENSANDBOX_URL=http://x", "HARNESS_TRUST_PROJECT=1")
+	noOptIn, err3 := load(t, dir, user, "SANDBOX_BACKEND=local", "HARNESS_MCP_STDIO=0", "HARNESS_TRUST_PROJECT=1")
 
 	// Assert
 	if err1 != nil || err2 != nil || err3 != nil {
@@ -219,8 +227,8 @@ func TestMCPFilesMergeByNameAndExpandHeaders(t *testing.T) {
 	writeFile(filepath.Join(root, ".mcp.json"), `{"mcpServers":{"kb":{"type":"http","url":"http://dot-mcp/mcp"},"docs":{"type":"sse","url":"http://docs/sse","headers":{"Authorization":"Bearer ${DOCS_TOKEN}"}}}}`)
 
 	// Act
-	cfg, err := load(t, dir, user, "DOCS_TOKEN=abc")
-	_, unresolved := load(t, dir, user)
+	cfg, err := load(t, dir, user, "DOCS_TOKEN=abc", "HARNESS_TRUST_PROJECT=1")
+	_, unresolved := load(t, dir, user, "HARNESS_TRUST_PROJECT=1")
 
 	// Assert
 	if err != nil {

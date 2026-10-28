@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"path/filepath"
 	"strings"
 )
 
@@ -23,9 +22,8 @@ type Provider struct {
 	APIKeyEnv    string
 	Models       []string
 	DefaultModel string
-	// Origin is the layer that last set a field of the provider; BaseURLOrigin the layer that chose its address.
-	Origin        Source
-	BaseURLOrigin Source
+	// Origin is the layer that defined the provider (always the user file: a project cannot define one).
+	Origin Source
 }
 
 // merge lets the non-empty fields of o override p's.
@@ -37,9 +35,6 @@ func (p Provider) merge(o Provider) Provider {
 		return a
 	}
 	p.Type = pick(p.Type, o.Type)
-	if o.BaseURL != "" && o.BaseURL != p.BaseURL { // only a change of address changes who chose it
-		p.BaseURLOrigin = o.Origin
-	}
 	p.BaseURL = pick(p.BaseURL, o.BaseURL)
 	p.SessionHeader = pick(p.SessionHeader, o.SessionHeader)
 	p.CacheTTL = pick(p.CacheTTL, o.CacheTTL)
@@ -115,9 +110,6 @@ func parseProviders(file string, v any, src Source) (map[string]Provider, error)
 				return nil, err
 			}
 		}
-		if p.BaseURL != "" {
-			p.BaseURLOrigin = src
-		}
 		out[name] = p
 	}
 	return out, nil
@@ -157,6 +149,9 @@ func selectProvider(flag string, procEnv map[string]string, merged map[string]st
 		if _, fromEnv := procEnv[key]; fromEnv {
 			return
 		}
+		if ly.Sources[key] == SourceProject {
+			return // what the project selected (a model) wins over the provider's default
+		}
 		merged[key] = val
 		ly.Values[key] = val
 		ly.Sources[key] = def.Origin
@@ -176,13 +171,6 @@ func selectProvider(flag string, procEnv map[string]string, merged map[string]st
 // base_url: that key is not for it). Nothing found is not an error here (see
 // RequireLLMKey); an unusable auth.json is.
 func (c *Config) resolveAPIKey(procEnv map[string]string, def *Provider, userDir string) error {
-	if err := c.findAPIKey(procEnv, def, userDir); err != nil || c.LLMAPIKey == "" {
-		return err
-	}
-	return c.checkKeyDestination(procEnv, def)
-}
-
-func (c *Config) findAPIKey(procEnv map[string]string, def *Provider, userDir string) error {
 	ly := c.Layers
 	c.keyHint = nil
 	if c.LLMAPIKey != "" {
@@ -241,34 +229,4 @@ func (c *Config) RequireLLMKey() error {
 	}
 	hint := append([]string{"run `harness auth login " + c.LLMProviderName + "`", "export LLM_API_KEY"}, c.keyHint...)
 	return errors.New("no API key for provider " + c.LLMProviderName + ": " + strings.Join(hint, ", or "))
-}
-
-// checkKeyDestination refuses to go on when the address the key would be sent to was chosen by the project
-// file alone. A repository you clone could otherwise set base_url to its own server and receive the key you
-// stored for that provider (or any variable it names with api_key_env). The address must come from the user
-// (flag, environment or ~/.har/config.yml), or be a local one. A project file may still pick the same address
-// the user file has, and may still choose models, headers and everything else.
-func (c *Config) checkKeyDestination(procEnv map[string]string, def *Provider) error {
-	if procEnv["LLM_BASE_URL"] != "" || c.LLMBaseURL == "" || c.Layers == nil {
-		return nil
-	}
-	chosenByProject := false
-	switch {
-	case def != nil && def.BaseURL != "":
-		chosenByProject = def.BaseURLOrigin == SourceProject
-	case c.Layers.Sources["LLM_BASE_URL"] == SourceProject:
-		chosenByProject = c.Layers.userBaseURL != c.LLMBaseURL
-	}
-	if !chosenByProject {
-		return nil
-	}
-	if u, err := url.Parse(c.LLMBaseURL); err == nil {
-		switch u.Hostname() {
-		case "localhost", "127.0.0.1", "::1":
-			return nil
-		}
-	}
-	return fmt.Errorf("%s sets the address of provider %q to %s: your API key is not sent to an address a repository chose. "+
-		"Put that base_url in %s (providers.%s.base_url) or set LLM_BASE_URL in the environment if you trust it",
-		c.Layers.ProjectFile, c.LLMProviderName, c.LLMBaseURL, filepath.Join(c.Layers.UserDir, ConfigFile), c.LLMProviderName)
 }

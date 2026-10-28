@@ -145,12 +145,6 @@ func AuthProviders(keys map[string]string) []string {
 // writeAuth replaces the file atomically (temp file in the same directory,
 // then rename), always mode 0600.
 func writeAuth(dir string, keys map[string]string) error {
-	if dir == "" {
-		return errors.New("no user directory (set HAR_HOME, or unset HARNESS_NO_USER_DIR)")
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
 	doc := authDoc{Providers: map[string]authEntry{}}
 	for n, k := range keys {
 		doc.Providers[n] = authEntry{APIKey: k}
@@ -159,12 +153,24 @@ func writeAuth(dir string, keys map[string]string) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".auth-*.tmp")
+	return writePrivateFile(dir, AuthFile, data)
+}
+
+// writePrivateFile writes dir/name atomically (temp file in dir, then rename),
+// mode 0600, creating dir (0700) when needed.
+func writePrivateFile(dir, name string, data []byte) error {
+	if dir == "" {
+		return errors.New("no user directory (set HAR_HOME, or unset HARNESS_NO_USER_DIR)")
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".tmp-*")
 	if err != nil {
 		return err
 	}
-	name := tmp.Name()
-	cleanup := func() { _ = tmp.Close(); _ = os.Remove(name) }
+	tmpName := tmp.Name()
+	cleanup := func() { _ = tmp.Close(); _ = os.Remove(tmpName) }
 	if err := tmp.Chmod(0o600); err != nil && runtime.GOOS != "windows" {
 		cleanup()
 		return err
@@ -178,11 +184,11 @@ func writeAuth(dir string, keys map[string]string) error {
 		return err
 	}
 	if err := tmp.Close(); err != nil {
-		_ = os.Remove(name)
+		_ = os.Remove(tmpName)
 		return err
 	}
-	if err := os.Rename(name, AuthPath(dir)); err != nil {
-		_ = os.Remove(name)
+	if err := os.Rename(tmpName, filepath.Join(dir, name)); err != nil {
+		_ = os.Remove(tmpName)
 		return err
 	}
 	return nil
