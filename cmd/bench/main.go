@@ -29,11 +29,19 @@ func main() {
 	timeout := flag.Duration("timeout", 10*time.Minute, "per-task timeout")
 	keep := flag.Bool("keep", false, "keep the working directories")
 	noKey := flag.Bool("no-cache-key", false, "send no prompt_cache_key")
+	tier := flag.String("tier", "", "only tasks of this tier: easy or hard (default: all)")
+	parallel := flag.Int("parallel", 1, "runs in flight at once (peak RSS is process-wide)")
+	priceIn := flag.Float64("price-in", 0, "USD per 1M uncached input tokens (enables the cost estimate)")
+	priceCached := flag.Float64("price-cached", 0, "USD per 1M cached input tokens")
+	priceOut := flag.Float64("price-out", 0, "USD per 1M output tokens")
 	flag.Parse()
+	if *tier != "" && *tier != "all" && *tier != bench.TierEasy && *tier != bench.TierHard {
+		fatal(fmt.Errorf("-tier must be easy, hard or all"))
+	}
 
 	if *list {
-		for _, t := range bench.Builtin() {
-			fmt.Printf("%-16s %s\n", t.Name, firstLine(t.Prompt))
+		for _, t := range bench.FilterTier(bench.Builtin(), *tier) {
+			fmt.Printf("%-20s %-5s %s\n", t.Name, t.TierOf(), firstLine(t.Prompt))
 		}
 		return
 	}
@@ -60,6 +68,7 @@ func main() {
 	if len(missing) > 0 {
 		fatal(fmt.Errorf("unknown tasks %v (have: %s)", missing, bench.Names()))
 	}
+	selected = bench.FilterTier(selected, *tier)
 	cfg, err := config.Load()
 	if err != nil {
 		fatal(err)
@@ -70,22 +79,20 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	var results []bench.Result
-	for _, t := range selected {
-		if m := bench.Missing(t); len(m) > 0 {
-			fmt.Fprintf(os.Stderr, "skip %s: needs %v on PATH\n", t.Name, m)
-			continue
-		}
-		for i := 0; i < *n && ctx.Err() == nil; i++ {
-			fmt.Fprintf(os.Stderr, "run  %s (%d/%d) …\n", t.Name, i+1, *n)
-			r := bench.Run(ctx, cfg, nil, t, bench.Options{Timeout: *timeout, MaxSteps: *steps, Keep: *keep, NoCacheKey: *noKey})
-			fmt.Fprintf(os.Stderr, "     %s passed=%v status=%s steps=%d %.0fs\n", t.Name, r.Passed, r.Status, r.Steps, r.WallSeconds)
-			results = append(results, r)
-		}
+	prices := bench.Prices{In: *priceIn, Cached: *priceCached, Out: *priceOut}
+	suite := bench.Suite{
+		Config:   cfg,
+		Options:  bench.Options{Timeout: *timeout, MaxSteps: *steps, Keep: *keep, NoCacheKey: *noKey},
+		Parallel: *parallel,
+		Skip:     func(t bench.Task, m []string) { fmt.Fprintf(os.Stderr, "skip %s: needs %v on PATH\n", t.Name, m) },
+		Progress: func(t bench.Task, run, n int, r bench.Result) {
+			fmt.Fprintf(os.Stderr, "done %s (%d/%d) passed=%v status=%s steps=%d %.0fs\n", t.Name, run, n, r.Passed, r.Status, r.Steps, r.WallSeconds)
+		},
 	}
-	bench.Markdown(os.Stdout, results)
+	results := suite.Run(ctx, selected, *n)
+	bench.MarkdownWith(os.Stdout, results, prices)
 	if *out != "" {
-		if err := bench.WriteJSON(*out, cfg.LLMDefaultModel, results); err != nil {
+		if err := bench.WriteJSONWith(*out, cfg.LLMDefaultModel, results, prices); err != nil {
 			fatal(err)
 		}
 	}
