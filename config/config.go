@@ -7,17 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
-
-	"github.com/caarlos0/env/v11"
 )
-
-// MCPServer is one entry of MCP_SERVERS.
-type MCPServer struct {
-	Name    string            `json:"name"`
-	URL     string            `json:"url"`
-	Tools   []string          `json:"tools,omitempty"`
-	Headers map[string]string `json:"headers,omitempty"`
-}
 
 // Config is the whole service configuration. See README "Configuration".
 type Config struct {
@@ -82,6 +72,10 @@ type Config struct {
 	// AgentPermissions is AGENT_PERMISSIONS: ask (default on the local backend), auto-edit, yolo, yolo-unsafe or
 	// readonly (see package permissions). It only applies to the local backend and the coding profile.
 	AgentPermissions string `env:"AGENT_PERMISSIONS"`
+	// AgentPermissionsAllow|Ask|Deny are AGENT_PERMISSIONS_ALLOW|ASK|DENY: extra rules, separated by newlines or ";;".
+	AgentPermissionsAllow string `env:"AGENT_PERMISSIONS_ALLOW"`
+	AgentPermissionsAsk   string `env:"AGENT_PERMISSIONS_ASK"`
+	AgentPermissionsDeny  string `env:"AGENT_PERMISSIONS_DENY"`
 
 	OpenSandboxURL            string   `env:"OPENSANDBOX_URL"`
 	OpenSandboxAPIKey         string   `env:"OPENSANDBOX_API_KEY"`
@@ -103,6 +97,9 @@ type Config struct {
 
 	MCPServersJSON string `env:"MCP_SERVERS"`
 	MCPServers     []MCPServer
+	// MCPAllowStdio is HARNESS_MCP_STDIO (or mcp.allow_stdio in the user's config.yml): MCP servers that are
+	// local programs (stdio) may be started. Only with the local sandbox backend; a project file cannot set it.
+	MCPAllowStdio bool `env:"HARNESS_MCP_STDIO"`
 
 	GlitchtipDSN string `env:"GLITCHTIP_API_DSN"`
 
@@ -179,21 +176,18 @@ type Config struct {
 	// Harness v3 runtime & API (stream B): RUNTIME_TERMINATION_GRACE_SECONDS,
 	// MAX_STREAMS_PER_USER, APPROVAL_TTL_HOURS, APPROVAL_RISKY_TOOL_PATTERNS (runtime_api.go).
 	RuntimeAPI
-}
 
-// Load parses the environment.
-func Load() (*Config, error) {
-	cfg := &Config{}
-	if err := env.Parse(cfg); err != nil {
-		return nil, err
-	}
-	if err := cfg.normalize(); err != nil {
-		return nil, err
-	}
-	return cfg, nil
+	// Layers says how the configuration was assembled (files, sources of the values); see LoadWith.
+	Layers *Layers `env:"-"`
+
+	envSet    func(string) bool
+	envLookup func(string) (string, bool)
 }
 
 func (c *Config) normalize() error {
+	if strings.EqualFold(strings.TrimSpace(c.SandboxBackend), "none") { // sandbox.backend: none
+		c.SandboxBackend, c.OpenSandboxURL = "", ""
+	}
 	c.Production = strings.TrimSpace(c.ProductionRaw) != "" // C-16
 	c.LLMModels = trimAll(c.LLMModels)
 	if err := c.validateMemory(); err != nil {
@@ -221,14 +215,14 @@ func (c *Config) normalize() error {
 		}
 		seen := map[string]bool{}
 		for _, s := range c.MCPServers {
-			if s.Name == "" || s.URL == "" {
-				return fmt.Errorf("MCP_SERVERS: every server needs name and url")
+			if s.Name == "" || (s.URL == "" && s.Command == "") {
+				return fmt.Errorf("MCP_SERVERS: every server needs name and url (or command)")
 			}
 			if seen[s.Name] {
 				return fmt.Errorf("MCP_SERVERS: duplicate server name %q", s.Name)
 			}
 			seen[s.Name] = true
-			if _, err := url.Parse(s.URL); err != nil {
+			if err := validURL(s.URL); err != nil {
 				return fmt.Errorf("MCP_SERVERS: server %q: %w", s.Name, err)
 			}
 		}
