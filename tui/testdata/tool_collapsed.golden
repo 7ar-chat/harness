@@ -1,0 +1,12 @@
+> look around
+
+✓ read_file src/main.go
+  ⎿ package main
+    
+    func main() {}
+
+✓ run_command go test ./...
+  ⎿ ok      pkg    0.1s
+    ok      pkg    0.1s
+    ok      pkg    0.1s
+    … +5 lines (ctrl+o expands)
