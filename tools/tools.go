@@ -14,8 +14,6 @@ type RunContext struct {
 	ThreadID string
 	RunID    string
 	Login    string
-	// Userinfo is the raw X-Userinfo of the run's user.
-	Userinfo string
 }
 
 // Provider contributes tools to a run.

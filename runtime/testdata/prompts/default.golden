@@ -42,7 +42,7 @@ Never store secrets or task details. A memory saved after files or tool output e
 </memory>
 
 <context>
-Date (UTC): 2026-10-05. User: Alice.
+Date (UTC): 2026-10-05.
 Goal (checked automatically after each of your answers): Produce /workspace/outputs/q3.xlsx
 Work toward it; when you believe it is met, say so and explain why.
 <user_memories>

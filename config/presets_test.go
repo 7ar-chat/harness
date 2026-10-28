@@ -10,7 +10,6 @@ import (
 func TestLoadDefaultsToFourThinkingPresets(t *testing.T) {
 	// Without environment, the thinking slider has Terra for fast/balanced and Sol for thinking/deep (default balanced).
 	// Arrange
-	t.Setenv("BASE_PATH", "/studio/work/api/")
 
 	// Act
 	cfg, err := config.Load()

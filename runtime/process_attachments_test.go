@@ -33,7 +33,7 @@ func (r *v2rig) attachedRunWith(content string, files map[string][]byte) *store.
 		items = append(items, map[string]any{"artifactId": a.ID, "name": a.Name, "path": a.Path, "sizeBytes": a.SizeBytes, "mimeType": a.MimeType, "version": a.Version})
 	}
 	run, _, err := r.st.CreateRun(ctx, store.NewRun{RunID: newID(), ThreadID: th.ID, UserLogin: "alice", Model: "gpt-test",
-		Userinfo: userinfo("alice", "Alice"), Message: store.Message{Role: store.RoleUser, Content: content, Metadata: map[string]any{"attachments": items}}})
+		Message: store.Message{Role: store.RoleUser, Content: content, Metadata: map[string]any{"attachments": items}}})
 	if err != nil {
 		r.t.Fatal(err)
 	}

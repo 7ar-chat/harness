@@ -44,7 +44,7 @@ func TestProcessGeneratesATitleAfterTheFirstCompletedRun(t *testing.T) {
 	if got.Title != "Analyse des ventes 2025" || got.TitleSource != store.TitleGenerated {
 		t.Fatalf("thread %+v", got)
 	}
-	if call := r.model.Calls()[1]; call.Messages[0].Content != titles.Instructions || call.Userinfo != userinfo("alice", "Alice") {
+	if call := r.model.Calls()[1]; call.Messages[0].Content != titles.Instructions {
 		t.Fatalf("title call %+v", call)
 	}
 	second := r.create(got, store.NewRun{Message: store.Message{Role: store.RoleUser, Content: "and 2024?"}})

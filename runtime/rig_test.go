@@ -2,7 +2,6 @@ package runtime_test
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -139,11 +138,6 @@ func (r *rig) runtime() *runtime.Runtime {
 	return r.rt
 }
 
-func userinfo(login, first string) string {
-	b, _ := json.Marshal(map[string]string{"login": login, "firstname": first})
-	return base64.StdEncoding.EncodeToString(b)
-}
-
 // queued creates a thread with a queued run, like POST /threads/{id}/runs.
 func (r *rig) queued(content string) (*store.Thread, *store.Run) {
 	r.t.Helper()
@@ -158,7 +152,7 @@ func (r *rig) queued(content string) (*store.Thread, *store.Run) {
 func (r *rig) queuedOn(th *store.Thread, content string) *store.Run {
 	r.t.Helper()
 	run, _, err := r.st.CreateRun(context.Background(), store.NewRun{
-		RunID: newID(), ThreadID: th.ID, UserLogin: "alice", Model: "gpt-test", Userinfo: userinfo("alice", "Alice"),
+		RunID: newID(), ThreadID: th.ID, UserLogin: "alice", Model: "gpt-test",
 		Message: store.Message{Role: store.RoleUser, Content: content},
 	})
 	if err != nil {
@@ -283,7 +277,7 @@ func (r *rig) create(th *store.Thread, in store.NewRun) *store.Run {
 	r.t.Helper()
 	in.RunID, in.ThreadID = newID(), th.ID
 	if in.UserLogin == "" {
-		in.UserLogin, in.Userinfo = "alice", userinfo("alice", "Alice")
+		in.UserLogin = "alice"
 	}
 	if in.Model == "" {
 		in.Model = "gpt-test"

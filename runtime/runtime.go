@@ -15,7 +15,6 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/agent"
 	"github.com/GhaziBenDahmane/harness/agui"
-	"github.com/GhaziBenDahmane/harness/auth"
 	"github.com/GhaziBenDahmane/harness/eventlog"
 	"github.com/GhaziBenDahmane/harness/queue"
 	"github.com/GhaziBenDahmane/harness/store"
@@ -308,11 +307,7 @@ func (r *Runtime) execute(parent context.Context, run *store.Run) {
 	if _, aerr := w.Append(runCtx, agui.RunStartedEvent(run.ThreadID, run.ID)); aerr != nil {
 		err = &agent.Error{Code: agui.CodeInternal, Message: agent.MsgInternal, Detail: aerr.Error()}
 	} else {
-		firstName := ""
-		if u, derr := auth.Decode(run.Userinfo); derr == nil {
-			firstName = u.FirstName
-		}
-		res, err = r.safeRun(runCtx, agent.Input{Run: run, FirstName: firstName}, w)
+		res, err = r.safeRun(runCtx, agent.Input{Run: run}, w)
 	}
 
 	if w.lost.Load() { // another writer (the sweeper) appended to this run's log

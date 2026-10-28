@@ -35,7 +35,7 @@ func goalOn(t *testing.T, r *v2rig, text string) (*store.Thread, *store.Run) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	run, _, err := r.st.CreateRun(ctx, goals.NewRun(g, "alice", userinfo("alice", "Alice"), "gpt-test", "", "", goals.StartMessage(g.Text)))
+	run, _, err := r.st.CreateRun(ctx, goals.NewRun(g, "alice", "gpt-test", "", "", goals.StartMessage(g.Text)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestAuxiliaryCallsAreCountedInTheRunUsageAndRunAtLowEffort(t *testing.T) {
 	ctx := context.Background()
 	th, _ := r.st.CreateThread(ctx, "alice", "")
 	g, _ := r.st.PutGoal(ctx, "alice", th.ID, "Write the Q3 report", 3)
-	run, _, err := r.st.CreateRun(ctx, goals.NewRun(g, "alice", userinfo("alice", "Alice"), "gpt-reasoning", "high", "", goals.StartMessage(g.Text)))
+	run, _, err := r.st.CreateRun(ctx, goals.NewRun(g, "alice", "gpt-reasoning", "high", "", goals.StartMessage(g.Text)))
 	if err != nil {
 		t.Fatal(err)
 	}

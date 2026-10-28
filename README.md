@@ -16,7 +16,7 @@ It is meant to sit behind any front end — a web server, a TUI, a desktop app.
                                     harness.Harness  (Send / Events / Cancel / Steer)
                                                │
         ┌───────────── runtime (claim, heartbeat, hooks) ─────────────┐
-        │  agent loop ── llm (OpenAI chat / Responses, gateway)       │
+        │  agent loop ── llm (OpenAI chat / Responses, Anthropic)│
         │      │         compaction · steering · approvals · goals    │
         │      ▼                                                      │
         │  tools ── sandboxtools (exec, read, edit, search, view…)    │
@@ -70,6 +70,13 @@ prompt. An explicit `LLM_PROMPT_VARIANTS` still wins per model. Typical terminal
 AGENT_PROFILE=coding SANDBOX_BACKEND=local LLM_PROVIDER=anthropic LLM_API_KEY=… \
 LLM_MODELS=claude-sonnet-5-5 LLM_DEFAULT_MODEL=claude-sonnet-5-5 harness
 ```
+
+## LLM providers
+
+`LLM_PROVIDER` is `openai` (the default: any OpenAI-compatible endpoint at `LLM_BASE_URL` with `LLM_API_KEY`;
+Chat Completions, or `{LLM_BASE_URL}/responses` for the models in `LLM_RESPONSES_MODELS`) or `anthropic`.
+Model ids (`LLM_MODELS`) are sent to the provider verbatim. A user is just a login string; the harness
+forwards no identity to the model or to MCP servers.
 
 ## Providers that route by session
 
@@ -231,7 +238,7 @@ Nothing happens outside a git repository.
 | `httpserver` | `net/http` handlers + SSE for web front ends |
 | `agent` | The loop: steps, streaming, retries, steering, tool hooks, approvals, spill, masking |
 | `agui` | AG-UI event builders and order checker |
-| `llm`, `llm/anthropic`, `llm/responses` | eino model factory: OpenAI chat, Responses API, native Anthropic Messages (prompt-cache breakpoints, `LLM_PROVIDER=anthropic`), Studio LLM gateway transport, retry |
+| `llm`, `llm/anthropic`, `llm/responses` | eino model factory: OpenAI chat, Responses API, native Anthropic Messages (prompt-cache breakpoints, `LLM_PROVIDER=anthropic`), retry |
 | `compaction` | Context summarisation and token estimates |
 | `sandbox`, `tools/sandboxtools` | Remote sandbox contract/manager and the file/exec/search/view tools |
 | `tools/{skill,memory,harness,mcp}tools` | Skills, memory, plan/ask_user/goal and MCP tools |

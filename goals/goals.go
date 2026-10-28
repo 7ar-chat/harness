@@ -86,9 +86,9 @@ type Store interface {
 
 // NewRun is a goal run of the thread: it claims one of the goal's turns.
 // interactionMode is interactive or automatic ("": the thread's last choice).
-func NewRun(g *store.Goal, login, userinfo, model, reasoningEffort, interactionMode, content string) store.NewRun {
+func NewRun(g *store.Goal, login, model, reasoningEffort, interactionMode, content string) store.NewRun {
 	return store.NewRun{
-		RunID: uuid.NewString(), ThreadID: g.ThreadID, UserLogin: login, Model: model, Userinfo: userinfo,
+		RunID: uuid.NewString(), ThreadID: g.ThreadID, UserLogin: login, Model: model,
 		Kind: store.KindGoal, ReasoningEffort: reasoningEffort, GoalID: g.ID, InteractionMode: interactionMode,
 		Message:   store.Message{Role: store.RoleUser, Content: content, Metadata: map[string]any{"source": "goal"}},
 		AutoTitle: autoTitle(content),
@@ -288,7 +288,7 @@ func (h *Hook) startReplacement(ctx context.Context, g *store.Goal, prev *store.
 	if g.Status != store.GoalActive || g.TurnsUsed > 0 {
 		return ""
 	}
-	return h.startRun(ctx, NewRun(g, prev.UserLogin, prev.Userinfo, prev.Model, prev.ReasoningEffort, "", StartMessage(g.Text)), prev)
+	return h.startRun(ctx, NewRun(g, prev.UserLogin, prev.Model, prev.ReasoningEffort, "", StartMessage(g.Text)), prev)
 }
 
 // continueGoal starts the next goal run unless another run (a user message) got
@@ -296,7 +296,7 @@ func (h *Hook) startReplacement(ctx context.Context, g *store.Goal, prev *store.
 // previous run, or the one the user switched to while it ran (prev holds the
 // mode the run started with, so it is not copied: it would undo the switch).
 func (h *Hook) continueGoal(ctx context.Context, g *store.Goal, prev *store.Run, reason string, blockers []string) string {
-	return h.startRun(ctx, NewRun(g, prev.UserLogin, prev.Userinfo, prev.Model, prev.ReasoningEffort, "", ContinueMessage(reason, blockers...)), prev)
+	return h.startRun(ctx, NewRun(g, prev.UserLogin, prev.Model, prev.ReasoningEffort, "", ContinueMessage(reason, blockers...)), prev)
 }
 
 // startRun creates and enqueues a goal run (one active run per thread: "" when another run is active).

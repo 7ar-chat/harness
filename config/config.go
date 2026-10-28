@@ -13,17 +13,15 @@ import (
 
 // MCPServer is one entry of WORK_MCP_SERVERS.
 type MCPServer struct {
-	Name            string            `json:"name"`
-	URL             string            `json:"url"`
-	ForwardIdentity bool              `json:"forwardIdentity"`
-	Tools           []string          `json:"tools,omitempty"`
-	Headers         map[string]string `json:"headers,omitempty"`
+	Name    string            `json:"name"`
+	URL     string            `json:"url"`
+	Tools   []string          `json:"tools,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
 }
 
 // Config is the whole service configuration. See README "Configuration".
 type Config struct {
-	Port     int    `env:"PORT" envDefault:"8000"`
-	BasePath string `env:"BASE_PATH" envDefault:"/studio/work/api"`
+	Port int `env:"PORT" envDefault:"8000"`
 	// Production is on when DJANGO_PRODUCTION has any non-empty value (house
 	// convention, like Django's os.environ.get: "1", "true", "yes" alike).
 	Production    bool   `env:"-"`
@@ -50,12 +48,10 @@ type Config struct {
 	// RedisPoolSize must exceed concurrent SSE tailers (each holds a connection during XREAD BLOCK).
 	RedisPoolSize int `env:"REDIS_POOL_SIZE" envDefault:"256"`
 
-	LLMProvider   string `env:"LLM_PROVIDER" envDefault:"gateway"`
-	LLMGatewayURL string `env:"LLM_GATEWAY_URL" envDefault:"http://llm-gateway:5000/"`
-	LLMUseCase    string `env:"LLM_USE_CASE" envDefault:"5"`
-	LLMAPIVersion string `env:"LLM_API_VERSION" envDefault:"2025-04-01-preview"`
-	LLMBaseURL    string `env:"LLM_BASE_URL"`
-	LLMAPIKey     string `env:"LLM_API_KEY"`
+	// LLMProvider is "openai" (any OpenAI-compatible endpoint at LLM_BASE_URL) or "anthropic".
+	LLMProvider string `env:"LLM_PROVIDER" envDefault:"openai"`
+	LLMBaseURL  string `env:"LLM_BASE_URL"`
+	LLMAPIKey   string `env:"LLM_API_KEY"`
 	// ExploreModel is EXPLORE_MODEL: the model of the read-only explore sub-agent of the coding profile
 	// (default LLM_DEFAULT_MODEL; a cheaper model saves the most).
 	ExploreModel string `env:"EXPLORE_MODEL"`
@@ -147,19 +143,6 @@ type Config struct {
 	GitArchiveMaxBytes   int64 `env:"WORK_GIT_ARCHIVE_MAX_BYTES" envDefault:"52428800"`
 	CheckpointMaxFile    int64 `env:"WORK_WORKSPACE_CHECKPOINT_MAX_FILE_BYTES" envDefault:"20971520"`
 
-	// Skills (parity with Work, README "Skills catalog"): who may publish,
-	// unpublish and tag global skills — X-Userinfo logins and/or roles (claims
-	// roles, groups, realm_access.roles, resource_access.<own client>.roles), comma-separated;
-	// both empty = nobody (global skills are then read-only).
-	SkillAdminLogins []string `env:"WORK_SKILL_ADMIN_LOGINS" envSeparator:","`
-	SkillAdminRoles  []string `env:"WORK_SKILL_ADMIN_ROLES" envSeparator:","`
-	// SkillAdminClientID (stream A, B-03): the Keycloak client whose
-	// resource_access roles count for WORK_SKILL_ADMIN_ROLES (default
-	// OIDC_RP_CLIENT_ID, Studio's own client); roles of any other client only
-	// match an explicit "client:role" entry.
-	SkillAdminClientID string `env:"WORK_SKILL_ADMIN_CLIENT_ID"`
-	OIDCClientID       string `env:"OIDC_RP_CLIENT_ID"`
-
 	// Skills marketplace sync (AstraForge's ASTRAFORGE_SKILLS_MARKETPLACE_*,
 	// README "Skills marketplace sync"): the skills/ of a GitLab repository
 	// become global skills. Enabled when a source path, a token or a
@@ -226,10 +209,6 @@ func Load() (*Config, error) {
 
 func (c *Config) normalize() error {
 	c.Production = strings.TrimSpace(c.ProductionRaw) != "" // C-16
-	c.BasePath = "/" + strings.Trim(c.BasePath, "/")
-	if c.BasePath == "/" {
-		c.BasePath = ""
-	}
 	c.LLMModels = trimAll(c.LLMModels)
 	if err := c.validateMemory(); err != nil {
 		return err
@@ -246,9 +225,9 @@ func (c *Config) normalize() error {
 		c.LLMModels = append(c.LLMModels, c.ExploreModel)
 	}
 	switch c.LLMProvider {
-	case "gateway", "openai", "anthropic":
+	case "openai", "anthropic":
 	default:
-		return fmt.Errorf("LLM_PROVIDER must be gateway, openai or anthropic, got %q", c.LLMProvider)
+		return fmt.Errorf("LLM_PROVIDER must be openai or anthropic, got %q", c.LLMProvider)
 	}
 	if strings.TrimSpace(c.MCPServersJSON) != "" {
 		if err := json.Unmarshal([]byte(c.MCPServersJSON), &c.MCPServers); err != nil {
@@ -359,7 +338,7 @@ func (c *Config) PostgresDSN() string {
 	q := url.Values{}
 	q.Set("search_path", c.PostgresSchema)
 	q.Set("sslmode", c.PostgresSSLMode)
-	q.Set("application_name", "studio-work")
+	q.Set("application_name", "harness")
 	u.RawQuery = q.Encode()
 	return u.String()
 }

@@ -19,7 +19,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/GhaziBenDahmane/harness/agui"
-	"github.com/GhaziBenDahmane/harness/auth"
 	"github.com/GhaziBenDahmane/harness/compaction"
 	"github.com/GhaziBenDahmane/harness/eventlog"
 	"github.com/GhaziBenDahmane/harness/llm"
@@ -144,7 +143,6 @@ type runState struct {
 
 // Run executes the loop. It returns ctx.Err() when cancelled, *Error for run failures.
 func (a *Agent) Run(ctx context.Context, in Input, w eventlog.Writer) (Result, error) {
-	ctx = auth.WithUserinfo(ctx, in.Run.Userinfo)
 	ctx = llm.WithSession(ctx, in.Run.ThreadID) // every model call of the run (steps, compaction, judges)
 	st := &runState{a: a, in: in, w: w, usage: agui.Usage{Model: in.Run.Model}}
 
@@ -160,7 +158,7 @@ func (a *Agent) Run(ctx context.Context, in Input, w eventlog.Writer) (Result, e
 	cleanup := func() {}
 	if a.Tools != nil {
 		toolList, cleanup, err = a.Tools.Tools(ctx, tools.RunContext{
-			ThreadID: in.Run.ThreadID, RunID: in.Run.ID, Login: in.Run.UserLogin, Userinfo: in.Run.Userinfo,
+			ThreadID: in.Run.ThreadID, RunID: in.Run.ID, Login: in.Run.UserLogin,
 		})
 		if err != nil {
 			slog.Warn("agent: tools unavailable", "run_id", in.Run.ID, "error", err)

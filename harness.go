@@ -81,7 +81,7 @@ type Options struct {
 	// store/pgstore for Postgres).
 	Store Store
 	// Models builds the chat models (default: llm.New(Config), the OpenAI-compatible
-	// provider or the Studio LLM gateway).
+	// provider, or Anthropic with LLM_PROVIDER=anthropic).
 	Models llm.Factory
 	// Backend provides the sandboxes (default: the local machine when SANDBOX_BACKEND=local,
 	// OpenSandbox when OPENSANDBOX_URL is set, else none: the agent then has no sandbox tools).
@@ -303,8 +303,6 @@ type RunOptions struct {
 	ReasoningEffort string
 	// Skills are skill names requested explicitly for this run.
 	Skills []string
-	// Userinfo is forwarded to the LLM gateway and MCP servers (X-Userinfo, base64 JSON).
-	Userinfo string
 	// Interactive makes risky tool calls wait for Approve/Reject.
 	Interactive bool
 	// MessageID makes Send idempotent for that user message (optional).
@@ -333,7 +331,7 @@ func (h *Harness) Send(ctx context.Context, user, threadID, text string, o RunOp
 		mode = "interactive"
 	}
 	run, _, err := h.Store.CreateRun(ctx, store.NewRun{
-		RunID: uuid.NewString(), ThreadID: threadID, UserLogin: user, Model: o.Model, Userinfo: o.Userinfo,
+		RunID: uuid.NewString(), ThreadID: threadID, UserLogin: user, Model: o.Model,
 		Message:         store.Message{ID: o.MessageID, Role: store.RoleUser, Content: text},
 		AutoTitle:       autoTitle(text),
 		Skills:          o.Skills,

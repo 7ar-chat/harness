@@ -26,7 +26,7 @@ func (r *rig) goalRun(maxTurns int) (*store.Thread, *store.Goal, *store.Run) {
 	if err != nil {
 		r.t.Fatal(err)
 	}
-	run, _, err := r.st.CreateRun(ctx, goals.NewRun(g, "alice", userinfo("alice", "Alice"), "gpt-test", "", "", goals.StartMessage(g.Text)))
+	run, _, err := r.st.CreateRun(ctx, goals.NewRun(g, "alice", "gpt-test", "", "", goals.StartMessage(g.Text)))
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -359,7 +359,7 @@ func TestProcessGoalContinuationKeepsTheRunsInteractionMode(t *testing.T) {
 	ctx := context.Background()
 	th, _ := r.st.CreateThread(ctx, "alice", "t")
 	g, _ := r.st.PutGoal(ctx, "alice", th.ID, goalText, 3)
-	run, _, err := r.st.CreateRun(ctx, goals.NewRun(g, "alice", userinfo("alice", "Alice"), "gpt-test", "", store.InteractionInteractive, goals.StartMessage(g.Text)))
+	run, _, err := r.st.CreateRun(ctx, goals.NewRun(g, "alice", "gpt-test", "", store.InteractionInteractive, goals.StartMessage(g.Text)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -390,7 +390,7 @@ func TestProcessGoalContinuationFollowsAModeSwitchedDuringTheRun(t *testing.T) {
 	ctx := context.Background()
 	th, _ := r.st.CreateThread(ctx, "alice", "t")
 	g, _ := r.st.PutGoal(ctx, "alice", th.ID, goalText, 3)
-	run, _, err := r.st.CreateRun(ctx, goals.NewRun(g, "alice", userinfo("alice", "Alice"), "gpt-test", "", store.InteractionInteractive, goals.StartMessage(g.Text)))
+	run, _, err := r.st.CreateRun(ctx, goals.NewRun(g, "alice", "gpt-test", "", store.InteractionInteractive, goals.StartMessage(g.Text)))
 	if err != nil {
 		t.Fatal(err)
 	}
