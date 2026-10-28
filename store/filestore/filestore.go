@@ -53,6 +53,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/engine/agui"
 	"github.com/GhaziBenDahmane/harness/engine/eventlog"
 	"github.com/GhaziBenDahmane/harness/store"
@@ -105,10 +106,14 @@ type Store struct {
 }
 
 // DefaultDir is the state directory used when none is given:
-// $LOCAL_STATE_DIR, else $XDG_STATE_HOME/harness, else ~/.local/state/harness.
+// $LOCAL_STATE_DIR, else <user dir>/sessions ($HAR_HOME or ~/.har), else (user
+// directory disabled or unknown) $XDG_STATE_HOME/harness, else ~/.local/state/harness.
 func DefaultDir() string {
 	if d := os.Getenv("LOCAL_STATE_DIR"); d != "" {
 		return d
+	}
+	if u := config.UserDir(); u != "" {
+		return filepath.Join(u, config.SessionsFolder)
 	}
 	if d := os.Getenv("XDG_STATE_HOME"); d != "" {
 		return filepath.Join(d, "harness")

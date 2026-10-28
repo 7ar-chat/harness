@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // DirName is the name of the configuration directory of a project
@@ -18,14 +19,57 @@ const (
 	MCPFile          = "mcp.json"
 	SkillsFolder     = "skills"
 	MemoryFolder     = "memory"
+	AuthFile         = "auth.json"
+	AgentsFile       = "AGENTS.md"
+	SessionsFolder   = "sessions"
 )
 
-// UserDir is ~/.har ("" when the home directory is unknown).
-func UserDir() string {
+// Environment variables that place or disable the user directory.
+const (
+	// HomeEnv overrides the location of the user directory (default ~/.har):
+	// for tests, containers and servers.
+	HomeEnv = "HAR_HOME"
+	// NoUserDirEnv disables reading anything from the user directory (any
+	// non-empty value but 0/false/no/off): for servers, containers and CI that must be hermetic.
+	NoUserDirEnv = "HARNESS_NO_USER_DIR"
+)
+
+// NoUserDir reports HARNESS_NO_USER_DIR: nothing is read from the user directory.
+func NoUserDir() bool { return noUserDir(os.Getenv) }
+
+func noUserDir(get func(string) string) bool {
+	switch strings.ToLower(strings.TrimSpace(get(NoUserDirEnv))) {
+	case "", "0", "false", "no", "off":
+		return false
+	}
+	return true
+}
+
+// HomeDir is the user directory whether or not it is disabled: $HAR_HOME, else
+// ~/.har ("" when the home directory is unknown). Commands that write to it
+// (harness auth, harness config init) use it; everything that reads uses UserDir.
+func HomeDir() string { return homeDir(os.Getenv) }
+
+func homeDir(get func(string) string) string {
+	if d := strings.TrimSpace(get(HomeEnv)); d != "" {
+		return d
+	}
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
 		return filepath.Join(home, DirName)
 	}
 	return ""
+}
+
+// UserDir is the directory every user-level file is read from: $HAR_HOME, else
+// ~/.har. It is "" when the home directory is unknown or HARNESS_NO_USER_DIR
+// is set. All readers of the user directory go through it.
+func UserDir() string { return userDirFrom(os.Getenv) }
+
+func userDirFrom(get func(string) string) string {
+	if noUserDir(get) {
+		return ""
+	}
+	return homeDir(get)
 }
 
 // FindProjectDir walks up from start to the git root (the first directory

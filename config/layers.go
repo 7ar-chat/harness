@@ -38,6 +38,9 @@ type LoadOptions struct {
 	UserDir string
 	// Environ is the process environment ("K=V" entries; default os.Environ()).
 	Environ []string
+	// Provider selects a named provider (the -provider flag); it wins over
+	// LLM_PROVIDER and the files.
+	Provider string
 	// NoFiles ignores the configuration files (environment only).
 	NoFiles bool
 }
@@ -50,6 +53,8 @@ type Layers struct {
 	// directory ("" when there is none).
 	ProjectRoot, ProjectDir string
 	UserDir                 string
+	// AuthFile is the credentials file when the API key came from it.
+	AuthFile string
 	// ProjectFile and UserFile are the config.yml files that were read ("" if absent).
 	ProjectFile, UserFile string
 	// Values and Sources are keyed by the environment variable name.
@@ -83,10 +88,16 @@ func LoadWith(o LoadOptions) (*Config, error) {
 
 	var mcpFiles []mcpDoc
 	var allowStdioUser bool
+	providers := map[string]Provider{}
+	userDir := ""
 	if !o.NoFiles {
-		userDir := o.UserDir
+		lookup := func(k string) string { return procEnv[k] }
+		userDir = o.UserDir
 		if userDir == "" {
-			userDir = UserDir()
+			userDir = userDirFrom(lookup)
+		}
+		if noUserDir(lookup) {
+			userDir = "" // HARNESS_NO_USER_DIR: nothing is read from the user directory
 		}
 		ly.UserDir = userDir
 		start := o.Dir
@@ -128,6 +139,12 @@ func LoadWith(o LoadOptions) (*Config, error) {
 				ly.Values[k] = v
 				ly.Sources[k] = layer.src
 			}
+			for name, p := range doc.providers {
+				if prev, ok := providers[name]; ok {
+					p = prev.merge(p)
+				}
+				providers[name] = p
+			}
 			for k, v := range doc.lists {
 				perms[k] = append(perms[k], v...)
 			}
@@ -151,6 +168,7 @@ func LoadWith(o LoadOptions) (*Config, error) {
 			ly.Sources[k] = SourceEnv
 		}
 	}
+	name, def := selectProvider(o.Provider, procEnv, merged, ly, providers)
 	cfg := &Config{}
 	cfg.envLookup = func(name string) (string, bool) { v, ok := procEnv[name]; return v, ok }
 	cfg.envSet = func(name string) bool { _, ok := merged[name]; return ok }
@@ -158,12 +176,16 @@ func LoadWith(o LoadOptions) (*Config, error) {
 		return nil, err
 	}
 	cfg.Layers = ly
+	cfg.LLMProviderName, cfg.Providers = name, providers
 	if allowStdioUser {
 		if _, set := procEnv["HARNESS_MCP_STDIO"]; !set {
 			cfg.MCPAllowStdio = true
 		}
 	}
 	if err := cfg.normalize(); err != nil {
+		return nil, err
+	}
+	if err := cfg.resolveAPIKey(procEnv, def, userDir); err != nil {
 		return nil, err
 	}
 	if !o.NoFiles {
@@ -310,6 +332,7 @@ type fileDoc struct {
 	values     map[string]string
 	lists      map[string][]string // permissions allow/ask/deny, appended across files
 	mcp        map[string]any
+	providers  map[string]Provider
 	allowStdio bool
 }
 
@@ -380,7 +403,7 @@ func parseConfigFile(file string, data []byte, user bool, procEnv map[string]str
 	plain := map[string]any{}
 	for k, v := range root {
 		switch k {
-		case "mcp", "env":
+		case "mcp", "env", "providers":
 			special[k] = v
 		default:
 			plain[k] = v
@@ -407,6 +430,17 @@ func parseConfigFile(file string, data []byte, user bool, procEnv map[string]str
 			}
 			doc.values[name] = s
 		}
+	}
+	if v, ok := special["providers"]; ok {
+		src := SourceProject
+		if user {
+			src = SourceUser
+		}
+		ps, err := parseProviders(file, v, src)
+		if err != nil {
+			return nil, err
+		}
+		doc.providers = ps
 	}
 	if v, ok := special["mcp"]; ok {
 		m, ok := v.(map[string]any)
@@ -565,6 +599,10 @@ func (c *Config) Dump(w io.Writer, flags map[string]string) {
 	fmt.Fprintf(w, "project root: %s\n", orNone(ly.ProjectRoot))
 	fmt.Fprintf(w, "project file: %s\n", orNone(ly.ProjectFile))
 	fmt.Fprintf(w, "user file:    %s\n", orNone(ly.UserFile))
+	fmt.Fprintf(w, "auth file:    %s\n", orNone(ly.AuthFile))
+	if c.LLMProviderName != "" {
+		fmt.Fprintf(w, "provider:     %s (type %s)\n", c.LLMProviderName, c.LLMProvider)
+	}
 	for _, src := range ly.MCPSources {
 		fmt.Fprintf(w, "mcp file:     %s\n", src)
 	}
@@ -573,6 +611,9 @@ func (c *Config) Dump(w io.Writer, flags map[string]string) {
 	type row struct{ name, val, src string }
 	var rows []row
 	for name, v := range ly.Values {
+		if name == "LLM_API_KEY" {
+			continue // shown below with the source that supplied it
+		}
 		rows = append(rows, row{name, show(name, v), string(ly.Sources[name])})
 	}
 	for name, v := range flags {
@@ -584,6 +625,9 @@ func (c *Config) Dump(w io.Writer, flags map[string]string) {
 			continue
 		}
 		fmt.Fprintf(w, "%-40s %-30s (%s)\n", r.name, r.val, r.src)
+	}
+	if c.LLMAPIKey != "" {
+		fmt.Fprintf(w, "%-40s %-30s (%s)\n", "LLM_API_KEY", "****", c.LLMKeySource)
 	}
 	if n := len(c.MCPServers); n > 0 {
 		fmt.Fprintf(w, "\nmcp servers:\n")
