@@ -54,6 +54,9 @@ type Options struct {
 	// OnWrite runs after write_file or edit_file wrote content to path (e.g.
 	// to install the skills the content names); its errors are logged.
 	OnWrite func(ctx context.Context, rc tools.RunContext, sb sandbox.Sandbox, path string, content []byte) error
+	// CheckWrite runs after write_file or edit_file wrote path; a non-empty result
+	// (a syntax error, say) is added to the tool result as its notice.
+	CheckWrite func(ctx context.Context, sb sandbox.Sandbox, path string) string
 	// AfterFailedCommand runs after a foreground command exited non-zero,
 	// with its output (stdout then stderr); a non-empty result is added to the
 	// tool result as its note (e.g. "Skill x was installed; run the command
@@ -329,17 +332,27 @@ func (b *binding) write(ctx context.Context, in writeInput) (*writeOutput, error
 	if err != nil {
 		return nil, err
 	}
+	var notice string
 	if err := b.withSandbox(ctx, func(sb sandbox.Sandbox) error {
 		if err := writeNoFollow(ctx, sb, p, []byte(in.Content)); err != nil {
 			return err
 		}
 		b.afterWrite(ctx, sb, p, []byte(in.Content))
+		notice = b.checkWrite(ctx, sb, p)
 		return nil
 	}); err != nil {
 		return nil, err
 	}
 	b.p.seen.record(b.rc.ThreadID, p, []byte(in.Content))
-	return &writeOutput{Path: p, BytesWritten: len(in.Content)}, nil
+	return &writeOutput{Path: p, BytesWritten: len(in.Content), Notice: notice}, nil
+}
+
+// checkWrite runs the CheckWrite hook ("" without one).
+func (b *binding) checkWrite(ctx context.Context, sb sandbox.Sandbox, p string) string {
+	if hook := b.p.opts.CheckWrite; hook != nil {
+		return hook(ctx, sb, p)
+	}
+	return ""
 }
 
 // afterWrite runs the OnWrite hook (best effort).

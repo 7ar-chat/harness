@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,6 +36,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/approvals"
 	"github.com/GhaziBenDahmane/harness/artifacts"
 	"github.com/GhaziBenDahmane/harness/classification"
+	"github.com/GhaziBenDahmane/harness/codecheck"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/eventlog"
 	"github.com/GhaziBenDahmane/harness/goals"
@@ -207,6 +209,13 @@ func New(o Options) (*Harness, error) {
 		OnWrite:            installer.NoteContent,
 		AfterFailedCommand: installer.AfterFailedCommand,
 		Renders:            renderRecorder(st, mgr),
+	}
+	if strings.EqualFold(strings.TrimSpace(cfg.AgentProfile), "coding") || strings.TrimSpace(cfg.CodeChecks) != "" {
+		extra, err := codecheck.Parse(cfg.CodeChecks)
+		if err != nil {
+			return nil, err
+		}
+		sbOpts.CheckWrite = codecheck.New(extra).Check
 	}
 	if o.Redis != nil {
 		sbOpts.Jobs = sandboxtools.RedisJobs{RDB: o.Redis}

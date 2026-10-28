@@ -56,6 +56,9 @@ type Config struct {
 	LLMAPIVersion string `env:"LLM_API_VERSION" envDefault:"2025-04-01-preview"`
 	LLMBaseURL    string `env:"LLM_BASE_URL"`
 	LLMAPIKey     string `env:"LLM_API_KEY"`
+	// CodeChecks is CODE_CHECKS: ".ext=command;…" syntax checks run after write_file/edit_file ({path} is the
+	// file; see codecheck.Defaults). They are on with AGENT_PROFILE=coding, or whenever this is set.
+	CodeChecks string `env:"CODE_CHECKS"`
 	// LLMCacheTTL is the prompt-cache lifetime of the anthropic provider: "5m" (default) or "1h".
 	LLMCacheTTL     string   `env:"LLM_CACHE_TTL"`
 	LLMDefaultModel string   `env:"LLM_DEFAULT_MODEL" envDefault:"gpt-5.6-terra"`

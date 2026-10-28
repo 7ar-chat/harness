@@ -108,6 +108,9 @@ func (b *binding) replaceIn(ctx context.Context, sb sandbox.Sandbox, p string, i
 		return nil, err
 	}
 	b.afterWrite(ctx, sb, p, []byte(content))
+	if note := b.checkWrite(ctx, sb, p); note != "" {
+		out.Notice = note
+	}
 	b.p.seen.record(b.rc.ThreadID, p, []byte(content))
 	return out, nil
 }
