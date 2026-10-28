@@ -108,7 +108,7 @@ func TestHookPauseRecordsTheApproval(t *testing.T) {
 
 func TestDeniedMessageIsClear(t *testing.T) {
 	msg := DeniedMessage(Decision{Action: Deny, Reason: "writing .env is blocked"})
-	for _, part := range []string{"permission denied", "writing .env is blocked", "was not run", "do not retry", ".harness/permissions.yml"} {
+	for _, part := range []string{"permission denied", "writing .env is blocked", "was not run", "do not retry", ".har/permissions.yml"} {
 		if !strings.Contains(msg, part) {
 			t.Errorf("message %q lacks %q", msg, part)
 		}

@@ -18,8 +18,8 @@ import (
 //
 //   - builtin: the skills embedded in the binary (skills/skillsfs/builtin);
 //   - extra: an fs.FS the embedding product passes in its options;
-//   - user: the user directory (SKILLS_DIR, default ~/.config/harness/skills);
-//   - project: <workspace>/.harness/skills (not wired yet: see the README).
+//   - user: the user directory (SKILLS_DIR, default ~/.har/skills);
+//   - project: <workspace>/.har/skills (not wired yet: see the README).
 const (
 	SourceBuiltin = "builtin"
 	SourceExtra   = "extra"

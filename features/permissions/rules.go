@@ -14,6 +14,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/GhaziBenDahmane/harness/config"
 )
 
 // Action is a decision.
@@ -128,7 +130,7 @@ func isToolName(s string) bool {
 	return s != ""
 }
 
-// File is the YAML form of a permissions file (.harness/permissions.yml).
+// File is the YAML form of a permissions file (.har/permissions.yml).
 type File struct {
 	Mode  string   `yaml:"mode"`
 	Allow []string `yaml:"allow"`
@@ -172,8 +174,8 @@ type Options struct {
 	// (AGENT_PERMISSIONS_ALLOW|ASK|DENY: entries separated by newlines or ";;").
 	Allow, Ask, Deny string
 	// Files are read in order when they exist; earlier files have priority for
-	// the mode. Default: <workspace>/.harness/permissions.yml, then
-	// ~/.config/harness/permissions.yml.
+	// the mode. Default: <workspace>/.har/permissions.yml, then
+	// ~/.har/permissions.yml.
 	Files []string
 	// Home is the user's home directory (default os.UserHomeDir).
 	Home string
@@ -191,10 +193,10 @@ func Load(o Options) (*Policy, error) {
 	files := o.Files
 	if files == nil {
 		if o.Workspace != "" {
-			files = append(files, filepath.Join(o.Workspace, ".harness", "permissions.yml"))
+			files = append(files, filepath.Join(o.Workspace, config.DirName, config.PermissionsFile))
 		}
 		if home != "" {
-			files = append(files, filepath.Join(home, ".config", "harness", "permissions.yml"))
+			files = append(files, filepath.Join(home, config.DirName, config.PermissionsFile))
 		}
 	}
 	p := &Policy{Workspace: o.Workspace, Home: home}

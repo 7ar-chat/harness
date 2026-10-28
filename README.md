@@ -255,8 +255,8 @@ redirections) and the most severe verdict wins.
 
 `AGENT_PERMISSIONS` picks the mode: `ask` (default on local), `auto-edit` (edits free everywhere,
 commands asked), `yolo` (no prompts, deny rules still apply), `yolo-unsafe` (nothing is checked),
-`readonly` (only read-only commands, no edits). Rules go in `.harness/permissions.yml` (workspace) and
-`~/.config/harness/permissions.yml`, or in `AGENT_PERMISSIONS_ALLOW|ASK|DENY` (entries separated by
+`readonly` (only read-only commands, no edits). Rules go in `.har/permissions.yml` (workspace) and
+`~/.har/permissions.yml`, or in `AGENT_PERMISSIONS_ALLOW|ASK|DENY` (entries separated by
 newlines or `;;`); deny beats ask beats allow, and a user allow overrides a built-in ask:
 
 ```yaml
@@ -290,11 +290,11 @@ Skills are discovered from, lowest to highest precedence (a later source replace
 | --- | --- | --- |
 | `builtin` | embedded in the binary (`features/skills/skillsfs/builtin`) | `docx`, `pptx`, `xlsx`, `pdf`, `charts`; `Options.BuiltinSkills` replaces them |
 | `extra` | `Options.ExtraSkills` (an `fs.FS`) | the embedding product's own skills |
-| `user` | `SKILLS_DIR`, default `~/.config/harness/skills` | one folder per skill |
-| `project` | `<workspace>/.harness/skills` | not wired yet (see Status); fenced as untrusted text |
+| `user` | `SKILLS_DIR`, default `~/.har/skills` | one folder per skill |
+| `project` | `<workspace>/.har/skills` | not wired yet (see Status); fenced as untrusted text |
 
 ```
-~/.config/harness/skills/
+~/.har/skills/
   release-notes/
     SKILL.md          # ---\nname: release-notes\ndescription: Draft release notes from merged PRs.\n---\n…
     scripts/collect.py
@@ -476,8 +476,8 @@ names are read); the model, sandbox and storage settings keep their descriptive 
 | `HARNESS_TEST_S3_ENDPOINT`, `_ACCESS_KEY`, `_SECRET_KEY` | unset | S3-compatible endpoint for the artifact blob tests (skipped when unset) |
 
 Memory entries live in the store; their logical paths (`memories/semantic/facts.md`, ...) may be written with
-the `.harness/memory/` prefix, which is stripped. The workspace checkpoints leave `.harness/tmp/` and
-`.harness/runtime/` out of the history.
+the `.har/memory/` prefix, which is stripped. The workspace checkpoints leave `.har/tmp/` and
+`.har/runtime/` out of the history.
 
 ## Building
 
@@ -488,7 +488,7 @@ because it keeps the symbol table and DWARF). Idle resident memory is about 20 M
 ## Status / known gaps
 
 * Requires Go 1.26 (`go test ./...`). `store/pgstore` tests need a Postgres (`HARNESS_TEST_DATABASE_URL`) and skip otherwise.
-* Project skills (`<workspace>/.harness/skills`) are not discovered yet: the registry supports the
+* Project skills (`<workspace>/.har/skills`) are not discovered yet: the registry supports the
   `project` source (`Registry.AddFS` / `AddDir`, fenced as untrusted data) but nothing feeds it a
   workspace directory per run. Follow-up.
 * Web search is not built in: configure any web-search MCP server in `MCP_SERVERS`.

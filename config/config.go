@@ -143,7 +143,7 @@ type Config struct {
 	GitArchiveMaxBytes   int64 `env:"HARNESS_GIT_ARCHIVE_MAX_BYTES" envDefault:"52428800"`
 	CheckpointMaxFile    int64 `env:"HARNESS_WORKSPACE_CHECKPOINT_MAX_FILE_BYTES" envDefault:"20971520"`
 
-	// SkillsDir is the user skills directory (SKILLS_DIR; "" = ~/.config/harness/skills,
+	// SkillsDir is the user skills directory (SKILLS_DIR; "" = ~/.har/skills,
 	// see SkillsPath): one <name>/SKILL.md folder per skill.
 	SkillsDir string `env:"SKILLS_DIR"`
 
