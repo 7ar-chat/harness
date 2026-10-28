@@ -1,4 +1,4 @@
-package eventlog_test
+package redisx_test
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/GhaziBenDahmane/harness/engine/agui"
-	"github.com/GhaziBenDahmane/harness/engine/eventlog"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/store"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
 	_ "github.com/GhaziBenDahmane/harness/store/pgstore" // registers the Postgres data-error classifier
@@ -48,7 +48,7 @@ func (f *flakyStore) AppendEvents(ctx context.Context, id string, evs []store.Ev
 	return f.Store.AppendEvents(ctx, id, evs)
 }
 
-func newFlaky(t *testing.T) (*flakyStore, *eventlog.RedisLog, *store.Run) {
+func newFlaky(t *testing.T) (*flakyStore, *redisx.EventLog, *store.Run) {
 	t.Helper()
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
@@ -57,7 +57,7 @@ func newFlaky(t *testing.T) (*flakyStore, *eventlog.RedisLog, *store.Run) {
 	th, _ := st.CreateThread(context.Background(), "alice", "t")
 	run, _, _ := st.CreateRun(context.Background(), store.NewRun{RunID: runID, ThreadID: th.ID, UserLogin: "alice", Model: "m", Message: store.Message{Role: "user", Content: "q"}})
 	_, _ = st.ClaimRun(context.Background(), run.ID, "rt")
-	l := eventlog.New(rdb, st)
+	l := redisx.NewEventLog(rdb, st)
 	l.CloseRetry = 50 * time.Millisecond
 	return st, l, run
 }
@@ -159,8 +159,8 @@ func TestRepairKeepsRunWhenRedisCannotBeRead(t *testing.T) {
 	_ = w.Close(ctx)
 	st.setDown(false)
 	_ = st.FinishRun(ctx, run.ID, "rt", store.StatusCompleted, "", "")
-	l.Redis().Del(ctx, eventlog.Key(runID))
-	l.Redis().Set(ctx, eventlog.Key(runID), "not a stream", 0) // XRANGE now fails (WRONGTYPE)
+	l.Redis().Del(ctx, redisx.EventKey(runID))
+	l.Redis().Set(ctx, redisx.EventKey(runID), "not a stream", 0) // XRANGE now fails (WRONGTYPE)
 
 	// Act
 	n, _ := l.Repair(ctx)

@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 
 	"github.com/GhaziBenDahmane/harness/store"
 )
@@ -120,17 +119,9 @@ type DefaultManager struct {
 	cache map[string]*entry // threadID -> handle
 }
 
-// NewManager builds a manager. A nil backend yields a disabled manager.
-func NewManager(backend Backend, st Store, rdb redis.UniversalClient, opts ManagerOptions) *DefaultManager {
-	var coord Coordinator
-	if rdb != nil {
-		coord = RedisCoordinator{RDB: rdb}
-	}
-	return NewManagerWith(backend, st, coord, opts)
-}
-
-// NewManagerWith is NewManager over a Coordinator (nil: in-process state).
-func NewManagerWith(backend Backend, st Store, coord Coordinator, opts ManagerOptions) *DefaultManager {
+// NewManager builds a manager over a Coordinator (nil: in-process state, a
+// single process). A nil backend yields a disabled manager.
+func NewManager(backend Backend, st Store, coord Coordinator, opts ManagerOptions) *DefaultManager {
 	if coord == nil {
 		coord = NewLocalCoordinator()
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/skills"
 	skillsfs "github.com/GhaziBenDahmane/harness/features/skills/skillsfs"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/store"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
@@ -120,7 +121,7 @@ func TestConcurrentInstallsFromTwoRuntimesInstallASkillOnce(t *testing.T) {
 	sb := sandboxtest.NewSandbox("sb-1")
 	sb.SetWriteErr(func(string) error { time.Sleep(2 * time.Millisecond); return nil }) // slow uploads widen the race
 	rc := tools.RunContext{ThreadID: "th-1", RunID: "run-1", Login: "alice"}
-	replicas := []*skills.Installer{{Registry: reg, Redis: rdb}, {Registry: reg, Redis: rdb}}
+	replicas := []*skills.Installer{{Registry: reg, Shared: redisx.NewSkillInstalls(rdb)}, {Registry: reg, Shared: redisx.NewSkillInstalls(rdb)}}
 
 	// Act
 	var wg sync.WaitGroup

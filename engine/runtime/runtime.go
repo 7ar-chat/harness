@@ -11,8 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/redis/go-redis/v9"
-
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/engine/agui"
 	"github.com/GhaziBenDahmane/harness/engine/eventlog"
@@ -33,6 +31,20 @@ const InterruptedMessage = "The run was interrupted (the runtime stopped). Send 
 // Executor runs the agent loop of one run.
 type Executor interface {
 	Run(ctx context.Context, in agent.Input, w eventlog.Writer) (agent.Result, error)
+}
+
+// Locks is the small shared state the runtime needs to cooperate with other
+// runtimes: the sweeper and job locks, and the liveness marks of runs. The
+// Redis implementation is redisx.Coordinator; nil means a single process.
+type Locks interface {
+	// SetNX stores key=value for ttl unless the key exists.
+	SetNX(ctx context.Context, key, value string, ttl time.Duration) (bool, error)
+	// Set stores key=value for ttl.
+	Set(ctx context.Context, key, value string, ttl time.Duration) error
+	// Del removes key.
+	Del(ctx context.Context, key string) (bool, error)
+	// Exists reports whether key is set.
+	Exists(ctx context.Context, key string) (bool, error)
 }
 
 // RunQueue is the queue side used by the runtime.
@@ -58,7 +70,7 @@ type Options struct {
 	ShutdownGrace time.Duration // default 15 s: in-flight runs may finish normally
 	InterruptWait time.Duration // default 8 s: then interrupted runs get this long to write RUN_ERROR
 	FinishRetry   time.Duration // default 30 s: retry budget for recording the final status
-	ReadBlock     time.Duration // default 2 s (bounds shutdown latency: go-redis ignores ctx cancel while blocked)
+	ReadBlock     time.Duration // default 2 s (bounds shutdown latency: a blocking Redis read ignores ctx cancel)
 	// ConsumerIdle: queue consumers idle for longer, without pending entries,
 	// are deleted by the sweeper (default 1 h); entries pending for longer than
 	// QueuedAge on a consumer are reclaimed.
@@ -99,7 +111,7 @@ type Runtime struct {
 	q     RunQueue
 	bus   queue.Bus
 	exec  Executor
-	rdb   redis.UniversalClient
+	locks Locks
 
 	mu        sync.Mutex
 	inflight  map[string]context.CancelCauseFunc
@@ -147,8 +159,8 @@ func (r *Runtime) Health() error {
 	return nil
 }
 
-// New builds a runtime. rdb is used for the sweeper lock (optional).
-func New(opts Options, st store.Store, log eventlog.Log, q RunQueue, bus queue.Bus, exec Executor, rdb redis.UniversalClient) *Runtime {
+// New builds a runtime. locks is used for the sweeper lock and run liveness (nil: single process).
+func New(opts Options, st store.Store, log eventlog.Log, q RunQueue, bus queue.Bus, exec Executor, locks Locks) *Runtime {
 	if opts.Concurrency < 1 {
 		opts.Concurrency = 1
 	}
@@ -168,7 +180,7 @@ func New(opts Options, st store.Store, log eventlog.Log, q RunQueue, bus queue.B
 	def(&opts.ConsumerIdle, time.Hour)
 	def(&opts.StuckAfter, max(time.Minute, 5*opts.ReadBlock))
 	def(&opts.PurgeEvery, time.Hour)
-	return &Runtime{opts: opts, store: st, log: log, q: q, bus: bus, exec: exec, rdb: rdb,
+	return &Runtime{opts: opts, store: st, log: log, q: q, bus: bus, exec: exec, locks: locks,
 		inflight: map[string]context.CancelCauseFunc{}, sem: make(chan struct{}, opts.Concurrency)}
 }
 
@@ -564,36 +576,36 @@ func (r *Runtime) heartbeat(run *store.Run, cancel context.CancelCauseFunc, done
 }
 
 func (r *Runtime) redisHeartbeat(runID string) {
-	if r.rdb == nil {
+	if r.locks == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := r.rdb.Set(ctx, heartbeatKey(runID), r.opts.ID, r.opts.StaleAge).Err(); err != nil {
+	if err := r.locks.Set(ctx, heartbeatKey(runID), r.opts.ID, r.opts.StaleAge); err != nil {
 		slog.Warn("redis heartbeat failed", "run_id", runID, "error", err)
 	}
 }
 
 func (r *Runtime) clearHeartbeat(runID string) {
-	if r.rdb == nil {
+	if r.locks == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	_ = r.rdb.Del(ctx, heartbeatKey(runID)).Err()
+	_, _ = r.locks.Del(ctx, heartbeatKey(runID))
 }
 
 // aliveInRedis reports a run whose runtime heartbeats in Redis (or whose
 // liveness cannot be checked: never interrupt on a Redis error).
 func (r *Runtime) aliveInRedis(ctx context.Context) func(*store.Run) bool {
 	return func(run *store.Run) bool {
-		if r.rdb == nil {
+		if r.locks == nil {
 			return false
 		}
 		cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
-		n, err := r.rdb.Exists(cctx, heartbeatKey(run.ID)).Result()
-		return err != nil || n > 0
+		ok, err := r.locks.Exists(cctx, heartbeatKey(run.ID))
+		return err != nil || ok
 	}
 }
 
@@ -612,12 +624,12 @@ func (r *Runtime) sweepLoop(ctx context.Context) {
 
 // Sweep re-enqueues stale queued runs and interrupts runs whose runtime stopped heartbeating.
 func (r *Runtime) Sweep(ctx context.Context) {
-	if r.rdb != nil {
+	if r.locks != nil {
 		ttl := r.opts.SweepEvery - time.Second
 		if ttl < time.Second {
 			ttl = time.Second
 		}
-		ok, err := r.rdb.SetNX(ctx, "work:sweeper:lock", r.opts.ID, ttl).Result()
+		ok, err := r.locks.SetNX(ctx, "work:sweeper:lock", r.opts.ID, ttl)
 		if err != nil || !ok {
 			return
 		}
@@ -676,7 +688,7 @@ func (r *Runtime) queueHygiene(ctx context.Context) {
 	}
 }
 
-// runJobs runs the periodic jobs that are due (across runtimes when Redis is set).
+// runJobs runs the periodic jobs that are due (across runtimes when Locks is set).
 func (r *Runtime) runJobs(ctx context.Context) {
 	for _, j := range r.opts.Jobs {
 		if j.Run == nil || j.Every <= 0 {
@@ -695,8 +707,8 @@ func (r *Runtime) runJobs(ctx context.Context) {
 		if !due {
 			continue
 		}
-		if r.rdb != nil {
-			if ok, err := r.rdb.SetNX(ctx, "work:job:"+j.Name+":lock", r.opts.ID, j.Every).Result(); err != nil || !ok {
+		if r.locks != nil {
+			if ok, err := r.locks.SetNX(ctx, "work:job:"+j.Name+":lock", r.opts.ID, j.Every); err != nil || !ok {
 				continue
 			}
 		}
@@ -708,7 +720,7 @@ func (r *Runtime) runJobs(ctx context.Context) {
 	}
 }
 
-// purge runs the retention job at most every PurgeEvery (across runtimes when Redis is set).
+// purge runs the retention job at most every PurgeEvery (across runtimes when Locks is set).
 func (r *Runtime) purge(ctx context.Context) {
 	if r.opts.Purger == nil {
 		return
@@ -722,8 +734,8 @@ func (r *Runtime) purge(ctx context.Context) {
 	if !due {
 		return
 	}
-	if r.rdb != nil {
-		if ok, err := r.rdb.SetNX(ctx, "work:purge:lock", r.opts.ID, r.opts.PurgeEvery).Result(); err != nil || !ok {
+	if r.locks != nil {
+		if ok, err := r.locks.SetNX(ctx, "work:purge:lock", r.opts.ID, r.opts.PurgeEvery); err != nil || !ok {
 			return
 		}
 	}

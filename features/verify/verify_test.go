@@ -14,6 +14,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/GhaziBenDahmane/harness/features/verify"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/store"
@@ -103,7 +104,7 @@ func newRig(t *testing.T, files map[string]string) *rig {
 			sb.Put(p, c)
 		}
 	}
-	mgr := sandbox.NewManager(backend, st, rdb, sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour})
+	mgr := sandbox.NewManager(backend, st, redisx.NewCoordinator(rdb), sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour})
 	if _, err := mgr.Acquire(ctx, th.ID, "alice"); err != nil {
 		t.Fatal(err)
 	}

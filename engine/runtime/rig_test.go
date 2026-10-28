@@ -19,7 +19,6 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/engine/agui"
-	"github.com/GhaziBenDahmane/harness/engine/eventlog"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
@@ -30,6 +29,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/features/memory/memorytools"
 	"github.com/GhaziBenDahmane/harness/features/plan"
 	"github.com/GhaziBenDahmane/harness/features/titles"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/store"
@@ -59,8 +59,8 @@ type rig struct {
 	st      *memstore.Store
 	mr      *miniredis.Miniredis
 	rdb     *redis.Client
-	log     *eventlog.RedisLog
-	q       *queue.Redis
+	log     *redisx.EventLog
+	q       *redisx.Queue
 	backend *sandboxtest.Backend
 	mgr     *sandbox.DefaultManager
 	model   *llmtest.Model
@@ -78,10 +78,10 @@ func newRig(t *testing.T, turns ...llmtest.Turn) *rig {
 	t.Cleanup(func() { _ = rdb.Close() })
 	st := memstore.New()
 	r := &rig{t: t, st: st, mr: mr, rdb: rdb, backend: sandboxtest.NewBackend(), model: llmtest.New(turns...)}
-	r.log = eventlog.New(rdb, st)
+	r.log = redisx.NewEventLog(rdb, st)
 	r.log.TailBlock, r.log.Poll = 100*time.Millisecond, 10*time.Millisecond
-	r.q = queue.New(rdb)
-	r.mgr = sandbox.NewManager(r.backend, st, rdb, sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour})
+	r.q = redisx.NewQueue(rdb)
+	r.mgr = sandbox.NewManager(r.backend, st, redisx.NewCoordinator(rdb), sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour})
 	r.mem = memory.New(st, memory.Options{RecallInjection: true})
 	r.agent = &agent.Agent{
 		Models: llmtest.Factory{M: r.model},
@@ -133,7 +133,7 @@ func checkOrder(t *testing.T, st *memstore.Store) {
 
 func (r *rig) runtime() *runtime.Runtime {
 	if r.rt == nil {
-		r.rt = runtime.New(r.opts, r.st, r.log, r.q, r.q, r.agent, r.rdb)
+		r.rt = runtime.New(r.opts, r.st, r.log, r.q, r.q, r.agent, redisx.NewCoordinator(r.rdb))
 	}
 	return r.rt
 }
@@ -262,7 +262,7 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 
 // liveTypes reads the live Redis stream (events not yet flushed to Postgres).
 func (r *rig) liveTypes(runID string) []string {
-	msgs, _ := r.rdb.XRange(context.Background(), eventlog.Key(runID), "-", "+").Result()
+	msgs, _ := r.rdb.XRange(context.Background(), redisx.EventKey(runID), "-", "+").Result()
 	var out []string
 	for _, m := range msgs {
 		var e event

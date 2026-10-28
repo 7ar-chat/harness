@@ -1,0 +1,221 @@
+package harness
+
+import (
+	"cmp"
+	"context"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/GhaziBenDahmane/harness/engine/agent"
+	"github.com/GhaziBenDahmane/harness/engine/approvals"
+	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/GhaziBenDahmane/harness/engine/tools/sandboxtools"
+	"github.com/GhaziBenDahmane/harness/features/codecheck"
+	"github.com/GhaziBenDahmane/harness/features/explore"
+	"github.com/GhaziBenDahmane/harness/features/gitsafe"
+	"github.com/GhaziBenDahmane/harness/features/mcp"
+	"github.com/GhaziBenDahmane/harness/features/permissions"
+	"github.com/GhaziBenDahmane/harness/features/plan"
+	"github.com/GhaziBenDahmane/harness/features/projectdocs"
+)
+
+// Names of the built-in features (Feature.Name, Builder.Has, Builder.Require).
+const (
+	FeatureSandbox     = "sandbox"
+	FeatureCodecheck   = "codecheck"
+	FeatureExplore     = "explore"
+	FeatureSkills      = "skills"
+	FeatureMCP         = "mcp"
+	FeaturePlan        = "plan"
+	FeatureProjectDocs = "projectdocs"
+	FeatureArtifacts   = "artifacts"
+	FeatureWorkspace   = "workspace"
+	FeatureTitles      = "titles"
+	FeatureVerify      = "verify"
+	FeatureGoals       = "goals"
+	FeatureMemory      = "memory"
+	FeatureToolProfile = "toolprofile"
+	FeaturePermissions = "permissions"
+)
+
+type builtin struct {
+	name    string
+	install func(*Builder) error
+}
+
+func (f builtin) Name() string             { return f.name }
+func (f builtin) Install(b *Builder) error { return f.install(b) }
+
+// Sandbox offers the sandbox tools: execute_command, job_output, job_kill,
+// read_file, view_file, search_files, write_file, edit_file, list_files. Other
+// features hook into them through Builder.SandboxTools. Without a configured
+// sandbox backend it contributes nothing.
+func Sandbox() Feature {
+	return builtin{FeatureSandbox, func(b *Builder) error {
+		if !b.Sandboxes.Enabled() {
+			return nil
+		}
+		late := &lateProvider{name: "sandbox"}
+		b.sandboxTools = late
+		b.AddTools(late)
+		b.After(func() error {
+			opts := sandboxtools.Options{CommandTimeout: b.Config.CommandTimeout(), MaxSandboxesPerUser: b.Config.MaxSandboxesPerUser}
+			for _, f := range b.sbOpts {
+				f(&opts)
+			}
+			if b.Infra.Jobs != nil {
+				opts.Jobs = b.Infra.Jobs
+			}
+			p := sandboxtools.New(b.Sandboxes, opts)
+			late.p = p
+			if p != nil && b.Infra.Jobs != nil {
+				b.Background(func(ctx context.Context) { p.KeepResumingJobs(ctx, 2*time.Minute, nil) })
+			}
+			return nil
+		})
+		return nil
+	}}
+}
+
+// Codecheck adds a syntax check to the notice of write_file and edit_file
+// (the coding agent's immediate feedback; AGENT_CODE_CHECKS adds commands).
+// With coding false it only installs when AGENT_CODE_CHECKS is set. It
+// requires the Sandbox feature.
+func Codecheck(coding bool) Feature {
+	return builtin{FeatureCodecheck, func(b *Builder) error {
+		if err := b.Require(FeatureSandbox); err != nil {
+			return err
+		}
+		if !coding && strings.TrimSpace(b.Config.CodeChecks) == "" {
+			return nil
+		}
+		extra, err := codecheck.Parse(b.Config.CodeChecks)
+		if err != nil {
+			return err
+		}
+		check := codecheck.New(extra).Check
+		b.SandboxTools(func(o *sandboxtools.Options) {
+			o.CheckWrite = check
+			o.Coding = coding
+		})
+		return nil
+	}}
+}
+
+// Explore offers the explore tool, a read-only sub-agent that searches and
+// reads the workspace and reports back (LLM_EXPLORE_MODEL, default the default
+// model). Without a sandbox it contributes nothing. It requires the Sandbox
+// feature.
+func Explore() Feature {
+	return builtin{FeatureExplore, func(b *Builder) error {
+		if err := b.Require(FeatureSandbox); err != nil {
+			return err
+		}
+		if b.sandboxTools == nil {
+			return nil
+		}
+		if m := cmp.Or(b.Config.ExploreModel, b.Config.LLMDefaultModel); m != "" {
+			b.AddTools(&exploretools.Provider{Source: b.sandboxTools, Models: b.Models, Model: m})
+		}
+		return nil
+	}}
+}
+
+// MCP offers the tools of the MCP servers of the configuration (MCP_SERVERS).
+func MCP() Feature {
+	return builtin{FeatureMCP, func(b *Builder) error {
+		p := mcptools.New(b.Config.MCPServers, b.Options.Version, mcptools.MaxResultChars)
+		if p != nil {
+			p.CallTimeout = b.Config.MCPCallTimeout()
+			b.AddTools(p)
+		}
+		return nil
+	}}
+}
+
+// Plan offers update_plan and ask_user.
+func Plan() Feature {
+	return builtin{FeaturePlan, func(b *Builder) error {
+		b.AddTools(harnesstools.New(b.Store))
+		return nil
+	}}
+}
+
+// ProjectDocs adds the project documents (AGENTS.md and the like) found in the
+// workspace to the prompt.
+func ProjectDocs() Feature {
+	return builtin{FeatureProjectDocs, func(b *Builder) error {
+		b.Section(projectdocs.Section(b.Sandboxes))
+		return nil
+	}}
+}
+
+// ToolProfile applies the tool profile: with coding true the lean coding
+// allow-list (no document viewer, skills only when the user has some, no
+// memory unless AGENT_MEMORY_IN_CODING), and in both cases the AGENT_TOOLS
+// overrides. It also drops the prompt sections of the skills and memory
+// features whose tools it hides. It takes effect on the
+// Skills and Memory features whatever the order.
+func ToolProfile(coding bool) Feature {
+	return builtin{FeatureToolProfile, func(b *Builder) error {
+		reg := b.prof.reg
+		*b.prof = *newProfile(b.Config, reg, coding)
+		b.WrapTools(b.prof.Wrap)
+		return nil
+	}}
+}
+
+// Permissions puts the permission layer (allow/ask/deny rules, modes;
+// AGENT_PERMISSIONS*) in front of the tools and snapshots the git working tree
+// at the start of runs on the local backend. It applies to the local backend
+// and, with coding true, to the coding agent on a remote sandbox; with neither
+// it contributes nothing (the work profile on a remote sandbox).
+//
+// The mode is AGENT_PERMISSIONS; without it the local backend asks and the
+// coding agent on a remote sandbox, which is isolated, does not (yolo: deny
+// rules still apply). The interactive approvals gate stays behind it for the
+// tools the policy has no rule for.
+func Permissions(coding bool) Feature {
+	return builtin{FeaturePermissions, func(b *Builder) error {
+		cfg := b.Config
+		if !cfg.LocalSandbox() && !coding {
+			return nil
+		}
+		ws := cfg.LocalWorkspace
+		if ws == "" && cfg.LocalSandbox() {
+			ws, _ = os.Getwd()
+		}
+		mode := cfg.AgentPermissions
+		if strings.TrimSpace(mode) == "" && !cfg.LocalSandbox() {
+			mode = string(permissions.ModeYolo)
+		}
+		policy, err := permissions.Load(permissions.Options{
+			Workspace: ws, Mode: mode,
+			Allow: os.Getenv("AGENT_PERMISSIONS_ALLOW"), Ask: os.Getenv("AGENT_PERMISSIONS_ASK"), Deny: os.Getenv("AGENT_PERMISSIONS_DENY"),
+		})
+		if err != nil {
+			return fmt.Errorf("%w", err)
+		}
+		b.Configure(func(hs *agent.Harness) {
+			var out []agent.BeforeToolHook
+			wrapped := false
+			for _, h := range hs.BeforeTool {
+				if g, ok := h.(*approvals.Gate); ok && !wrapped {
+					out = append(out, &permissions.Hook{Policy: policy, Inner: g})
+					wrapped = true
+					continue
+				}
+				out = append(out, h)
+			}
+			hs.BeforeTool = out
+			if cfg.LocalSandbox() && ws != "" {
+				hs.RunStart = append(hs.RunStart, gitsafe.Hook{Dir: ws})
+			}
+		})
+		return nil
+	}}
+}
+
+var _ tools.Provider = (*lateProvider)(nil)

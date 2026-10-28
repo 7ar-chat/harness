@@ -38,9 +38,9 @@ type profile struct {
 	reg        *skills.Registry
 }
 
-func newProfile(cfg *config.Config, reg *skills.Registry) *profile {
+func newProfile(cfg *config.Config, reg *skills.Registry, coding bool) *profile {
 	p := &profile{reg: reg, allow: map[string]bool{}, removed: map[string]bool{},
-		coding: strings.EqualFold(strings.TrimSpace(cfg.AgentProfile), "coding"), vision: len(cfg.LLMVisionModels) > 0}
+		coding: coding, vision: len(cfg.LLMVisionModels) > 0}
 	spec := strings.TrimSpace(cfg.AgentTools)
 	p.active = p.coding || spec != ""
 	for _, n := range builtinTools {
@@ -155,10 +155,10 @@ func (p *profile) Wrap(inner tools.Provider) tools.Provider {
 
 // skillsSection drops the skills index when load_skill is not offered.
 func (p *profile) skillsSection(s agent.PromptSection) agent.PromptSection {
-	if !p.active {
-		return s
-	}
 	return func(ctx context.Context, in agent.Input) string {
+		if !p.active {
+			return s(ctx, in)
+		}
 		if p.removed["load_skill"] || (!p.allow["load_skill"] && !(p.skillsAuto && p.hasUserSkills(ctx, in.Run))) {
 			return ""
 		}
@@ -168,10 +168,10 @@ func (p *profile) skillsSection(s agent.PromptSection) agent.PromptSection {
 
 // memorySection drops a memory prompt section when the memory tools are not offered.
 func (p *profile) memorySection(s agent.PromptSection) agent.PromptSection {
-	if !p.active {
-		return s
-	}
 	return func(ctx context.Context, in agent.Input) string {
+		if !p.active {
+			return s(ctx, in)
+		}
 		if !p.allow["memory_search"] || p.removed["memory_search"] {
 			return ""
 		}

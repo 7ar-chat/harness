@@ -14,6 +14,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/engine/tools/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/features/plan"
 	"github.com/GhaziBenDahmane/harness/features/workspace"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/store"
@@ -47,7 +48,7 @@ func newWSRig(t *testing.T, turns ...llmtest.Turn) *wsRig {
 
 // wireWS (re)creates the manager and tools like a runtime process start.
 func (r *wsRig) wireWS() {
-	r.mgr = sandbox.NewManager(r.backend, r.st, r.rdb, sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour,
+	r.mgr = sandbox.NewManager(r.backend, r.st, redisx.NewCoordinator(r.rdb), sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour,
 		OnCreate: func(ctx context.Context, threadID string, sb sandbox.Sandbox, recreated bool) string {
 			r.ws.OnCreate(ctx, threadID, sb)
 			return r.arts.RestoreWorkspace(ctx, threadID, sb, recreated)

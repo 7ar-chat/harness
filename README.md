@@ -53,7 +53,8 @@ h.Cancel(ctx, "alice", run.ID)
   [Terminal UI](#terminal-ui)); package `tui` has the model and renderers to embed.
 * **Single process** (default): store, event log and queue live in memory — nothing to run
   except the sandbox server. **Multi process**: pass `Options.Store` (`store/pgstore` +
-  `store/pgstore/migrate`) and `Options.Redis`; replicas then share runs, logs, sandbox locks
+  `store/pgstore/migrate`) and `Options.Redis` (or any `Options.Infra`, see
+  [Infrastructure](#infrastructure)); replicas then share runs, logs, sandbox locks
   and skill installs, and a crashed runtime's runs are finished as `interrupted` by another.
 * **Local, no container**: `SANDBOX_BACKEND=local` (optionally `LOCAL_WORKSPACE=dir`, default the current
   directory) runs the tools on this machine through `sandbox/local`; the agent still sees `/workspace`.
@@ -265,6 +266,89 @@ command); the built-ins are only listed and installed on demand. An optional `re
 frontmatter list installs dependencies with a skill. Packages are validated (entry count, depth, file
 and total size, safe paths) when loaded; an invalid folder is logged and skipped.
 
+## Features and profiles
+
+`harness.New` builds a small core (store, models, sandboxes, infrastructure, the agent loop, the runtime) and
+installs **features** on top of it. A feature is a set of tools, prompt sections, hooks and jobs that belong
+together. A host chooses its set with `Options.Features`; left nil, the profile named by `AGENT_PROFILE` is used.
+
+| Profile | Constructor | Features (in order) |
+|---|---|---|
+| work (default) | `harness.ProfileWork()` | Sandbox, Codecheck(false), Skills, MCP, Plan, ProjectDocs, Artifacts, Workspace, Titles, Verify, Goals, Memory, ToolProfile(false), Permissions(false) |
+| coding | `harness.ProfileCoding()` | the same with Codecheck(true), Explore, ToolProfile(true), Permissions(true) |
+| minimal | `harness.ProfileMinimal()` | Sandbox, Plan |
+
+`AGENT_PROFILE=work|coding|minimal` picks the profile when `Options.Features` is nil; the tool list and prompt
+of work and coding are byte-identical to what they were before features existed. Features install in list
+order, and that order is the order of tools and prompt sections. A feature that builds on another says so
+(`Workspace` needs `Artifacts`, `Explore` and `Codecheck` need `Sandbox`) and `New` fails with a clear error
+if it is missing or listed twice.
+
+Compose your own set from the constructors (`Sandbox()`, `Skills()`, `Memory()`, `Goals()`...), drop what you
+do not want, add your own:
+
+```go
+features := append(harness.ProfileMinimal(), harness.Memory(), harness.Titles(), myAudit)
+h, err := harness.New(harness.Options{Config: cfg, Features: features})
+```
+
+### Writing a feature
+
+```go
+type Feature interface {
+	Name() string
+	Install(*harness.Builder) error
+}
+```
+
+`harness.FeatureFunc(name, func(b *harness.Builder) error)` turns a function into one. `Install` reads the
+environment from the builder (`b.Config`, `b.Store`, `b.Models`, `b.Sandboxes`, `b.Infra`, `b.Options`) and
+contributes:
+
+| Builder method | Contributes |
+|---|---|
+| `AddTools(providers...)`, `WrapTools(f)` | tool providers; a wrapper over the whole registry (filters, auditing) |
+| `Section(f)`, `ContextSection(f)`, `TailSection(f)` | static prompt section; dynamic section in the final context block; per-run reminder at the end of each request |
+| `BeforeTool(h)`, `ToolHook(h)`, `RunStart(h)` | gate tool calls; observe tool results; run before a run's first step |
+| `SetAnswers`, `SetImages`, `SetChecker`, `Configure(f)` | final-answer review, image attachment, deliverable checker (one each); a free-form mutator of `agent.Harness` |
+| `EndOfRun(h)`, `Job(j)`, `SetPurger(p)`, `Background(f)` | end-of-run `runtime.Hook`; periodic job (run by one runtime at a time); retention job; goroutine started once `New` succeeded |
+| `SandboxTools(f)`, `PrepareSandbox(f)`, `OnSandboxCreate(f)` | chain onto the sandbox tools' options (`OnAcquire`, `BeforeCommand`, `CheckWrite`...); run when a sandbox is created |
+| `RequireSandbox()`, `Require(names...)`, `StoreAs[T](b)` | fail with a clear error when no backend is configured, a feature is missing, or the store lacks an extension |
+| `Provide[T](b, v)`, `Lookup[T](b)`, `b.Has(name)` | publish a service for later features; look one up |
+| `After(f)` | run once every feature is installed |
+
+The built-in features publish their services on the builder (`b.Artifacts`, `b.Workspace`, `b.Skills`,
+`b.Installer`, `b.Memory`, `b.Verifier`; nil until installed). The wiring of the built-ins lives in
+`features_core.go` and `features_state.go`; they use the same `Builder` a host's feature does. Example, a tool
+plus a prompt section plus a hook (this is `TestACustomFeatureAddsAToolAPromptSectionAndAHook`):
+
+```go
+ping := harness.FeatureFunc("ping", func(b *harness.Builder) error {
+	b.AddTools(longtest.ExtraTool("ping", func(context.Context, string) (string, error) { return "pong", nil }))
+	b.Section(func(context.Context, agent.Input) string { return "Use ping to check the line." })
+	b.ToolHook(auditHook) // agent.ToolHook: AfterTool(ctx, run, toolCallID, toolName)
+	return nil
+})
+h, err := harness.New(harness.Options{Config: cfg, Features: append(harness.ProfileMinimal(), ping)})
+```
+
+## Infrastructure
+
+The engine, sandbox and feature packages do not know Redis (or any broker). They define the small interfaces
+they need, with in-process implementations, and `harness.Infra` bundles the implementations a deployment
+injects (`Options.Infra`; every field optional, a missing one stays in process):
+
+| Field | Interface | In process | Redis (`redisx`) |
+|---|---|---|---|
+| `Broker` | `queue.Queue` + `queue.Bus` + `runtime.RunQueue`: run queue, cancel, steers | `queue.NewMemory` | `redisx.NewQueue` |
+| `Log` | `eventlog.Log`: per-run event log with replay | `eventlog.NewMemory` | `redisx.NewEventLog` |
+| `Coordinator` | `sandbox.Coordinator` + `runtime.Locks`: creation locks, health streaks, sweeper and job locks, run liveness | none (`sandbox.LocalCoordinator` inside the manager) | `redisx.NewCoordinator` |
+| `Jobs` | `sandboxtools.JobList`: running background jobs and their leases | memory only | `redisx.NewJobs` |
+| `Installs` | `skills.InstallState`: installed skill revisions and install locks | per process | `redisx.NewSkillInstalls` |
+
+`Options.Redis` is the convenience: `harness.RedisInfra(rdb, store)` builds all five (set `Infra` or `Redis`,
+not both). To run on NATS or SQS, implement the interfaces above and pass them in `Infra`; nothing else changes.
+
 ## Layout
 
 The repository is one Go module in strict layers; a lower layer never imports a higher one
@@ -279,14 +363,16 @@ engine/                        the reusable intelligence
   llm/        OpenAI chat + Responses, Anthropic Messages, retry, test doubles (llm/llmtest)
   tools/      tool interfaces; tools/sandboxtools = read/write/edit/search/exec/jobs
   runtime/    run claiming, heartbeat, sweeper, end-of-run hooks
-  eventlog/ queue/ compaction/ approvals/
+  eventlog/ queue/ compaction/ approvals/   (interfaces and in-memory implementations only)
 store/{memstore,filestore,pgstore}   persistence adapters (memory, durable local files, Postgres)
+redisx/                        the Redis adapters: queue + bus, event log, coordinator, job list, skill installs
 features/                      optional capabilities a host switches on
   permissions/ gitsafe/ codecheck/ projectdocs/ explore/ plan/ mcp/
   memory/ skills/ goals/ titles/ verify/ artifacts/ workspace/
 hosts/                         ways to drive the engine
   tui/ (terminal)   web/ (HTTP + SSE)
 harness.go                     the facade: New / Send / Events / Steer / Cancel / Resume
+feature*.go profiles.go infra.go   Feature + Builder, the built-in features and profiles, Infra
 cmd/harness  cmd/bench         binaries;  bench/ longtest/ = benchmark and long-session tests
 ```
 
@@ -326,8 +412,8 @@ the `.harness/memory/` prefix, which is stripped. The workspace checkpoints leav
 ## Building
 
 `make build` produces stripped binaries in `bin/` (`cmd/harness` is about 30 MB; a plain `go build` is 44 MB
-because it keeps the symbol table and DWARF). Idle resident memory is about 20 MB. go-redis remains linked;
-the coding profile does not use it.
+because it keeps the symbol table and DWARF). Idle resident memory is about 20 MB. go-redis remains linked
+(the facade offers `Options.Redis`); the engine, sandbox, features and store packages do not import it.
 
 ## Status / known gaps
 

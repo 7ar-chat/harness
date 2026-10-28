@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 )
 
@@ -28,7 +29,7 @@ func TestNewAndRecreatedSandboxesHaveTheWorkspaceLayoutBeforeTheRestore(t *testi
 	f := newFixture(t, 5)
 	th := f.thread(t, "alice")
 	var atRestore [][]string
-	mgr := sandbox.NewManager(f.backend, f.st, f.rdb, sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour, RenewEvery: time.Hour,
+	mgr := sandbox.NewManager(f.backend, f.st, redisx.NewCoordinator(f.rdb), sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour, RenewEvery: time.Hour,
 		OnCreate: func(ctx context.Context, _ string, sb sandbox.Sandbox, _ bool) string {
 			atRestore = append(atRestore, missingDirs(ctx, sb))
 			return ""

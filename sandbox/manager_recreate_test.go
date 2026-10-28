@@ -6,12 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 )
 
 func replica(f *fixture, opts sandbox.ManagerOptions) *sandbox.DefaultManager {
 	opts.MaxPerUser, opts.Timeout = f.max, time.Hour
-	return sandbox.NewManager(f.backend, f.st, f.rdb, opts)
+	return sandbox.NewManager(f.backend, f.st, redisx.NewCoordinator(f.rdb), opts)
 }
 
 func TestSandboxUnhealthyForTooLongIsRecreated(t *testing.T) {

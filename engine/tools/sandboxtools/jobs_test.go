@@ -12,6 +12,7 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/engine/tools/sandboxtools"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
@@ -27,7 +28,7 @@ func newKeepAliveFixture(t *testing.T, job sandboxtest.JobFunc) (*fixture, *atom
 	th, _ := st.CreateThread(context.Background(), "alice", "t")
 	f := &fixture{backend: sandboxtest.NewBackend(), tools: map[string]tool.InvokableTool{}}
 	f.backend.OnCreate = func(sb *sandboxtest.Sandbox) { f.sb = sb; sb.SetJobs(job) }
-	mgr := sandbox.NewManager(f.backend, st, rdb, sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour, RenewEvery: 5 * time.Millisecond})
+	mgr := sandbox.NewManager(f.backend, st, redisx.NewCoordinator(rdb), sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour, RenewEvery: 5 * time.Millisecond})
 	var live atomic.Int32
 	p := sandboxtools.New(mgr, sandboxtools.Options{CommandTimeout: time.Second, JobPollEvery: 10 * time.Millisecond,
 		KeepAlive: func(ctx context.Context, sb sandbox.Sandbox) func() {

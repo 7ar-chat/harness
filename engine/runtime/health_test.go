@@ -8,11 +8,12 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/engine/queue"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
+	"github.com/GhaziBenDahmane/harness/redisx"
 )
 
 // brokenQueue fails EnsureGroup or blocks Read past its block time (a stuck connection).
 type brokenQueue struct {
-	*queue.Redis
+	*redisx.Queue
 	groupErr  error
 	stuckRead chan struct{}
 }
@@ -21,7 +22,7 @@ func (b brokenQueue) EnsureGroup(ctx context.Context) error {
 	if b.groupErr != nil {
 		return b.groupErr
 	}
-	return b.Redis.EnsureGroup(ctx)
+	return b.Queue.EnsureGroup(ctx)
 }
 
 func (b brokenQueue) Read(ctx context.Context, consumer string, count int, block time.Duration) ([]queue.Message, error) {
@@ -32,14 +33,14 @@ func (b brokenQueue) Read(ctx context.Context, consumer string, count int, block
 			return nil, ctx.Err()
 		}
 	}
-	return b.Redis.Read(ctx, consumer, count, block)
+	return b.Queue.Read(ctx, consumer, count, block)
 }
 
 // healthAfter starts the runtime loop with q and returns its health after wait.
 func (r *rig) healthAfter(q runtime.RunQueue, wait time.Duration) error {
 	r.t.Helper()
 	r.opts.StuckAfter = 100 * time.Millisecond
-	rt := runtime.New(r.opts, r.st, r.log, q, r.q, r.agent, r.rdb)
+	rt := runtime.New(r.opts, r.st, r.log, q, r.q, r.agent, redisx.NewCoordinator(r.rdb))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { _ = rt.Run(ctx); close(done) }()
@@ -68,7 +69,7 @@ func TestHealthFailsWhenTheConsumerGroupCannotBeCreated(t *testing.T) {
 	r := newRig(t)
 
 	// Act
-	err := r.healthAfter(brokenQueue{Redis: r.q, groupErr: errors.New("NOPERM")}, 50*time.Millisecond)
+	err := r.healthAfter(brokenQueue{Queue: r.q, groupErr: errors.New("NOPERM")}, 50*time.Millisecond)
 
 	// Assert
 	if err == nil {
@@ -84,7 +85,7 @@ func TestHealthFailsWhenTheQueueLoopIsStuck(t *testing.T) {
 	t.Cleanup(func() { close(stuck) })
 
 	// Act
-	err := r.healthAfter(brokenQueue{Redis: r.q, stuckRead: stuck}, 300*time.Millisecond)
+	err := r.healthAfter(brokenQueue{Queue: r.q, stuckRead: stuck}, 300*time.Millisecond)
 
 	// Assert
 	if err == nil {

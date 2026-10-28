@@ -10,6 +10,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/store"
@@ -31,7 +32,7 @@ func newFixture(t *testing.T, maxPerUser int) *fixture {
 	t.Cleanup(func() { _ = rdb.Close() })
 	st := memstore.New()
 	b := sandboxtest.NewBackend()
-	return &fixture{max: maxPerUser, rdb: rdb, st: st, backend: b, mgr: sandbox.NewManager(b, st, rdb, sandbox.ManagerOptions{MaxPerUser: maxPerUser, Timeout: time.Hour, RenewEvery: time.Hour})}
+	return &fixture{max: maxPerUser, rdb: rdb, st: st, backend: b, mgr: sandbox.NewManager(b, st, redisx.NewCoordinator(rdb), sandbox.ManagerOptions{MaxPerUser: maxPerUser, Timeout: time.Hour, RenewEvery: time.Hour})}
 }
 
 func (f *fixture) thread(t *testing.T, login string) *store.Thread {
@@ -85,7 +86,7 @@ func TestAcquireReplacesExpiredSandbox(t *testing.T) {
 
 // otherProcess is a manager of another api/runtime process sharing Redis, Postgres and the provider.
 func otherProcess(f *fixture) *sandbox.DefaultManager {
-	return sandbox.NewManager(f.backend, f.st, f.rdb, sandbox.ManagerOptions{MaxPerUser: f.max, Timeout: time.Hour})
+	return sandbox.NewManager(f.backend, f.st, redisx.NewCoordinator(f.rdb), sandbox.ManagerOptions{MaxPerUser: f.max, Timeout: time.Hour})
 }
 
 func TestAcquireEnforcesPerUserQuota(t *testing.T) {

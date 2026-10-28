@@ -1,4 +1,4 @@
-package sandboxtools
+package redisx
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	"github.com/GhaziBenDahmane/harness/engine/tools/sandboxtools"
 )
 
 // redisJobsKey is the hash of the running background jobs ("thread/job" → start,
@@ -17,11 +19,14 @@ const redisJobsKey = "work:sbx:jobs"
 // redisJobLeasePrefix + "thread/job" is the lease of the process keeping a job's sandbox alive.
 const redisJobLeasePrefix = "work:sbx:job-lease:"
 
-// RedisJobs is the JobList shared by the runtime processes.
-type RedisJobs struct{ RDB redis.UniversalClient }
+// Jobs is the sandboxtools.JobList shared by the runtime processes.
+type Jobs struct{ RDB redis.UniversalClient }
+
+// NewJobs returns a Redis JobList.
+func NewJobs(rdb redis.UniversalClient) Jobs { return Jobs{RDB: rdb} }
 
 // Add implements JobList: the first recorded start is kept (HSETNX).
-func (r RedisJobs) Add(ctx context.Context, threadID, jobID string) (time.Time, error) {
+func (r Jobs) Add(ctx context.Context, threadID, jobID string) (time.Time, error) {
 	key := jobKey(threadID, jobID)
 	now := time.Now()
 	if err := r.RDB.HSetNX(ctx, redisJobsKey, key, now.UnixMilli()).Err(); err != nil {
@@ -35,20 +40,20 @@ func (r RedisJobs) Add(ctx context.Context, threadID, jobID string) (time.Time, 
 }
 
 // Remove implements JobList.
-func (r RedisJobs) Remove(ctx context.Context, threadID, jobID string) error {
+func (r Jobs) Remove(ctx context.Context, threadID, jobID string) error {
 	return r.RDB.HDel(ctx, redisJobsKey, jobKey(threadID, jobID)).Err()
 }
 
 // List implements JobList.
-func (r RedisJobs) List(ctx context.Context) ([]ListedJob, error) {
+func (r Jobs) List(ctx context.Context) ([]sandboxtools.ListedJob, error) {
 	all, err := r.RDB.HGetAll(ctx, redisJobsKey).Result()
 	if err != nil {
 		return nil, err
 	}
-	out := make([]ListedJob, 0, len(all))
+	out := make([]sandboxtools.ListedJob, 0, len(all))
 	for k, v := range all {
 		if thread, job, ok := strings.Cut(k, "/"); ok {
-			out = append(out, ListedJob{ThreadID: thread, JobID: job, Started: parseStart(v, time.Now())})
+			out = append(out, sandboxtools.ListedJob{ThreadID: thread, JobID: job, Started: parseStart(v, time.Now())})
 		}
 	}
 	return out, nil
@@ -67,13 +72,13 @@ if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) 
 return 0`)
 
 // Claim implements JobList.
-func (r RedisJobs) Claim(ctx context.Context, threadID, jobID, owner string, ttl time.Duration) (bool, error) {
+func (r Jobs) Claim(ctx context.Context, threadID, jobID, owner string, ttl time.Duration) (bool, error) {
 	n, err := claimScript.Run(ctx, r.RDB, []string{redisJobLeasePrefix + jobKey(threadID, jobID)}, owner, max(ttl.Milliseconds(), 1)).Int()
 	return n == 1, err
 }
 
 // Release implements JobList.
-func (r RedisJobs) Release(ctx context.Context, threadID, jobID, owner string) error {
+func (r Jobs) Release(ctx context.Context, threadID, jobID, owner string) error {
 	err := releaseScript.Run(ctx, r.RDB, []string{redisJobLeasePrefix + jobKey(threadID, jobID)}, owner).Err()
 	if errors.Is(err, redis.Nil) {
 		return nil
@@ -92,3 +97,7 @@ func parseStart(raw string, fallback time.Time) time.Time {
 	}
 	return fallback
 }
+
+func jobKey(threadID, jobID string) string { return threadID + "/" + jobID }
+
+var _ sandboxtools.JobList = Jobs{}

@@ -12,6 +12,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/store"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
 )
@@ -80,7 +81,7 @@ func TestALeftoverSteerIsOnlyAnnouncedOnceStored(t *testing.T) {
 	st := &failingSteerStore{Store: r.st}
 	st.fails.Store(1)
 	th, run := r.steerThenFail(func() {})
-	rt := runtime.New(r.opts, st, r.log, r.q, r.q, r.agent, r.rdb)
+	rt := runtime.New(r.opts, st, r.log, r.q, r.q, r.agent, redisx.NewCoordinator(r.rdb))
 
 	// Act
 	_ = rt.Process(context.Background(), run.ID)

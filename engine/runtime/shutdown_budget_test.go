@@ -7,6 +7,7 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
+	"github.com/GhaziBenDahmane/harness/redisx"
 )
 
 func TestShutdownFinishesInFlightRunsWithinItsBudget(t *testing.T) {
@@ -16,7 +17,7 @@ func TestShutdownFinishesInFlightRunsWithinItsBudget(t *testing.T) {
 	st := &finishOutage{Store: r.st}
 	st.until.Store(time.Now().Add(time.Hour).UnixNano())
 	r.opts.ShutdownGrace, r.opts.InterruptWait = 100*time.Millisecond, 500*time.Millisecond
-	rt := runtime.New(r.opts, st, r.log, r.q, r.q, r.agent, r.rdb)
+	rt := runtime.New(r.opts, st, r.log, r.q, r.q, r.agent, redisx.NewCoordinator(r.rdb))
 	_, run := r.queued("q")
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})

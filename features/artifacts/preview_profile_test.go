@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/GhaziBenDahmane/harness/features/artifacts"
+	"github.com/GhaziBenDahmane/harness/redisx"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
@@ -27,7 +28,7 @@ func TestEachOfficePreviewConvertsWithItsOwnLibreOfficeProfile(t *testing.T) {
 	t.Cleanup(func() { _ = rdb.Close() })
 	st := memstore.New()
 	backend := sandboxtest.NewBackend()
-	mgr := sandbox.NewManager(backend, st, rdb, sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour})
+	mgr := sandbox.NewManager(backend, st, redisx.NewCoordinator(rdb), sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour})
 	svc := artifacts.New(st, artifacts.PGBlobs{S: st}, mgr, artifacts.Options{})
 	th, _ := st.CreateThread(ctx, "alice", "t")
 	if _, err := mgr.Acquire(ctx, th.ID, "alice"); err != nil {
