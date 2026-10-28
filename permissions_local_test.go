@@ -17,9 +17,9 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/agui"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/engine/agui"
+	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/store"
 )
 

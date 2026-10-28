@@ -30,12 +30,12 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/agui"
-	"github.com/GhaziBenDahmane/harness/compaction"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/engine/agui"
+	"github.com/GhaziBenDahmane/harness/engine/compaction"
+	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/store"
-	"github.com/GhaziBenDahmane/harness/tools"
 )
 
 // Markers the assertions look for after compaction.

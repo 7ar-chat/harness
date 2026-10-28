@@ -12,8 +12,8 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/bench"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/llm"
-	"github.com/GhaziBenDahmane/harness/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/engine/llm"
+	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 func TestTiersSplitTheBuiltinTasks(t *testing.T) {

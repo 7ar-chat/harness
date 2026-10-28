@@ -5,11 +5,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/agent"
-	"github.com/GhaziBenDahmane/harness/approvals"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/gitsafe"
-	"github.com/GhaziBenDahmane/harness/permissions"
+	"github.com/GhaziBenDahmane/harness/engine/agent"
+	"github.com/GhaziBenDahmane/harness/engine/approvals"
+	"github.com/GhaziBenDahmane/harness/features/gitsafe"
+	"github.com/GhaziBenDahmane/harness/features/permissions"
 )
 
 // wirePermissions puts the permission layer (allow/ask/deny rules, modes) in

@@ -16,13 +16,13 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/agent"
-	"github.com/GhaziBenDahmane/harness/agent/prompts"
-	"github.com/GhaziBenDahmane/harness/compaction"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/engine/agent"
+	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
+	"github.com/GhaziBenDahmane/harness/engine/compaction"
+	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/store"
-	"github.com/GhaziBenDahmane/harness/tools"
 )
 
 // fixedOverhead is what every request of a profile carries before the user speaks.

@@ -17,9 +17,9 @@ import (
 	"time"
 
 	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/agui"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/llm"
+	"github.com/GhaziBenDahmane/harness/engine/agui"
+	"github.com/GhaziBenDahmane/harness/engine/llm"
 )
 
 // Missing returns the programs of t that are not on PATH.

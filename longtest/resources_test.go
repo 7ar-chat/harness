@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/tools"
+	"github.com/GhaziBenDahmane/harness/engine/tools"
 
 	"github.com/GhaziBenDahmane/harness/longtest"
 )

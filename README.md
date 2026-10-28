@@ -247,7 +247,7 @@ Skills are discovered from, lowest to highest precedence (a later source replace
 
 | Source | Where | Notes |
 | --- | --- | --- |
-| `builtin` | embedded in the binary (`skills/skillsfs/builtin`) | `docx`, `pptx`, `xlsx`, `pdf`, `charts`; `Options.BuiltinSkills` replaces them |
+| `builtin` | embedded in the binary (`features/skills/skillsfs/builtin`) | `docx`, `pptx`, `xlsx`, `pdf`, `charts`; `Options.BuiltinSkills` replaces them |
 | `extra` | `Options.ExtraSkills` (an `fs.FS`) | the embedding product's own skills |
 | `user` | `SKILLS_DIR`, default `~/.config/harness/skills` | one folder per skill |
 | `project` | `<workspace>/.harness/skills` | not wired yet (see Status); fenced as untrusted text |
@@ -265,24 +265,30 @@ command); the built-ins are only listed and installed on demand. An optional `re
 frontmatter list installs dependencies with a skill. Packages are validated (entry count, depth, file
 and total size, safe paths) when loaded; an invalid folder is logged and skipped.
 
-## Packages
+## Layout
 
-| Package | Role |
-|---|---|
-| `harness` (root) | Facade: wiring + `Send/Events/Cancel/Steer` |
-| `httpserver` | `net/http` handlers + SSE for web front ends |
-| `agent` | The loop: steps, streaming, retries, steering, tool hooks, approvals, spill, masking |
-| `agui` | AG-UI event builders and order checker |
-| `llm`, `llm/anthropic`, `llm/responses` | eino model factory: OpenAI chat, Responses API, native Anthropic Messages (prompt-cache breakpoints, `LLM_PROVIDER=anthropic`), retry |
-| `compaction` | Context summarisation and token estimates |
-| `sandbox`, `tools/sandboxtools` | Remote sandbox contract/manager and the file/exec/search/view tools |
-| `tools/{skill,memory,harness,mcp}tools` | Skills, memory, plan/ask_user/goal and MCP tools |
-| `skills`, `skills/skillsfs` | Filesystem skills: registry, lazy install into the sandbox; built-in skills (embedded) |
-| `artifacts`, `workspace` | Versioned deliverables, workspace git checkpoints |
-| `approvals`, `permissions`, `gitsafe`, `goals`, `verify`, `titles`, `memory` | Optional features, usable as plugins |
-| `runtime` | Run claiming, heartbeat, sweeper, end-of-run hooks |
-| `store`, `store/memstore`, `store/pgstore` | Types + interface; in-memory and Postgres implementations |
-| `eventlog`, `queue` | Per-run durable event log and run queue/bus (memory and Redis) |
+The repository is one Go module in strict layers; a lower layer never imports a higher one
+(`layers_test.go` enforces it).
+
+```
+config/ store/                 foundation: configuration, the persistence interfaces
+engine/agui, syncx, prompts    foundation: AG-UI events, small helpers, prompt text
+sandbox/                       where tools run: contract + manager; local (your machine), opensandbox (remote), sandboxtest (fake)
+engine/                        the reusable intelligence
+  agent/      the ReAct loop: steps, streaming, retries, steering, hooks, spill, masking
+  llm/        OpenAI chat + Responses, Anthropic Messages, retry, test doubles (llm/llmtest)
+  tools/      tool interfaces; tools/sandboxtools = read/write/edit/search/exec/jobs
+  runtime/    run claiming, heartbeat, sweeper, end-of-run hooks
+  eventlog/ queue/ compaction/ approvals/
+store/{memstore,filestore,pgstore}   persistence adapters (memory, durable local files, Postgres)
+features/                      optional capabilities a host switches on
+  permissions/ gitsafe/ codecheck/ projectdocs/ explore/ plan/ mcp/
+  memory/ skills/ goals/ titles/ verify/ artifacts/ workspace/
+hosts/                         ways to drive the engine
+  tui/ (terminal)   web/ (HTTP + SSE)
+harness.go                     the facade: New / Send / Events / Steer / Cancel / Resume
+cmd/harness  cmd/bench         binaries;  bench/ longtest/ = benchmark and long-session tests
+```
 
 ## Configuration
 

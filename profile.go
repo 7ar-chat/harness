@@ -4,12 +4,12 @@ import (
 	"context"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/agent"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/skills"
+	"github.com/GhaziBenDahmane/harness/engine/agent"
+	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/GhaziBenDahmane/harness/features/memory/memorytools"
+	"github.com/GhaziBenDahmane/harness/features/skills"
 	"github.com/GhaziBenDahmane/harness/store"
-	"github.com/GhaziBenDahmane/harness/tools"
-	"github.com/GhaziBenDahmane/harness/tools/memorytools"
 )
 
 // builtinTools are the tools a profile governs; any other tool (MCP, web

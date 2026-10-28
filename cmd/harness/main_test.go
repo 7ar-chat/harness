@@ -12,8 +12,8 @@ import (
 
 	"github.com/GhaziBenDahmane/harness"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/gitsafe"
-	"github.com/GhaziBenDahmane/harness/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/features/gitsafe"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 )
 

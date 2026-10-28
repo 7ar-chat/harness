@@ -53,8 +53,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/agui"
-	"github.com/GhaziBenDahmane/harness/eventlog"
+	"github.com/GhaziBenDahmane/harness/engine/agui"
+	"github.com/GhaziBenDahmane/harness/engine/eventlog"
 	"github.com/GhaziBenDahmane/harness/store"
 	"github.com/GhaziBenDahmane/harness/store/memstore"
 )

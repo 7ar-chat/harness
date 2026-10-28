@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/agui"
+	"github.com/GhaziBenDahmane/harness/engine/agui"
 	"github.com/GhaziBenDahmane/harness/store"
 )
 

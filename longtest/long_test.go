@@ -9,7 +9,7 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
-	"github.com/GhaziBenDahmane/harness/agent"
+	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/longtest"
 )
 

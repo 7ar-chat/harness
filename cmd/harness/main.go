@@ -28,10 +28,10 @@ import (
 
 	"github.com/GhaziBenDahmane/harness"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/gitsafe"
+	"github.com/GhaziBenDahmane/harness/features/gitsafe"
+	"github.com/GhaziBenDahmane/harness/hosts/tui"
 	"github.com/GhaziBenDahmane/harness/store"
 	"github.com/GhaziBenDahmane/harness/store/filestore"
-	"github.com/GhaziBenDahmane/harness/tui"
 )
 
 func main() {

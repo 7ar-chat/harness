@@ -11,7 +11,7 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/bench"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 func needs(t *testing.T, task bench.Task) {

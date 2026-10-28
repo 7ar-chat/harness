@@ -12,10 +12,10 @@ import (
 	"github.com/cloudwego/eino/schema"
 	goopenai "github.com/meguminnnnnnnnn/go-openai"
 
-	"github.com/GhaziBenDahmane/harness/agent"
-	"github.com/GhaziBenDahmane/harness/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/engine/agent"
+	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/longtest"
-	"github.com/GhaziBenDahmane/harness/tools"
 )
 
 func customEvents(o *longtest.Outcome, name string) int {

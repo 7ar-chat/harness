@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/agent/prompts"
+	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
 )
 
 // ---- harness v3, stream C2 (prompt variants, reasoning efforts per model) ----
