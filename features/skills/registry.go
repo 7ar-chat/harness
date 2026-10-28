@@ -18,8 +18,8 @@ import (
 //
 //   - builtin: the skills embedded in the binary (skills/skillsfs/builtin);
 //   - extra: an fs.FS the embedding product passes in its options;
-//   - user: the user directory (SKILLS_DIR, default ~/.har/skills);
-//   - project: <workspace>/.har/skills (not wired yet: see the README).
+//   - user: SKILLS_DIR, ~/.har/skills, ~/.agents/skills, ~/.claude/skills (see Dirs);
+//   - project: <repo>/.har/skills, <repo>/.agents/skills, <repo>/.claude/skills (untrusted, fenced).
 const (
 	SourceBuiltin = "builtin"
 	SourceExtra   = "extra"
@@ -82,7 +82,15 @@ func (r *Registry) AddFS(source string, fsys fs.FS) int {
 	}
 	n := 0
 	for _, e := range entries {
-		if !e.IsDir() {
+		isDir := e.IsDir()
+		if !isDir && e.Type()&fs.ModeSymlink != 0 && source != SourceProject {
+			// A symlinked skill folder (tools share skills that way); never in a repository's own directory,
+			// where a link could point anywhere on the host.
+			if st, err := fs.Stat(fsys, e.Name()); err == nil {
+				isDir = st.IsDir()
+			}
+		}
+		if !isDir {
 			continue
 		}
 		if _, err := fs.Stat(fsys, e.Name()+"/SKILL.md"); err != nil {
