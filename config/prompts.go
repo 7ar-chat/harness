@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 
@@ -16,6 +17,9 @@ type PromptAndEfforts struct {
 	// variants of internal/agent/prompts (default, gpt-5.6, deepseek, legacy).
 	// Models not listed use deepseek when their name contains "deepseek",
 	// else default.
+	// AgentProfile is AGENT_PROFILE: "work" (default, documents and data) or "coding": models not
+	// listed in an explicit LLM_PROMPT_VARIANTS then use the coding prompt, which also loads AGENTS.md.
+	AgentProfile         string `env:"AGENT_PROFILE"`
 	LLMPromptVariantsRaw string `env:"LLM_PROMPT_VARIANTS" envDefault:"gpt-5.6-sol=gpt-5.6,gpt-5.6-terra=gpt-5.6"`
 	LLMPromptVariants    map[string]string
 	// LLMReasoningEffortsRaw is LLM_REASONING_EFFORTS: "model=effort|effort…,…",
@@ -33,6 +37,11 @@ var DefaultReasoningEfforts = []string{"minimal", "low", "medium", "high"}
 var effortScale = []string{"none", "minimal", "low", "medium", "high", "xhigh"}
 
 func (c *Config) normalizePromptAndEfforts() error {
+	switch strings.ToLower(strings.TrimSpace(c.AgentProfile)) {
+	case "", "work", "coding":
+	default:
+		return fmt.Errorf("AGENT_PROFILE must be work or coding, got %q", c.AgentProfile)
+	}
 	c.LLMPromptVariants = map[string]string{}
 	for _, entry := range trimAll(strings.Split(c.LLMPromptVariantsRaw, ",")) {
 		model, variant, ok := strings.Cut(entry, "=")
@@ -41,6 +50,11 @@ func (c *Config) normalizePromptAndEfforts() error {
 			return fmt.Errorf("LLM_PROMPT_VARIANTS: %q is not model=variant (variants: %s)", entry, strings.Join(prompts.Names(), ", "))
 		}
 		c.LLMPromptVariants[model] = variant
+	}
+	if strings.EqualFold(strings.TrimSpace(c.AgentProfile), "coding") {
+		if _, set := os.LookupEnv("LLM_PROMPT_VARIANTS"); !set {
+			c.LLMPromptVariants = map[string]string{} // the work defaults do not apply to the coding profile
+		}
 	}
 	c.LLMReasoningEfforts = map[string][]string{}
 	for _, entry := range trimAll(strings.Split(c.LLMReasoningEffortsRaw, ",")) {
@@ -64,6 +78,9 @@ func (c *Config) normalizePromptAndEfforts() error {
 func (c *Config) PromptVariant(model string) string {
 	if v, ok := c.LLMPromptVariants[model]; ok {
 		return v
+	}
+	if strings.EqualFold(strings.TrimSpace(c.AgentProfile), "coding") {
+		return prompts.Coding
 	}
 	if strings.Contains(strings.ToLower(model), "deepseek") {
 		return prompts.DeepSeek

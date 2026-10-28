@@ -40,6 +40,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/goals"
 	"github.com/GhaziBenDahmane/harness/llm"
 	"github.com/GhaziBenDahmane/harness/memory"
+	"github.com/GhaziBenDahmane/harness/projectdocs"
 	"github.com/GhaziBenDahmane/harness/queue"
 	"github.com/GhaziBenDahmane/harness/renders"
 	"github.com/GhaziBenDahmane/harness/runtime"
@@ -174,13 +175,16 @@ func New(o Options) (*Harness, error) {
 		MaxPerUser: cfg.MaxSandboxesPerUser, Timeout: cfg.SandboxTimeout(),
 		UnhealthyRecreate: time.Duration(cfg.SandboxUnhealthyRecreate) * time.Second,
 		OnCreate: func(ctx context.Context, threadID string, sb sandbox.Sandbox, recreated bool) string {
+			if cfg.LocalSandbox() {
+				return "" // the host keeps its files; nothing to restore into the user's project
+			}
 			wsSvc.OnCreate(ctx, threadID, sb) // the checkpoint history first, then the files
 			return artSvc.RestoreWorkspace(ctx, threadID, sb, recreated)
 		},
 	})
 	artSvc = artifacts.New(st, blobs, mgr, classifier, artifacts.Options{Actor: clsSettings.Actor, PreviewConcurrency: cfg.PreviewMaxConcurrency,
 		BlobGCGrace: time.Duration(cfg.BlobGCGraceHours) * time.Hour})
-	wsSvc = workspace.New(mgr, st, st, artSvc, workspace.Options{Disabled: !cfg.WorkspaceCheckpoints, ArchiveMaxBytes: cfg.GitArchiveMaxBytes,
+	wsSvc = workspace.New(mgr, st, st, artSvc, workspace.Options{Disabled: !cfg.WorkspaceCheckpoints || cfg.LocalSandbox(), ArchiveMaxBytes: cfg.GitArchiveMaxBytes,
 		MaxFileBytes: cfg.CheckpointMaxFile})
 	builtin := o.BuiltinSkills
 	if builtin == nil {
@@ -382,6 +386,7 @@ func harnessOptions(cfg *config.Config, st store.Store, reg *skills.Registry, ar
 	return agent.Harness{
 		Sections: []agent.PromptSection{
 			reg.PromptSection,
+			projectdocs.Section(mgr),
 			agent.Legacy(artifacts.PromptSection, ""),
 			agent.Part(prompts.Git, agent.Legacy(wsSvc.PromptSection, prompts.GitCheckpoints)),
 			agent.Legacy(func(context.Context, agent.Input) string { return harnesstools.Instructions }, ""),

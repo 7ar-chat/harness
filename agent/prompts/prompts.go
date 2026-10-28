@@ -19,6 +19,8 @@ const (
 	Default  = "default"
 	GPT56    = "gpt-5.6"
 	DeepSeek = "deepseek"
+	// Coding is the software-engineering prompt (AGENT_PROFILE=coding).
+	Coding = "coding"
 	// Legacy is the harness v2 prompt, kept verbatim for A/B comparisons.
 	Legacy = "legacy"
 )
@@ -43,6 +45,7 @@ var registry = map[string]variant{
 	Default:  {base: defaultBase, parts: map[Part]bool{Memory: true, Git: true, Web: true}},
 	GPT56:    {base: gpt56Base, parts: map[Part]bool{Memory: true, Git: true, Web: true}},
 	DeepSeek: {base: deepseekBase, parts: map[Part]bool{Memory: true, Git: true, Web: true}},
+	Coding:   {base: codingBase, parts: map[Part]bool{Memory: true, Web: true}},
 	Legacy:   {parts: map[Part]bool{Memory: true, Git: true, Web: true}},
 }
 

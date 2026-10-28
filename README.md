@@ -58,6 +58,18 @@ h.Cancel(ctx, "alice", run.ID)
   `sandbox/sandboxtest` is an in-memory fake for tests.
 * **Your own tools**: `Options.Tools` takes `tools.Provider`s (eino tools, per-run).
 
+## Coding profile
+
+`AGENT_PROFILE=coding` switches the system prompt to a software-engineering one (orient with search, read
+before edit, smallest change, run the project's own build/tests before finishing, no commits or
+destructive commands unless asked) and puts the repository's `AGENTS.md` (else `CLAUDE.md`) into the
+prompt. An explicit `LLM_PROMPT_VARIANTS` still wins per model. Typical terminal setup:
+
+```
+AGENT_PROFILE=coding SANDBOX_BACKEND=local LLM_PROVIDER=anthropic LLM_API_KEY=… \
+LLM_MODELS=claude-sonnet-5-5 LLM_DEFAULT_MODEL=claude-sonnet-5-5 harness
+```
+
 ## Sandbox definition
 
 `sandbox-image/` holds the sandbox image (`Dockerfile`: Python/Node/LibreOffice/pandoc/… toolchain,
