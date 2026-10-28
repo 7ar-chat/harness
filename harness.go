@@ -78,8 +78,8 @@ type Options struct {
 	// Models builds the chat models (default: llm.New(Config), the OpenAI-compatible
 	// provider or the Studio LLM gateway).
 	Models llm.Factory
-	// Backend provides the sandboxes (default: OpenSandbox when OPENSANDBOX_URL is
-	// set, else none: the agent then has no sandbox tools).
+	// Backend provides the sandboxes (default: the local machine when SANDBOX_BACKEND=local,
+	// OpenSandbox when OPENSANDBOX_URL is set, else none: the agent then has no sandbox tools).
 	Backend sandbox.Backend
 	// Blobs stores artifact contents (default: in the Store).
 	Blobs artifacts.Blobs
@@ -130,7 +130,12 @@ func New(o Options) (*Harness, error) {
 	backend := o.Backend
 	if backend == nil {
 		var err error
-		if backend, err = sandbox.BackendFromConfig(cfg); err != nil {
+		if cfg.LocalSandbox() {
+			backend, err = localBackend(cfg)
+		} else {
+			backend, err = sandbox.BackendFromConfig(cfg)
+		}
+		if err != nil {
 			return nil, err
 		}
 	}

@@ -66,6 +66,13 @@ type Config struct {
 	RuntimeConcurrency   int `env:"RUNTIME_CONCURRENCY" envDefault:"16"`
 	RuntimeShutdownGrace int `env:"RUNTIME_SHUTDOWN_GRACE_SECONDS" envDefault:"15"`
 
+	// SandboxBackend is "opensandbox" (default; needs OPENSANDBOX_URL) or "local": commands run
+	// on this machine in LOCAL_WORKSPACE (default: the current directory), seen as /workspace.
+	// The local backend has no isolation; use it on your own machine or inside a container.
+	SandboxBackend string `env:"SANDBOX_BACKEND"`
+	LocalWorkspace string `env:"LOCAL_WORKSPACE"`
+	LocalStateDir  string `env:"LOCAL_STATE_DIR"`
+
 	OpenSandboxURL            string   `env:"OPENSANDBOX_URL"`
 	OpenSandboxAPIKey         string   `env:"OPENSANDBOX_API_KEY"`
 	OpenSandboxImage          string   `env:"OPENSANDBOX_IMAGE" envDefault:"python:3.11-slim"`
@@ -287,14 +294,21 @@ func (c *Config) ModelAllowed(model string) bool {
 }
 
 // SandboxEnabled reports whether sandbox tools are configured.
-func (c *Config) SandboxEnabled() bool { return strings.TrimSpace(c.OpenSandboxURL) != "" }
+func (c *Config) SandboxEnabled() bool {
+	return c.LocalSandbox() || strings.TrimSpace(c.OpenSandboxURL) != ""
+}
+
+// LocalSandbox reports whether tools run on this machine (SANDBOX_BACKEND=local).
+func (c *Config) LocalSandbox() bool {
+	return strings.EqualFold(strings.TrimSpace(c.SandboxBackend), "local")
+}
 
 // EgressMode is the effective sandbox egress: "disabled" (no sandbox), "allowlist"
 // or "unrestricted". In production unrestricted egress must be explicitly accepted
 // with SANDBOX_EGRESS_UNRESTRICTED=true; otherwise an error is returned.
 func (c *Config) EgressMode() (string, error) {
 	switch {
-	case !c.SandboxEnabled():
+	case !c.SandboxEnabled() || c.LocalSandbox():
 		return "disabled", nil
 	case len(c.SandboxEgressAllowlist) > 0:
 		return "allowlist", nil

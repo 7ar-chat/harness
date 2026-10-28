@@ -50,6 +50,9 @@ h.Cancel(ctx, "alice", run.ID)
   except the sandbox server. **Multi process**: pass `Options.Store` (`store/pgstore` +
   `store/pgstore/migrate`) and `Options.Redis`; replicas then share runs, logs, sandbox locks
   and skill installs, and a crashed runtime's runs are finished as `interrupted` by another.
+* **Local, no container**: `SANDBOX_BACKEND=local` (optionally `LOCAL_WORKSPACE=dir`, default the current
+  directory) runs the tools on this machine through `sandbox/local`; the agent still sees `/workspace`.
+  There is no isolation beyond path confinement of the file API: use it on your own machine or inside a container.
 * **Your own sandbox**: implement `sandbox.Backend` (Create/Connect/Kill) returning
   `sandbox.Instance` (Exec, ReadFile, WriteFile, MkdirAll, List, Stat, Healthy…).
   `sandbox/sandboxtest` is an in-memory fake for tests.

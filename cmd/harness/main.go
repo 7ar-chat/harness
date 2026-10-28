@@ -56,7 +56,7 @@ func main() {
 		fatal(err)
 	}
 	if !cfg.SandboxEnabled() {
-		fmt.Fprintln(os.Stderr, "(OPENSANDBOX_URL is not set: the agent has no sandbox tools)")
+		fmt.Fprintln(os.Stderr, "(no sandbox: set SANDBOX_BACKEND=local or OPENSANDBOX_URL; the agent has no tools)")
 	}
 
 	in := bufio.NewScanner(os.Stdin)
