@@ -198,8 +198,12 @@ func Load(o Options) (*Policy, error) {
 		if o.Workspace != "" {
 			files = append(files, filepath.Join(o.Workspace, config.DirName, config.PermissionsFile))
 		}
-		if home != "" {
-			files = append(files, filepath.Join(home, config.DirName, config.PermissionsFile))
+		userDir := config.UserDir()
+		if o.Home != "" {
+			userDir = filepath.Join(o.Home, config.DirName)
+		}
+		if userDir != "" {
+			files = append(files, filepath.Join(userDir, config.PermissionsFile))
 		}
 	}
 	p := &Policy{Workspace: o.Workspace, Home: home, AskTools: o.AskTools}

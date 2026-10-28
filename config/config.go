@@ -42,6 +42,13 @@ type Config struct {
 	LLMProvider string `env:"LLM_PROVIDER" envDefault:"openai"`
 	LLMBaseURL  string `env:"LLM_BASE_URL"`
 	LLMAPIKey   string `env:"LLM_API_KEY"`
+	// LLMProviderName is the selected provider (a name of Providers, or openai/anthropic);
+	// LLMProvider is its type. LLMKeySource says where LLMAPIKey came from ("env LLM_API_KEY",
+	// "auth.json", ...; never the key). Providers are the named providers of the config files.
+	LLMProviderName string              `env:"-"`
+	LLMKeySource    string              `env:"-"`
+	Providers       map[string]Provider `env:"-"`
+	keyHint         []string
 	// ExploreModel is EXPLORE_MODEL: the model of the read-only explore sub-agent of the coding profile
 	// (default LLM_DEFAULT_MODEL; a cheaper model saves the most).
 	ExploreModel string `env:"EXPLORE_MODEL"`
@@ -210,7 +217,7 @@ func (c *Config) normalize() error {
 	switch c.LLMProvider {
 	case "openai", "anthropic":
 	default:
-		return fmt.Errorf("LLM_PROVIDER must be openai or anthropic, got %q", c.LLMProvider)
+		return fmt.Errorf("LLM_PROVIDER must be openai, anthropic or the name of a provider defined under providers: in a config.yml, got %q", c.LLMProvider)
 	}
 	if strings.TrimSpace(c.MCPServersJSON) != "" {
 		if err := json.Unmarshal([]byte(c.MCPServersJSON), &c.MCPServers); err != nil {

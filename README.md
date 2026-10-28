@@ -34,7 +34,8 @@ HTTP APIs (authentication, multi-tenant routing) are left to the embedding appli
 ## Use it
 
 ```go
-cfg, _ := config.Load()                       // env: LLM_*, SANDBOX_*, OPENSANDBOX_*, HARNESS_*, …
+cfg, _ := config.Load()                       // ~/.har/config.yml + <repo>/.har/config.yml + env: LLM_*, SANDBOX_*, …
+                                              // the API key: LLM_API_KEY, else ~/.har/auth.json (see Configuration files)
 h, _ := harness.New(harness.Options{Config: cfg})
 go h.Run(ctx)                                 // consumes queued runs
 
@@ -47,6 +48,9 @@ h.Steer(ctx, "alice", run.ID, "use blue instead")   // message to a running run
 h.Cancel(ctx, "alice", run.ID)
 ```
 
+* **Credentials**: `harness auth login <provider>` stores an API key in `~/.har/auth.json` (mode 0600), never in a
+  repository; `HAR_HOME` relocates `~/.har`, and servers set `HARNESS_NO_USER_DIR=1` and use the environment
+  (see [Configuration files and standards](#configuration-files-and-standards)).
 * **Web**: `httpserver.New(h, httpserver.Options{…})` (`hosts/web`) serves threads, runs, approvals,
   files and the run's events as SSE (`id` = seq, so reconnects resume without loss), plus a built-in
   browser UI; `cmd/harness-web` runs it (see [Web host](#web-host)).
@@ -86,7 +90,8 @@ LLM_MODELS=claude-sonnet-5-5 LLM_DEFAULT_MODEL=claude-sonnet-5-5 harness
 
 ## LLM providers
 
-`LLM_PROVIDER` is `openai` (the default: any OpenAI-compatible endpoint at `LLM_BASE_URL` with `LLM_API_KEY`;
+`provider` (`LLM_PROVIDER`, flag `-provider NAME`) selects a provider: one of your named providers (see
+[Named providers](#named-providers-and-api-keys)) or a built-in type. The built-in `openai` (the default: any OpenAI-compatible endpoint at `LLM_BASE_URL` with `LLM_API_KEY`;
 Chat Completions, or `{LLM_BASE_URL}/responses` for the models in `LLM_RESPONSES_MODELS`) or `anthropic`.
 Model ids (`LLM_MODELS`) are sent to the provider verbatim. A user is just a login string; the harness
 forwards no identity to the model or to MCP servers.
@@ -104,7 +109,7 @@ LLM_SESSION_HEADER=x-opencode-session LLM_MODELS=deepseek-v4.1-flash LLM_DEFAULT
 
 ## CLI sessions
 
-`harness` saves each conversation under `LOCAL_STATE_DIR` (default `~/.local/state/harness`):
+`harness` saves each conversation under `LOCAL_STATE_DIR` (default `~/.har/sessions`, i.e. `$HAR_HOME/sessions`):
 `harness -continue` resumes the latest, `-resume <id>` a given one, `-sessions` lists them, `-ephemeral`
 keeps nothing. In a git repository the coding profile snapshots the tree before every run;
 `harness -undo` restores the snapshot (the replaced state is kept under `refs/harness/backups/`).
@@ -296,7 +301,7 @@ host and not the facade, and the facade imports no host. Package `harness` is im
 Local hosts keep their conversations across restarts without Postgres or Redis:
 
 ```go
-st, _ := harness.OpenLocalStore("")           // "" = $LOCAL_STATE_DIR, else $XDG_STATE_HOME/harness, else ~/.local/state/harness
+st, _ := harness.OpenLocalStore("")           // "" = $LOCAL_STATE_DIR, else ~/.har/sessions ($HAR_HOME/sessions)
 defer st.Close()
 h, _ := harness.New(harness.Options{Config: cfg, Store: st})
 
@@ -562,8 +567,28 @@ code (and `~/.har/` for the user), and the de-facto standards for agent instruct
     mcp.json                 MCP servers, same format as .mcp.json
     skills/<name>/SKILL.md   project skills (also .agents/skills and .claude/skills)
     memory/                  logical prefix of memory paths
-~/.har/                      the same files for the user: config.yml, permissions.yml, AGENTS.md, mcp.json, skills/
 ```
+
+The user directory is the harness's home, like `~/.claude` or `~/.codex`: general settings and credentials live
+there and never in a repository.
+
+```
+~/.har/                      $HAR_HOME when set
+  config.yml                 general settings and named providers (same schema as the project file); no secrets
+  auth.json                  API keys by provider, mode 0600 (written by `harness auth login`)
+  AGENTS.md                  your own instructions, loaded for every project (local backend)
+  permissions.yml            allow/ask/deny rules for every project
+  mcp.json                   your MCP servers
+  skills/<name>/SKILL.md     your skills
+  sessions/                  the saved conversations (LOCAL_STATE_DIR overrides)
+  memory/                    memory files
+```
+
+`HAR_HOME` points the harness at another directory (tests, containers). `HARNESS_NO_USER_DIR=1` makes the
+harness read nothing from it (no `auth.json`, `config.yml`, `AGENTS.md`, skills, MCP, permissions; sessions fall back to
+`$XDG_STATE_HOME/harness`): set it on servers and CI that must be hermetic and give the key through the environment.
+`harness config path` prints the user directory and the project directory in use; `harness config init` writes a commented
+starter `config.yml` (0600, in a 0700 directory) when there is none.
 
 The project directory is the nearest `.har/` found walking up from the working directory (or `LOCAL_WORKSPACE`) to the git
 root. `harness -config-dump` prints the effective configuration with the source of every value that was set
@@ -592,7 +617,8 @@ Keys are translated to the environment variables of the "Configuration" section,
 
 | Key | Environment variable | Notes |
 |---|---|---|
-| `provider` | `LLM_PROVIDER` | `openai` or `anthropic` |
+| `provider` | `LLM_PROVIDER` | `openai`, `anthropic`, or the name of an entry of `providers` |
+| `providers` | (see below) | named providers: `type`, `base_url`, `session_header`, `cache_ttl`, `models`, `default_model`, `api_key_env` |
 | `base_url` | `LLM_BASE_URL` | |
 | `api_key_env` | `LLM_API_KEY` | the NAME of the environment variable that holds the key; unset is an error |
 | `models` | `LLM_MODELS` | list |
@@ -643,6 +669,55 @@ permissions:
 mcp:
   servers:
     docs: {type: http, url: "https://docs.example.com/mcp", headers: {Authorization: "Bearer ${DOCS_TOKEN}"}}
+```
+
+### Named providers and API keys
+
+`providers:` (user and project file; the project overrides the user's by name, field by field) defines providers you
+select with `provider: <name>` or `harness -provider <name>`. `type` is `openai` (any OpenAI-compatible endpoint) or
+`anthropic`; a bare `provider: openai|anthropic` stays the built-in type with the `LLM_BASE_URL` default, and the flat
+keys (`base_url`, `api_key_env`, ...) and every environment variable keep working. The values of the selected provider
+sit above the flat keys of the files and below the environment (`LLM_BASE_URL` still wins).
+
+```yaml
+# ~/.har/config.yml
+provider: opencode
+providers:
+  opencode:
+    type: openai
+    base_url: https://opencode.ai/zen/go/v1
+    session_header: x-opencode-session
+    models: [deepseek-v4.1-flash]
+    default_model: deepseek-v4.1-flash
+    api_key_env: OPENCODE_KEY      # optional
+  anthropic:
+    type: anthropic
+```
+
+**Key resolution**, first match wins, for the selected provider:
+
+1. `LLM_API_KEY` in the environment (also a flat `api_key_env`, which fills it);
+2. the environment variable named by the provider's `api_key_env`;
+3. `~/.har/auth.json`, the entry named like the provider;
+4. the conventional variable of its type: `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` (not for a named provider that sets
+   its own `base_url`: an OpenAI key is not sent to another host).
+
+With none, the command stops with a message that says how to set one (`harness auth login <provider>`); a local
+endpoint (`localhost`, `127.0.0.1`) needs no key. A plain `api_key` is refused in every `config.yml`; keys go in `auth.json`:
+
+```json
+{"providers": {"opencode": {"api_key": "sk-..."}, "anthropic": {"api_key": "sk-ant-..."}}}
+```
+
+`auth.json` must not be readable by the group or others (`mode & 0o077 == 0`); otherwise it is refused with an error naming
+the file and `chmod 600`. The CLI creates it 0600 in a 0700 directory and rewrites it atomically. Keys are never logged;
+`-config-dump` shows `LLM_API_KEY  ****  (auth.json)` (or the environment variable) and never the key.
+
+```
+harness auth login opencode            # prompts without echo; or: echo "$KEY" | harness auth login opencode -key-stdin
+harness auth list                      # providers with a key, last 4 characters, and the file path
+harness auth remove opencode
+harness -provider opencode -p "hello"
 ```
 
 ### Instruction files

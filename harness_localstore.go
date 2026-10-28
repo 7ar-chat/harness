@@ -8,7 +8,8 @@ import "github.com/GhaziBenDahmane/harness/store/filestore"
 // Options.Store and Close it on exit.
 //
 // dir is the state directory; "" uses $LOCAL_STATE_DIR, else
-// $XDG_STATE_HOME/harness, else ~/.local/state/harness. Runs that were in
+// <user dir>/sessions ($HAR_HOME or ~/.har), else $XDG_STATE_HOME/harness, else
+// ~/.local/state/harness. Runs that were in
 // progress when the previous process died are marked interrupted. Use
 // Store.Sessions() to list, fork and delete threads. See store/filestore.
 func OpenLocalStore(dir string) (*filestore.Store, error) { return filestore.Open(dir) }

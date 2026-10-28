@@ -10,6 +10,8 @@
 //	harness -p "prompt"      print mode: the answer on stdout, tool activity on stderr
 //	echo prompt | harness    print mode, the prompt read from stdin
 //	harness -p … -json       print mode emitting the AG-UI events as JSON lines
+//	harness auth login|list|remove   manage the API keys of ~/.har/auth.json
+//	harness config path|init          show / create the configuration directories
 //
 // Remote mode attaches the same terminal UI (and print mode) to a running
 // harness-web instead of an in-process engine; the server owns the model
@@ -55,11 +57,15 @@ func main() {
 type factory func(cfg *config.Config, st harness.Store) (*harness.Harness, error)
 
 func newHarness(cfg *config.Config, st harness.Store) (*harness.Harness, error) {
+	if err := cfg.RequireLLMKey(); err != nil {
+		return nil, err
+	}
 	return harness.New(harness.Options{Config: cfg, Store: st, Version: "cli"})
 }
 
 type options struct {
 	model, user, prompt string
+	provider            string
 	json, auto          bool
 	ephemeral, cont     bool
 	resume              string
@@ -69,10 +75,14 @@ type options struct {
 }
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, isTTY bool, mk factory) int {
+	if code, ok := subcommand(args, stdin, stdout, stderr, isTTY); ok {
+		return code
+	}
 	var o options
 	fs := flag.NewFlagSet("harness", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.StringVar(&o.model, "model", "", "model id (default LLM_DEFAULT_MODEL)")
+	fs.StringVar(&o.provider, "provider", "", "provider to use: a name defined under providers: in a config.yml, or openai / anthropic (default LLM_PROVIDER)")
 	fs.StringVar(&o.user, "user", "local", "user login")
 	fs.StringVar(&o.prompt, "p", "", "print mode: send this prompt (and stdin, if piped), print the answer, exit")
 	fs.BoolVar(&o.json, "json", false, "print mode: emit the AG-UI events as JSON lines on stdout")
@@ -93,13 +103,13 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	slog.SetDefault(slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: slog.LevelWarn})))
 
 	if o.configDump {
-		cfg, err := config.Load()
+		cfg, err := config.LoadWith(config.LoadOptions{Provider: o.provider})
 		if err != nil {
 			return fail(stderr, err)
 		}
 		flags := map[string]string{}
 		fs.Visit(func(f *flag.Flag) {
-			if f.Name == "model" || f.Name == "user" {
+			if f.Name == "model" || f.Name == "user" || f.Name == "provider" {
 				flags["-"+f.Name] = f.Value.String()
 			}
 		})
@@ -118,7 +128,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	if o.remote != "" {
 		return runRemote(ctx, o, prompt, printMode, stdout, stderr)
 	}
-	cfg, err := config.Load()
+	cfg, err := config.LoadWith(config.LoadOptions{Provider: o.provider})
 	if err != nil {
 		return fail(stderr, err)
 	}

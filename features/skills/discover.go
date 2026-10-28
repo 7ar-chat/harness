@@ -43,7 +43,11 @@ type Dir struct {
 //	<repo>/.har/skills, <repo>/.agents/skills, <repo>/.claude/skills
 func Dirs(o DiscoverOptions) []Dir {
 	home := o.Home
-	if home == "" {
+	userDir := ""
+	if home != "" {
+		userDir = filepath.Join(home, config.DirName)
+	} else if !config.NoUserDir() {
+		userDir = config.UserDir()
 		home, _ = os.UserHomeDir()
 	}
 	var out []Dir
@@ -53,8 +57,10 @@ func Dirs(o DiscoverOptions) []Dir {
 		}
 	}
 	add(o.SkillsDir, SourceUser)
+	if userDir != "" {
+		add(filepath.Join(userDir, config.SkillsFolder), SourceUser)
+	}
 	if home != "" {
-		add(filepath.Join(home, config.DirName, config.SkillsFolder), SourceUser)
 		if o.ForeignUserDirs {
 			add(filepath.Join(home, agentsDir, config.SkillsFolder), SourceUser)
 			add(filepath.Join(home, claudeDir, config.SkillsFolder), SourceUser)
