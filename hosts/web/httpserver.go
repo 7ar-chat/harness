@@ -45,9 +45,7 @@ import (
 	"time"
 
 	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/engine/queue"
-	"github.com/GhaziBenDahmane/harness/store"
-	"github.com/GhaziBenDahmane/harness/store/filestore"
+	"github.com/GhaziBenDahmane/harness/hosts/client"
 )
 
 // Caller is an authenticated user.
@@ -153,90 +151,31 @@ func (s *server) authed(next handler) http.HandlerFunc {
 	}
 }
 
-// ---- DTOs ----
-
-type threadDTO struct {
-	ID              string                 `json:"id"`
-	Title           string                 `json:"title"`
-	Pinned          bool                   `json:"pinned"`
-	CreatedAt       time.Time              `json:"createdAt"`
-	UpdatedAt       time.Time              `json:"updatedAt"`
-	ActiveRun       *store.ActiveRun       `json:"activeRun"`
-	PendingApproval map[string]any         `json:"pendingApproval"`
-	PendingQuestion *store.PendingQuestion `json:"pendingQuestion"`
-	Messages        []messageDTO           `json:"messages,omitempty"`
-}
-
-type messageDTO struct {
-	ID         string           `json:"id"`
-	RunID      string           `json:"runId,omitempty"`
-	Role       string           `json:"role"`
-	Content    string           `json:"content"`
-	ToolCalls  []store.ToolCall `json:"toolCalls,omitempty"`
-	ToolCallID string           `json:"toolCallId,omitempty"`
-	Error      string           `json:"error,omitempty"`
-	Metadata   map[string]any   `json:"metadata,omitempty"`
-	CreatedAt  time.Time        `json:"createdAt"`
-}
-
-type runDTO struct {
-	ID        string    `json:"id"`
-	ThreadID  string    `json:"threadId"`
-	Status    string    `json:"status"`
-	Model     string    `json:"model"`
-	Error     string    `json:"error,omitempty"`
-	ErrorCode string    `json:"errorCode,omitempty"`
-	LastSeq   int64     `json:"lastSeq"`
-	CreatedAt time.Time `json:"createdAt"`
-}
-
-func toThread(t *store.Thread) threadDTO {
-	d := threadDTO{ID: t.ID, Title: t.Title, Pinned: t.PinnedAt != nil, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
-		ActiveRun: t.ActiveRun, PendingQuestion: t.PendingQuestion}
-	if t.PendingApproval != nil {
-		d.PendingApproval = t.PendingApproval.Payload()
-	}
-	return d
-}
-
-func toRun(r *store.Run) runDTO {
-	return runDTO{ID: r.ID, ThreadID: r.ThreadID, Status: r.Status, Model: r.Model, Error: r.Error, ErrorCode: r.ErrorCode,
-		LastSeq: r.LastSeq, CreatedAt: r.CreatedAt}
-}
-
 // ---- handlers ----
+//
+// The handlers are a thin HTTP skin over client.InProcess: the DTOs, the
+// validation and the errors are those of package client, which is also what
+// client.HTTP decodes.
 
-func (s *server) models(w http.ResponseWriter, _ *http.Request, _ Caller) {
-	m := s.o.Models
-	if m == nil {
-		m = []string{}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"models": m, "default": s.o.DefaultModel})
+// api is the engine as seen by the caller.
+func (s *server) api(c Caller) client.Client {
+	return client.InProcess(s.h, c.Login, client.WithModels(s.o.Models, s.o.DefaultModel))
 }
 
-func (s *server) sessions(w http.ResponseWriter, r *http.Request, c Caller) {
-	fs, ok := s.h.Store.(interface{ Sessions() filestore.Sessions })
-	if !ok {
-		writeError(w, http.StatusNotImplemented, "not_supported", "The store has no session listing.")
-		return
-	}
-	list, err := fs.Sessions().List(r.Context(), c.Login, limitParam(r, 50))
+func (s *server) models(w http.ResponseWriter, r *http.Request, c Caller) {
+	m, err := s.api(c).Models(r.Context())
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	type session struct {
-		ID         string    `json:"id"`
-		Title      string    `json:"title"`
-		Preview    string    `json:"preview"`
-		Messages   int       `json:"messages"`
-		LastStatus string    `json:"lastStatus"`
-		CreatedAt  time.Time `json:"createdAt"`
-		UpdatedAt  time.Time `json:"updatedAt"`
-	}
-	out := make([]session, 0, len(list))
-	for _, i := range list {
-		out = append(out, session{i.ID, i.Title, i.Preview, i.Messages, i.LastStatus, i.CreatedAt, i.UpdatedAt})
+	writeJSON(w, http.StatusOK, m)
+}
+
+func (s *server) sessions(w http.ResponseWriter, r *http.Request, c Caller) {
+	out, err := s.api(c).Sessions(r.Context(), limitParam(r, 50))
+	if err != nil {
+		fail(w, err)
+		return
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -255,77 +194,47 @@ func (s *server) createThread(w http.ResponseWriter, r *http.Request, c Caller) 
 	if !decode(w, r, &body) {
 		return
 	}
-	th, err := s.h.NewThread(r.Context(), c.Login, body.Title)
+	th, err := s.api(c).CreateThread(r.Context(), body.Title)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, toThread(th))
+	writeJSON(w, http.StatusCreated, th)
 }
 
 func (s *server) listThreads(w http.ResponseWriter, r *http.Request, c Caller) {
-	ths, err := s.h.Store.ListThreads(r.Context(), c.Login, limitParam(r, 50), nil)
+	ths, err := s.api(c).ListThreads(r.Context(), limitParam(r, 50))
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	out := make([]threadDTO, 0, len(ths))
-	for _, t := range ths {
-		out = append(out, toThread(t))
-	}
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, ths)
 }
 
 func (s *server) getThread(w http.ResponseWriter, r *http.Request, c Caller) {
-	th, err := s.h.Store.GetThread(r.Context(), c.Login, r.PathValue("id"))
+	th, err := s.api(c).GetThread(r.Context(), r.PathValue("id"))
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	msgs, err := s.h.Store.ListMessages(r.Context(), th.ID)
-	if err != nil {
-		fail(w, err)
-		return
-	}
-	d := toThread(th)
-	d.Messages = make([]messageDTO, 0, len(msgs))
-	for _, m := range msgs {
-		d.Messages = append(d.Messages, messageDTO{ID: m.ID, RunID: m.RunID, Role: m.Role, Content: m.Content, ToolCalls: m.ToolCalls,
-			ToolCallID: m.ToolCallID, Error: m.Error, Metadata: m.Metadata, CreatedAt: m.CreatedAt})
-	}
-	writeJSON(w, http.StatusOK, d)
+	writeJSON(w, http.StatusOK, th)
 }
 
 func (s *server) renameThread(w http.ResponseWriter, r *http.Request, c Caller) {
-	var body struct {
-		Title  *string `json:"title"`
-		Pinned *bool   `json:"pinned"`
-	}
+	var body client.ThreadPatch
 	if !decode(w, r, &body) {
 		return
 	}
-	if body.Title == nil && body.Pinned == nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "title or pinned is required.")
-		return
-	}
-	if body.Title != nil {
-		t := strings.TrimSpace(*body.Title)
-		if t == "" || len([]rune(t)) > 200 {
-			writeError(w, http.StatusBadRequest, "invalid_request", "title must be 1 to 200 characters.")
-			return
-		}
-		body.Title = &t
-	}
-	th, err := s.h.Store.UpdateThread(r.Context(), c.Login, r.PathValue("id"), store.ThreadPatch{Title: body.Title, Pinned: body.Pinned})
+	th, err := s.api(c).RenameThread(r.Context(), r.PathValue("id"), body)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, toThread(th))
+	writeJSON(w, http.StatusOK, th)
 }
 
 func (s *server) deleteThread(w http.ResponseWriter, r *http.Request, c Caller) {
-	if _, err := s.h.Store.DeleteThread(r.Context(), c.Login, r.PathValue("id")); err != nil {
+	if err := s.api(c).DeleteThread(r.Context(), r.PathValue("id")); err != nil {
 		fail(w, err)
 		return
 	}
@@ -333,111 +242,51 @@ func (s *server) deleteThread(w http.ResponseWriter, r *http.Request, c Caller) 
 }
 
 func (s *server) createRun(w http.ResponseWriter, r *http.Request, c Caller) {
-	var body struct {
-		Message         string   `json:"message"`
-		Model           string   `json:"model"`
-		ReasoningEffort string   `json:"reasoningEffort"`
-		Skills          []string `json:"skills"`
-		Interactive     bool     `json:"interactive"`
-	}
+	var body client.RunRequest
 	if !decode(w, r, &body) {
 		return
 	}
-	if strings.TrimSpace(body.Message) == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "message is required.")
-		return
-	}
-	if !s.ownsThread(w, r, c) {
-		return
-	}
-	run, err := s.h.Send(r.Context(), c.Login, r.PathValue("id"), body.Message, harness.RunOptions{
-		Model: s.model(body.Model), ReasoningEffort: body.ReasoningEffort, Skills: body.Skills, Interactive: body.Interactive,
-	})
+	run, err := s.api(c).Send(r.Context(), r.PathValue("id"), body.Message, body.SendOptions)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusAccepted, toRun(run))
-}
-
-func (s *server) model(m string) string {
-	if m == "" {
-		return s.o.DefaultModel
-	}
-	return m
-}
-
-// ownsThread answers 404 (and returns false) unless the path's thread belongs to the caller.
-func (s *server) ownsThread(w http.ResponseWriter, r *http.Request, c Caller) bool {
-	if _, err := s.h.Store.GetThread(r.Context(), c.Login, r.PathValue("id")); err != nil {
-		fail(w, err)
-		return false
-	}
-	return true
+	writeJSON(w, http.StatusAccepted, run)
 }
 
 func (s *server) resume(w http.ResponseWriter, r *http.Request, c Caller) {
-	var body struct {
-		InterruptID     string `json:"interruptId"`
-		Reason          string `json:"reason"`
-		Decision        string `json:"decision"`
-		Always          bool   `json:"always"`
-		Text            string `json:"text"`
-		Model           string `json:"model"`
-		ReasoningEffort string `json:"reasoningEffort"`
-		Interactive     bool   `json:"interactive"`
-	}
+	var body client.ResumeRequest
 	if !decode(w, r, &body) {
 		return
 	}
-	if body.InterruptID == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "interruptId is required.")
-		return
-	}
-	if body.Reason == "" {
-		body.Reason = "ask_user"
-		if body.Decision != "" {
-			body.Reason = store.ReasonToolApproval
-		}
-	}
-	if body.Reason == store.ReasonToolApproval && body.Decision != store.DecisionApprove && body.Decision != store.DecisionDeny && body.Decision != store.DecisionRespond {
-		writeError(w, http.StatusBadRequest, "invalid_request", "decision must be approve, deny or respond.")
-		return
-	}
-	if !s.ownsThread(w, r, c) {
-		return
-	}
-	run, err := s.h.Resume(r.Context(), c.Login, r.PathValue("id"), harness.ResumeRequest{
-		InterruptID: body.InterruptID, Reason: body.Reason, Decision: body.Decision, Always: body.Always, Text: body.Text,
-		Model: s.model(body.Model), Interactive: body.Interactive, ReasoningEffort: body.ReasoningEffort,
-	})
+	run, err := s.api(c).Resume(r.Context(), r.PathValue("id"), body)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusAccepted, toRun(run))
+	writeJSON(w, http.StatusAccepted, run)
 }
 
 func (s *server) getRun(w http.ResponseWriter, r *http.Request, c Caller) {
-	run, err := s.h.Store.GetUserRun(r.Context(), c.Login, r.PathValue("id"))
+	run, err := s.api(c).GetRun(r.Context(), r.PathValue("id"))
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, toRun(run))
+	writeJSON(w, http.StatusOK, run)
 }
 
 func (s *server) events(w http.ResponseWriter, r *http.Request, c Caller) {
-	run, err := s.h.Store.GetUserRun(r.Context(), c.Login, r.PathValue("id"))
-	if err != nil {
-		fail(w, err)
-		return
-	}
 	after := int64(0)
 	for _, v := range []string{r.URL.Query().Get("after"), r.Header.Get("Last-Event-ID")} {
 		if n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64); err == nil && n >= 0 {
 			after = n
 		}
+	}
+	events, err := s.api(c).Events(r.Context(), r.PathValue("id"), after)
+	if err != nil {
+		fail(w, err)
+		return
 	}
 	fl, ok := w.(http.Flusher)
 	if !ok {
@@ -451,7 +300,6 @@ func (s *server) events(w http.ResponseWriter, r *http.Request, c Caller) {
 	_, _ = w.Write([]byte(": connected\n\n"))
 	fl.Flush()
 
-	events := s.h.Events(r.Context(), run.ID, after)
 	ping := time.NewTicker(s.o.PingEvery)
 	defer ping.Stop()
 	for {
@@ -476,7 +324,7 @@ func (s *server) events(w http.ResponseWriter, r *http.Request, c Caller) {
 }
 
 func (s *server) cancel(w http.ResponseWriter, r *http.Request, c Caller) {
-	if err := s.h.Cancel(r.Context(), c.Login, r.PathValue("id")); err != nil {
+	if err := s.api(c).Cancel(r.Context(), r.PathValue("id")); err != nil {
 		fail(w, err)
 		return
 	}
@@ -490,20 +338,11 @@ func (s *server) steer(w http.ResponseWriter, r *http.Request, c Caller) {
 	if !decode(w, r, &body) {
 		return
 	}
-	if strings.TrimSpace(body.Text) == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "text is required.")
+	if err := s.api(c).Steer(r.Context(), r.PathValue("id"), body.Text); err != nil {
+		fail(w, err)
 		return
 	}
-	switch err := s.h.Steer(r.Context(), c.Login, r.PathValue("id"), body.Text); {
-	case errors.Is(err, queue.ErrSteersClosed):
-		writeError(w, http.StatusConflict, "run_not_active", "The run no longer accepts messages.")
-	case errors.Is(err, queue.ErrTooManySteers):
-		writeError(w, http.StatusTooManyRequests, "too_many_steers", "Too many pending messages.")
-	case err != nil:
-		fail(w, err)
-	default:
-		writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
-	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
 }
 
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
@@ -516,19 +355,14 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	return true
 }
 
-// fail maps a harness error to the error envelope {"error":{"code","message"}}.
+// fail writes a client error with its own status and code, anything else as an internal error.
 func fail(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		writeError(w, http.StatusNotFound, "not_found", "Not found.")
-	case errors.Is(err, store.ErrConflict), errors.Is(err, store.ErrRunActive):
-		writeError(w, http.StatusConflict, "conflict", "Conflict.")
-	case errors.Is(err, harness.ErrInvalidRequest):
-		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
-	default:
-		slog.Error("httpserver: request failed", "error", err)
-		writeError(w, http.StatusInternalServerError, "internal", "An internal error occurred.")
+	if e := client.AsError(err); e != nil && e.Status != 500 {
+		writeError(w, e.Status, e.Code, e.Message)
+		return
 	}
+	slog.Error("httpserver: request failed", "error", err)
+	writeError(w, http.StatusInternalServerError, "internal", "An internal error occurred.")
 }
 
 func writeError(w http.ResponseWriter, status int, code, msg string) {
