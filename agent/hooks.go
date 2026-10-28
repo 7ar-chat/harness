@@ -31,6 +31,14 @@ type BeforeToolHook interface {
 	Pause(ctx context.Context, run *store.Run, tc schema.ToolCall) (*tools.Interrupt, error)
 }
 
+// ToolDenier is implemented by BeforeToolHooks that can refuse a call outright
+// (a permission policy): a non-empty text is the call's error result and the
+// call is not run, whatever the interaction mode. Like NeedsApproval it must
+// not have side effects.
+type ToolDenier interface {
+	Denial(ctx context.Context, run *store.Run, toolName, arguments string) string
+}
+
 // RiskJudge is implemented by BeforeToolHooks that can tell whether a call
 // would need approval in interactive mode, whatever the run's current mode is.
 // Once a step has a pending approval, later calls it judges risky wait behind

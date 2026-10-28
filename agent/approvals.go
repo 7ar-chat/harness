@@ -29,6 +29,10 @@ var errPausePanicked = errors.New("the approval hook crashed")
 // deferred without a result: the resumed run takes them up one at a time,
 // in order. Other calls of the step still run.
 func (st *runState) callTool(ctx context.Context, tc schema.ToolCall, toolMap map[string]tool.BaseTool) error {
+	if refusal := st.denial(ctx, tc, toolMap); refusal != "" {
+		st.g.observed(tc, refusal, true)
+		return st.refuseTool(ctx, tc, refusal)
+	}
 	if intr := st.h.interrupt; intr != nil && intr.Approval != nil && st.hookFor(ctx, tc, toolMap, risky) != nil {
 		// A call waits for the user here: later risky calls stay behind it whatever
 		// the live mode (a switch to automatic must not run them before it).
@@ -46,6 +50,37 @@ func (st *runState) callTool(ctx context.Context, tc schema.ToolCall, toolMap ma
 		return st.pause(ctx, tc, gate)
 	}
 	return st.runTool(ctx, tc, toolMap)
+}
+
+// denial asks the hooks that can refuse calls (ToolDenier) for a refusal text
+// ("" runs the call as usual; a panicking hook refuses: fail closed).
+func (st *runState) denial(ctx context.Context, tc schema.ToolCall, toolMap map[string]tool.BaseTool) (text string) {
+	if len(st.a.Harness.BeforeTool) == 0 || toolMap[tc.Function.Name] == nil {
+		return ""
+	}
+	args := strings.TrimSpace(tc.Function.Arguments)
+	if args == "" {
+		args = "{}"
+	}
+	if !json.Valid([]byte(args)) {
+		return ""
+	}
+	for _, h := range st.a.Harness.BeforeTool {
+		d, ok := h.(ToolDenier)
+		if !ok || text != "" {
+			continue
+		}
+		func() {
+			defer func() {
+				if p := recover(); p != nil {
+					slog.Error("agent: before-tool hook panicked", "run_id", st.in.Run.ID, "panic", p)
+					text = "Error: the permission check crashed, so the action was not run."
+				}
+			}()
+			text = d.Denial(ctx, st.in.Run, tc.Function.Name, tc.Function.Arguments)
+		}()
+	}
+	return text
 }
 
 // gate returns the hook that requires approval for a call (nil: run it). Unknown

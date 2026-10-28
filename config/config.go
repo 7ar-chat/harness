@@ -83,6 +83,9 @@ type Config struct {
 	SandboxBackend string `env:"SANDBOX_BACKEND"`
 	LocalWorkspace string `env:"LOCAL_WORKSPACE"`
 	LocalStateDir  string `env:"LOCAL_STATE_DIR"`
+	// AgentPermissions is AGENT_PERMISSIONS: ask (default on the local backend), auto-edit, yolo, yolo-unsafe or
+	// readonly (see package permissions). It only applies to the local backend and the coding profile.
+	AgentPermissions string `env:"AGENT_PERMISSIONS"`
 
 	OpenSandboxURL            string   `env:"OPENSANDBOX_URL"`
 	OpenSandboxAPIKey         string   `env:"OPENSANDBOX_API_KEY"`
