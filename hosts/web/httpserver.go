@@ -188,6 +188,7 @@ type runDTO struct {
 	ErrorCode string    `json:"errorCode,omitempty"`
 	LastSeq   int64     `json:"lastSeq"`
 	CreatedAt time.Time `json:"createdAt"`
+	Sandbox   string    `json:"sandbox,omitempty"`
 }
 
 func toThread(t *store.Thread) threadDTO {
@@ -201,7 +202,7 @@ func toThread(t *store.Thread) threadDTO {
 
 func toRun(r *store.Run) runDTO {
 	return runDTO{ID: r.ID, ThreadID: r.ThreadID, Status: r.Status, Model: r.Model, Error: r.Error, ErrorCode: r.ErrorCode,
-		LastSeq: r.LastSeq, CreatedAt: r.CreatedAt}
+		LastSeq: r.LastSeq, CreatedAt: r.CreatedAt, Sandbox: r.Sandbox}
 }
 
 // ---- handlers ----
@@ -339,6 +340,9 @@ func (s *server) createRun(w http.ResponseWriter, r *http.Request, c Caller) {
 		ReasoningEffort string   `json:"reasoningEffort"`
 		Skills          []string `json:"skills"`
 		Interactive     bool     `json:"interactive"`
+		// Sandbox is auto (default), off (no sandbox tools for this run) or on
+		// (fail when the harness has no sandbox).
+		Sandbox string `json:"sandbox"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -352,6 +356,7 @@ func (s *server) createRun(w http.ResponseWriter, r *http.Request, c Caller) {
 	}
 	run, err := s.h.Send(r.Context(), c.Login, r.PathValue("id"), body.Message, harness.RunOptions{
 		Model: s.model(body.Model), ReasoningEffort: body.ReasoningEffort, Skills: body.Skills, Interactive: body.Interactive,
+		Sandbox: harness.SandboxMode(body.Sandbox),
 	})
 	if err != nil {
 		fail(w, err)
