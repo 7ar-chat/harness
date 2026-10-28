@@ -70,6 +70,20 @@ AGENT_PROFILE=coding SANDBOX_BACKEND=local LLM_PROVIDER=anthropic LLM_API_KEY=â€
 LLM_MODELS=claude-sonnet-5-5 LLM_DEFAULT_MODEL=claude-sonnet-5-5 harness
 ```
 
+## Benchmark
+
+`bench/` runs coding tasks through the real harness (local sandbox, coding profile) and reports pass/fail,
+steps, tool calls, tokens, prompt-cache hits, wall time and memory. Each task has hidden tests restored
+before verification and a reference solution; `go test ./bench` proves every task fails untouched and
+passes with its solution, and exercises the runner with a scripted model (no network).
+
+```
+bench -list
+bench -tasks go-fix-bugs,py-fix-bugs -n 3 -out run.json     # model from LLM_* env
+bench -compare before.json after.json                        # before/after a harness change
+go test -tags live ./bench -run TestLive -v                  # same, as a test (BENCH_TASKS, BENCH_OUT)
+```
+
 ## Sandbox definition
 
 `sandbox-image/` holds the sandbox image (`Dockerfile`: Python/Node/LibreOffice/pandoc/â€¦ toolchain,
