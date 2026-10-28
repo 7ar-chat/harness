@@ -17,16 +17,17 @@ import (
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/engine/agui"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/hosts/client"
 	"github.com/GhaziBenDahmane/harness/hosts/tui"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 )
 
-func newBackend(t *testing.T, interactive bool, turns ...llmtest.Turn) (*tui.HarnessBackend, context.Context) {
+func newBackend(t *testing.T, interactive bool, turns ...llmtest.Turn) (*tui.ClientBackend, context.Context) {
 	t.Helper()
 	return newBackendModel(t, interactive, llmtest.New(turns...))
 }
 
-func newBackendModel(t *testing.T, interactive bool, model *llmtest.Model) (*tui.HarnessBackend, context.Context) {
+func newBackendModel(t *testing.T, interactive bool, model *llmtest.Model) (*tui.ClientBackend, context.Context) {
 	t.Helper()
 	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	t.Setenv("LLM_PROVIDER", "openai")
@@ -47,7 +48,7 @@ func newBackendModel(t *testing.T, interactive bool, model *llmtest.Model) (*tui
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &tui.HarnessBackend{H: h, User: "alice", ThreadID: th.ID, ModelID: "gpt-test", Interactive: interactive}, ctx
+	return &tui.ClientBackend{C: client.InProcess(h, "alice", client.WithModels(cfg.LLMModels, "gpt-test")), ThreadID: th.ID, ModelID: "gpt-test", Interactive: interactive}, ctx
 }
 
 func TestPrintModeStreamsTheAnswerToStdoutAndToolActivityToStderr(t *testing.T) {
@@ -148,7 +149,7 @@ func TestPrintModeExitsWithTwoWhenTheRunWaitsForTheUser(t *testing.T) {
 	}
 }
 
-func TestHarnessBackendResumesAnAskUserInterrupt(t *testing.T) {
+func TestClientBackendResumesAnAskUserInterrupt(t *testing.T) {
 	// Arrange
 	// The first call asks; a call that sees the user's answer in the history
 	// answers; anything else (the title hook) gets a title.

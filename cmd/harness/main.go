@@ -11,6 +11,13 @@
 //	echo prompt | harness    print mode, the prompt read from stdin
 //	harness -p … -json       print mode emitting the AG-UI events as JSON lines
 //
+// Remote mode attaches the same terminal UI (and print mode) to a running
+// harness-web instead of an in-process engine; the server owns the model
+// provider, the sandbox and the conversations:
+//
+//	harness -remote http://127.0.0.1:8080                  # HARNESS_REMOTE_TOKEN is the bearer token
+//	harness -remote http://host:8080 -p "summarise the repo"
+//
 // Print mode exits 0 on success, 1 when the run failed or was cancelled and 2
 // when it ended waiting for an answer or an approval.
 package main
@@ -29,8 +36,8 @@ import (
 	"github.com/GhaziBenDahmane/harness"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/features/gitsafe"
+	"github.com/GhaziBenDahmane/harness/hosts/client"
 	"github.com/GhaziBenDahmane/harness/hosts/tui"
-	"github.com/GhaziBenDahmane/harness/store"
 	"github.com/GhaziBenDahmane/harness/store/filestore"
 )
 
@@ -57,6 +64,7 @@ type options struct {
 	ephemeral, cont     bool
 	resume              string
 	list, undo          bool
+	remote              string
 }
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, isTTY bool, mk factory) int {
@@ -73,6 +81,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	fs.StringVar(&o.resume, "resume", "", "continue the conversation with this id (see -sessions)")
 	fs.BoolVar(&o.undo, "undo", false, "restore the files of the workspace (a git repository) to the last snapshot taken before a run of the conversation (-resume <id>, default the most recent), then exit")
 	fs.BoolVar(&o.list, "sessions", false, "list the saved conversations and exit")
+	fs.StringVar(&o.remote, "remote", "", "attach to the harness-web server at this URL instead of running an engine in process (bearer token: HARNESS_REMOTE_TOKEN)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -90,6 +99,9 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return fail(stderr, errors.New("no prompt: pass -p, pipe one on stdin, or run in a terminal"))
 	}
 
+	if o.remote != "" {
+		return runRemote(ctx, o, prompt, printMode, stdout, stderr)
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		return fail(stderr, err)
@@ -127,42 +139,74 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	defer stop()
 	go func() { _ = h.Run(hctx) }()
 
-	th, err := pickThread(hctx, h, sessions, st != nil, o)
-	if err != nil {
-		return fail(stderr, err)
-	}
-	be := &tui.HarnessBackend{H: h, User: o.user, ThreadID: th.ID, ModelID: o.model, Interactive: !printMode && !o.auto}
+	c := client.InProcess(h, o.user, client.WithModels(cfg.LLMModels, o.model))
 	if !cfg.SandboxEnabled() && !o.json {
 		fmt.Fprintln(stderr, "(no sandbox: set SANDBOX_BACKEND=local or OPENSANDBOX_URL; the agent has no tools)")
 	}
-	if printMode {
-		return tui.RunPrint(hctx, be, prompt, tui.PrintOptions{Stdout: stdout, Stderr: stderr, JSON: o.json})
+	return attach(hctx, c, o, prompt, printMode, st != nil, stdout, stderr)
+}
+
+// runRemote attaches the terminal UI to the harness-web server at o.remote.
+func runRemote(ctx context.Context, o options, prompt string, printMode bool, stdout, stderr io.Writer) int {
+	if o.undo {
+		return fail(stderr, errors.New("-undo restores a local workspace: it does not work with -remote"))
 	}
-	if err := tui.Run(hctx, be); err != nil {
+	c := client.HTTP(o.remote, os.Getenv("HARNESS_REMOTE_TOKEN"))
+	if o.list {
+		list, err := c.Sessions(ctx, 50)
+		if err != nil {
+			return fail(stderr, err)
+		}
+		printSessions(list, stdout)
+		return 0
+	}
+	if o.model == "" {
+		m, err := c.Models(ctx)
+		if err != nil {
+			return fail(stderr, fmt.Errorf("%s: %w", o.remote, err))
+		}
+		o.model = m.Default
+	}
+	if o.model == "" {
+		return fail(stderr, errors.New("no model: pass -model (the server has no default)"))
+	}
+	return attach(ctx, c, o, prompt, printMode, true, stdout, stderr)
+}
+
+// attach picks the conversation and runs print mode or the terminal UI on it.
+func attach(ctx context.Context, c client.Client, o options, prompt string, printMode, saved bool, stdout, stderr io.Writer) int {
+	th, err := pickThread(ctx, c, saved, o)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	be := &tui.ClientBackend{C: c, ThreadID: th.ID, ModelID: o.model, Interactive: !printMode && !o.auto}
+	if printMode {
+		return tui.RunPrint(ctx, be, prompt, tui.PrintOptions{Stdout: stdout, Stderr: stderr, JSON: o.json})
+	}
+	if err := tui.Run(ctx, be); err != nil {
 		return fail(stderr, err)
 	}
 	return 0
 }
 
-// resolvePrompt combines the -p flag with piped stdin ("" when neither).
 // pickThread starts a new conversation, or continues the one asked for.
-func pickThread(ctx context.Context, h *harness.Harness, sessions filestore.Sessions, saved bool, o options) (*store.Thread, error) {
+func pickThread(ctx context.Context, c client.Client, saved bool, o options) (*client.Thread, error) {
 	if (o.cont || o.resume != "") && !saved {
 		return nil, errors.New("-continue and -resume need the session store (drop -ephemeral)")
 	}
 	switch {
 	case o.resume != "":
-		return h.Store.GetThread(ctx, o.user, o.resume)
+		return c.GetThread(ctx, o.resume)
 	case o.cont:
-		list, err := sessions.List(ctx, o.user, 1)
+		list, err := c.Sessions(ctx, 1)
 		if err != nil {
 			return nil, err
 		}
 		if len(list) > 0 {
-			return h.Store.GetThread(ctx, o.user, list[0].ID)
+			return c.GetThread(ctx, list[0].ID)
 		}
 	}
-	return h.NewThread(ctx, o.user, "")
+	return c.CreateThread(ctx, "")
 }
 
 // undoRun restores the workspace to the snapshot taken before the conversation's last run. The
@@ -197,6 +241,15 @@ func listSessions(ctx context.Context, sessions filestore.Sessions, user string,
 	if err != nil {
 		return fail(stderr, err)
 	}
+	out := make([]client.Session, 0, len(list))
+	for _, s := range list {
+		out = append(out, client.Session{ID: s.ID, Title: s.Title, Preview: s.Preview, Messages: s.Messages, UpdatedAt: s.UpdatedAt})
+	}
+	printSessions(out, stdout)
+	return 0
+}
+
+func printSessions(list []client.Session, stdout io.Writer) {
 	for _, s := range list {
 		title := s.Title
 		if title == "" {
@@ -207,9 +260,9 @@ func listSessions(ctx context.Context, sessions filestore.Sessions, user string,
 	if len(list) == 0 {
 		fmt.Fprintln(stdout, "no saved conversations")
 	}
-	return 0
 }
 
+// resolvePrompt combines the -p flag with piped stdin ("" when neither).
 func resolvePrompt(flagPrompt string, stdin io.Reader, isTTY bool) (string, error) {
 	var piped string
 	if !isTTY && stdin != nil {

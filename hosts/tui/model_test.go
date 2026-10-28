@@ -16,7 +16,7 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/GhaziBenDahmane/harness/engine/agui"
-	"github.com/GhaziBenDahmane/harness/store"
+	"github.com/GhaziBenDahmane/harness/hosts/client"
 )
 
 var updateGolden = flag.Bool("update", false, "rewrite the golden files")
@@ -78,8 +78,8 @@ func (f *fakeBackend) Send(_ context.Context, text string) (string, error) {
 	f.record("send:" + text)
 	return f.next(), nil
 }
-func (f *fakeBackend) Events(context.Context, string) <-chan store.Event {
-	return make(chan store.Event)
+func (f *fakeBackend) Events(context.Context, string) <-chan client.Event {
+	return make(chan client.Event)
 }
 func (f *fakeBackend) Steer(_ context.Context, runID, text string) error {
 	f.record("steer:" + runID + ":" + text)
@@ -104,7 +104,7 @@ func ev(t *testing.T, e agui.Event) EventMsg {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return EventMsg{Ev: Decode(store.Event{Type: e.Type(), Data: b})}
+	return EventMsg{Ev: Decode(client.Event{Type: e.Type(), Data: b})}
 }
 
 // msgs runs a command and collects the messages it produces, following
@@ -383,7 +383,7 @@ func TestCtrlCWhenIdleNeedsConfirmation(t *testing.T) {
 
 func approvalInterrupt() agui.Event {
 	return agui.RunInterruptedEvent("t", "run1", []agui.Interrupt{{
-		ID: "i1", Reason: store.ReasonToolApproval, Message: "run_command", ToolCallID: "c1",
+		ID: "i1", Reason: client.ReasonToolApproval, Message: "run_command", ToolCallID: "c1",
 		ResponseSchema: map[string]any{"allowFreeText": true},
 		Approval:       map[string]any{"id": "ap1", "toolName": "run_command", "toolInputPreview": `{"command":"rm -rf build"}`},
 	}}, nil)

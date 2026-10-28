@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/GhaziBenDahmane/harness/engine/agui"
-	"github.com/GhaziBenDahmane/harness/store"
+	"github.com/GhaziBenDahmane/harness/hosts/client"
 )
 
 // Ev is a decoded AG-UI event: only the fields the terminal client uses.
@@ -47,7 +47,7 @@ type Ev struct {
 
 // Decode parses a stored event; an undecodable payload yields an Ev with only
 // Type and Seq set.
-func Decode(se store.Event) Ev {
+func Decode(se client.Event) Ev {
 	ev := Ev{Type: se.Type, Seq: se.Seq, Raw: se.Data}
 	var w struct {
 		MessageID    string         `json:"messageId"`

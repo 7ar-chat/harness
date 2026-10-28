@@ -14,7 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GhaziBenDahmane/harness/engine/agui"
-	"github.com/GhaziBenDahmane/harness/store"
+	"github.com/GhaziBenDahmane/harness/hosts/client"
 )
 
 // Messages the model handles besides key and window messages.
@@ -29,7 +29,7 @@ type (
 	// runStartedMsg: Send or Resume created a run.
 	runStartedMsg struct {
 		runID  string
-		events <-chan store.Event
+		events <-chan client.Event
 		err    error
 	}
 	// tickMsg refreshes the elapsed time.
@@ -80,7 +80,7 @@ type Options struct {
 
 // Model is the Bubble Tea model of the terminal client. It is pure with
 // respect to the world: events arrive as messages (from a channel of
-// store.Event pumped by a command), and every effect goes through Backend.
+// client.Event pumped by a command), and every effect goes through Backend.
 type Model struct {
 	be  Backend
 	ctx context.Context
@@ -212,7 +212,7 @@ func (m *Model) key(k tea.KeyMsg) (tea.Cmd, bool) {
 		m.quitArmed = false
 	}
 	// Approval prompt: single keys.
-	if p := m.pending; p != nil && p.prompt.Reason == store.ReasonToolApproval {
+	if p := m.pending; p != nil && p.prompt.Reason == client.ReasonToolApproval {
 		switch s {
 		case "y", "Y":
 			return m.resume(ResumeRequest{Decision: DecisionApprove}), true
@@ -261,7 +261,7 @@ func (m *Model) key(k tea.KeyMsg) (tea.Cmd, bool) {
 		return cmd, true
 	}
 	// ask_user options by number when the input is empty.
-	if p := m.pending; p != nil && p.prompt.Reason != store.ReasonToolApproval && m.in.Value() == "" && len(s) == 1 {
+	if p := m.pending; p != nil && p.prompt.Reason != client.ReasonToolApproval && m.in.Value() == "" && len(s) == 1 {
 		if n, err := strconv.Atoi(s); err == nil && n >= 1 && n <= len(p.prompt.Options) {
 			return m.resume(ResumeRequest{Text: p.prompt.Options[n-1]}), true
 		}
@@ -276,7 +276,7 @@ func (m *Model) submit() tea.Cmd {
 		return nil
 	}
 	if p := m.pending; p != nil {
-		if p.prompt.Reason == store.ReasonToolApproval {
+		if p.prompt.Reason == client.ReasonToolApproval {
 			return nil
 		}
 		return m.resume(ResumeRequest{Text: text})
@@ -305,11 +305,11 @@ func (m *Model) resume(r ResumeRequest) tea.Cmd {
 	}
 	r.InterruptID, r.Reason = p.id, p.prompt.Reason
 	switch {
-	case r.Reason == store.ReasonToolApproval && r.Decision == DecisionApprove && r.Always:
+	case r.Reason == client.ReasonToolApproval && r.Decision == DecisionApprove && r.Always:
 		m.add(block{kind: blockNotice, text: "approved " + p.prompt.Title + " for this run"})
-	case r.Reason == store.ReasonToolApproval && r.Decision == DecisionApprove:
+	case r.Reason == client.ReasonToolApproval && r.Decision == DecisionApprove:
 		m.add(block{kind: blockNotice, text: "approved " + p.prompt.Title})
-	case r.Reason == store.ReasonToolApproval:
+	case r.Reason == client.ReasonToolApproval:
 		m.add(block{kind: blockNotice, text: "denied " + p.prompt.Title})
 	default:
 		m.add(block{kind: blockUser, text: r.Text})
@@ -345,7 +345,7 @@ func (m *Model) cancel() tea.Cmd {
 }
 
 // pump reads one event of the channel; Update re-arms it after each event.
-func pump(run string, ch <-chan store.Event) tea.Cmd {
+func pump(run string, ch <-chan client.Event) tea.Cmd {
 	var next tea.Cmd
 	next = func() tea.Msg {
 		se, ok := <-ch
@@ -493,7 +493,7 @@ func (m *Model) interrupt(ev Ev) {
 	in := ev.Interrupts[0]
 	p := Prompt{Reason: in.Reason, Title: in.Message}
 	id := in.ID
-	if in.Reason == store.ReasonToolApproval {
+	if in.Reason == client.ReasonToolApproval {
 		if a := in.Approval; a != nil {
 			if v, _ := a["id"].(string); v != "" {
 				id = v
