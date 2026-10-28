@@ -197,6 +197,15 @@ func (in *Instance) mapCommand(s string) string {
 	return mapRoot(s, "/skills", filepath.Join(in.sys, "skills"))
 }
 
+// mapEnv maps the sandbox paths the tools pass in WORK_* variables (the search
+// path, the glob); WORK_PATTERN and other free text are left alone.
+func (in *Instance) mapEnv(key, v string) string {
+	if strings.HasPrefix(key, "WORK_") && key != "WORK_PATTERN" && !strings.HasSuffix(key, "_B64") {
+		return in.mapCommand(v)
+	}
+	return v
+}
+
 func mapRoot(s, from, to string) string {
 	var b strings.Builder
 	for {
@@ -305,8 +314,13 @@ func (in *Instance) WriteFile(_ context.Context, p string, data []byte) error {
 	return os.WriteFile(h, data, 0o644)
 }
 
-// MkdirAll creates a directory and its parents.
+// MkdirAll creates a directory and its parents. /workspace/outputs (the document
+// deliverables folder of the default layout) is not created in a project, and the
+// scratch folder /workspace/.work is kept out of git by a .gitignore of its own.
 func (in *Instance) MkdirAll(_ context.Context, p string) error {
+	if cleanVirtual(p) == sandbox.OutputsDir {
+		return nil
+	}
 	h, err := in.host(p)
 	if err != nil {
 		return err
@@ -314,7 +328,16 @@ func (in *Instance) MkdirAll(_ context.Context, p string) error {
 	if err := in.confine(h); err != nil {
 		return err
 	}
-	return os.MkdirAll(h, 0o755)
+	if err := os.MkdirAll(h, 0o755); err != nil {
+		return err
+	}
+	if cleanVirtual(p) == sandbox.ScratchDir {
+		ignore := filepath.Join(h, ".gitignore")
+		if _, err := os.Stat(ignore); err != nil {
+			_ = os.WriteFile(ignore, []byte("*\n"), 0o644)
+		}
+	}
+	return nil
 }
 
 func info(virtual string, st fs.FileInfo) sandbox.FileInfo {
@@ -416,7 +439,7 @@ func (in *Instance) run(ctx context.Context, req sandbox.ExecRequest) (sandbox.E
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "HOME="+in.ws)
 	for k, v := range req.Env {
-		cmd.Env = append(cmd.Env, k+"="+v)
+		cmd.Env = append(cmd.Env, k+"="+in.mapEnv(k, v))
 	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }

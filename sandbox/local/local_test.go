@@ -175,3 +175,37 @@ func TestBackgroundJobScriptsRunNatively(t *testing.T) {
 }
 
 func b64(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+
+func TestToolPathsPassedInTheEnvironmentAreMapped(t *testing.T) {
+	// Arrange
+	sb, _ := newSandbox(t)
+	var out strings.Builder
+
+	// Act
+	res, err := sb.Exec(context.Background(), sandbox.ExecRequest{Command: `ls -d "$WORK_PATH" && echo "$WORK_PATTERN"`,
+		Env: map[string]string{"WORK_PATH": "/workspace", "WORK_PATTERN": "/workspace/x"}, OnStdout: func(s string) { out.WriteString(s) }})
+
+	// Assert
+	if err != nil || res.ExitCode != 0 || out.String() != "/workspace\n/workspace/x\n" {
+		t.Fatalf("exit %d err %v out %q", res.ExitCode, err, out.String())
+	}
+}
+
+func TestPreparingTheWorkspaceLeavesTheProjectClean(t *testing.T) {
+	// Arrange
+	sb, ws := newSandbox(t)
+
+	// Act
+	err := sandbox.PrepareWorkspace(context.Background(), sb)
+
+	// Assert
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(ws, "outputs")); err == nil {
+		t.Error("outputs/ was created in the project")
+	}
+	if b, _ := os.ReadFile(filepath.Join(ws, ".work", ".gitignore")); string(b) != "*\n" {
+		t.Errorf(".work/.gitignore = %q", b)
+	}
+}
