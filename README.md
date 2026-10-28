@@ -248,6 +248,12 @@ The Hertz HTTP API (`httpapi`: APISIX/OIDC identity, CSRF rules, uploads, OpenAP
 skill sync/import and the product's Helm/CI. Studio can later depend on this module instead of
 its internal copy.
 
+## Building
+
+`make build` produces stripped binaries in `bin/` (`cmd/harness` is about 30 MB; a plain `go build` is 44 MB
+because it keeps the symbol table and DWARF). Idle resident memory is about 20 MB. The PDF/OLE readers of
+`classification` (Studio's confidentiality policy) and go-redis remain linked; the coding profile does not use them.
+
 ## Status / known gaps
 
 * Lifted from `studio/work` (Go 1.26); behaviour and tests are unchanged except for the decoupling
