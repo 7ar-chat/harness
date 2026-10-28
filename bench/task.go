@@ -18,7 +18,9 @@ import "time"
 
 // Task is one benchmark job.
 type Task struct {
-	Name   string
+	Name string
+	// Tier is TierEasy (the default when empty) or TierHard; see TierOf.
+	Tier   string
 	Prompt string
 	// Files is the starting repository (path → content).
 	Files map[string]string
@@ -34,6 +36,20 @@ type Task struct {
 	SolutionAnswer string
 	// Needs lists the programs the task needs on PATH (go, python3, make).
 	Needs []string
+}
+
+// Difficulty tiers.
+const (
+	TierEasy = "easy"
+	TierHard = "hard"
+)
+
+// TierOf returns the task's tier (easy when unset).
+func (t Task) TierOf() string {
+	if t.Tier == "" {
+		return TierEasy
+	}
+	return t.Tier
 }
 
 // Options tune a run.
@@ -68,6 +84,9 @@ type Result struct {
 	OutputTokens int     `json:"outputTokens"`
 	CachedTokens int     `json:"cachedTokens"`
 	CacheHitPct  float64 `json:"cacheHitPct"`
+	// UncachedTokens is InputTokens - CachedTokens; UncachedPerStep divides it by Steps.
+	UncachedTokens  int     `json:"uncachedTokens"`
+	UncachedPerStep float64 `json:"uncachedPerStep"`
 
 	WallSeconds float64 `json:"wallSeconds"`
 	// HeapMiB and SysMiB are the Go heap in use and memory obtained from the OS at the end of the run;

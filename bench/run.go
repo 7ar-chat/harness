@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -107,9 +108,7 @@ func Run(ctx context.Context, base *config.Config, models llm.Factory, t Task, o
 	if o.NoCacheKey {
 		cfg.LLMPromptCacheKey = false
 	}
-	prev := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
-	defer slog.SetDefault(prev)
+	defer quietLogs()()
 
 	h, err := harness.New(harness.Options{Config: &cfg, Models: models, Version: "bench"})
 	if err != nil {
@@ -148,6 +147,7 @@ func Run(ctx context.Context, base *config.Config, models llm.Factory, t Task, o
 	if res.InputTokens > 0 {
 		res.CacheHitPct = 100 * float64(res.CachedTokens) / float64(res.InputTokens)
 	}
+	res.UncachedTokens, res.UncachedPerStep = uncached(res.InputTokens, res.CachedTokens, res.Steps)
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 	res.HeapMiB, res.SysMiB, res.MaxRSSMiB = mib(ms.HeapAlloc), mib(ms.Sys), maxRSSMiB()
@@ -208,6 +208,40 @@ func maxRSSMiB() float64 {
 		return float64(ru.Maxrss) / (1 << 20) // bytes
 	}
 	return float64(ru.Maxrss) / 1024 // KiB
+}
+
+var (
+	logMu    sync.Mutex
+	logUsers int
+	logPrev  *slog.Logger
+)
+
+// quietLogs silences the default logger until the returned func is called; it is reference counted so
+// runs in parallel (Suite) restore the original logger only when the last one finishes.
+func quietLogs() func() {
+	logMu.Lock()
+	defer logMu.Unlock()
+	if logUsers == 0 {
+		logPrev = slog.Default()
+		slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}
+	logUsers++
+	return func() {
+		logMu.Lock()
+		defer logMu.Unlock()
+		if logUsers--; logUsers == 0 {
+			slog.SetDefault(logPrev)
+		}
+	}
+}
+
+// uncached returns the input tokens not served from the prompt cache, in total and per step.
+func uncached(input, cached, steps int) (int, float64) {
+	u := max(input-cached, 0)
+	if steps <= 0 {
+		return u, 0
+	}
+	return u, float64(u) / float64(steps)
 }
 
 func tail(s string, n int) string {
