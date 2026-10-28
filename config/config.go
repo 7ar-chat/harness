@@ -111,7 +111,7 @@ type Config struct {
 	ArtifactsS3Endpoint  string `env:"ARTIFACTS_S3_ENDPOINT"`
 	ArtifactsS3Region    string `env:"ARTIFACTS_S3_REGION" envDefault:"us-east-1"`
 	ArtifactsS3PathStyle bool   `env:"ARTIFACTS_S3_PATH_STYLE" envDefault:"true"`
-	ArtifactsS3Prefix    string `env:"ARTIFACTS_S3_PREFIX" envDefault:"work/"`
+	ArtifactsS3Prefix    string `env:"ARTIFACTS_S3_PREFIX" envDefault:"harness/"`
 	// ArtifactsS3CreateBucket creates the bucket at startup when missing (local RustFS; production buckets are provisioned).
 	ArtifactsS3CreateBucket bool   `env:"ARTIFACTS_S3_CREATE_BUCKET"`
 	AWSAccessKeyID          string `env:"AWS_ACCESS_KEY_ID"`
@@ -121,7 +121,7 @@ type Config struct {
 	// MaxConcurrentUploads bounds uploads per api process (429 too_many_uploads beyond).
 	MaxConcurrentUploads int `env:"HARNESS_MAX_CONCURRENT_UPLOADS" envDefault:"4"`
 	// MaxConcurrentUploadsPerUser bounds one user's uploads per api process (429 too_many_uploads beyond).
-	// Default 4: the composer uploads 4 files in parallel .
+	// Default 4: the composer uploads 4 files in parallel.
 	MaxConcurrentUploadsPerUser int `env:"HARNESS_MAX_CONCURRENT_UPLOADS_PER_USER" envDefault:"4"`
 	// PreviewMaxConcurrency bounds the Office → PDF conversions per api process.
 	PreviewMaxConcurrency int `env:"PREVIEW_MAX_CONCURRENCY" envDefault:"2"`
@@ -147,12 +147,12 @@ type Config struct {
 	// see SkillsPath): one <name>/SKILL.md folder per skill.
 	SkillsDir string `env:"SKILLS_DIR"`
 
-	// Memory (Work parity, README "Memory"): write policy (warn records missing
+	// Memory (README "Configuration"): write policy (warn records missing
 	// triggers, strict blocks them), delete mode (soft keeps the entry as
 	// deleted until the retention, hard removes it), default scope, embedding
-	// backend (simple = Work's bag-of-words cosine; disabled|none|keyword only
-	// change the reported capabilities, like Work), the "[Repository Memory
-	// Recall]" block in the system prompt, the limits (≤ 0 entries: no limit)
+	// backend (simple = bag-of-words cosine; disabled|none|keyword only
+	// change the reported capabilities), the recalled memories in the
+	// system prompt, the limits (≤ 0 entries: no limit)
 	// and the consolidation job (dedup + purge of deleted entries; ≤ 0 hours disables it).
 	MemoryWriteMode            string `env:"HARNESS_MEMORY_WRITE_MODE" envDefault:"warn"`
 	MemoryDeleteMode           string `env:"HARNESS_MEMORY_DELETE_MODE" envDefault:"soft"`

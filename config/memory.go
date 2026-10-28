@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// validateMemory rejects unknown HARNESS_MEMORY_* modes (Work's proxy refuses them too).
+// validateMemory rejects unknown HARNESS_MEMORY_* modes.
 func (c *Config) validateMemory() error {
 	c.MemoryWriteMode = strings.ToLower(strings.TrimSpace(c.MemoryWriteMode))
 	c.MemoryDeleteMode = strings.ToLower(strings.TrimSpace(c.MemoryDeleteMode))

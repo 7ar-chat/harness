@@ -28,7 +28,7 @@ type Options struct {
 	AccessKey string
 	SecretKey string
 	PathStyle bool
-	// Prefix is prepended to every key (e.g. "work/").
+	// Prefix is prepended to every key (e.g. "harness/").
 	Prefix string
 }
 

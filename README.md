@@ -1,12 +1,16 @@
 # harness
 
-The agent harness behind Studio's **Work Chat**, extracted as a library: a ReAct loop
-([eino](https://github.com/cloudwego/eino)) whose tools run in a **remote sandbox**
-([OpenSandbox](https://github.com/alibaba/OpenSandbox)), streaming
-[AG-UI](https://docs.ag-ui.com) events. It does not spawn Claude Code/Codex: the Go loop drives the
-model, the sandbox only executes.
+An open, embeddable agent harness written in Go: a ReAct loop
+([eino](https://github.com/cloudwego/eino)) whose tools run in a **sandbox** (a local directory or a remote
+[OpenSandbox](https://github.com/alibaba/OpenSandbox) container), streaming
+[AG-UI](https://docs.ag-ui.com) events. The Go loop drives the model (OpenAI-compatible or Anthropic) and the
+sandbox only executes; nothing spawns another agent CLI. It ships tools (files, shell, search, document
+rendering), skills, memory, goals and plans, tool approvals and permissions, context compaction and
+verification of produced documents.
 
-It is meant to sit behind any front end — a web server, a TUI, a desktop app.
+It is meant to sit behind any front end: a web server, a TUI, a worker, a desktop app. The repository contains
+a terminal client (`cmd/harness`), a `net/http` + SSE server package and a benchmark runner; product-specific
+HTTP APIs (authentication, multi-tenant routing) are left to the embedding application.
 
 ```
         web UI ──► httpserver (net/http, SSE) ─┐
@@ -30,7 +34,7 @@ It is meant to sit behind any front end — a web server, a TUI, a desktop app.
 ## Use it
 
 ```go
-cfg, _ := config.Load()                       // env: LLM_*, OPENSANDBOX_*, …
+cfg, _ := config.Load()                       // env: LLM_*, SANDBOX_*, OPENSANDBOX_*, HARNESS_*, …
 h, _ := harness.New(harness.Options{Config: cfg})
 go h.Run(ctx)                                 // consumes queued runs
 
@@ -124,6 +128,7 @@ input tokens it reports uncached input per step, `(input - cached) / steps`, whi
 not absorb, and, when prices are given, an estimated cost; `-compare` shows both. `-parallel N` runs N tasks at
 once (each run has its own working directory and state); wall time is per run, but peak RSS is process-wide, so
 use `-parallel 1` for memory comparisons.
+
 ## Terminal UI
 
 `cmd/harness` is a terminal client (Bubble Tea) over one in-process harness and one thread.
@@ -155,6 +160,7 @@ and the run's elapsed time. `edit_file` calls show a diff of `oldText`/`newText`
 `harness.Harness`), with one render function per event type and golden tests in `tui/testdata`
 (`go test ./tui -update` rewrites them). The facade has no call to answer an interrupt, so
 `HarnessBackend.Resume` creates the resume run through `h.Store` and `h.Queue`.
+
 ## Sessions
 
 Local hosts keep their conversations across restarts without Postgres or Redis:
@@ -272,17 +278,44 @@ and total size, safe paths) when loaded; an invalid folder is logged and skipped
 | `sandbox`, `tools/sandboxtools` | Remote sandbox contract/manager and the file/exec/search/view tools |
 | `tools/{skill,memory,harness,mcp}tools` | Skills, memory, plan/ask_user/goal and MCP tools |
 | `skills`, `skills/skillsfs` | Filesystem skills: registry, lazy install into the sandbox; built-in skills (embedded) |
-| `artifacts`, `workspace` | Versioned deliverables, workspace git checkpoints, document renders |
-| `approvals`, `goals`, `verify`, `titles`, `memory`, `ideas` | Optional features, usable as plugins |
+| `artifacts`, `workspace` | Versioned deliverables, workspace git checkpoints |
+| `approvals`, `permissions`, `gitsafe`, `goals`, `verify`, `titles`, `memory` | Optional features, usable as plugins |
 | `runtime` | Run claiming, heartbeat, sweeper, end-of-run hooks |
 | `store`, `store/memstore`, `store/pgstore` | Types + interface; in-memory and Postgres implementations |
 | `eventlog`, `queue` | Per-run durable event log and run queue/bus (memory and Redis) |
 
-## What stayed in Studio
+## Configuration
 
-The Hertz HTTP API (`httpapi`: APISIX/OIDC identity, CSRF rules, uploads, OpenAPI), the CLIs for
-skill sync/import and the product's Helm/CI. Studio can later depend on this module instead of
-its internal copy.
+`config.Load()` reads the environment. The harness-wide settings below use the `HARNESS_` prefix (no other
+names are read); the model, sandbox and storage settings keep their descriptive names (`LLM_*`,
+`SANDBOX_*`, `OPENSANDBOX_*`, `POSTGRES_*`, `REDIS_*`, `ARTIFACTS_*`, `AGENT_*`, see `config/`).
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `HARNESS_PRODUCTION` | unset | Any non-empty value turns production mode on (stricter startup checks); unset is debug mode |
+| `HARNESS_WORKSPACE_CHECKPOINTS` | `true` | Local Git checkpoint of `/workspace` before every turn, with per-file history, diff and restore |
+| `HARNESS_WORKSPACE_CHECKPOINT_MAX_FILE_BYTES` | `20971520` | Files larger than this are kept out of the checkpoints (`<= 0`: no limit) |
+| `HARNESS_GIT_ARCHIVE_MAX_BYTES` | `52428800` | Largest `.git` archive stored after a run (a bigger one is not archived) |
+| `HARNESS_MAX_UPLOAD_BYTES` | `104857600` | Largest accepted attachment |
+| `HARNESS_MAX_CONCURRENT_UPLOADS` | `4` | Concurrent uploads per process |
+| `HARNESS_MAX_CONCURRENT_UPLOADS_PER_USER` | `4` | Concurrent uploads per user and process |
+| `HARNESS_PURGE_AFTER_DAYS` | `30` | Deleted threads are hard-deleted this many days later (`<= 0`: never) |
+| `HARNESS_BLOB_GC_GRACE_HOURS` | `24` | A content blob is collected only after this many hours without a referencing version |
+| `HARNESS_MEMORY_WRITE_MODE` | `warn` | `warn` records writes without a valid trigger, `strict` rejects them |
+| `HARNESS_MEMORY_DELETE_MODE` | `soft` | `soft` keeps a deleted entry until the retention, `hard` removes it |
+| `HARNESS_MEMORY_DEFAULT_SCOPE` | `personal` | Scope of new entries (`repository`, `workspace`, `personal`) |
+| `HARNESS_MEMORY_EMBEDDING_BACKEND` | `simple` | Ranking backend (`simple`; `disabled`, `none`, `keyword` only change the reported capabilities) |
+| `HARNESS_MEMORY_RECALL_INJECTION` | `true` | Put the recalled memories in the system prompt context |
+| `HARNESS_MEMORY_MAX_ENTRIES` | `1000` | Entries per user (`<= 0`: no limit) |
+| `HARNESS_MEMORY_MAX_CONTENT_BYTES` | `200000` | Size of one entry |
+| `HARNESS_MEMORY_CONSOLIDATION_HOURS` | `168` | Period of the dedup and purge job (`<= 0`: disabled) |
+| `HARNESS_MEMORY_DELETED_RETENTION_DAYS` | `30` | Soft-deleted entries are purged after this many days |
+| `HARNESS_TEST_DATABASE_URL` | unset | Postgres used by the `store/pgstore` tests (skipped when unset) |
+| `HARNESS_TEST_S3_ENDPOINT`, `_ACCESS_KEY`, `_SECRET_KEY` | unset | S3-compatible endpoint for the artifact blob tests (skipped when unset) |
+
+Memory entries live in the store; their logical paths (`memories/semantic/facts.md`, ...) may be written with
+the `.harness/memory/` prefix, which is stripped. The workspace checkpoints leave `.harness/tmp/` and
+`.harness/runtime/` out of the history.
 
 ## Building
 
@@ -292,8 +325,7 @@ the coding profile does not use it.
 
 ## Status / known gaps
 
-* Lifted from `studio/work` (Go 1.26); behaviour and tests are unchanged except for the decoupling
-  (`go test ./...`). `store/pgstore` tests need a Postgres (`HARNESS_TEST_DATABASE_URL`) and skip otherwise.
+* Requires Go 1.26 (`go test ./...`). `store/pgstore` tests need a Postgres (`HARNESS_TEST_DATABASE_URL`) and skip otherwise.
 * Project skills (`<workspace>/.harness/skills`) are not discovered yet: the registry supports the
   `project` source (`Registry.AddFS` / `AddDir`, fenced as untrusted data) but nothing feeds it a
   workspace directory per run. Follow-up.
