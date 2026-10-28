@@ -101,6 +101,7 @@ func Run(ctx context.Context, base *config.Config, models llm.Factory, t Task, o
 	cfg := *base
 	cfg.SandboxBackend, cfg.LocalWorkspace, cfg.LocalStateDir = "local", dir, state
 	cfg.AgentProfile = "coding"
+	cfg.AgentPermissions = "yolo" // unattended: nobody can answer an approval prompt (the hard denies still apply)
 	cfg.WorkspaceCheckpoints = false
 	if o.MaxSteps > 0 {
 		cfg.AgentMaxSteps = o.MaxSteps
