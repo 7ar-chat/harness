@@ -57,6 +57,7 @@ type options struct {
 	ephemeral, cont     bool
 	resume              string
 	list, undo          bool
+	configDump          bool
 }
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, isTTY bool, mk factory) int {
@@ -73,6 +74,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	fs.StringVar(&o.resume, "resume", "", "continue the conversation with this id (see -sessions)")
 	fs.BoolVar(&o.undo, "undo", false, "restore the files of the workspace (a git repository) to the last snapshot taken before a run of the conversation (-resume <id>, default the most recent), then exit")
 	fs.BoolVar(&o.list, "sessions", false, "list the saved conversations and exit")
+	fs.BoolVar(&o.configDump, "config-dump", false, "print the effective configuration with the source of each value (flag, env, project file, user file; secrets masked) and exit")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -81,6 +83,20 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: slog.LevelWarn})))
 
+	if o.configDump {
+		cfg, err := config.Load()
+		if err != nil {
+			return fail(stderr, err)
+		}
+		flags := map[string]string{}
+		fs.Visit(func(f *flag.Flag) {
+			if f.Name == "model" || f.Name == "user" {
+				flags["-"+f.Name] = f.Value.String()
+			}
+		})
+		cfg.Dump(stdout, flags)
+		return 0
+	}
 	prompt, err := resolvePrompt(o.prompt, stdin, isTTY)
 	if err != nil {
 		return fail(stderr, err)
