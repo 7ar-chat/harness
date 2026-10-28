@@ -29,14 +29,14 @@ func main() {
 	timeout := flag.Duration("timeout", 10*time.Minute, "per-task timeout")
 	keep := flag.Bool("keep", false, "keep the working directories")
 	noKey := flag.Bool("no-cache-key", false, "send no prompt_cache_key")
-	tier := flag.String("tier", "", "only tasks of this tier: easy or hard (default: all)")
+	tier := flag.String("tier", "", "only tasks of this tier: easy, hard or long (default: easy and hard)")
 	parallel := flag.Int("parallel", 1, "runs in flight at once (peak RSS is process-wide)")
 	priceIn := flag.Float64("price-in", 0, "USD per 1M uncached input tokens (enables the cost estimate)")
 	priceCached := flag.Float64("price-cached", 0, "USD per 1M cached input tokens")
 	priceOut := flag.Float64("price-out", 0, "USD per 1M output tokens")
 	flag.Parse()
-	if *tier != "" && *tier != "all" && *tier != bench.TierEasy && *tier != bench.TierHard {
-		fatal(fmt.Errorf("-tier must be easy, hard or all"))
+	if *tier != "" && *tier != "all" && *tier != bench.TierEasy && *tier != bench.TierHard && *tier != bench.TierLong {
+		fatal(fmt.Errorf("-tier must be easy, hard, long or all"))
 	}
 
 	if *list {

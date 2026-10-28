@@ -20,7 +20,7 @@ func TestTiersSplitTheBuiltinTasks(t *testing.T) {
 	hard, easy := bench.FilterTier(all, bench.TierHard), bench.FilterTier(all, bench.TierEasy)
 
 	// Assert
-	if len(hard) < 8 || len(easy) < 6 || len(hard)+len(easy) != len(all) {
+	if len(hard) < 8 || len(easy) < 6 || len(hard)+len(easy)+len(bench.FilterTier(all, bench.TierLong)) != len(all) {
 		t.Fatalf("hard %d easy %d all %d", len(hard), len(easy), len(all))
 	}
 	for _, h := range hard {
@@ -28,8 +28,8 @@ func TestTiersSplitTheBuiltinTasks(t *testing.T) {
 			t.Errorf("hard task %s needs hidden tests, a Verify command and a Solution", h.Name)
 		}
 	}
-	if len(bench.FilterTier(all, "")) != len(all) || len(bench.FilterTier(all, "all")) != len(all) {
-		t.Error("an empty tier or all keeps every task")
+	if len(bench.FilterTier(all, "")) != len(hard)+len(easy) || len(bench.FilterTier(all, "all")) != len(hard)+len(easy) {
+		t.Error("an empty tier or all keeps the easy and hard tasks, not the long ones")
 	}
 	if got := (bench.Task{}).TierOf(); got != bench.TierEasy {
 		t.Errorf("default tier %q", got)

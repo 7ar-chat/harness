@@ -9,10 +9,12 @@ import (
 // context window, compaction and masking (set LLM_CONTEXT_WINDOWS=<model>=32000 to
 // force it). They are generated programmatically so the repositories are big
 // enough to be explored and edited file by file.
-//
-// TODO: include LongTasks() in Builtin() (tasks.go) once the tiers land.
 func LongTasks() []Task {
-	return []Task{migrateAPIV2(), fixSharedHelperBug(), featureAcrossEightFiles()}
+	ts := []Task{migrateAPIV2(), fixSharedHelperBug(), featureAcrossEightFiles()}
+	for i := range ts {
+		ts[i].Tier = TierLong
+	}
+	return ts
 }
 
 // ---- go-migrate-api-v2 ----

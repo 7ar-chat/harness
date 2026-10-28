@@ -29,6 +29,9 @@ func TestLive(t *testing.T) {
 		}
 	}
 	tasks, missing := bench.Select(names)
+	if len(names) == 0 {
+		tasks = bench.FilterTier(tasks, os.Getenv("BENCH_TIER"))
+	}
 	if len(missing) > 0 {
 		t.Fatalf("unknown tasks %v", missing)
 	}

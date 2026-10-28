@@ -42,6 +42,8 @@ type Task struct {
 const (
 	TierEasy = "easy"
 	TierHard = "hard"
+	// TierLong tasks need 50+ steps (compaction, masking); `-tier long` runs them.
+	TierLong = "long"
 )
 
 // TierOf returns the task's tier (easy when unset).

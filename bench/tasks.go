@@ -5,6 +5,7 @@ import "sort"
 // Builtin returns the built-in tasks, by name.
 func Builtin() []Task {
 	ts := append([]Task{goFixBugs, goAddFeature, pyFixBugs, goRename, codeQuestion, agentsMDCheck}, hardTasks()...)
+	ts = append(ts, LongTasks()...)
 	sort.Slice(ts, func(i, j int) bool { return ts[i].Name < ts[j].Name })
 	return ts
 }
@@ -29,10 +30,17 @@ func Select(names []string) (tasks []Task, missing []string) {
 	return tasks, missing
 }
 
-// FilterTier keeps the tasks of one tier ("easy" or "hard"); an empty tier or "all" keeps everything.
+// FilterTier keeps the tasks of one tier ("easy", "hard" or "long"). An empty tier or "all" keeps the
+// easy and hard tasks: the long ones need 50+ steps and are only run when asked for.
 func FilterTier(ts []Task, tier string) []Task {
 	if tier == "" || tier == "all" {
-		return ts
+		var out []Task
+		for _, t := range ts {
+			if t.TierOf() != TierLong {
+				out = append(out, t)
+			}
+		}
+		return out
 	}
 	var out []Task
 	for _, t := range ts {
