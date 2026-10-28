@@ -50,12 +50,14 @@ type Config struct {
 	// RedisPoolSize must exceed concurrent SSE tailers (each holds a connection during XREAD BLOCK).
 	RedisPoolSize int `env:"REDIS_POOL_SIZE" envDefault:"256"`
 
-	LLMProvider     string   `env:"LLM_PROVIDER" envDefault:"gateway"`
-	LLMGatewayURL   string   `env:"LLM_GATEWAY_URL" envDefault:"http://llm-gateway:5000/"`
-	LLMUseCase      string   `env:"LLM_USE_CASE" envDefault:"5"`
-	LLMAPIVersion   string   `env:"LLM_API_VERSION" envDefault:"2025-04-01-preview"`
-	LLMBaseURL      string   `env:"LLM_BASE_URL"`
-	LLMAPIKey       string   `env:"LLM_API_KEY"`
+	LLMProvider   string `env:"LLM_PROVIDER" envDefault:"gateway"`
+	LLMGatewayURL string `env:"LLM_GATEWAY_URL" envDefault:"http://llm-gateway:5000/"`
+	LLMUseCase    string `env:"LLM_USE_CASE" envDefault:"5"`
+	LLMAPIVersion string `env:"LLM_API_VERSION" envDefault:"2025-04-01-preview"`
+	LLMBaseURL    string `env:"LLM_BASE_URL"`
+	LLMAPIKey     string `env:"LLM_API_KEY"`
+	// LLMCacheTTL is the prompt-cache lifetime of the anthropic provider: "5m" (default) or "1h".
+	LLMCacheTTL     string   `env:"LLM_CACHE_TTL"`
 	LLMDefaultModel string   `env:"LLM_DEFAULT_MODEL" envDefault:"gpt-5.6-terra"`
 	LLMModels       []string `env:"LLM_MODELS" envDefault:"gpt-5.6-sol,gpt-5.6-terra" envSeparator:","`
 	LLMTimeout      int      `env:"LLM_TIMEOUT_SECONDS" envDefault:"300"`
@@ -227,9 +229,9 @@ func (c *Config) normalize() error {
 		c.LLMModels = append([]string{c.LLMDefaultModel}, c.LLMModels...)
 	}
 	switch c.LLMProvider {
-	case "gateway", "openai":
+	case "gateway", "openai", "anthropic":
 	default:
-		return fmt.Errorf("LLM_PROVIDER must be gateway or openai, got %q", c.LLMProvider)
+		return fmt.Errorf("LLM_PROVIDER must be gateway, openai or anthropic, got %q", c.LLMProvider)
 	}
 	if strings.TrimSpace(c.MCPServersJSON) != "" {
 		if err := json.Unmarshal([]byte(c.MCPServersJSON), &c.MCPServers); err != nil {

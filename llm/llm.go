@@ -15,6 +15,7 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/auth"
 	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/llm/anthropic"
 )
 
 // Factory returns a chat model by id. Tests inject a fake.
@@ -103,6 +104,16 @@ func (p *Provider) Model(ctx context.Context, name string) (model.ToolCallingCha
 	}
 	if p.cfg.UsesResponses(name) {
 		m, err := p.responsesModel(name)
+		if err != nil {
+			return nil, err
+		}
+		p.models[name] = m
+		return m, nil
+	}
+	if p.cfg.LLMProvider == "anthropic" {
+		m, err := anthropic.New(anthropic.Config{
+			BaseURL: p.cfg.LLMBaseURL, APIKey: p.cfg.LLMAPIKey, Model: name, HTTPClient: p.client, CacheTTL: p.cfg.LLMCacheTTL,
+		})
 		if err != nil {
 			return nil, err
 		}

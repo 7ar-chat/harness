@@ -3,7 +3,8 @@
 // reference for building a real TUI.
 //
 //	LLM_PROVIDER=openai LLM_API_KEY=… LLM_MODELS=gpt-5 \
-//	OPENSANDBOX_URL=http://localhost:8090 harness -model gpt-5
+//	SANDBOX_BACKEND=local harness -model gpt-5   # tools run in the current directory
+//	OPENSANDBOX_URL=http://localhost:8090 harness -model gpt-5   # or in a remote OpenSandbox
 //
 // Type a message and press enter; type it while a run is going to steer the
 // run; Ctrl-C cancels the run; /quit leaves.

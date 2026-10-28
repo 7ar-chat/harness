@@ -74,7 +74,7 @@ health, recreation notice, keep-alive, `Coordinator` for cross-replica locks).
 | `httpserver` | `net/http` handlers + SSE for web front ends |
 | `agent` | The loop: steps, streaming, retries, steering, tool hooks, approvals, spill, masking |
 | `agui` | AG-UI event builders and order checker |
-| `llm` | eino model factory: OpenAI chat + Responses API, Studio LLM gateway transport, retry |
+| `llm`, `llm/anthropic`, `llm/responses` | eino model factory: OpenAI chat, Responses API, native Anthropic Messages (prompt-cache breakpoints, `LLM_PROVIDER=anthropic`), Studio LLM gateway transport, retry |
 | `compaction` | Context summarisation and token estimates |
 | `sandbox`, `tools/sandboxtools` | Remote sandbox contract/manager and the file/exec/search/view tools |
 | `tools/{skill,memory,harness,mcp}tools` | Skills, memory, plan/ask_user/goal and MCP tools |
