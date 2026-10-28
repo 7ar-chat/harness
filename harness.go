@@ -271,6 +271,9 @@ func (h *Harness) NewThread(ctx context.Context, user, title string) (*store.Thr
 // Send adds a user message to the thread and queues a run answering it. The
 // run is executed by Run; follow it with Events.
 func (h *Harness) Send(ctx context.Context, user, threadID, text string, o RunOptions) (*store.Run, error) {
+	if err := h.ownsThread(ctx, user, threadID); err != nil {
+		return nil, err
+	}
 	if o.Model == "" {
 		return nil, fmt.Errorf("%w: model is required", ErrInvalidRequest)
 	}
@@ -325,6 +328,10 @@ func (h *Harness) sandboxMode(m SandboxMode) (string, error) {
 
 // Events streams the run's AG-UI events with seq > after, then follows it live
 // until RUN_FINISHED or RUN_ERROR. Each event carries its seq (resume point).
+//
+// Events takes no user: it trusts the caller to have established that the run belongs to the requesting
+// user (Store.GetUserRun), as hosts/client and hosts/web do. A host that exposes run ids to end users
+// without going through them must make that check itself.
 func (h *Harness) Events(ctx context.Context, runID string, after int64) <-chan store.Event {
 	return h.Log.Replay(ctx, runID, after)
 }
@@ -405,4 +412,12 @@ func gateResolver(mgr sandbox.Manager) approvals.PathResolver {
 		return nil
 	}
 	return approvals.SandboxResolver{Sandboxes: mgr}
+}
+
+// ownsThread returns store.ErrNotFound unless the thread exists and belongs to user. A thread of another user
+// is indistinguishable from a missing one, and the check comes before any other, so the answer never reveals
+// whether the thread is busy.
+func (h *Harness) ownsThread(ctx context.Context, user, threadID string) error {
+	_, err := h.Store.GetThread(ctx, user, threadID)
+	return err
 }

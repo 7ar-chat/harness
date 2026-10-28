@@ -7,6 +7,7 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/engine/approvals"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/store"
@@ -33,6 +34,9 @@ func (h *Hook) NeedsApproval(ctx context.Context, run *store.Run, toolName, argu
 	}
 	// "Approve for the run" covers file edits (their path was shown), never commands.
 	if ToolClass(toolName) == classEdit && slices.Contains(run.ApprovedTools, approvals.Kind(toolName)) {
+		return false
+	}
+	if d.Once && slices.Contains(run.ApprovedTools, approvals.Kind(toolName)) {
 		return false
 	}
 	slog.Info("permissions: asking", "tool", toolName, "reason", d.Reason, "run_id", run.ID)
@@ -68,5 +72,5 @@ func (h *Hook) Denial(_ context.Context, run *store.Run, toolName, arguments str
 // DeniedMessage is the tool result of a refused call.
 func DeniedMessage(d Decision) string {
 	return "Error: permission denied: " + d.Reason + ". The action was not run and the permission policy does not let it run; " +
-		"do not retry it. Choose another approach, or tell the user what you wanted to do so they can change .harness/permissions.yml."
+		"do not retry it. Choose another approach, or tell the user what you wanted to do so they can change " + config.DirName + "/permissions.yml."
 }

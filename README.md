@@ -75,8 +75,9 @@ h.Cancel(ctx, "alice", run.ID)
 
 `AGENT_PROFILE=coding` switches the system prompt to a software-engineering one (orient with search, read
 before edit, smallest change, run the project's own build/tests before finishing, no commits or
-destructive commands unless asked) and puts the repository's `AGENTS.md` (else `CLAUDE.md`) into the
-prompt. An explicit `LLM_PROMPT_VARIANTS` still wins per model. Typical terminal setup:
+destructive commands unless asked) and puts the repository's instructions (`AGENTS.md`, else `CLAUDE.md`
+or `GEMINI.md`, plus `.har/instructions.md` and your `~/.har/AGENTS.md`; see "Configuration files and
+standards") into the prompt. An explicit `LLM_PROMPT_VARIANTS` still wins per model. Typical terminal setup:
 
 ```
 AGENT_PROFILE=coding SANDBOX_BACKEND=local LLM_PROVIDER=anthropic LLM_API_KEY=… \
@@ -343,8 +344,8 @@ redirections) and the most severe verdict wins.
 
 `AGENT_PERMISSIONS` picks the mode: `ask` (default on local), `auto-edit` (edits free everywhere,
 commands asked), `yolo` (no prompts, deny rules still apply), `yolo-unsafe` (nothing is checked),
-`readonly` (only read-only commands, no edits). Rules go in `.harness/permissions.yml` (workspace) and
-`~/.config/harness/permissions.yml`, or in `AGENT_PERMISSIONS_ALLOW|ASK|DENY` (entries separated by
+`readonly` (only read-only commands, no edits). Rules go in `.har/permissions.yml` (workspace) and
+`~/.har/permissions.yml`, or in `AGENT_PERMISSIONS_ALLOW|ASK|DENY` (entries separated by
 newlines or `;;`); deny beats ask beats allow, and a user allow overrides a built-in ask:
 
 ```yaml
@@ -378,11 +379,11 @@ Skills are discovered from, lowest to highest precedence (a later source replace
 | --- | --- | --- |
 | `builtin` | embedded in the binary (`features/skills/skillsfs/builtin`) | `docx`, `pptx`, `xlsx`, `pdf`, `charts`; `Options.BuiltinSkills` replaces them |
 | `extra` | `Options.ExtraSkills` (an `fs.FS`) | the embedding product's own skills |
-| `user` | `SKILLS_DIR`, default `~/.config/harness/skills` | one folder per skill |
-| `project` | `<workspace>/.harness/skills` | not wired yet (see Status); fenced as untrusted text |
+| `user` | `SKILLS_DIR`, `~/.har/skills`, `~/.agents/skills`, `~/.claude/skills` (in that order) | one folder per skill; the last two only with the local backend |
+| `project` | `<repo>/.har/skills`, `<repo>/.agents/skills`, `<repo>/.claude/skills` (in that order) | local backend only; fenced as untrusted text; symbolic links are not followed |
 
 ```
-~/.config/harness/skills/
+~/.har/skills/
   release-notes/
     SKILL.md          # ---\nname: release-notes\ndescription: Draft release notes from merged PRs.\n---\n…
     scripts/collect.py
@@ -544,9 +545,179 @@ those variables plus `LLM_API_KEY` and `OPENSANDBOX_URL`, `HARNESS_WORKER_ADDR=0
 on `/readyz`, `stop_grace_period` longer than `RUNTIME_SHUTDOWN_GRACE_SECONDS`, and `deploy.replicas` set to
 the number of workers wanted.
 
+## Configuration files and standards
+
+The harness follows the conventions of the other coding-agent tools: a project directory `.har/` next to the
+code (and `~/.har/` for the user), and the de-facto standards for agent instructions (`AGENTS.md`), skills
+(`SKILL.md` folders) and MCP servers (`.mcp.json`). The directory name is one constant, `config.DirName`.
+
+```
+<repo>/
+  AGENTS.md                  agent instructions (https://agents.md); else CLAUDE.md, else GEMINI.md
+  .mcp.json                  MCP servers, the format Claude Code and others share
+  .har/
+    config.yml               project settings (this section); no secrets
+    permissions.yml          allow/ask/deny rules (see Permissions)
+    instructions.md          extra instructions, always loaded, highest priority
+    mcp.json                 MCP servers, same format as .mcp.json
+    skills/<name>/SKILL.md   project skills (also .agents/skills and .claude/skills)
+    memory/                  logical prefix of memory paths
+~/.har/                      the same files for the user: config.yml, permissions.yml, AGENTS.md, mcp.json, skills/
+```
+
+The project directory is the nearest `.har/` found walking up from the working directory (or `LOCAL_WORKSPACE`) to the git
+root. `harness -config-dump` prints the effective configuration with the source of every value that was set
+(`flag`, `env`, `project file`, `user file`; secrets are masked) and the files that were read.
+
+### Precedence
+
+| Layer | Source | Wins over |
+|---|---|---|
+| 1 | command-line flags (`-model`, ...) | everything |
+| 2 | process environment (`LLM_*`, `SANDBOX_*`, ...) | files and defaults |
+| 3 | project `<repo>/.har/config.yml` | user file and defaults |
+| 4 | user `~/.har/config.yml` | defaults |
+| 5 | built-in defaults | |
+
+Scalars and lists are replaced by the higher layer as a whole. Exceptions: `permissions.allow|ask|deny` add up across the two
+files (a user `deny` is never lost) unless the matching `AGENT_PERMISSIONS_*` variable is set, and MCP servers merge by name
+(see below). Unknown keys are an error naming the key and the file (`.har/config.yml: unknown key "sandbox.bakend"`), a
+plain `api_key` is refused, and a value of the wrong type is an error.
+
+### config.yml
+
+Keys are translated to the environment variables of the "Configuration" section, so every existing setting works;
+`env:` is the escape hatch for the ones without a nice key (`env: {HARNESS_MEMORY_MAX_ENTRIES: 500}`; secret-looking names such as
+`*_KEY`, `*_PASSWORD`, `*_TOKEN` are refused).
+
+| Key | Environment variable | Notes |
+|---|---|---|
+| `provider` | `LLM_PROVIDER` | `openai` or `anthropic` |
+| `base_url` | `LLM_BASE_URL` | |
+| `api_key_env` | `LLM_API_KEY` | the NAME of the environment variable that holds the key; unset is an error |
+| `models` | `LLM_MODELS` | list |
+| `default_model` | `LLM_DEFAULT_MODEL` | |
+| `explore_model` | `EXPLORE_MODEL` | |
+| `session_header` | `LLM_SESSION_HEADER` | |
+| `cache_ttl` | `LLM_CACHE_TTL` | `5m` or `1h` |
+| `timeout_seconds` | `LLM_TIMEOUT_SECONDS` | |
+| `profile` | `AGENT_PROFILE` | `work`, `coding` or `minimal` |
+| `tools` | `AGENT_TOOLS` | list (`+name`, `-name`) |
+| `code_checks` | `CODE_CHECKS` | |
+| `context_windows` | `LLM_CONTEXT_WINDOWS` | map `model: tokens` |
+| `reasoning_models`, `vision_models` | `LLM_REASONING_MODELS`, `LLM_VISION_MODELS` | lists |
+| `model_labels`, `prompt_variants` | `LLM_MODEL_LABELS`, `LLM_PROMPT_VARIANTS` | maps |
+| `presets`, `default_preset` | `LLM_PRESETS`, `LLM_DEFAULT_PRESET` | |
+| `limits.max_steps` | `AGENT_MAX_STEPS` | |
+| `limits.max_tool_output_chars`, `limits.tool_output_spill` | `AGENT_MAX_TOOL_OUTPUT_CHARS`, `AGENT_TOOL_OUTPUT_SPILL_CHARS` | |
+| `limits.step_retries`, `limits.stream_idle_seconds`, `limits.call_max_seconds`, `limits.max_output_tokens` | `LLM_STEP_RETRIES`, `LLM_STREAM_IDLE_SECONDS`, `LLM_CALL_MAX_SECONDS`, `LLM_MAX_OUTPUT_TOKENS` | |
+| `limits.compaction_threshold`, `limits.compaction_model`, `limits.keep_recent_tool_calls` | `COMPACTION_THRESHOLD`, `COMPACTION_MODEL`, `COMPACTION_KEEP_RECENT_TOOL_RESULTS` | |
+| `sandbox.backend` | `SANDBOX_BACKEND` | `local`, `opensandbox` or `none` (`none` ignores `sandbox.url`) |
+| `sandbox.url`, `sandbox.image`, `sandbox.api_key_env` | `OPENSANDBOX_URL`, `OPENSANDBOX_IMAGE`, `OPENSANDBOX_API_KEY` | `api_key_env` is a variable name |
+| `sandbox.use_server_proxy`, `sandbox.timeout_seconds`, `sandbox.command_timeout`, `sandbox.cpu`, `sandbox.memory` | `OPENSANDBOX_USE_SERVER_PROXY`, `SANDBOX_TIMEOUT_SECONDS`, `SANDBOX_COMMAND_TIMEOUT_SECONDS`, `SANDBOX_CPU`, `SANDBOX_MEMORY` | |
+| `sandbox.egress_allowlist`, `sandbox.egress_unrestricted`, `sandbox.max_sandboxes_per_user` | `SANDBOX_EGRESS_ALLOWLIST`, `SANDBOX_EGRESS_UNRESTRICTED`, `MAX_SANDBOXES_PER_USER` | |
+| `sandbox.workspace`, `sandbox.state_dir` | `LOCAL_WORKSPACE`, `LOCAL_STATE_DIR` | local backend |
+| `permissions.mode` | `AGENT_PERMISSIONS` | `ask`, `auto-edit`, `yolo`, `yolo-unsafe`, `readonly` |
+| `permissions.allow`, `.ask`, `.deny` | `AGENT_PERMISSIONS_ALLOW`, `_ASK`, `_DENY` | lists of rules, merged across the files |
+| `skills.dir`, `skills.in_coding` | `SKILLS_DIR`, `SKILLS_IN_CODING` | |
+| `memory.write_mode`, `.delete_mode`, `.default_scope`, `.embedding_backend`, `.recall_injection`, `.max_entries`, `.max_content_bytes`, `.consolidation_hours`, `.deleted_retention_days`, `.in_coding` | `HARNESS_MEMORY_*`, `MEMORY_IN_CODING` | |
+| `mcp.servers` | `MCP_SERVERS` (merged) | map `name: {command,args,env}` or `{type,url,headers,tools}` |
+| `mcp.allow_stdio` | `HARNESS_MCP_STDIO` | `true`; **user file only** (a project file that sets it is an error) |
+| `mcp.call_timeout_seconds` | `MCP_CALL_TIMEOUT_SECONDS` | |
+| `env` | any setting | `ENV_NAME: value` |
+
+Server and infrastructure settings (`POSTGRES_*`, `REDIS_*`, `ARTIFACTS_*`, `PORT`) stay in the environment.
+
+```yaml
+# <repo>/.har/config.yml
+provider: anthropic
+api_key_env: ANTHROPIC_API_KEY
+models: [claude-sonnet-5-5]
+default_model: claude-sonnet-5-5
+profile: coding
+sandbox: {backend: local}
+permissions:
+  mode: ask
+  allow: ["make test*"]
+  deny:  ["Bash(terraform apply*)"]
+mcp:
+  servers:
+    docs: {type: http, url: "https://docs.example.com/mcp", headers: {Authorization: "Bearer ${DOCS_TOKEN}"}}
+```
+
+### Instruction files
+
+Read for the coding profile, lowest priority first (a later file wins where they disagree; they are all shown to the model):
+
+| # | File | When |
+|---|---|---|
+| 1 | `~/.har/AGENTS.md` | local backend, or `HARNESS_USER_INSTRUCTIONS=1`; trusted |
+| 2 | `.github/copilot-instructions.md`, `.cursorrules`, `.cursor/rules/*.mdc` with `alwaysApply: true` | only if the repo root has no `AGENTS.md` |
+| 3 | `AGENTS.md`, else `CLAUDE.md`, else `GEMINI.md` (repo root) | the first that exists; the others are not also loaded |
+| 4 | `.har/instructions.md` | always, last |
+
+These go into the system prompt, computed once per run so the prompt stays byte-identical across steps (prompt cache). Each file
+is cut at 16 KiB and the total at 48 KiB, with a `[…cut: read_file <path> for the rest]` or `size limit` marker. Text from the
+repository is data: the run's context is reported untrusted (memory writes are only proposed) and the block cannot close itself;
+only `~/.har/AGENTS.md` is trusted. Everything is read through the sandbox API, so remote sandboxes work; the user's file is the
+only one read from the host, and only with the local backend or the explicit `HARNESS_USER_INSTRUCTIONS=1`.
+
+* **`@path/to/file` imports** (Claude Code style) inside an instruction file are appended as `[imported from <path>]`; the path is
+  relative to the file, at most 3 levels deep, each file once, 16 KiB each, never outside the workspace (symbolic links are
+  resolved and refused if they leave it; in `~/.har/AGENTS.md` imports stay inside `~/.har`). `@alice`, e-mail addresses and
+  anything inside code spans or fenced blocks are not imports.
+* **Nested files**: an `AGENTS.md` (else `CLAUDE.md`) in a subdirectory applies to the files under it, the closest one wins. They are
+  not in the prompt. The first time `read_file`, `write_file` or `edit_file` touches a path under such a directory in a run, the
+  note is appended once to that tool's result as `[Instructions for pkg/sub (pkg/sub/AGENTS.md, repository notes for files under this
+  directory): ...]` (8 KiB max). Cursor rules with `globs` work the same way, when a matching file is touched.
+  Implemented by `sandboxtools.Options.AfterPath`, a generic hook that appends text to those three results.
+
+### Compatibility
+
+| Standard | Read | Not read |
+|---|---|---|
+| `AGENTS.md` | repo root, nested directories, `~/.har/AGENTS.md` | `AGENTS.override.md` (Codex), `~/.codex/` |
+| `CLAUDE.md` | repo root when there is no `AGENTS.md`; nested directories; `@imports` | `~/.claude/CLAUDE.md`, `CLAUDE.local.md`, `.claude/settings.json`, hooks, slash commands |
+| `GEMINI.md` | repo root when there is neither of the above | `~/.gemini/`, `@` imports of `.gemini` settings |
+| Cursor | `.cursorrules`, `.cursor/rules/*.mdc` (`alwaysApply`, `globs`) | "agent requested" rules (description only), `.cursor/mcp.json` |
+| Copilot | `.github/copilot-instructions.md` | `.github/instructions/*.instructions.md` |
+| `.mcp.json` | `mcpServers`: `command/args/env`, `type: http\|sse` + `url/headers`; `${VAR}` and `${VAR:-default}` in values | `enabledMcpjsonServers` approvals, OAuth, `type: ws` |
+| Agent Skills | `SKILL.md` folders in `.har`, `.agents`, `.claude` (project and user) | `allowed-tools`, plugin marketplaces |
+| `.har/permissions.yml` | harness format | Claude Code `settings.json` permission rules |
+
+### MCP servers
+
+Sources, lowest to highest (a later one replaces a server of the same name): `~/.har/config.yml` `mcp.servers`, `~/.har/mcp.json`,
+`<repo>/.mcp.json`, `<repo>/.har/mcp.json`, `<repo>/.har/config.yml` `mcp.servers`, `MCP_SERVERS`. Files use the shared format:
+
+```json
+{"mcpServers": {
+  "docs": {"type": "http", "url": "https://docs.example.com/mcp", "headers": {"Authorization": "Bearer ${DOCS_TOKEN}"}},
+  "legacy": {"type": "sse", "url": "https://old.example.com/sse"},
+  "fs": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "."], "env": {"DEBUG": "0"}}
+}}
+```
+
+`${VAR}` (or `${VAR:-default}`) in `url`, `headers`, `env`, `command` and `args` comes from the process environment; an unset one
+without a default is an error naming the server and the variable. The harness adds an optional `tools` allow-list.
+
+Stdio servers (`command`) start a child process, so they are the dangerous kind (a cloned repository can bring a `.mcp.json`).
+The rules:
+
+1. They run only with `SANDBOX_BACKEND=local` and an explicit opt-in: `mcp.allow_stdio: true` in **`~/.har/config.yml`** or
+   `HARNESS_MCP_STDIO=1`. A project `config.yml` that sets it is an error, so a repository cannot enable them for itself
+   (`HARNESS_MCP_STDIO=0` in the environment turns the user file's setting off).
+2. Otherwise they are skipped with a warning (listed by `-config-dump`), and the remote ones still work.
+3. The tools of a stdio server go through the permission layer as **ask on first use**: one approval per tool and run (the usual
+   "approve for the run"); an `allow` rule (`my-server__*(*)` style, see Permissions) stops the question, `deny` blocks them, and
+   `yolo` mode, as for all asks, does not prompt.
+4. The child gets a reduced environment (`PATH`, `HOME`, `USER`, `LANG`, `TERM`, `TMPDIR`, ...) plus the server's own `env`; the
+   harness's API keys and database passwords are not inherited.
+
 ## Configuration
 
-`config.Load()` reads the environment. The harness-wide settings below use the `HARNESS_` prefix (no other
+`config.Load()` reads the environment, on top of the optional `config.yml` files (see "Configuration files and
+standards" above; every variable below can also be set there). The harness-wide settings below use the `HARNESS_` prefix (no other
 names are read); the model, sandbox and storage settings keep their descriptive names (`LLM_*`,
 `SANDBOX_*`, `OPENSANDBOX_*`, `POSTGRES_*`, `REDIS_*`, `ARTIFACTS_*`, `AGENT_*`, see `config/`).
 
@@ -570,12 +741,14 @@ names are read); the model, sandbox and storage settings keep their descriptive 
 | `HARNESS_MEMORY_MAX_CONTENT_BYTES` | `200000` | Size of one entry |
 | `HARNESS_MEMORY_CONSOLIDATION_HOURS` | `168` | Period of the dedup and purge job (`<= 0`: disabled) |
 | `HARNESS_MEMORY_DELETED_RETENTION_DAYS` | `30` | Soft-deleted entries are purged after this many days |
+| `HARNESS_MCP_STDIO` | unset | `1` allows MCP servers that are local programs (stdio); local backend only. Wins over the user file's `mcp.allow_stdio` |
+| `HARNESS_USER_INSTRUCTIONS` | unset | `1` reads the host user's `~/.har/AGENTS.md` also with a remote sandbox backend (always read with the local one) |
 | `HARNESS_TEST_DATABASE_URL` | unset | Postgres used by the `store/pgstore` tests (skipped when unset) |
 | `HARNESS_TEST_S3_ENDPOINT`, `_ACCESS_KEY`, `_SECRET_KEY` | unset | S3-compatible endpoint for the artifact blob tests (skipped when unset) |
 
 Memory entries live in the store; their logical paths (`memories/semantic/facts.md`, ...) may be written with
-the `.harness/memory/` prefix, which is stripped. The workspace checkpoints leave `.harness/tmp/` and
-`.harness/runtime/` out of the history.
+the `.har/memory/` prefix, which is stripped. The workspace checkpoints leave `.har/tmp/` and
+`.har/runtime/` out of the history.
 
 ## Building
 
@@ -586,8 +759,10 @@ because it keeps the symbol table and DWARF). Idle resident memory is about 20 M
 ## Status / known gaps
 
 * Requires Go 1.26 (`go test ./...`). `store/pgstore` tests need a Postgres (`HARNESS_TEST_DATABASE_URL`) and skip otherwise.
-* Project skills (`<workspace>/.harness/skills`) are not discovered yet: the registry supports the
-  `project` source (`Registry.AddFS` / `AddDir`, fenced as untrusted data) but nothing feeds it a
-  workspace directory per run. Follow-up.
+* Project skills are read from the host directories of the local backend. A remote sandbox's own
+  `/workspace/.har/skills` is not discovered (the registry is global and read at start-up, a remote
+  workspace is per thread). Follow-up.
+* MCP stdio servers run only with the local backend and an opt-in; there is no per-project trust prompt
+  beyond the permission layer's ask-once rule.
 * Web search is not built in: configure any web-search MCP server in `MCP_SERVERS`.
 * The sandbox image was adapted for public base images and not built here.

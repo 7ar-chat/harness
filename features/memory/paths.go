@@ -6,16 +6,18 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/GhaziBenDahmane/harness/config"
 )
 
 // pathPrefix is the memory root of Work's file layout; paths given with it are accepted.
-const pathPrefix = ".harness/memory/"
+const pathPrefix = config.DirName + "/" + config.MemoryFolder + "/"
 
 // SemanticKinds are the folders of memories/semantic/ (and shared/memories/semantic/).
 var SemanticKinds = []string{"decisions", "facts", "constraints", "preferences", "procedures", "notes"}
 
 // NormalizePath applies Work's _normalize_relative_path: a relative path
-// without "..", not under proxy/ (the root prefix .harness/memory/ is stripped).
+// without "..", not under proxy/ (the root prefix .har/memory/ is stripped).
 func NormalizePath(raw string) (string, *Error) {
 	p := strings.ReplaceAll(strings.TrimSpace(raw), "\\", "/")
 	p = strings.TrimPrefix(p, pathPrefix)

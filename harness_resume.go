@@ -31,6 +31,9 @@ type ResumeRequest struct {
 // Resume answers a run's interrupt (a tool approval or an ask_user question) and
 // queues the run that continues the conversation. Follow it with Events.
 func (h *Harness) Resume(ctx context.Context, user, threadID string, r ResumeRequest) (*store.Run, error) {
+	if err := h.ownsThread(ctx, user, threadID); err != nil {
+		return nil, err
+	}
 	if r.Model == "" {
 		return nil, fmt.Errorf("%w: model is required", ErrInvalidRequest)
 	}

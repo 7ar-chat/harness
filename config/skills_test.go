@@ -25,7 +25,7 @@ func TestSkillsPathIsSKILLS_DIRElseTheUserConfigDirectory(t *testing.T) {
 	if got := set.SkillsPath(); got != "/data/skills" {
 		t.Fatalf("SKILLS_DIR path %q", got)
 	}
-	if got, want := unset.SkillsPath(), filepath.Join(home, ".config", "harness", "skills"); got != want {
+	if got, want := unset.SkillsPath(), filepath.Join(home, ".har", "skills"); got != want {
 		t.Fatalf("default path %q, want %q", got, want)
 	}
 }

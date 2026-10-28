@@ -45,6 +45,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	httpserver "github.com/GhaziBenDahmane/harness/hosts/web"
 	"github.com/GhaziBenDahmane/harness/sandbox"
+	"github.com/GhaziBenDahmane/harness/store"
 	"github.com/GhaziBenDahmane/harness/store/filestore"
 )
 
@@ -187,9 +188,13 @@ func (s *site) ask(w http.ResponseWriter, r *http.Request, user string) {
 	switch {
 	case errors.Is(err, harness.ErrInvalidRequest):
 		http.Error(w, err.Error(), http.StatusBadRequest)
-	case err != nil:
-		// A thread of another user is store.ErrNotFound here: answer like a missing one.
+	case errors.Is(err, store.ErrNotFound):
+		// A thread of another user is store.ErrNotFound: answer like a missing one.
 		http.Error(w, "not found", http.StatusNotFound)
+	case errors.Is(err, store.ErrRunActive):
+		http.Error(w, "a run is already in progress on this thread", http.StatusConflict)
+	case err != nil:
+		http.Error(w, "internal error", http.StatusInternalServerError)
 	default:
 		writeJSON(w, http.StatusAccepted, map[string]string{
 			"threadId": run.ThreadID, "runId": run.ID, "events": "/agent/api/runs/" + run.ID + "/events"})

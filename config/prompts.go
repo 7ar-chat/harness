@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 
@@ -52,7 +51,7 @@ func (c *Config) normalizePromptAndEfforts() error {
 		c.LLMPromptVariants[model] = variant
 	}
 	if strings.EqualFold(strings.TrimSpace(c.AgentProfile), "coding") {
-		if _, set := os.LookupEnv("LLM_PROMPT_VARIANTS"); !set {
+		if !c.envIsSet("LLM_PROMPT_VARIANTS") {
 			c.LLMPromptVariants = map[string]string{} // the work defaults do not apply to the coding profile
 		}
 	}

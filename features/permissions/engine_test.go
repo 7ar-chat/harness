@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/GhaziBenDahmane/harness/config"
 )
 
 func testPolicy(mode Mode, rules ...Rule) *Policy {
@@ -320,8 +322,8 @@ func TestLoadMergesFilesAndEnvironment(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write(filepath.Join(ws, ".harness", "permissions.yml"), "mode: auto-edit\nallow:\n  - git push origin feature*\ndeny:\n  - \"Bash(docker*)\"\n")
-	write(filepath.Join(home, ".config", "harness", "permissions.yml"), "mode: yolo\nask:\n  - make deploy*\n")
+	write(filepath.Join(ws, config.DirName, "permissions.yml"), "mode: auto-edit\nallow:\n  - git push origin feature*\ndeny:\n  - \"Bash(docker*)\"\n")
+	write(filepath.Join(home, config.DirName, "permissions.yml"), "mode: yolo\nask:\n  - make deploy*\n")
 
 	p, err := Load(Options{Workspace: ws, Home: home, Deny: "kubectl*;;terraform apply*"})
 	if err != nil {
@@ -354,8 +356,8 @@ func TestLoadWithoutFilesUsesDefaults(t *testing.T) {
 
 func TestLoadRejectsBadInput(t *testing.T) {
 	ws := t.TempDir()
-	_ = os.MkdirAll(filepath.Join(ws, ".harness"), 0o755)
-	_ = os.WriteFile(filepath.Join(ws, ".harness", "permissions.yml"), []byte("allow: [unclosed"), 0o644)
+	_ = os.MkdirAll(filepath.Join(ws, config.DirName), 0o755)
+	_ = os.WriteFile(filepath.Join(ws, config.DirName, "permissions.yml"), []byte("allow: [unclosed"), 0o644)
 	if _, err := Load(Options{Workspace: ws, Home: t.TempDir()}); err == nil {
 		t.Error("invalid YAML accepted")
 	}

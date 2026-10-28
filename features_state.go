@@ -2,8 +2,11 @@ package harness
 
 import (
 	"context"
+	"os"
+	"strings"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
@@ -34,7 +37,7 @@ func Skills() Feature {
 		}
 		reg := skills.NewRegistry(builtinFS, b.Store)
 		reg.AddFS(skills.SourceExtra, b.Options.ExtraSkills)
-		reg.AddDir(skills.SourceUser, b.Config.SkillsPath())
+		reg.Discover(skillDiscovery(b.Config))
 		installer := &skills.Installer{Registry: reg, Shared: b.Infra.Installs, Messages: b.Store}
 		b.Skills, b.Installer = reg, installer
 		b.prof.reg = reg
@@ -55,6 +58,25 @@ func Skills() Feature {
 		b.Section(b.prof.skillsSection(reg.PromptSection))
 		return nil
 	}}
+}
+
+// skillDiscovery says which host directories hold skills. Project skills (the
+// repository's .har, .agents and .claude folders) and the skills of the user's
+// other agent tools are read with the local backend only, where the host
+// directories are the user's own; a remote sandbox keeps its files to itself.
+func skillDiscovery(cfg *config.Config) skills.DiscoverOptions {
+	o := skills.DiscoverOptions{SkillsDir: strings.TrimSpace(cfg.SkillsDir)}
+	if cfg.LocalSandbox() {
+		o.ForeignUserDirs = true
+		o.ProjectRoot = cfg.LocalWorkspace
+		if o.ProjectRoot == "" && cfg.Layers != nil {
+			o.ProjectRoot = cfg.Layers.ProjectRoot
+		}
+		if o.ProjectRoot == "" {
+			o.ProjectRoot, _ = os.Getwd()
+		}
+	}
+	return o
 }
 
 // Artifacts tracks the files the agent produces (snapshots on tool results,

@@ -57,6 +57,10 @@ type Options struct {
 	// CheckWrite runs after write_file or edit_file wrote path; a non-empty result
 	// (a syntax error, say) is added to the tool result as its notice.
 	CheckWrite func(ctx context.Context, sb sandbox.Sandbox, path string) string
+	// AfterPath runs after read_file, write_file or edit_file succeeded on path (an absolute sandbox path); a
+	// non-empty result is appended to the tool result (the notes of the directory the file is in).
+	// It runs at most once per call and must be cheap when it has nothing to say.
+	AfterPath func(ctx context.Context, rc tools.RunContext, sb sandbox.Sandbox, path string) string
 	// AfterFailedCommand runs after a foreground command exited non-zero,
 	// with its output (stdout then stderr); a non-empty result is added to the
 	// tool result as its note (e.g. "Skill x was installed; run the command
@@ -359,7 +363,32 @@ func (b *binding) write(ctx context.Context, in writeInput) (*writeOutput, error
 		return nil, err
 	}
 	b.p.seen.record(b.rc.ThreadID, p, []byte(in.Content))
-	return &writeOutput{Path: p, BytesWritten: len(in.Content), Notice: notice}, nil
+	return &writeOutput{Path: p, BytesWritten: len(in.Content), Notice: joinNotes(notice, b.pathNote(ctx, p))}, nil
+}
+
+// pathNote runs the AfterPath hook for p ("" without one, or when the sandbox cannot be reached).
+func (b *binding) pathNote(ctx context.Context, p string) string {
+	hook := b.p.opts.AfterPath
+	if hook == nil {
+		return ""
+	}
+	var note string
+	_ = b.withSandbox(ctx, func(sb sandbox.Sandbox) error {
+		note = hook(ctx, b.rc, sb, p)
+		return nil
+	})
+	return note
+}
+
+// joinNotes joins two notices with a newline.
+func joinNotes(a, b string) string {
+	switch {
+	case a == "":
+		return b
+	case b == "":
+		return a
+	}
+	return a + "\n" + b
 }
 
 // checkWrite runs the CheckWrite hook ("" without one).

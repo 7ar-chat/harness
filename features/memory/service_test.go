@@ -13,11 +13,11 @@ import (
 )
 
 func TestNormalizePathRejectsUnsafePaths(t *testing.T) {
-	// Work's path rules: the .harness/memory/ prefix is stripped, ./ and // collapse; absolute, traversal, empty and proxy/ paths are rejected.
+	// Work's path rules: the .har/memory/ prefix is stripped, ./ and // collapse; absolute, traversal, empty and proxy/ paths are rejected.
 	ok := map[string]string{
-		".harness/memory/memories/semantic/facts.md": "memories/semantic/facts.md",
-		"./shared//memories/semantic/decisions.md":   "shared/memories/semantic/decisions.md",
-		`memories\semantic\notes\a.md`:               "memories/semantic/notes/a.md",
+		".har/memory/memories/semantic/facts.md":   "memories/semantic/facts.md",
+		"./shared//memories/semantic/decisions.md": "shared/memories/semantic/decisions.md",
+		`memories\semantic\notes\a.md`:             "memories/semantic/notes/a.md",
 	}
 	for in, want := range ok {
 		if got, err := memory.NormalizePath(in); err != nil || got != want {
@@ -130,7 +130,7 @@ func TestCreateRejectsInvalidWrites(t *testing.T) {
 	codes := map[string]string{
 		"empty":     errCode(f.svc.Create(ctx, f.w, memory.CreateInput{Content: "  "})),
 		"runs":      errCode(f.svc.Create(ctx, f.w, memory.CreateInput{Content: "x", Path: "runs/2026/summary.md"})),
-		"handoff":   errCode(f.svc.Create(ctx, f.w, memory.CreateInput{Content: "x", Path: ".harness/memory/handoff/next.md"})),
+		"handoff":   errCode(f.svc.Create(ctx, f.w, memory.CreateInput{Content: "x", Path: ".har/memory/handoff/next.md"})),
 		"exists":    errCode(f.svc.Create(ctx, f.w, memory.CreateInput{Content: "b", Path: "memories/semantic/notes/a.md"})),
 		"scope":     errCode(f.svc.Create(ctx, f.w, memory.CreateInput{Content: "x", Scope: "global"})),
 		"strict":    errCode(strict.svc.Create(ctx, strict.w, memory.CreateInput{Content: "Lunch at noon"})),
@@ -282,7 +282,7 @@ func TestGetUpdateAndDeleteByIDOrPath(t *testing.T) {
 	id := m["id"].(string)
 
 	// Act
-	byPath := f.svc.Get(ctx, "alice", "", ".harness/memory/shared/memories/semantic/constraints.md", true)
+	byPath := f.svc.Get(ctx, "alice", "", ".har/memory/shared/memories/semantic/constraints.md", true)
 	content := "# Deploys\n- Friday and Monday freeze"
 	tags := []string{"constraint"}
 	upd := f.svc.Update(ctx, f.w, memory.UpdateInput{Path: "shared/memories/semantic/constraints.md", Content: &content,
