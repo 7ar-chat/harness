@@ -53,7 +53,9 @@ func Example() {
 	os.Setenv("LLM_PROVIDER", "openai")
 	os.Setenv("LLM_MODELS", "gpt-test")
 	cfg, _ := config.Load()
-	model := llmtest.NewFunc(func(llmtest.Call) llmtest.Turn { return llmtest.Turn{Chunks: llmtest.Text("Hello ", "from the engine")} })
+	model := llmtest.NewFunc(func(llmtest.Call) llmtest.Turn {
+		return llmtest.Turn{Chunks: llmtest.Text("Hello ", "from the engine")}
+	})
 	h, _ := harness.New(harness.Options{Config: cfg, Models: llmtest.Factory{M: model}, Backend: sandboxtest.NewBackend()})
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

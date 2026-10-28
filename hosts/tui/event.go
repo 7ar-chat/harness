@@ -1,7 +1,8 @@
 // Package tui is a terminal client of the harness: a Bubble Tea model fed by
 // the AG-UI events of a run, pure render functions for each event type, a
 // print mode for scripts, and the Backend that connects them to a
-// harness.Harness.
+// client.Client (in process or remote). It imports only hosts/client and
+// engine/agui.
 package tui
 
 import (

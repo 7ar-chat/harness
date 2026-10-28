@@ -51,7 +51,10 @@ h.Cancel(ctx, "alice", run.ID)
   files and the run's events as SSE (`id` = seq, so reconnects resume without loss), plus a built-in
   browser UI; `cmd/harness-web` runs it (see [Web host](#web-host)).
 * **TUI**: `cmd/harness` is a Bubble Tea terminal client with a print mode (see
-  [Terminal UI](#terminal-ui)); package `tui` has the model and renderers to embed.
+  [Terminal UI](#terminal-ui)); package `tui` has the model and renderers to embed. It runs on an in-process
+  engine or attaches to a running `harness-web` (`-remote`).
+* **Your own front end**: write it against `hosts/client`, one narrow interface with an in-process and an HTTP
+  implementation (see [Front ends and the client contract](#front-ends-and-the-client-contract)).
 * **Single process** (default): store, event log and queue live in memory — nothing to run
   except the sandbox server. **Multi process**: pass `Options.Store` (`store/pgstore` +
   `store/pgstore/migrate`) and `Options.Redis` (or any `Options.Infra`, see
@@ -133,14 +136,20 @@ use `-parallel 1` for memory comparisons.
 
 ## Terminal UI
 
-`cmd/harness` is a terminal client (Bubble Tea) over one in-process harness and one thread.
+`cmd/harness` is a terminal client (Bubble Tea) over one thread of an in-process harness, or of a remote `harness-web`.
 
 ```
 harness -model gpt-5                  # interactive UI (stdin is a terminal)
 harness -p "summarise main.go"        # print mode: answer on stdout, tool activity on stderr
 git diff | harness -p "review this"   # print mode, the prompt is -p plus stdin
 echo "what is 2+2" | harness -json    # print mode, AG-UI events as JSON lines on stdout
+harness -remote http://127.0.0.1:8080 # the same UI, attached to a running harness-web
+harness -remote https://host -p "…"   # print mode against it; HARNESS_REMOTE_TOKEN is the bearer token
 ```
+
+With `-remote` the process runs no engine and needs no model or sandbox configuration: the server owns
+them, and `-model` defaults to the server's default. `-continue`, `-resume` and `-sessions` use the server's
+saved conversations; `-undo` (a local workspace) is refused.
 
 Flags: `-model` (default `LLM_DEFAULT_MODEL`), `-user`, `-p`, `-json`, `-auto` (UI: do not ask for
 approval of risky tool calls). Print mode exits 0 on success, 1 when the run failed or was
@@ -158,10 +167,9 @@ cancelled, 2 when it ended waiting for an answer or approval (the question goes 
 
 The status line shows the model, state, step count, tokens in/out/cached (with the cache share)
 and the run's elapsed time. `edit_file` calls show a diff of `oldText`/`newText`. The UI is a pure
-`tui.Model` fed by `store.Event`s through a `tui.Backend` (`tui.HarnessBackend` for a
-`harness.Harness`), with one render function per event type and golden tests in `tui/testdata`
-(`go test ./tui -update` rewrites them). The facade has no call to answer an interrupt, so
-`HarnessBackend.Resume` creates the resume run through `h.Store` and `h.Queue`.
+`tui.Model` fed by `client.Event`s through a `tui.Backend` (`tui.ClientBackend` adapts any `client.Client`),
+with one render function per event type and golden tests in `hosts/tui/testdata`
+(`go test ./hosts/tui -update` rewrites them). The package imports only `hosts/client` and `engine/agui`.
 
 ## Web host
 
@@ -201,6 +209,83 @@ token the server only answers loopback `Host` names. Every response carries a st
 streamed transcript with basic markdown, collapsible tool calls (edit diffs), status line (model, steps, tokens,
 cache %), send / steer / cancel, approval and question prompts, a file panel with downloads, light and dark themes,
 phone-width layout. With a token set the UI asks for it once and keeps it for the tab.
+
+## Front ends and the client contract
+
+The engine is a library; a front end should not be written against it. `hosts/client` is the narrow contract
+between the two, and the only thing a terminal UI, a web UI, a Slack bot or a desktop app needs to import:
+
+```
+engine/ features/ store/ sandbox/            the core (a library, no HTTP, no UI)
+        ▲
+   harness.Harness                           the facade
+        ▲                       ▲
+  client.InProcess(h, user)   hosts/web      the HTTP API server (JSON + SSE, bearer auth)
+        │                       ▲
+        │                client.HTTP(url, token)     Last-Event-ID reconnect with backoff
+        └───────────┬───────────┘
+                client.Client                the contract
+              ▲      ▲       ▲
+         hosts/tui   web UI   your Slack bot, desktop app, …
+```
+
+`Client` acts for one user and has: `Models`; `CreateThread`, `ListThreads`, `GetThread`, `RenameThread`,
+`DeleteThread`; `Send` (returns the `Run`), `GetRun`, `Events(ctx, runID, after)` (AG-UI events with an ordered `Seq`,
+resumable from any seq), `Steer`, `Cancel`, `Resume` (answers a tool approval or an `ask_user` question);
+`ListFiles`, `DownloadFile`; `Sessions`. Errors are `*client.Error` values matched with `errors.Is` against
+`client.ErrNotFound` (also what another user's thread or run gives), `ErrInvalidRequest`, `ErrRunNotActive`,
+`ErrNotSupported`... The DTOs (`Thread`, `Message`, `Run`, `File`, `Session`, `SendOptions`, `ResumeRequest`) are the
+JSON that `hosts/web` serves: the server uses these very types, so the wire format has a single definition. The
+run-creation request also takes an optional `sandbox` string, which the server forwards once the engine supports a
+per-run sandbox.
+
+Both implementations pass the same suite, `clienttest.Run(t, newClient)`: create, send, stream to `RUN_FINISHED`,
+resume from a seq, steer, cancel, approval and `ask_user` round trips, files, validation and ownership.
+A new implementation (a gRPC client, a recorded replay…) is tested by calling it.
+
+A complete front end, in about 25 lines (`hosts/client/example_test.go` compiles and runs it):
+
+```go
+func ask(ctx context.Context, c client.Client, question string) error {
+	th, err := c.CreateThread(ctx, "")
+	if err != nil {
+		return err
+	}
+	run, err := c.Send(ctx, th.ID, question, client.SendOptions{})
+	if err != nil {
+		return err
+	}
+	events, err := c.Events(ctx, run.ID, 0)
+	if err != nil {
+		return err
+	}
+	for ev := range events {
+		switch ev.Type {
+		case agui.TextMessageContent:
+			var e struct{ Delta string }
+			_ = json.Unmarshal(ev.Data, &e)
+			fmt.Print(e.Delta)
+		case agui.RunFinished, agui.RunError:
+			fmt.Println()
+		}
+	}
+	return nil
+}
+
+// in-process:  ask(ctx, client.InProcess(h, "alice", client.WithModels(cfg.LLMModels, "gpt-5")), "Say hello")
+// remote:      ask(ctx, client.HTTP("http://127.0.0.1:8080", os.Getenv("HARNESS_REMOTE_TOKEN")), "Say hello")
+```
+
+A run that ends with `RUN_FINISHED` outcome `interrupt` is waiting for the user: read the interrupt (`reason`,
+`id`) from the event, or the thread's `PendingApproval` / `PendingQuestion`, and answer with `Resume`. A stream
+whose connection cannot be recovered ends with a synthetic `RUN_ERROR` (code `stream_lost`), so a consumer that
+waits for a terminal event never hangs.
+
+**Dependency rules** (`layers_test.go`): `hosts/tui` imports only `hosts/client` and `engine/agui` (never package
+`harness`, `hosts/web`, `hosts/worker`, the store, the features or the sandbox); `hosts/web` and `hosts/worker`
+import no other host; `hosts/client` imports no host above it; `engine/`, `features/`, `store/` and `sandbox/` import no
+host and not the facade, and the facade imports no host. Package `harness` is imported only by the composition roots
+(`cmd/`), `hosts/web`'s server side and `client.InProcess`.
 
 ## Sessions
 
@@ -409,7 +494,8 @@ redisx/                        the Redis adapters: queue + bus, event log, coord
 features/                      optional capabilities a host switches on
   permissions/ gitsafe/ codecheck/ projectdocs/ explore/ plan/ mcp/
   memory/ skills/ goals/ titles/ verify/ artifacts/ workspace/
-hosts/                         ways to drive the engine
+hosts/                         ways to drive the engine, and the contract front ends are written against
+  client/ (the Client contract: in-process + HTTP; client/clienttest = its conformance suite)
   tui/ (terminal)   web/ (HTTP + SSE + embedded UI)   worker/ (headless queue consumer + admin endpoints)
 harness.go                     the facade: New / Send / Events / Steer / Cancel / Resume
 feature*.go profiles.go infra.go   Feature + Builder, the built-in features and profiles, Infra

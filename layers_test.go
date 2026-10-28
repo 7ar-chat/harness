@@ -17,7 +17,7 @@ const module = "github.com/GhaziBenDahmane/harness"
 //	2 engine      the agent loop, LLM clients, tools, runtime, event log, queue, approvals
 //	3 adapters    store implementations (memory, file, Postgres), Redis helpers
 //	4 features    optional capabilities built on the engine (permissions, memory, skills, documents...)
-//	5 hosts       the facade (package harness), TUI, web server, worker
+//	5 hosts       the facade (package harness), the client contract, TUI, web server, worker
 //	9 tooling     benchmarks, long-session tests and commands: may import anything
 func layer(p string) int {
 	rel := strings.TrimPrefix(strings.TrimPrefix(p, module), "/")
@@ -99,6 +99,54 @@ func TestTheLayeringCheckCatchesBadImports(t *testing.T) {
 	}
 }
 
+func TestTheHostRulesCatchBadImports(t *testing.T) {
+	// Arrange: synthetic violations of each rule, and the legal edges next to them.
+	m := module + "/"
+	lines := []string{
+		m + "hosts/tui " + m + " " + m + "hosts/web " + m + "hosts/worker " + m + "engine/agent " + m + "features/memory " +
+			m + "store " + m + "sandbox " + m + "hosts/client " + m + "engine/agui",
+		m + "hosts/web " + m + "hosts/tui " + m + "hosts/client " + m + " " + m + "store",
+		m + "hosts/worker " + m + "hosts/web " + m + "hosts/client " + m + " " + m + "engine/runtime",
+		m + "hosts/client " + m + "hosts/tui " + m + " " + m + "hosts/client/clienttest",
+		m + "engine/agent " + m + "hosts/client",
+		m + "features/memory " + m + "hosts/web",
+		m + " " + m + "hosts/web " + m + "engine/agent",
+		m + "hosts/client/clienttest " + m + "hosts/client " + m + " " + m + "engine/llm/llmtest",
+	}
+
+	// Act
+	got := strings.Join(findViolations(lines), "\n")
+
+	// Assert
+	for _, want := range []string{
+		"hosts/tui imports the facade (package harness) (hosts/tui may import only",
+		"hosts/tui imports hosts/web (hosts/tui may import only",
+		"hosts/tui imports hosts/worker (hosts/tui may import only",
+		"hosts/tui imports engine/agent (hosts/tui may import only",
+		"hosts/tui imports features/memory (hosts/tui may import only",
+		"hosts/tui imports store (hosts/tui may import only",
+		"hosts/tui imports sandbox (hosts/tui may import only",
+		"hosts/web imports hosts/tui (hosts/web must not import another host)",
+		"hosts/worker imports hosts/web (hosts/worker must not import another host)",
+		"hosts/worker imports hosts/client (hosts/worker must not import another host)",
+		"hosts/client imports hosts/tui (hosts/client must not import a host that uses it)",
+		"engine/agent imports hosts/client (the engine must not import hosts or the facade)",
+		"features/memory imports hosts/web (the engine must not import hosts or the facade)",
+		"the facade (package harness) imports hosts/web (hosts import the facade, not the reverse)",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing violation %q in:\n%s", want, got)
+		}
+	}
+	for _, bad := range []string{"hosts/tui imports hosts/client ", "hosts/tui imports engine/agui", "hosts/web imports hosts/client",
+		"hosts/web imports the facade", "hosts/web imports store", "hosts/worker imports the facade", "hosts/worker imports engine/runtime",
+		"hosts/client imports the facade", "hosts/client imports hosts/client/clienttest", "clienttest imports"} {
+		if strings.Contains(got, bad) {
+			t.Errorf("a legal edge was reported (%q):\n%s", bad, got)
+		}
+	}
+}
+
 // findViolations takes `go list` lines ("<package> <imports...>") and returns the import edges that break the layers.
 func findViolations(lines []string) []string {
 	var violations []string
@@ -117,6 +165,9 @@ func findViolations(lines []string) []string {
 			if layer(pkg) < layer(imp) {
 				violations = append(violations, rel+" (layer "+itoa(layer(pkg))+") imports "+irel+" (layer "+itoa(layer(imp))+")")
 			}
+			if v := hostViolation(rel, irel); v != "" {
+				violations = append(violations, v)
+			}
 			if layer(pkg) == 4 && layer(imp) == 4 && !sameFeature(rel, irel) && !allowed(rel, irel) {
 				violations = append(violations, rel+" imports the feature "+irel+" (not an allowed edge)")
 			}
@@ -124,6 +175,51 @@ func findViolations(lines []string) []string {
 	}
 	sort.Strings(violations)
 	return violations
+}
+
+// hostViolation applies the rules between the front ends and the engine. The picture:
+//
+//	engine <- facade (package harness) <- hosts/client (InProcess) <- front ends (hosts/tui, other apps)
+//	                                      hosts/web (HTTP API server) <- hosts/client (HTTP)
+//
+// A front end is written against hosts/client only, so that it works the same on an in-process engine and on a
+// remote server. Hosts do not depend on each other.
+func hostViolation(pkg, imp string) string {
+	isHost := func(p string) bool { return strings.HasPrefix(p, "hosts/") }
+	under := func(p, root string) bool { return p == root || strings.HasPrefix(p, root+"/") }
+	name := func(p string) string {
+		if p == "" {
+			return "the facade (package harness)"
+		}
+		return p
+	}
+	switch {
+	case under(pkg, "hosts/tui"):
+		if imp != "engine/agui" && imp != "hosts/client" && !under(imp, "hosts/tui") {
+			return pkg + " imports " + name(imp) + " (hosts/tui may import only hosts/client and engine/agui)"
+		}
+	case under(pkg, "hosts/web"):
+		if under(imp, "hosts/tui") || under(imp, "hosts/worker") {
+			return pkg + " imports " + imp + " (hosts/web must not import another host)"
+		}
+	case under(pkg, "hosts/worker"):
+		if isHost(imp) && !under(imp, "hosts/worker") {
+			return pkg + " imports " + imp + " (hosts/worker must not import another host)"
+		}
+	case under(pkg, "hosts/client"):
+		if isHost(imp) && !under(imp, "hosts/client") {
+			return pkg + " imports " + imp + " (hosts/client must not import a host that uses it)"
+		}
+	case under(pkg, "engine"), under(pkg, "features"), under(pkg, "store"), under(pkg, "sandbox"), under(pkg, "config"):
+		if isHost(imp) || imp == "" {
+			return pkg + " imports " + name(imp) + " (the engine must not import hosts or the facade)"
+		}
+	case pkg == "":
+		if isHost(imp) {
+			return "the facade (package harness) imports " + imp + " (hosts import the facade, not the reverse)"
+		}
+	}
+	return ""
 }
 
 func itoa(n int) string { return string(rune('0' + n)) }
