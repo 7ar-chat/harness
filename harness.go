@@ -218,6 +218,7 @@ func New(o Options) (*Harness, error) {
 			return nil, err
 		}
 		sbOpts.CheckWrite = codecheck.New(extra).Check
+		sbOpts.Coding = strings.EqualFold(strings.TrimSpace(cfg.AgentProfile), "coding")
 	}
 	if o.Redis != nil {
 		sbOpts.Jobs = sandboxtools.RedisJobs{RDB: o.Redis}
@@ -251,7 +252,7 @@ func New(o Options) (*Harness, error) {
 	hs.Checker, hs.Deliverables = checker, checker
 
 	h.Agent = &agent.Agent{
-		Models: models, Tools: tools.NewRegistry(providers...), Store: st, Steers: h.Bus,
+		Models: models, Tools: newProfile(cfg, reg).Wrap(tools.NewRegistry(providers...)), Store: st, Steers: h.Bus,
 		MaxSteps: cfg.AgentMaxSteps, MaxToolOutputChars: cfg.AgentMaxToolOutputChars,
 		Harness:           hs,
 		ModelTimeout:      time.Duration(cfg.LLMTimeout) * time.Second,
@@ -401,17 +402,18 @@ func autoTitle(text string) string {
 // harnessOptions is the agent's feature configuration (prompt sections, hooks,
 // compaction, approvals).
 func harnessOptions(cfg *config.Config, st store.Store, reg *skills.Registry, artSvc *artifacts.Service, wsSvc *workspace.Service, mgr sandbox.Manager, memSvc *memory.Service) agent.Harness {
+	prof := newProfile(cfg, reg)
 	return agent.Harness{
 		Sections: []agent.PromptSection{
-			reg.PromptSection,
+			prof.skillsSection(reg.PromptSection),
 			projectdocs.Section(mgr),
 			agent.Legacy(artifacts.PromptSection, ""),
 			agent.Part(prompts.Git, agent.Legacy(wsSvc.PromptSection, prompts.GitCheckpoints)),
 			agent.Legacy(func(context.Context, agent.Input) string { return harnesstools.Instructions }, ""),
-			memory.PromptSection(memSvc),
+			prof.memorySection(memory.PromptSection(memSvc)),
 			goals.PromptSection(st),
 		},
-		Context:               []agent.PromptSection{goals.ContextSection(st), memory.RecallSection(memSvc)},
+		Context:               []agent.PromptSection{goals.ContextSection(st), prof.memorySection(memory.RecallSection(memSvc))},
 		Tail:                  []agent.PromptSection{goals.TurnsSection(st)},
 		PromptVariant:         cfg.PromptVariant,
 		Summaries:             st,

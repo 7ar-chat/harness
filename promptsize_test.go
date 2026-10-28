@@ -39,7 +39,7 @@ type fixedOverhead struct {
 }
 
 // sectionNames name harnessOptions' Sections, in order.
-var sectionNames = []string{"skills", "artifacts", "git", "plan/ask_user", "memory", "goals"}
+var sectionNames = []string{"skills", "projectdocs", "artifacts", "git", "plan/ask_user", "memory", "goals"}
 
 // measure builds the real tool list and system prompt of a profile with a
 // local sandbox backend and a fake model.

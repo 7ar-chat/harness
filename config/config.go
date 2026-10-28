@@ -196,6 +196,8 @@ type Config struct {
 	Loop
 	// Harness v3 (stream C2): LLM_PROMPT_VARIANTS, LLM_REASONING_EFFORTS (prompts.go).
 	PromptAndEfforts
+	// Tool and prompt selection per profile: AGENT_TOOLS, SKILLS_IN_CODING, MEMORY_IN_CODING (toolprofile.go).
+	ToolProfile
 	// Stream R: models called through the Responses API (LLM_RESPONSES_MODELS, responses.go).
 	Responses
 	// Web search (Tavily MCP, parity with Work): WEB_SEARCH_ENABLED, WEB_SEARCH_MCP_URL,
