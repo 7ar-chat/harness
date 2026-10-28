@@ -430,7 +430,7 @@ func (i *Installer) planLookup(plan RunPlan) lookupFunc {
 			if att != nil {
 				return installItem{s, att.Package}, true
 			}
-			s, pkg, err := i.Registry.ByName(ctx, rc.Login, name)
+			s, pkg, err := i.Registry.ByName(ctx, name)
 			if err != nil {
 				slog.Warn("skills: skill unavailable", "run_id", rc.RunID, "skill", name, "error", err)
 				return installItem{}, false
@@ -444,7 +444,7 @@ func (i *Installer) planLookup(plan RunPlan) lookupFunc {
 // included (the runtime's checkers).
 func (i *Installer) registryLookup(ctx context.Context, rc tools.RunContext, name string) (installItem, bool) {
 	return i.cached(rc, "\x00registry\x00"+name, func() (installItem, bool) {
-		s, pkg, err := i.Registry.ByName(ctx, rc.Login, name)
+		s, pkg, err := i.Registry.ByName(ctx, name)
 		if err != nil {
 			return installItem{}, false
 		}
@@ -532,7 +532,7 @@ func (i *Installer) scriptRefs(ctx context.Context, rc tools.RunContext, sb sand
 
 // NoteContent is the write_file / edit_file hook: the known skills a written
 // file names (/skills/<name>/, e.g. a model-written script importing
-// studio-brand's brand.py) are needed by the run and installed now, with
+// another skill's module) are needed by the run and installed now, with
 // their dependencies; the file counts as scanned (a command running it does
 // not download it while its size is unchanged).
 func (i *Installer) NoteContent(ctx context.Context, rc tools.RunContext, sb sandbox.Sandbox, p string, content []byte) error {
@@ -567,7 +567,7 @@ var (
 // skill (the sandbox tools' AfterFailedCommand hook): when its output shows a
 // missing file or module and names a skill not yet installed (a
 // /skills/<name>/ path, or a Python module that only that skill's scripts/
-// holds, e.g. brand → studio-brand), the skill is installed (with its
+// holds, e.g. a module → its skill), the skill is installed (with its
 // dependencies) and recorded as needed. It returns the note for the tool
 // result ("Skill <name> was installed; run the command again."; "" when
 // nothing was installed); the command is never re-run (it may not be idempotent).

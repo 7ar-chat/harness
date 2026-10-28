@@ -44,7 +44,7 @@ func newV2RigWith(t *testing.T, builtin fs.FS, vision bool, turns ...llmtest.Tur
 	r.backend.OnCreate = func(sb *sandboxtest.Sandbox) { sb.SetExec(sandboxtest.FindExec(sb, nil)) }
 	v.arts = artifacts.New(r.st, artifacts.PGBlobs{S: r.st}, nil, artifacts.Options{})
 	v.reg = skills.NewRegistry(builtin, r.st)
-	v.inst = &skills.Installer{Registry: v.reg, Store: r.st, Redis: r.rdb}
+	v.inst = &skills.Installer{Registry: v.reg, Redis: r.rdb}
 	h := &r.agent.Harness
 	h.Sections = append([]agent.PromptSection{v.reg.PromptSection, artifacts.PromptSection}, h.Sections...)
 	h.ToolHooks = []agent.ToolHook{v.arts}
@@ -68,7 +68,7 @@ func (v *v2rig) wire() {
 			return v.arts.RestoreWorkspace(ctx, threadID, sb, recreated)
 		}})
 	v.arts.Sandbox = v.mgr
-	v.inst = &skills.Installer{Registry: v.reg, Store: v.st, Redis: v.rdb, Messages: v.st}
+	v.inst = &skills.Installer{Registry: v.reg, Redis: v.rdb, Messages: v.st}
 	v.agent.Tools = tools.NewRegistry(
 		sandboxtools.New(v.mgr, sandboxtools.Options{CommandTimeout: 5 * time.Second, MaxSandboxesPerUser: 5, OnAcquire: v.inst.EnsureRunSkills,
 			BeforeCommand: v.inst.EnsureCommandSkills, OnWrite: v.inst.NoteContent, AfterFailedCommand: v.inst.AfterFailedCommand}),

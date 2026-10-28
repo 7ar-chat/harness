@@ -20,7 +20,7 @@ Prints {"out", "pages"}.
 
 Page x of y in your own reportlab code:
   import sys; sys.path.insert(0, "/skills/pdf/scripts"); from build_pdf import numbered_canvas
-  doc.build(story, canvasmaker=numbered_canvas("Report title", locale="en", font="StudioSans"))
+  doc.build(story, canvasmaker=numbered_canvas("Report title", locale="en", font="DocSans"))
 """
 from __future__ import annotations
 
@@ -36,10 +36,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from blocks import normalize_spec  # noqa: E402  (same normalizer as docx/scripts/new_document.py)
 
-BRAND_DIRS = ["/skills/studio-brand/scripts", os.path.join(HERE, "..", "..", "studio-brand", "scripts")]
 FALLBACK = {"navy": "1B365D", "blue": "2E6DA4", "teal": "2A9D8F", "amber": "E9A23B", "ink": "1A1F2B",
             "slate": "4A5568", "grey": "8C96A3", "rule": "D5DAE1", "mist": "EEF1F5", "white": "FFFFFF"}
-EXAMPLE = {"locale": "en", "title": "Monthly report", "subtitle": "September 2026", "author": "Studio",
+EXAMPLE = {"locale": "en", "title": "Monthly report", "subtitle": "September 2026", "author": "Example",
            "footer": "Monthly report", "blocks": [
                {"type": "toc"}, {"type": "heading", "text": "Highlights", "level": 1},
                {"type": "paragraph", "text": "Activity grew **8%** over the month."},
@@ -54,20 +53,20 @@ LIBERATION = "/usr/share/fonts/truetype/liberation/"
 
 
 def register_fonts():
-    """(sans, mono) embedded TrueType families: Liberation Sans as "StudioSans" (+ -Bold,
-    -Italic, -BoldItalic) and Liberation Mono as "StudioMono". The built-in Helvetica/Courier
+    """(sans, mono) embedded TrueType families: Liberation Sans as "DocSans" (+ -Bold,
+    -Italic, -BoldItalic) and Liberation Mono as "DocMono". The built-in Helvetica/Courier
     are not embedded and miss characters such as œ ’ – (extract.py --check fails on them)."""
     from reportlab.lib.fonts import addMapping
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
 
-    families = {"StudioSans": "LiberationSans", "StudioMono": "LiberationMono"}
+    families = {"DocSans": "LiberationSans", "DocMono": "LiberationMono"}
     out = []
     for name, base in families.items():
         if name not in pdfmetrics.getRegisteredFontNames():
             faces = {"": "Regular", "-Bold": "Bold", "-Italic": "Italic", "-BoldItalic": "BoldItalic"}
             if not all(os.path.isfile(f"{LIBERATION}{base}-{f}.ttf") for f in faces.values()):
-                out.append("Helvetica" if name == "StudioSans" else "Courier")
+                out.append("Helvetica" if name == "DocSans" else "Courier")
                 continue
             for suffix, face in faces.items():
                 pdfmetrics.registerFont(TTFont(name + suffix, f"{LIBERATION}{base}-{face}.ttf"))
@@ -80,11 +79,7 @@ def register_fonts():
 
 
 def load_brand():
-    for d in BRAND_DIRS:
-        if os.path.isfile(os.path.join(d, "brand.py")):
-            sys.path.insert(0, os.path.abspath(d))
-            import brand  # noqa: PLC0415
-            return brand
+    """No external brand module: the built-in palette and styles are used."""
     return None
 
 

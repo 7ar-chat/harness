@@ -149,34 +149,8 @@ type BlobStore interface {
 	CollectBlobs(ctx context.Context, keys []string, grace time.Duration) ([]string, error)
 }
 
-// UserSkill is an uploaded skill package.
-type UserSkill struct {
-	ID        string
-	UserLogin string
-	Name      string
-	// DisplayName is the SKILL.md name (Name is its slug); "" = Name.
-	DisplayName string
-	Description string
-	Version     int
-	SHA256      string
-	Files       int
-	SizeBytes   int64
-	// Package is the canonical zip (only loaded by GetUserSkill).
-	Package   []byte
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-// SkillStore persists user skills, per-user toggles and run-requested skills.
+// SkillStore returns the skills requested for a run (RunOptions.Skills).
 type SkillStore interface {
-	// UpsertUserSkill stores a package; re-uploading a name bumps its version (same id).
-	UpsertUserSkill(ctx context.Context, s UserSkill) (*UserSkill, error)
-	ListUserSkills(ctx context.Context, login string) ([]*UserSkill, error)
-	GetUserSkill(ctx context.Context, login, id string) (*UserSkill, error)
-	DeleteUserSkill(ctx context.Context, login, id string) error
-	// SkillSettings returns the explicit per-user toggles by skill id.
-	SkillSettings(ctx context.Context, login string) (map[string]bool, error)
-	SetSkillEnabled(ctx context.Context, login, skillID string, enabled bool) error
 	// RunSkills returns the skill names requested at run creation.
 	RunSkills(ctx context.Context, runID string) ([]string, error)
 }

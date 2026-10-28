@@ -1,8 +1,6 @@
 ---
 name: charts
-description: Make clear static charts (bar, stacked, horizontal bar, line, area, scatter, pie/donut, waterfall, or any custom matplotlib/seaborn figure) as PNG (200 dpi) or SVG, sized for slides and A4 documents, in the Studio palette, check them (size, dpi, not blank) and embed them in Word, PowerPoint, Excel or PDF deliverables. Use it whenever the user asks for a chart, graph, plot or visualisation, or a document or deck needs a figure. For editable charts inside PowerPoint or Excel see the pptx/xlsx skills (native charts).
-license: Internal (Studio)
-requires: [studio-brand]
+description: Make clear static charts (bar, stacked, horizontal bar, line, area, scatter, pie/donut, waterfall, or any custom matplotlib/seaborn figure) as PNG (200 dpi) or SVG, sized for slides and A4 documents, in a clean default palette, check them (size, dpi, not blank) and embed them in Word, PowerPoint, Excel or PDF deliverables. Use it whenever the user asks for a chart, graph, plot or visualisation, or a document or deck needs a figure. For editable charts inside PowerPoint or Excel see the pptx/xlsx skills (native charts).
 ---
 
 # Charts (matplotlib / seaborn)
@@ -21,8 +19,7 @@ requires: [studio-brand]
 save it in `/workspace/outputs/`. Never put a deliverable in `/workspace/.work/` and never link a file
 there (it is scratch space and is not kept). In your answer, only link files under `/workspace/outputs/`.
 
-Script: `/skills/charts/scripts/make_chart.py` (CLI + importable helpers). It uses the
-`studio-brand` palette and fonts when that skill is installed, an identical built-in fallback otherwise.
+Script: `/skills/charts/scripts/make_chart.py` (CLI + importable helpers). It uses a built-in palette and fonts.
 
 ## 0. Image chart or native chart?
 
@@ -66,7 +63,7 @@ never shrink a big figure into a small slot or stretch it.
 import sys
 sys.path.insert(0, "/skills/charts/scripts")
 import make_chart as mc
-fig, ax = mc.figure("doc")                         # Studio style, Agg backend
+fig, ax = mc.figure("doc")                         # default style, Agg backend
 ax.plot(x, y, label="Actual")
 ax.yaxis.set_major_formatter(mc.axis_formatter("percent", 0, "fr"))
 mc.finish(fig, ax, title="Margin back above target", subtitle="%", source="Source: finance")

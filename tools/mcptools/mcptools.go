@@ -1,4 +1,4 @@
-// Package mcptools exposes tools of configured MCP servers (WORK_MCP_SERVERS).
+// Package mcptools exposes tools of configured MCP servers (MCP_SERVERS).
 package mcptools
 
 import (

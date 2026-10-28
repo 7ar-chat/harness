@@ -101,53 +101,29 @@ func TestPGBlobsAreContentAddressed(t *testing.T) {
 	}
 }
 
-func TestPGUserSkillsVersionTogglesAndRunSkills(t *testing.T) {
-	// Re-uploading a name bumps the version under the same id; toggles and run skills persist; deletion is owner-only.
+func TestPGRunSkills(t *testing.T) {
+	// The skills requested at run creation persist; an unknown run is not found.
 	// Arrange
 	s := newPG(t)
 	ctx := context.Background()
-	up := func(desc string) *store.UserSkill {
-		u, err := s.UpsertUserSkill(ctx, store.UserSkill{UserLogin: "alice", Name: "my-report", Description: desc, SHA256: desc,
-			Package: []byte("zip-" + desc), Files: 1, SizeBytes: 3})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return u
-	}
 	th, _ := s.CreateThread(ctx, "alice", "")
 	in := newRun(th.ID, "go")
 	in.Skills = []string{"docx", "my-report"}
 
 	// Act
-	first, second := up("v1"), up("v2")
-	_ = s.SetSkillEnabled(ctx, "alice", second.ID, false)
-	_ = s.SetSkillEnabled(ctx, "alice", "builtin:docx", true)
-	settings, _ := s.SkillSettings(ctx, "alice")
-	got, _ := s.GetUserSkill(ctx, "alice", second.ID)
 	run, _, err := s.CreateRun(ctx, in)
 	if err != nil {
 		t.Fatal(err)
 	}
 	runSkills, _ := s.RunSkills(ctx, run.ID)
-	foreignDelete := s.DeleteUserSkill(ctx, "bob", second.ID)
-	ownDelete := s.DeleteUserSkill(ctx, "alice", second.ID)
-	after, _ := s.SkillSettings(ctx, "alice")
+	_, unknown := s.RunSkills(ctx, uuid.NewString())
 
 	// Assert
-	if first.ID != second.ID || second.Version != 2 || got.Description != "v2" || string(got.Package) != "zip-v2" {
-		t.Fatalf("first %+v second %+v got %+v", first, second, got)
+	if len(runSkills) != 2 || runSkills[0] != "docx" || runSkills[1] != "my-report" {
+		t.Fatalf("run skills %v", runSkills)
 	}
-	if settings[second.ID] || !settings["builtin:docx"] || len(runSkills) != 2 || runSkills[1] != "my-report" {
-		t.Fatalf("settings %v run skills %v", settings, runSkills)
-	}
-	if !errors.Is(foreignDelete, store.ErrNotFound) || ownDelete != nil {
-		t.Fatalf("deletes %v %v", foreignDelete, ownDelete)
-	}
-	if _, ok := after[second.ID]; ok {
-		t.Fatalf("toggle of a deleted skill kept: %v", after)
-	}
-	if _, err := s.RunSkills(ctx, uuid.NewString()); !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("unknown run: %v", err)
+	if !errors.Is(unknown, store.ErrNotFound) {
+		t.Fatalf("unknown run: %v", unknown)
 	}
 }
 

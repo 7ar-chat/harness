@@ -1,8 +1,6 @@
 ---
 name: docx
-description: Create, edit, check and convert Word documents (.docx) - reports, memos, letters, contracts, minutes. Use it to build a new .docx (JSON spec builder with Studio styling, real table of contents, single-line "Title · Page X of Y" footer), to change an existing document while keeping its styles (cross-run find/replace, template filling, sections, tables, images, TOC), to accept/reject or produce tracked changes, and to convert to PDF. To only read or summarise a .docx, call read_file on it; you do not need this skill for that.
-license: Internal (Studio)
-requires: [studio-brand]
+description: Create, edit, check and convert Word documents (.docx) - reports, memos, letters, contracts, minutes. Use it to build a new .docx (JSON spec builder with default styling, real table of contents, single-line "Title · Page X of Y" footer), to change an existing document while keeping its styles (cross-run find/replace, template filling, sections, tables, images, TOC), to accept/reject or produce tracked changes, and to convert to PDF. To only read or summarise a .docx, call read_file on it; you do not need this skill for that.
 ---
 
 # Word documents (.docx)
@@ -41,8 +39,6 @@ need structure: paragraph indices and styles, fields, tracked changes, sections.
 
 Scripts are in `/skills/docx/scripts/`; run them with `python3` (or `bash` for `.sh`) from
 `/workspace`. They print JSON; on bad input they exit non-zero with an `error` message.
-Studio styling comes from the `studio-brand` skill, installed with this one; `new_document.py` uses it.
-Colours in hand-written python-docx: `run.font.color.rgb = brand.docx_rgb("slate")` (not `brand.rgb()`, a tuple).
 
 ## 0. Decide
 
@@ -77,7 +73,7 @@ python3 /skills/docx/scripts/new_document.py --spec /workspace/.work/spec.json -
   `/skills/pdf/scripts/build_pdf.py`. A bad spec stops with the accepted shapes: fix the spec.
 - Top level: `locale` (fr|en), `title`, `subtitle`, `author`, `date` (any text: "2026-10-06",
   "14 octobre 2025" are written as a date in the locale, other text as is), `title_page`, `header`,
-  `footer`, `landscape`, `template` (a .docx whose styles you inherit), `brand` (default true).
+  `footer`, `landscape`, `template` (a .docx whose styles you inherit).
 - The footer is ONE paragraph "`footer` · Page X of Y" ("Page X sur Y" in French). Never add page numbers yourself.
 - A `toc` block is filled with real entries and page numbers automatically.
 - Charts: make a PNG with the `charts` skill in `/workspace/.work/`, then an `image` block
@@ -129,7 +125,7 @@ python3 /skills/docx/scripts/tracked_changes.py IN.docx --list
 python3 /skills/docx/scripts/tracked_changes.py IN.docx --accept-all --out /workspace/outputs/clean.docx
 python3 /skills/docx/scripts/tracked_changes.py IN.docx --reject-all --out /workspace/outputs/original.docx
 python3 /skills/docx/scripts/tracked_changes.py IN.docx --accept-all --strip-comments --out /workspace/outputs/final.docx
-python3 /skills/docx/scripts/replace.py IN.docx --out /workspace/outputs/proposal.docx --find "old" --replace "new" --track --author "Studio"
+python3 /skills/docx/scripts/replace.py IN.docx --out /workspace/outputs/proposal.docx --find "old" --replace "new" --track --author "Agent"
 ```
 Edits made with python-docx code are NOT tracked; say so if the user expects tracked changes.
 

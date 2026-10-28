@@ -11,7 +11,7 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
-// MCPServer is one entry of WORK_MCP_SERVERS.
+// MCPServer is one entry of MCP_SERVERS.
 type MCPServer struct {
 	Name    string            `json:"name"`
 	URL     string            `json:"url"`
@@ -101,7 +101,7 @@ type Config struct {
 	SandboxUnhealthyRecreate int `env:"SANDBOX_UNHEALTHY_RECREATE_SECONDS" envDefault:"300"`
 	MaxSandboxesPerUser      int `env:"MAX_SANDBOXES_PER_USER" envDefault:"5"`
 
-	MCPServersJSON string `env:"WORK_MCP_SERVERS"`
+	MCPServersJSON string `env:"MCP_SERVERS"`
 	MCPServers     []MCPServer
 
 	GlitchtipDSN string `env:"GLITCHTIP_API_DSN"`
@@ -143,19 +143,9 @@ type Config struct {
 	GitArchiveMaxBytes   int64 `env:"WORK_GIT_ARCHIVE_MAX_BYTES" envDefault:"52428800"`
 	CheckpointMaxFile    int64 `env:"WORK_WORKSPACE_CHECKPOINT_MAX_FILE_BYTES" envDefault:"20971520"`
 
-	// Skills marketplace sync (AstraForge's ASTRAFORGE_SKILLS_MARKETPLACE_*,
-	// README "Skills marketplace sync"): the skills/ of a GitLab repository
-	// become global skills. Enabled when a source path, a token or a
-	// username + password is set; the runtime syncs every interval (one
-	// replica, Redis lock) and `work skills-sync` syncs once.
-	SkillsMarketplaceRepoURL      string `env:"WORK_SKILLS_MARKETPLACE_REPO_URL" envDefault:""`
-	SkillsMarketplaceBranch       string `env:"WORK_SKILLS_MARKETPLACE_BRANCH" envDefault:"main"`
-	SkillsMarketplaceToken        string `env:"WORK_SKILLS_MARKETPLACE_TOKEN"`
-	SkillsMarketplaceUsername     string `env:"WORK_SKILLS_MARKETPLACE_USERNAME"`
-	SkillsMarketplacePassword     string `env:"WORK_SKILLS_MARKETPLACE_PASSWORD"`
-	SkillsMarketplaceSourcePath   string `env:"WORK_SKILLS_MARKETPLACE_SOURCE_PATH"`
-	SkillsMarketplaceSyncInterval int    `env:"WORK_SKILLS_MARKETPLACE_SYNC_INTERVAL_SECONDS" envDefault:"86400"`
-	SkillsMarketplaceTimeout      int    `env:"WORK_SKILLS_MARKETPLACE_TIMEOUT_SECONDS" envDefault:"300"`
+	// SkillsDir is the user skills directory (SKILLS_DIR; "" = ~/.config/harness/skills,
+	// see SkillsPath): one <name>/SKILL.md folder per skill.
+	SkillsDir string `env:"SKILLS_DIR"`
 
 	// Memory (Work parity, README "Memory"): write policy (warn records missing
 	// triggers, strict blocks them), delete mode (soft keeps the entry as
@@ -186,10 +176,6 @@ type Config struct {
 	ToolProfile
 	// Stream R: models called through the Responses API (LLM_RESPONSES_MODELS, responses.go).
 	Responses
-	// Web search (Tavily MCP, parity with Work): WEB_SEARCH_ENABLED, WEB_SEARCH_MCP_URL,
-	// WORK_MANAGED_TOKEN_MODE, WORK_TOKEN_EXCHANGE_*, WORK_MANAGED_TOKEN_MIN_VALIDITY_SECONDS,
-	// WORK_TOKEN_ENCRYPTION_KEY (websearch.go, README "Web search").
-	WebSearch
 	// Harness v3 runtime & API (stream B): RUNTIME_TERMINATION_GRACE_SECONDS,
 	// MAX_STREAMS_PER_USER, APPROVAL_TTL_HOURS, APPROVAL_RISKY_TOOL_PATTERNS (runtime_api.go).
 	RuntimeAPI
@@ -231,19 +217,19 @@ func (c *Config) normalize() error {
 	}
 	if strings.TrimSpace(c.MCPServersJSON) != "" {
 		if err := json.Unmarshal([]byte(c.MCPServersJSON), &c.MCPServers); err != nil {
-			return fmt.Errorf("WORK_MCP_SERVERS: %w", err)
+			return fmt.Errorf("MCP_SERVERS: %w", err)
 		}
 		seen := map[string]bool{}
 		for _, s := range c.MCPServers {
 			if s.Name == "" || s.URL == "" {
-				return fmt.Errorf("WORK_MCP_SERVERS: every server needs name and url")
+				return fmt.Errorf("MCP_SERVERS: every server needs name and url")
 			}
 			if seen[s.Name] {
-				return fmt.Errorf("WORK_MCP_SERVERS: duplicate server name %q", s.Name)
+				return fmt.Errorf("MCP_SERVERS: duplicate server name %q", s.Name)
 			}
 			seen[s.Name] = true
 			if _, err := url.Parse(s.URL); err != nil {
-				return fmt.Errorf("WORK_MCP_SERVERS: server %q: %w", s.Name, err)
+				return fmt.Errorf("MCP_SERVERS: server %q: %w", s.Name, err)
 			}
 		}
 	}
@@ -251,9 +237,6 @@ func (c *Config) normalize() error {
 		return err
 	}
 	if err := c.normalizeHarness(); err != nil {
-		return err
-	}
-	if err := c.normalizeWebSearch(); err != nil {
 		return err
 	}
 	if err := c.normalizeRuntimeAPI(); err != nil {

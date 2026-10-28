@@ -1,10 +1,19 @@
 package config
 
-import "strings"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+)
 
-// SkillsMarketplaceConfigured reports whether the marketplace sync can run
-// (AstraForge's SKILLS_MARKETPLACE_SYNC_CONFIGURED).
-func (c *Config) SkillsMarketplaceConfigured() bool {
-	return strings.TrimSpace(c.SkillsMarketplaceSourcePath) != "" || strings.TrimSpace(c.SkillsMarketplaceToken) != "" ||
-		strings.TrimSpace(c.SkillsMarketplaceUsername) != "" && strings.TrimSpace(c.SkillsMarketplacePassword) != ""
+// SkillsPath is the user skills directory: SKILLS_DIR, else
+// ~/.config/harness/skills ("" when the home directory is unknown).
+func (c *Config) SkillsPath() string {
+	if d := strings.TrimSpace(c.SkillsDir); d != "" {
+		return d
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return filepath.Join(home, ".config", "harness", "skills")
+	}
+	return ""
 }

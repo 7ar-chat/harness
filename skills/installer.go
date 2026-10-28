@@ -40,7 +40,6 @@ const (
 // run needs is decided lazily (lazy.go); loading a skill never starts a sandbox.
 type Installer struct {
 	Registry *Registry
-	Store    store.SkillStore
 	Redis    redis.UniversalClient
 	// Messages reads the thread's history: the skills loaded or used in its
 	// earlier runs are installed again (nil: this run's only).

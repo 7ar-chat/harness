@@ -47,5 +47,3 @@ wb.close()
   `xlsxwriter.Workbook(path, {"strings_to_numbers": True})`.
 - `wb = xlsxwriter.Workbook(path, {"constant_memory": True})` for very large sheets (write rows
   in order).
-- With studio-brand: `fmts = brand.xlsxwriter_formats(wb)` gives header/text/integer/number/
-  percent/eur/date/title formats.

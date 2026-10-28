@@ -1,8 +1,6 @@
 ---
 name: xlsx
 description: Create, edit and check Excel workbooks (.xlsx/.xlsm) - financial models, budgets, trackers, data tables, pivot-style summaries, Excel exports. Formulas are written as live Excel formulas (not typed results), recalculated with LibreOffice and checked for #REF!/#DIV/0!/#NAME? errors, typed totals and numbers stored as text. Covers number formats, widths, freeze panes, conditional formatting, validation, Excel tables, native charts, and editing a workbook while keeping its formulas, styles and charts. To only read a workbook or CSV, call read_file (sheet=...) or use pandas; you do not need this skill for that.
-license: Internal (Studio)
-requires: [studio-brand]
 ---
 
 # Excel workbooks (.xlsx)
@@ -66,10 +64,8 @@ Rules (the user opens the file in Excel and expects a working model):
    VLOOKUP, IF, IFERROR, ROUND, TEXT, DATE, EOMONTH, NPV/IRR/PMT. Not XLOOKUP, LET, LAMBDA,
    FILTER, UNIQUE, SORT or dynamic arrays (they give `#NAME?` in the check).
 - openpyxl (create and edit, the default): `reference/openpyxl.md` (styles, formats, widths,
-  tables, conditional formatting, validation, names, charts, images, print setup). With
-  studio-brand: `brand.xlsx_header(ws)`, `brand.xlsx_autofit(ws)`, `brand.XLSX_FORMATS`; colours
-  `Font(color=brand.xlsx_color("navy"))`, `cell.fill = brand.xlsx_fill("mist")` (never `brand.hex_()`:
-  openpyxl rejects the "#"; `cell.fill` takes a PatternFill, not a colour string).
+  tables, conditional formatting, validation, names, charts, images, print setup).
+  `cell.fill` takes a PatternFill, not a colour string, and openpyxl colours have no "#".
 - xlsxwriter (create only; fast, rich charts): `reference/xlsxwriter.md`.
 - pandas: `df.to_excel(writer, sheet_name="Data", index=False)` with `pd.ExcelWriter(path,
   engine="openpyxl")`, then reopen with openpyxl for formats and formulas.

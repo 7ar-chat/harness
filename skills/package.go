@@ -1,7 +1,9 @@
-// Package skills is the skill registry of Work Chat: built-in skills embedded
-// in the binary (work/skills/builtin) plus private user packages (zip), package
-// validation with the Studio Cowork limits, per-user toggles and the sandbox
-// installer used by the load_skill tool.
+// Package skills is the skill registry: a skill is a folder with a SKILL.md
+// (frontmatter name and description) and optional scripts and references.
+// Sources are the built-in skills embedded in the binary, an optional extra
+// fs.FS, and the user directory; package validation applies generic size and
+// path limits, and the installer copies the skills a run needs into its
+// sandbox under /skills/<name>/ (used by the load_skill tool).
 package skills
 
 import (
@@ -11,7 +13,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -28,10 +29,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Limits, copied from Work (ai/cowork/skill_packages.py): the frontmatter name
-// and description are bounded in UTF-8 bytes (256 B / 16 KiB) like Work; the
-// name is a free display name, the identifier (mentions, /skills/<name>/) is
-// its slug (Slug).
+// Package limits: the frontmatter name and description are bounded in UTF-8
+// bytes (256 B / 16 KiB); the name is a free display name, the identifier
+// (RunOptions.Skills, /skills/<name>/) is its slug (Slug).
 const (
 	MaxEntries          = 500
 	MaxDirectoryDepth   = 16
@@ -94,7 +94,7 @@ type Package struct {
 	// a list of skill names), installed with it.
 	Requires []string
 	// Uses are the other skills its own files (not the markdown) name as
-	// /skills/<name>/, e.g. a script importing studio-brand's brand.py:
+	// /skills/<name>/, e.g. a script importing another skill's module:
 	// implicit dependencies, installed with it (only the known ones).
 	Uses []string
 	// Body is SKILL.md without its frontmatter.
@@ -749,9 +749,6 @@ func Slug(name string) string {
 	}
 	return s
 }
-
-// ErrBuiltin means the operation is not allowed on built-in skills.
-var ErrBuiltin = errors.New("built-in skills cannot be deleted")
 
 // Digest is the hex sha256 of data.
 func Digest(data []byte) string {

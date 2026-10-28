@@ -22,11 +22,11 @@ import (
 func TestReferencedFindsOnlyKnownSkillFoldersAtTheStartOfAWord(t *testing.T) {
 	// Referenced returns the known skills a command names as /skills/<name>/ or /skills/<name> ending a word; other paths, unknown names and file names like /skills/docx.zip do not count.
 	// Arrange
-	known := []string{"docx", "xlsx", "studio-brand"}
+	known := []string{"docx", "xlsx", "shared-kit"}
 	cases := map[string][]string{
 		"python3 /skills/docx/scripts/new_document.py --out a.docx": {"docx"},
 		"ls /skills/xlsx": {"xlsx"},
-		`cat "/skills/xlsx/SKILL.md";ls '/skills/studio-brand'`:      {"xlsx", "studio-brand"},
+		`cat "/skills/xlsx/SKILL.md";ls '/skills/shared-kit'`:        {"xlsx", "shared-kit"},
 		"ls /home/skills/docx/ /x/skills/xlsx/":                      nil,
 		"cp /skills/docx.zip . && echo /skills/docx. ":               nil,
 		"python3 /skills/unknown/x.py /skills/docx/a /skills/docx/b": {"docx"},
@@ -90,7 +90,7 @@ func TestLoadedInListsTheSkillsAHistoryLoadedOrUsed(t *testing.T) {
 		{Role: store.RoleAssistant, ToolCalls: []store.ToolCall{
 			call("c1", "load_skill", `{"name":"docx"}`),
 			call("c2", "load_skill", `{"name":"pptx"}`),
-			call("c3", "write_file", `{"path":"a.py","content":"sys.path.insert(0, '/skills/studio-brand/scripts')"}`),
+			call("c3", "write_file", `{"path":"a.py","content":"sys.path.insert(0, '/skills/shared-kit/scripts')"}`),
 			call("c4", "edit_file", `{"path":"b.py","oldText":"x","newText":"open('/skills/xlsx/SKILL.md')"}`),
 			call("c5", "write_file", `{"path":"c.py","content":"open('/skills/charts/x')"}`),
 		}},
@@ -104,7 +104,7 @@ func TestLoadedInListsTheSkillsAHistoryLoadedOrUsed(t *testing.T) {
 	got := skills.LoadedIn(msgs)
 
 	// Assert
-	if want := []string{"docx", "studio-brand", "xlsx", "pdf"}; !slices.Equal(got, want) {
+	if want := []string{"docx", "shared-kit", "xlsx", "pdf"}; !slices.Equal(got, want) {
 		t.Fatalf("LoadedIn = %v, want %v", got, want)
 	}
 }
@@ -120,7 +120,7 @@ func TestConcurrentInstallsFromTwoRuntimesInstallASkillOnce(t *testing.T) {
 	sb := sandboxtest.NewSandbox("sb-1")
 	sb.SetWriteErr(func(string) error { time.Sleep(2 * time.Millisecond); return nil }) // slow uploads widen the race
 	rc := tools.RunContext{ThreadID: "th-1", RunID: "run-1", Login: "alice"}
-	replicas := []*skills.Installer{{Registry: reg, Store: st, Redis: rdb}, {Registry: reg, Store: st, Redis: rdb}}
+	replicas := []*skills.Installer{{Registry: reg, Redis: rdb}, {Registry: reg, Redis: rdb}}
 
 	// Act
 	var wg sync.WaitGroup

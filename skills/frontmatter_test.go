@@ -41,11 +41,11 @@ func TestEveryBuiltinDescriptionIsItsSkillMdText(t *testing.T) {
 	})
 
 	// Act
-	list, err := reg.List(context.Background(), "alice")
+	list := reg.List(context.Background())
 
 	// Assert
-	if err != nil || len(files) < 6 {
-		t.Fatalf("err %v files %d", err, len(files))
+	if len(files) < 5 {
+		t.Fatalf("files %d", len(files))
 	}
 	got := map[string]string{}
 	for _, s := range list {
