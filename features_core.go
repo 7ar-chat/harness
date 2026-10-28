@@ -20,6 +20,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/features/permissions"
 	"github.com/GhaziBenDahmane/harness/features/plan"
 	"github.com/GhaziBenDahmane/harness/features/projectdocs"
+	"github.com/GhaziBenDahmane/harness/sandbox"
 )
 
 // Names of the built-in features (Feature.Name, Builder.Has, Builder.Require).
@@ -155,11 +156,29 @@ func Plan() Feature {
 	}}
 }
 
-// ProjectDocs adds the project documents (AGENTS.md and the like) found in the
-// workspace to the prompt.
+// ProjectDocs adds the instructions of the project and of the user (AGENTS.md,
+// CLAUDE.md, GEMINI.md, Cursor and Copilot files, .har/instructions.md; see
+// package projectdocs) to the prompt, and the notes of subdirectories to the
+// results of read_file, write_file and edit_file. The user's own ~/.har/AGENTS.md
+// is read with the local backend, or when HARNESS_USER_INSTRUCTIONS is set.
 func ProjectDocs() Feature {
 	return builtin{FeatureProjectDocs, func(b *Builder) error {
-		b.Section(projectdocs.Section(b.Sandboxes))
+		o := projectdocs.Options{Manager: b.Sandboxes}
+		if b.Config.LocalSandbox() || b.Config.UserInstructions {
+			o.UserDir = config.UserDir()
+		}
+		docs := projectdocs.New(o)
+		b.Section(docs.Section)
+		b.SandboxTools(func(so *sandboxtools.Options) {
+			prev := so.AfterPath
+			so.AfterPath = func(ctx context.Context, rc tools.RunContext, sb sandbox.Sandbox, p string) string {
+				note := docs.AfterPath(ctx, rc, sb, p)
+				if prev != nil {
+					note = strings.TrimSpace(prev(ctx, rc, sb, p) + "\n" + note)
+				}
+				return note
+			}
+		})
 		return nil
 	}}
 }

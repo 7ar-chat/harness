@@ -54,6 +54,7 @@ func (b *binding) edit(ctx context.Context, in editInput) (*editOutput, error) {
 		return nil, err
 	}
 	out.Path = p
+	out.Notice = joinNotes(out.Notice, b.pathNote(ctx, p))
 	return out, nil
 }
 

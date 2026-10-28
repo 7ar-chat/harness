@@ -76,6 +76,9 @@ type Config struct {
 	AgentPermissionsAllow string `env:"AGENT_PERMISSIONS_ALLOW"`
 	AgentPermissionsAsk   string `env:"AGENT_PERMISSIONS_ASK"`
 	AgentPermissionsDeny  string `env:"AGENT_PERMISSIONS_DENY"`
+	// UserInstructions is HARNESS_USER_INSTRUCTIONS: read the host user's ~/.har/AGENTS.md even with a remote
+	// sandbox backend (the local backend always reads it). Off for servers: the host's home is not the tenants'.
+	UserInstructions bool `env:"HARNESS_USER_INSTRUCTIONS"`
 
 	OpenSandboxURL            string   `env:"OPENSANDBOX_URL"`
 	OpenSandboxAPIKey         string   `env:"OPENSANDBOX_API_KEY"`

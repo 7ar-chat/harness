@@ -86,6 +86,9 @@ func (b *binding) read(ctx context.Context, in readInput) (string, error) {
 	if byteTruncated {
 		out += fmt.Sprintf("[The file is %d bytes; only the first %d bytes were read. Use execute_command (e.g. tail -c, sed -n) or search_files for the rest.]\n", size, maxReadBytes)
 	}
+	if note := b.pathNote(ctx, p); note != "" {
+		out += note + "\n"
+	}
 	return out, nil
 }
 
