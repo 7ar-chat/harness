@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -132,11 +133,39 @@ func render(events <-chan store.Event) {
 			fmt.Printf("\n[tool] %v\n", e["toolCallName"])
 		case agui.ToolCallResult:
 			fmt.Printf("[result] %s\n", clip(fmt.Sprint(e["content"]), 200))
+		case agui.RunFinished:
+			printUsage(e["usage"])
 		case agui.RunError:
 			fmt.Printf("\n[error] %v\n", e["message"])
 		}
 	}
 }
+
+// printUsage prints the token and prompt-cache figures of a finished run and the process memory,
+// the numbers to watch when tuning cost and footprint.
+func printUsage(raw any) {
+	list, _ := raw.([]any)
+	var in, out, cached int
+	for _, u := range list {
+		m, _ := u.(map[string]any)
+		in += int(num(m["inputTokens"]))
+		out += int(num(m["outputTokens"]))
+		cached += int(num(m["cachedInputTokens"]))
+	}
+	if in+out == 0 {
+		return
+	}
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	hit := 0
+	if in > 0 {
+		hit = cached * 100 / in
+	}
+	fmt.Printf("\n[usage] in %d (cached %d, %d%%) out %d · heap %.0f MiB, sys %.0f MiB\n",
+		in, cached, hit, out, float64(ms.HeapAlloc)/(1<<20), float64(ms.Sys)/(1<<20))
+}
+
+func num(v any) float64 { f, _ := v.(float64); return f }
 
 func clip(s string, n int) string {
 	s = strings.ReplaceAll(s, "\n", " ")

@@ -19,6 +19,7 @@
 package harness
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -53,6 +54,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/store/memstore"
 	"github.com/GhaziBenDahmane/harness/titles"
 	"github.com/GhaziBenDahmane/harness/tools"
+	"github.com/GhaziBenDahmane/harness/tools/exploretools"
 	"github.com/GhaziBenDahmane/harness/tools/harnesstools"
 	"github.com/GhaziBenDahmane/harness/tools/mcptools"
 	"github.com/GhaziBenDahmane/harness/tools/memorytools"
@@ -225,8 +227,15 @@ func New(o Options) (*Harness, error) {
 		go sbTools.KeepResumingJobs(context.Background(), 2*time.Minute, nil)
 	}
 	memSvc := memory.New(st, memory.OptionsFromConfig(cfg))
+	var explore tools.Provider
+	if sbTools != nil && strings.EqualFold(strings.TrimSpace(cfg.AgentProfile), "coding") {
+		if m := cmp.Or(cfg.ExploreModel, cfg.LLMDefaultModel); m != "" {
+			explore = &exploretools.Provider{Source: sbTools, Models: models, Model: m}
+		}
+	}
 	providers := []tools.Provider{
 		nilProvider(sbTools),
+		explore,
 		&skilltools.Provider{Registry: reg, Installer: installer, Sandbox: mgr},
 		nilProvider(mcpProvider),
 		harnesstools.New(st),

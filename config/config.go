@@ -56,6 +56,9 @@ type Config struct {
 	LLMAPIVersion string `env:"LLM_API_VERSION" envDefault:"2025-04-01-preview"`
 	LLMBaseURL    string `env:"LLM_BASE_URL"`
 	LLMAPIKey     string `env:"LLM_API_KEY"`
+	// ExploreModel is EXPLORE_MODEL: the model of the read-only explore sub-agent of the coding profile
+	// (default LLM_DEFAULT_MODEL; a cheaper model saves the most).
+	ExploreModel string `env:"EXPLORE_MODEL"`
 	// CodeChecks is CODE_CHECKS: ".ext=command;…" syntax checks run after write_file/edit_file ({path} is the
 	// file; see codecheck.Defaults). They are on with AGENT_PROFILE=coding, or whenever this is set.
 	CodeChecks string `env:"CODE_CHECKS"`
@@ -230,6 +233,9 @@ func (c *Config) normalize() error {
 	}
 	if c.LLMDefaultModel != "" && !c.ModelAllowed(c.LLMDefaultModel) {
 		c.LLMModels = append([]string{c.LLMDefaultModel}, c.LLMModels...)
+	}
+	if c.ExploreModel = strings.TrimSpace(c.ExploreModel); c.ExploreModel != "" && !c.ModelAllowed(c.ExploreModel) {
+		c.LLMModels = append(c.LLMModels, c.ExploreModel)
 	}
 	switch c.LLMProvider {
 	case "gateway", "openai", "anthropic":
