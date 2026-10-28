@@ -221,7 +221,7 @@ func (v *Verifier) check(ctx context.Context, run *store.Run, p string, base *ag
 	if !ok {
 		return failed("no checker for this file type")
 	}
-	if v.o.Sandbox == nil {
+	if v.o.Sandbox == nil || run.Sandbox == store.SandboxOff {
 		return failed("could not run (no sandbox)")
 	}
 	sb, err := v.o.Sandbox.Get(ctx, run.ThreadID)

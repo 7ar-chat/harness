@@ -644,7 +644,7 @@ func (i *Installer) InstallWithDependencies(ctx context.Context, rc tools.RunCon
 // the user's catalog (disabled skills included) and cached per run, for the
 // runtime's own checkers (verify.Options.EnsureSkill).
 func (i *Installer) EnsureSkill(ctx context.Context, run *store.Run, sb sandbox.Sandbox, name string) error {
-	rc := tools.RunContext{ThreadID: run.ThreadID, RunID: run.ID, Login: run.UserLogin}
+	rc := tools.RunContext{ThreadID: run.ThreadID, RunID: run.ID, Login: run.UserLogin, Sandbox: run.Sandbox}
 	if _, ok := i.registryLookup(ctx, rc, name); !ok {
 		return fmt.Errorf("skill %s: %w", name, ErrNotFound)
 	}

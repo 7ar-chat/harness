@@ -43,7 +43,7 @@ type SandboxSpiller struct {
 
 // SpillOutput implements OutputSpiller.
 func (s SandboxSpiller) SpillOutput(ctx context.Context, rc RunContext, toolCallID, content string) (string, error) {
-	if s.Sandboxes == nil || !s.Sandboxes.Enabled() {
+	if s.Sandboxes == nil || !s.Sandboxes.Enabled() || rc.Sandbox == SandboxOff {
 		return "", ErrNoSpill
 	}
 	sb, err := s.Sandboxes.Get(ctx, rc.ThreadID)

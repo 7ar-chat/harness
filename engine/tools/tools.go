@@ -9,11 +9,17 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 )
 
+// SandboxOff is RunContext.Sandbox of a run without sandbox.
+const SandboxOff = "off"
+
 // RunContext identifies the run a tool set is built for.
 type RunContext struct {
 	ThreadID string
 	RunID    string
 	Login    string
+	// Sandbox is the run's sandbox mode ("", "auto", "on" or "off"): with "off"
+	// the sandbox tools offer nothing and no sandbox is used.
+	Sandbox string
 }
 
 // Provider contributes tools to a run.

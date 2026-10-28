@@ -274,14 +274,33 @@ func (c *Config) ModelAllowed(model string) bool {
 	return false
 }
 
-// SandboxEnabled reports whether sandbox tools are configured.
-func (c *Config) SandboxEnabled() bool {
-	return c.LocalSandbox() || strings.TrimSpace(c.OpenSandboxURL) != ""
+// Names of the built-in sandbox backends (SANDBOX_BACKEND).
+const (
+	BackendOpenSandbox = "opensandbox"
+	BackendLocal       = "local"
+	BackendNone        = "none"
+)
+
+// SandboxBackendName is the name of the selected sandbox backend (lower case):
+// SANDBOX_BACKEND when set (a built-in or one a host registered with
+// sandbox.Register), else "opensandbox" when OPENSANDBOX_URL is set, else
+// "none".
+func (c *Config) SandboxBackendName() string {
+	if n := strings.ToLower(strings.TrimSpace(c.SandboxBackend)); n != "" {
+		return n
+	}
+	if strings.TrimSpace(c.OpenSandboxURL) != "" {
+		return BackendOpenSandbox
+	}
+	return BackendNone
 }
+
+// SandboxEnabled reports whether sandbox tools are configured.
+func (c *Config) SandboxEnabled() bool { return c.SandboxBackendName() != BackendNone }
 
 // LocalSandbox reports whether tools run on this machine (SANDBOX_BACKEND=local).
 func (c *Config) LocalSandbox() bool {
-	return strings.EqualFold(strings.TrimSpace(c.SandboxBackend), "local")
+	return c.SandboxBackendName() == BackendLocal
 }
 
 // EgressMode is the effective sandbox egress: "disabled" (no sandbox), "allowlist"
@@ -289,7 +308,7 @@ func (c *Config) LocalSandbox() bool {
 // with SANDBOX_EGRESS_UNRESTRICTED=true; otherwise an error is returned.
 func (c *Config) EgressMode() (string, error) {
 	switch {
-	case !c.SandboxEnabled() || c.LocalSandbox():
+	case c.SandboxBackendName() != BackendOpenSandbox: // none, local or a host's own backend (its own isolation)
 		return "disabled", nil
 	case len(c.SandboxEgressAllowlist) > 0:
 		return "allowlist", nil

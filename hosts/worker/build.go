@@ -103,7 +103,7 @@ func describe(h *harness.Harness, cfg *config.Config, o Options) Wiring {
 	case cfg.LocalSandbox():
 		w.Sandbox = "local"
 	case cfg.SandboxEnabled():
-		w.Sandbox = "opensandbox"
+		w.Sandbox = cfg.SandboxBackendName()
 	}
 	return w
 }

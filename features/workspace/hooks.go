@@ -34,7 +34,7 @@ var _ agent.RunStartHook = (*Service)(nil)
 // sandbox is live checkpoints it first (never creates one; a sandbox created
 // later in the run is checkpointed by OnAcquire).
 func (s *Service) BeforeRun(ctx context.Context, run *store.Run) {
-	if !s.Enabled() {
+	if !s.Enabled() || run.Sandbox == store.SandboxOff {
 		return
 	}
 	sb, err := s.Sandbox.Get(ctx, run.ThreadID)

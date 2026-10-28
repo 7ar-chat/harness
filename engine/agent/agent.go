@@ -158,7 +158,7 @@ func (a *Agent) Run(ctx context.Context, in Input, w eventlog.Writer) (Result, e
 	cleanup := func() {}
 	if a.Tools != nil {
 		toolList, cleanup, err = a.Tools.Tools(ctx, tools.RunContext{
-			ThreadID: in.Run.ThreadID, RunID: in.Run.ID, Login: in.Run.UserLogin,
+			ThreadID: in.Run.ThreadID, RunID: in.Run.ID, Login: in.Run.UserLogin, Sandbox: in.Run.Sandbox,
 		})
 		if err != nil {
 			slog.Warn("agent: tools unavailable", "run_id", in.Run.ID, "error", err)
