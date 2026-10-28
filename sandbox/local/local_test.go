@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -207,5 +208,42 @@ func TestPreparingTheWorkspaceLeavesTheProjectClean(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Join(ws, ".work", ".gitignore")); string(b) != "*\n" {
 		t.Errorf(".work/.gitignore = %q", b)
+	}
+}
+
+func TestAJobWithHugeOutputDoesNotLoadItIntoMemory(t *testing.T) {
+	// Arrange: a command that writes 100 MB of output, as a runaway loop would
+	sb, _ := newSandbox(t)
+	ctx := context.Background()
+	dir := "/workspace/.work/jobs/big"
+	env := map[string]string{"HARNESS_JOB_DIR": dir, "HARNESS_JOB_CMD_B64": b64("head -c 100000000 /dev/zero | tr '\\0' x"), "HARNESS_JOB_WAIT": "0"}
+	if _, err := sb.Exec(ctx, sandbox.ExecRequest{Command: "# work:job-start\n", Env: env}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(90 * time.Second)
+	for time.Now().Before(deadline) {
+		var out strings.Builder
+		_, _ = sb.Exec(ctx, sandbox.ExecRequest{Command: "# work:job-status\n", Env: map[string]string{"HARNESS_JOB_DIR": dir, "HARNESS_HEAD": "100", "HARNESS_TAIL": "100"},
+			OnStdout: func(s string) { out.WriteString(s) }})
+		if strings.Contains(out.String(), "status finished") {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Act
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	var status strings.Builder
+	_, err := sb.Exec(ctx, sandbox.ExecRequest{Command: "# work:job-status\n", Env: map[string]string{"HARNESS_JOB_DIR": dir, "HARNESS_HEAD": "100", "HARNESS_TAIL": "100"},
+		OnStdout: func(s string) { status.WriteString(s) }})
+	runtime.ReadMemStats(&after)
+
+	// Assert
+	if err != nil || !strings.Contains(status.String(), "stdout 100000000 ") {
+		t.Fatalf("status %q err %v", status.String(), err)
+	}
+	if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 32<<20 {
+		t.Fatalf("job-status allocated %d MiB for a 100 MB output: it must read only the head and the tail", allocated>>20)
 	}
 }

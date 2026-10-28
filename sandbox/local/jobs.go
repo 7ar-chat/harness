@@ -106,7 +106,9 @@ func (in *Instance) follow(ctx context.Context, dir string, req sandbox.ExecRequ
 				continue
 			}
 			if _, err := f.Seek(offs[name], io.SeekStart); err == nil {
-				if b, _ := io.ReadAll(f); len(b) > 0 {
+				// At most maxPump per pass: a runaway command can write gigabytes between two passes, and the
+				// live output is capped downstream anyway; the backlog drains on the next passes.
+				if b, _ := io.ReadAll(io.LimitReader(f, maxPump)); len(b) > 0 {
 					offs[name] += int64(len(b))
 					emit(in.virtualText(string(b)))
 				}
@@ -168,11 +170,9 @@ func (in *Instance) jobStatus(_ context.Context, req sandbox.ExecRequest) (sandb
 		return s
 	}
 	for _, name := range []string{"stdout", "stderr"} {
-		data, _ := os.ReadFile(filepath.Join(dir, name))
-		h, t := data, []byte(nil)
-		if len(data) > head+tail {
+		h, t, size := headTail(filepath.Join(dir, name), head, tail)
+		if size > int64(head+tail) {
 			small = false
-			h, t = data[:head], data[len(data)-tail:]
 		}
 		hs, ts := "", ""
 		if len(h) > 0 {
@@ -181,7 +181,7 @@ func (in *Instance) jobStatus(_ context.Context, req sandbox.ExecRequest) (sandb
 		if len(t) > 0 {
 			ts = b64(t)
 		}
-		fmt.Fprintf(&out, "%s %d %s %s\n", name, len(data), dash(hs), dash(ts))
+		fmt.Fprintf(&out, "%s %d %s %s\n", name, size, dash(hs), dash(ts))
 	}
 	if req.Env["HARNESS_JOB_CLEAN"] == "1" && status == "finished" && small {
 		_ = os.RemoveAll(dir)
@@ -207,4 +207,33 @@ func (in *Instance) jobKill(_ context.Context, req sandbox.ExecRequest) (sandbox
 		_ = syscall.Kill(-pid, syscall.SIGKILL)
 	}
 	return exit(0)
+}
+
+// maxPump bounds what the live-output pump reads from a job's output file in one pass.
+const maxPump = 256 << 10
+
+// headTail returns the first head and the last tail bytes of the file and its size; a file of at most
+// head+tail bytes comes back whole as the head. It never reads more than head+tail bytes, whatever the
+// size of the file (a runaway job can write gigabytes).
+func headTail(path string, head, tail int) (h, t []byte, size int64) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, nil, 0
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil, nil, 0
+	}
+	size = st.Size()
+	if size <= int64(head+tail) {
+		h, _ = io.ReadAll(f)
+		return h, nil, size
+	}
+	h = make([]byte, head)
+	n, _ := f.ReadAt(h, 0)
+	h = h[:n]
+	t = make([]byte, tail)
+	n, _ = f.ReadAt(t, size-int64(tail))
+	return h, t[:n], size
 }

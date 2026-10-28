@@ -10,6 +10,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
@@ -34,7 +36,11 @@ func main() {
 	priceIn := flag.Float64("price-in", 0, "USD per 1M uncached input tokens (enables the cost estimate)")
 	priceCached := flag.Float64("price-cached", 0, "USD per 1M cached input tokens")
 	priceOut := flag.Float64("price-out", 0, "USD per 1M output tokens")
+	pprofAddr := flag.String("pprof", "", "serve net/http/pprof on this address (e.g. 127.0.0.1:6060) to profile memory and CPU of a run")
 	flag.Parse()
+	if *pprofAddr != "" {
+		go func() { fmt.Fprintln(os.Stderr, "pprof:", http.ListenAndServe(*pprofAddr, nil)) }()
+	}
 	if *tier != "" && *tier != "all" && *tier != bench.TierEasy && *tier != bench.TierHard && *tier != bench.TierLong {
 		fatal(fmt.Errorf("-tier must be easy, hard, long or all"))
 	}
