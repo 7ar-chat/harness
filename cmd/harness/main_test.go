@@ -24,6 +24,7 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	os.Setenv("LOCAL_STATE_DIR", dir)
+	os.Setenv("HOME", dir) // not the developer's ~/.har
 	code := m.Run()
 	os.RemoveAll(dir)
 	os.Exit(code)
