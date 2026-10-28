@@ -6,7 +6,7 @@
 // sandboxtest.RunConformance, which checks the adapter's own contract:
 //
 //	func TestToolsConformance(t *testing.T) {
-//		conformance.Run(t, func(t *testing.T) sandbox.Backend { return myadapter.New(...) })
+//		conformance.Run(t, func(t *testing.T) sandbox.Backend { return myadapter.New(...) }, memstore.New())
 //	}
 package conformance
 
@@ -22,15 +22,24 @@ import (
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/engine/tools/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/store/memstore"
+	"github.com/GhaziBenDahmane/harness/store"
 )
 
+// Store is what Run needs from the store: a sandbox.Store that also creates threads.
+type Store interface {
+	sandbox.Store
+	CreateThread(ctx context.Context, login, title string) (*store.Thread, error)
+}
+
 // Run drives the sandbox tools on a backend through a real sandbox.Manager.
-func Run(t *testing.T, newBackend func(t *testing.T) sandbox.Backend) {
+//
+// st persists the sandbox ids of threads: pass a memstore.New() (it also holds
+// the threads, which is why it is a parameter: this package sits below the
+// store implementations).
+func Run(t *testing.T, newBackend func(t *testing.T) sandbox.Backend, st Store) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	st := memstore.New()
 	th, err := st.CreateThread(ctx, "conformance", "t")
 	if err != nil {
 		t.Fatal(err)

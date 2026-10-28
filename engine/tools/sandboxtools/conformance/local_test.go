@@ -8,6 +8,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/engine/tools/sandboxtools/conformance"
 	"github.com/GhaziBenDahmane/harness/sandbox"
 	"github.com/GhaziBenDahmane/harness/sandbox/local"
+	"github.com/GhaziBenDahmane/harness/store/memstore"
 )
 
 // The local backend answers the job scripts natively and runs search_files'
@@ -19,5 +20,5 @@ func TestToolsConformanceOnTheLocalBackend(t *testing.T) {
 			t.Fatal(err)
 		}
 		return b
-	})
+	}, memstore.New())
 }
