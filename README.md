@@ -323,6 +323,15 @@ process died are marked `interrupted` (with a terminal `RUN_ERROR`) at the next 
 per directory (flock). The journal is compacted on open when it holds many superseded records or
 deleted threads.
 
+### Where a key may be sent
+
+A repository you clone can contain a `.har/config.yml`. It may choose models, headers, the profile and most
+other settings, but **not the address your API key goes to**: if the project file alone sets a provider's
+`base_url` (and a key would be sent there, from `auth.json`, `LLM_API_KEY` or an `api_key_env` variable), the
+harness refuses to start and says so. Put the address in `~/.har/config.yml` (`providers.<name>.base_url`) or set
+`LLM_BASE_URL` in the environment if you trust it. A project may repeat the address your user file already
+defines, and local addresses (`localhost`) need no trust.
+
 ## Sandbox definition
 
 `sandbox-image/` holds the sandbox image (`Dockerfile`: Python/Node/LibreOffice/pandoc/… toolchain,

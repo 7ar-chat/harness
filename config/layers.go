@@ -64,6 +64,9 @@ type Layers struct {
 	MCPSources []string
 	// MCPSkipped are the MCP servers that were not started and why.
 	MCPSkipped []string
+
+	// userBaseURL is the flat base_url of the user file ("" when it sets none).
+	userBaseURL string
 }
 
 // Load reads the configuration: built-in defaults, then ~/.har/config.yml, then
@@ -136,6 +139,9 @@ func LoadWith(o LoadOptions) (*Config, error) {
 				ly.ProjectFile = file
 			}
 			for k, v := range doc.values {
+				if layer.user && k == "LLM_BASE_URL" {
+					ly.userBaseURL = v
+				}
 				ly.Values[k] = v
 				ly.Sources[k] = layer.src
 			}
