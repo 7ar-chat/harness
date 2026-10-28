@@ -19,7 +19,7 @@ pptx.defineSlideMaster({
   background: { color: "FFFFFF" },
   objects: [
     { rect: { x: 0.65, y: 1.32, w: 0.9, h: 0.05, fill: { color: TEAL } } },
-    { text: { text: "Studio - Example", options: { x: 0.6, y: 7.05, w: 6, h: 0.3, fontFace: font, fontSize: 10, color: GREY } } },
+    { text: { text: "Example", options: { x: 0.6, y: 7.05, w: 6, h: 0.3, fontFace: font, fontSize: 10, color: GREY } } },
   ],
   slideNumber: { x: 12.2, y: 7.05, w: 0.5, h: 0.3, fontFace: font, fontSize: 10, color: GREY, align: "right" },
 });

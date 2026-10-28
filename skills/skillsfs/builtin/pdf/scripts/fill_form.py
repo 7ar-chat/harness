@@ -143,7 +143,7 @@ def flatten(writer):
             bbox = [float(v) for v in stream.get("/BBox", [0, 0, x1 - x0, y1 - y0])]
             bw, bh = (bbox[2] - bbox[0]) or 1, (bbox[3] - bbox[1]) or 1
             sx, sy = (x1 - x0) / bw, (y1 - y0) / bh
-            name = f"/StudioFlat{count}"
+            name = f"/FlatField{count}"
             count += 1
             xobjects[NameObject(name)] = normal if hasattr(normal, "idnum") else writer._add_object(stream)
             ops.append(f"q {sx:.4f} 0 0 {sy:.4f} {x0 - bbox[0] * sx:.4f} {y0 - bbox[1] * sy:.4f} cm {name} Do Q")

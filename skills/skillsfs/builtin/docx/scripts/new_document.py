@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a .docx from a JSON spec with python-docx (Studio styling by default).
+"""Build a .docx from a JSON spec with python-docx.
 
 Usage:
   python3 new_document.py --spec spec.json --out /workspace/outputs/report.docx
@@ -8,7 +8,6 @@ Usage:
 Spec (all keys optional except blocks):
 {
   "locale": "fr",                 # fr | en  (dates, "Page x sur y", language)
-  "brand": true,                  # apply studio-brand styles (needs /skills/studio-brand)
   "template": "path.docx",        # start from an existing document/template instead
   "title": "...", "subtitle": "...", "author": "...",
   "date": "2026-10-06",           # or "14 octobre 2025" / "7 October 2026"; other text is kept as is
@@ -46,10 +45,9 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BRAND_DIRS = ["/skills/studio-brand/scripts", os.path.join(HERE, "..", "..", "studio-brand", "scripts")]
 
 EXAMPLE = {
-    "locale": "en", "title": "Quarterly review", "subtitle": "Q3 2026", "author": "Studio",
+    "locale": "en", "title": "Quarterly review", "subtitle": "Q3 2026", "author": "Example",
     "title_page": True, "footer": "Quarterly review - Q3 2026",
     "blocks": [
         {"type": "toc", "title": "Contents"},
@@ -72,11 +70,7 @@ INLINE = re.compile(r"(\*\*.+?\*\*|\*[^*]+?\*|`[^`]+?`|\[[^\]]+?\]\([^)]+?\))")
 
 
 def load_brand():
-    for d in BRAND_DIRS:
-        if os.path.isfile(os.path.join(d, "brand.py")):
-            sys.path.insert(0, os.path.abspath(d))
-            import brand  # noqa: PLC0415
-            return brand
+    """No external brand module: the built-in palette and styles are used."""
     return None
 
 
@@ -225,8 +219,6 @@ def build(spec, out):
     locale = spec.get("locale", "fr")
     doc = docx.Document(spec["template"]) if spec.get("template") else docx.Document()
     brand = load_brand() if spec.get("brand", True) else None
-    if spec.get("brand", True) and brand is None:
-        print("warning: studio-brand not installed (load_skill studio-brand); using template styles", file=sys.stderr)
     if brand:
         brand.docx_apply(doc, locale)
     if spec.get("landscape"):

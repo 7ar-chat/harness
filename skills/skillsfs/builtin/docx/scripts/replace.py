@@ -7,7 +7,7 @@ copied byte for byte.
 Usage:
   python3 replace.py IN.docx --out OUT.docx --find "2025" --replace "2026"
   python3 replace.py IN.docx --out OUT.docx --pairs pairs.json      # {"old": "new", ...} or [["old","new"], ...]
-  python3 replace.py IN.docx --inplace --find "ACME" --replace "Contoso" --track --author "Studio"
+  python3 replace.py IN.docx --inplace --find "ACME" --replace "Contoso" --track --author "Agent"
   python3 replace.py IN.docx --dry-run --find "\\bQ(\\d)\\b" --replace "T\\1" --regex
 
 Options:
@@ -201,7 +201,7 @@ def main(argv=None) -> int:
     ap.add_argument("--regex", action="store_true")
     ap.add_argument("--ignore-case", action="store_true")
     ap.add_argument("--track", action="store_true")
-    ap.add_argument("--author", default="Studio")
+    ap.add_argument("--author", default="Agent")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--strict", action="store_true")
     args = ap.parse_args(argv)

@@ -15,16 +15,11 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-sys.path.insert(0, "/skills/studio-brand/scripts")
-try:
-    import brand
-    FONT = brand.reportlab_fonts()            # Liberation Sans TTF as "StudioSans" (+ -Bold/-Italic)
-except ImportError:                           # studio-brand not loaded: register the TTF yourself
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-    pdfmetrics.registerFont(TTFont("StudioSans", "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"))
-    pdfmetrics.registerFont(TTFont("StudioSans-Bold", "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"))
-    FONT = "StudioSans"
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+pdfmetrics.registerFont(TTFont("DocSans", "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"))
+pdfmetrics.registerFont(TTFont("DocSans-Bold", "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"))
+FONT = "DocSans"
 
 os.makedirs("/workspace/.work", exist_ok=True)
 PILImage.new("RGB", (900, 400), (27, 54, 93)).save("/workspace/.work/fig.png")
@@ -49,7 +44,7 @@ t.setStyle(TableStyle([("FONTNAME", (0, 0), (-1, -1), FONT), ("FONTNAME", (0, 0)
                        ("LINEBELOW", (0, 0), (-1, -1), 0.4, colors.HexColor("#D5DAE1"))]))
 story += [t, Spacer(1, 12), Image("/workspace/.work/fig.png", width=15 * cm, height=15 * cm * 400 / 900)]
 doc = SimpleDocTemplate("/workspace/.work/platypus.pdf", pagesize=A4, leftMargin=2.2 * cm, rightMargin=2.2 * cm,
-                        topMargin=2.2 * cm, bottomMargin=2.2 * cm, title="Exemple", author="Studio")
+                        topMargin=2.2 * cm, bottomMargin=2.2 * cm, title="Exemple", author="Example")
 doc.build(story, onFirstPage=footer, onLaterPages=footer)
 ```
 "Page x of y" needs the total page count, so the canvas must defer its pages. Import the
@@ -65,7 +60,7 @@ from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate
 sys.path.insert(0, "/skills/pdf/scripts")
 from build_pdf import numbered_canvas, register_fonts
 
-sans, mono = register_fonts()                # embedded Liberation Sans / Mono ("StudioSans", "StudioMono")
+sans, mono = register_fonts()                # embedded Liberation Sans / Mono ("DocSans", "DocMono")
 body = ParagraphStyle("body", fontName=sans, fontSize=10.5, leading=14.5)
 story = [Paragraph("First page", body), PageBreak(), Paragraph("Second page", body)]
 doc = SimpleDocTemplate("/workspace/.work/numbered.pdf", pagesize=A4)

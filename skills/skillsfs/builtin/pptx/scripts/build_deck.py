@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Build a 16:9 .pptx deck from a JSON spec with python-pptx, using a consistent grid
-(0.6 in margins, title band, body area, footer) and the Studio palette. Native, editable
+(0.6 in margins, title band, body area, footer) and the default palette. Native, editable
 charts and tables. Runs the fit_text.py checks at the end (and shrinks overflowing text, never
 below fit_text.MIN_PT = 12 pt, unless --no-fix); the result has "ok"/"layout_ok", "checks",
 "next_step" and "issues".
@@ -51,9 +51,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-BRAND_DIRS = ["/skills/studio-brand/scripts", os.path.join(HERE, "..", "..", "studio-brand", "scripts")]
 
-# Fallback when studio-brand is not installed (same values as studio-brand/scripts/brand.py).
+# Default palette and font.
 FALLBACK = {
     "PALETTE": {"navy": "1B365D", "blue": "2E6DA4", "sky": "8DB8DE", "teal": "2A9D8F", "amber": "E9A23B",
                 "coral": "C8553D", "ink": "1A1F2B", "slate": "4A5568", "grey": "8C96A3", "rule": "D5DAE1",
@@ -63,7 +62,7 @@ FALLBACK = {
 }
 
 EXAMPLE = {
-    "footer": "Studio - Example deck", "numbers": True,
+    "footer": "Example deck", "numbers": True,
     "slides": [
         {"type": "title", "title": "Quarterly business review", "subtitle": "Q3 2026", "date": "6 October 2026"},
         {"type": "bullets", "title": "Three things to remember", "bullets": [
@@ -177,11 +176,7 @@ def normalize_spec(spec):
 
 
 def load_brand():
-    for d in BRAND_DIRS:
-        if os.path.isfile(os.path.join(d, "brand.py")):
-            sys.path.insert(0, os.path.abspath(d))
-            import brand  # noqa: PLC0415
-            return brand
+    """No external brand module: the built-in palette and styles are used."""
     return None
 
 
@@ -199,7 +194,6 @@ class Deck:
         if self.brand:
             self.P, self.CC, self.FONT = self.brand.PALETTE, self.brand.CHART_COLORS, self.brand.FONTS["office"]
         else:
-            print("warning: studio-brand not installed; using built-in fallback palette", file=sys.stderr)
             self.P, self.CC, self.FONT = FALLBACK["PALETTE"], FALLBACK["CHART_COLORS"], FALLBACK["FONT"]
         if spec.get("template"):
             self.prs = Presentation(spec["template"])
@@ -311,10 +305,10 @@ class Deck:
             self.brand.pptx_footer(slide, self.prs, text, number)
         else:
             if text:
-                self.textbox(slide, self.M, self.H - 0.45, self.W / 2, 0.3, text, 10, "grey", name="Studio footer")
+                self.textbox(slide, self.M, self.H - 0.45, self.W / 2, 0.3, text, 10, "grey", name="Footer")
             if number is not None:
                 self.textbox(slide, self.W - self.M - 1, self.H - 0.45, 1, 0.3, str(number), 10, "grey",
-                             align="right", name="Studio footer number")
+                             align="right", name="Footer number")
 
     def notes(self, slide, spec):
         if spec.get("notes"):

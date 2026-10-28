@@ -1,8 +1,6 @@
 ---
 name: pdf
 description: Create, manipulate and check PDF files - extract text or tables (to CSV/Excel), merge, split, reorder, delete or rotate pages, fill PDF forms (AcroForm), add a watermark or stamp, produce a PDF report, letter or export (JSON spec builder sharing the docx spec format, reportlab, or Word/HTML/Markdown converted to PDF), and check a PDF deliverable (text layer, fonts embedded, glyphs). OCR of scanned PDFs is not available. To only read or summarise a PDF, call read_file on it (pages="1-3"); you do not need this skill for that.
-license: Internal (Studio)
-requires: [studio-brand]
 ---
 
 # PDF
@@ -103,11 +101,10 @@ python3 /skills/pdf/scripts/watermark.py IN.pdf OUT.pdf --text "DRAFT"
 python3 /skills/pdf/scripts/watermark.py IN.pdf OUT.pdf --text "Copie pour M. X" --position footer
 python3 /skills/pdf/scripts/watermark.py IN.pdf OUT.pdf --overlay stamp.png --position top-right --width-pt 90
 ```
-Do not add confidentiality classifications yourself: Studio labels downloaded files.
 
 ## 5. Create a PDF
 
-1. **Report-like document**: JSON spec -> `build_pdf.py` (Studio styling, embedded fonts, page x of y,
+1. **Report-like document**: JSON spec -> `build_pdf.py` (embedded fonts, page x of y,
    bookmarks, TOC). It takes exactly the docx builder's spec, shorthand included
    (`{"heading": "Intro"}`, `{"paragraph": "..."}`, a bare string), so one spec gives both formats.
    ```bash
@@ -134,7 +131,7 @@ Charts: a PNG from the `charts` skill as an `image` block.
 | `opens` | pypdf/pdfplumber cannot open the file | rebuild it (or `qpdf` repair) |
 | `pages` | no page | rebuild it |
 | `text` | no text layer at all, or a blank page | build from text; remove the blank page / fix the page break |
-| `fonts_embedded` | a font used for text is not embedded (the 14 standard PDF fonts are accepted) | use a TrueType font (`build_pdf.py`, `register_fonts()`, `brand.reportlab_fonts()`) |
+| `fonts_embedded` | a font used for text is not embedded (the 14 standard PDF fonts are accepted) | use a TrueType font (`build_pdf.py`, `register_fonts()`) |
 | `glyphs` | characters without a glyph (U+FFFD, notdef: shown as boxes) | a font that covers the text (Liberation Sans / DejaVu Sans) |
 
 Forms: `fill_form.py OUT.pdf --list` shows the values you set.

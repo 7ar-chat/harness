@@ -1,8 +1,6 @@
 ---
 name: pptx
-description: Create, edit and check PowerPoint decks (.pptx) - presentations, pitches, steering-committee or training decks, speaker notes. Use it to build a new deck (JSON spec builder with native charts and tables, Studio grid and fonts), to change an existing deck while keeping its formatting (cross-run text replace, add/duplicate/reorder/delete slides, charts, tables, images, templates), and to check the layout (overflow, overlaps, off-slide or stretched images, font sizes, titles). To only read or summarise a .pptx, call read_file on it; you do not need this skill for that.
-license: Internal (Studio)
-requires: [studio-brand]
+description: Create, edit and check PowerPoint decks (.pptx) - presentations, pitches, steering-committee or training decks, speaker notes. Use it to build a new deck (JSON spec builder with native charts and tables, grid and fonts), to change an existing deck while keeping its formatting (cross-run text replace, add/duplicate/reorder/delete slides, charts, tables, images, templates), and to check the layout (overflow, overlaps, off-slide or stretched images, font sizes, titles). To only read or summarise a .pptx, call read_file on it; you do not need this skill for that.
 ---
 
 # PowerPoint decks (.pptx)
@@ -74,7 +72,7 @@ Details: `reference/design.md`.
 
 ### 3a. Default for every new deck: JSON spec -> `build_deck.py`
 Native, editable charts and tables, wrapped table cells with row heights from the text, the
-Studio grid, footer and slide numbers; it runs the same checks as `fit_text.py` at the end.
+grid, footer and slide numbers; it runs the same checks as `fit_text.py` at the end.
 ```json
 {
   "footer": "Renewable energy - briefing",
@@ -122,7 +120,7 @@ express. Tested patterns in `reference/python-pptx.md`. Rules: 16:9 (`prs.slide_
 rectangles + text boxes; `text_frame.word_wrap = True` on every text box; pictures with
 `add_picture_fit` (fitted inside their box: a full-width picture runs off the slide, a guessed
 width and height stretches it); delete placeholders you do not fill. A deck you create from scratch
-this way gets `prs.core_properties.identifier = "studio-work:agent-deck"` (as `build_deck.py` does):
+this way gets `prs.core_properties.identifier = "harness:agent-deck"` (as `build_deck.py` does):
 `fit_text.py` then fails its overlaps; in decks without it (uploads) overlaps are only warnings.
 
 ### 3c. pptxgenjs alternative
@@ -146,7 +144,7 @@ this way gets `prs.core_properties.identifier = "studio-work:agent-deck"` (as `b
    Anything else (chart data with `chart.replace_data(...)`, a table cell, a slide from a layout):
    python-pptx code. To change text but keep its formatting set `run.text`;
    `text_frame.text = ...` resets it.
-4. New text follows the deck's fonts and sizes (read them with `inspect_pptx.py`), not Studio's.
+4. New text follows the deck's fonts and sizes (read them with `inspect_pptx.py`).
 5. Run the FINISH GATE after every text change: translations grow and overflow.
 
 ## 5. Verify (the FINISH GATE in detail)
@@ -159,7 +157,7 @@ this way gets `prs.core_properties.identifier = "studio-work:agent-deck"` (as `b
 | `text_fits` | text taller than its box, or no-wrap / long word wider than it | shorten, wrap on, bigger box, split the slide |
 | `tables_fit` | wrapped cell text taller than its row | row heights from the text (`build_deck.py`), wider column, fewer rows |
 | `inside_slide` | a shape, picture or group child outside the slide | move or resize it; fit pictures in their box |
-| `overlap` | two shapes overlap (one not inside the other) in a deck the agent made (`build_deck.py`, or identifier `studio-work:agent-deck`, §3b); in other decks (uploaded) it is a warning (`"detail": "warning: ..."`), and with `fit_text.py --baseline ORIGINAL.pptx` only overlaps the original did not have fail | move them apart or align them |
+| `overlap` | two shapes overlap (one not inside the other) in a deck the agent made (`build_deck.py`, or identifier `harness:agent-deck`, §3b); in other decks (uploaded) it is a warning (`"detail": "warning: ..."`), and with `fit_text.py --baseline ORIGINAL.pptx` only overlaps the original did not have fail | move them apart or align them |
 | `images` | a picture is stretched (ratio differs from the image) | width and height from the image ratio |
 | `min_font` | text below 12 pt (footer below 10 pt); a smaller size inherited from the template's layout/master is only a warning | bigger font, less text, split the slide |
 | `titles` | a slide without any text, or an empty title placeholder | write the message title |
@@ -183,4 +181,4 @@ Summarise the deck (slide count, structure) and link it:
 - python-pptx's default template is 4:3; layout placeholders keep their 4:3 positions: set every position explicitly.
 - `add_textbox` does not wrap by default.
 - Chart number formats are Excel formats (`'0.0'`, `'0%'`); set `number_format_is_linked = False`.
-- Use Arial (studio-brand) or the template's fonts: other fonts are substituted at render time.
+- Use Arial or the template's fonts: other fonts are substituted at render time.

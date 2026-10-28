@@ -62,7 +62,7 @@ BLOCKING = tuple(t for types in CHECKS.values() for t in types)
 WARNINGS = {"overlap": ("overlap_warning",), "min_font": ("small_font_inherited",)}
 # build_deck.py (and the agent's own python-pptx code, pptx SKILL.md 3b) writes it into
 # core_properties.identifier: the agent laid the deck out, so its overlaps fail.
-BUILT_MARKER = "studio-work:agent-deck"
+BUILT_MARKER = "harness:agent-deck"
 FOOTER_PH = ("SLIDE_NUMBER", "FOOTER", "DATE", "HEADER")
 CMD = "python3 /skills/pptx/scripts/fit_text.py"
 A = "http://schemas.openxmlformats.org/drawingml/2006/main"

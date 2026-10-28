@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publication-quality static charts (matplotlib) in the Studio style, sized for slides
+"""Publication-quality static charts (matplotlib) in the default style, sized for slides
 and documents. Use as a CLI with a JSON spec or CSV, or import the helpers.
 
 CLI:
@@ -45,9 +45,8 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BRAND_DIRS = ["/skills/studio-brand/scripts", os.path.join(HERE, "..", "..", "studio-brand", "scripts")]
 
-# Fallback (same values as studio-brand) so charts work even if studio-brand is not loaded.
+# Default palette.
 CHART_COLORS = ["1B365D", "2E6DA4", "2A9D8F", "E9A23B", "C8553D", "7D5BA6", "8C96A3", "8AA05B"]
 PALETTE = {"ink": "1A1F2B", "slate": "4A5568", "grey": "8C96A3", "rule": "D5DAE1", "mist": "EEF1F5",
            "navy": "1B365D", "muted": "C9D1DB", "positive": "2E7D32", "negative": "C62828"}
@@ -66,14 +65,7 @@ _brand = None
 def brand():
     global _brand
     if _brand is None:
-        for d in BRAND_DIRS:
-            if os.path.isfile(os.path.join(d, "brand.py")):
-                sys.path.insert(0, os.path.abspath(d))
-                import brand as b  # noqa: PLC0415
-                _brand = b
-                break
-        else:
-            _brand = False
+        _brand = False  # no external brand module: the built-in palette and style are used
     return _brand or None
 
 
@@ -83,7 +75,7 @@ def colors():
 
 
 def setup():
-    """Apply the Studio matplotlib style (Agg backend, fonts, colours, grid)."""
+    """Apply the matplotlib style (Agg backend, fonts, colours, grid)."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -152,7 +144,7 @@ def finish(fig, ax, title=None, subtitle=None, source=None, legend=None):
 
 # Written into every chart make_chart.py saves (PNG "Software" text chunk, JPEG comment, SVG dc:creator):
 # --check applies the chart checks (size, dpi, aspect) only to marked images.
-CHART_MARKER = "Studio Work make_chart.py"
+CHART_MARKER = "harness make_chart.py"
 
 
 def save(fig, out, dpi=DPI):

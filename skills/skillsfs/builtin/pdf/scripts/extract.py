@@ -136,7 +136,7 @@ def run_checks(path, password=None):
     if missing:
         add("fonts_embedded", False, f"fonts not embedded: {', '.join(missing[:6])}: viewers substitute them and the "
                                      "layout changes; use a TrueType font (build_pdf.py does; reportlab: "
-                                     "brand.reportlab_fonts() or register LiberationSans with TTFont)")
+                                     "register LiberationSans with TTFont)")
     else:
         detail = f"{len(used)} fonts used, all embedded" if used else "no text fonts"
         if standard:

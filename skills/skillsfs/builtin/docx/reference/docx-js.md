@@ -24,7 +24,7 @@ const cell = (text, opts = {}) => new TableCell({
 });
 
 const doc = new Document({
-  creator: "Studio",
+  creator: "Example",
   title: "Example report",
   styles: {
     default: { document: { run: { font: "Arial", size: 21 } } },          // size in half-points
