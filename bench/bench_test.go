@@ -24,6 +24,7 @@ func needs(t *testing.T, task bench.Task) {
 func TestEveryTaskFailsBeforeTheFixAndPassesWithTheReferenceSolution(t *testing.T) {
 	for _, task := range bench.Builtin() {
 		t.Run(task.Name, func(t *testing.T) {
+			t.Parallel()
 			// Arrange
 			needs(t, task)
 			ctx := context.Background()
