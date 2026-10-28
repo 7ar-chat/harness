@@ -17,7 +17,7 @@ import (
 // (or {LLM_BASE_URL}/responses for the openai provider), over the provider's
 // HTTP client (timeouts, X-Use-Case, x-userinfo, CallInfo).
 func (p *Provider) responsesModel(name string) (model.ToolCallingChatModel, error) {
-	_, bare := SplitModel(name)
+	bare := p.wireName(name)
 	header := http.Header{}
 	var u string
 	switch p.cfg.LLMProvider {

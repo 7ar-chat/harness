@@ -86,6 +86,17 @@ func SplitModel(id string) (provider, name string) {
 	return DefaultGatewayProvider, id
 }
 
+// wireName is the model id sent in the request body: the Studio gateway carries the
+// provider in its URL, so only the bare name is sent; any other OpenAI-compatible
+// endpoint (a router, OpenRouter) gets the id exactly as configured, slashes included.
+func (p *Provider) wireName(id string) string {
+	if p.cfg.LLMProvider == "gateway" {
+		_, bare := SplitModel(id)
+		return bare
+	}
+	return id
+}
+
 // GatewayBaseURL is the Azure-style base URL of a model on the Studio llm-gateway:
 // {gateway}/usecase/{uc}/providers/{provider}/models/{model}/.
 func GatewayBaseURL(gatewayURL, useCase, modelID string) string {
@@ -120,7 +131,7 @@ func (p *Provider) Model(ctx context.Context, name string) (model.ToolCallingCha
 		p.models[name] = m
 		return m, nil
 	}
-	_, bare := SplitModel(name)
+	bare := p.wireName(name)
 	mc := &einoopenai.ChatModelConfig{
 		Model:      bare,
 		HTTPClient: p.client,

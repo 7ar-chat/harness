@@ -2,6 +2,7 @@ package llm_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -106,5 +107,31 @@ func TestReasoningEffortIsSentInTheRequest(t *testing.T) {
 	// Assert
 	if err != nil || !strings.Contains(body, `"reasoning_effort":"minimal"`) {
 		t.Fatalf("err %v body %s", err, body)
+	}
+}
+
+func TestOpenAIProviderSendsTheModelIdWithItsSlashes(t *testing.T) {
+	// A router or OpenRouter id such as "ocg/deepseek-v4.1-flash" is one model name, not provider/model.
+	// Arrange
+	var sent string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Model string `json:"model"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		sent = body.Model
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"1","object":"chat.completion","model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"pong"},"finish_reason":"stop"}]}`))
+	}))
+	t.Cleanup(ts.Close)
+	f := llm.New(&config.Config{LLMProvider: "openai", LLMBaseURL: ts.URL + "/v1", LLMAPIKey: "k", LLMModels: []string{"ocg/deepseek-v4.1-flash"}, LLMTimeout: 10})
+	m, _ := f.Model(context.Background(), "ocg/deepseek-v4.1-flash")
+
+	// Act
+	_, err := m.Generate(context.Background(), []*schema.Message{schema.UserMessage("ping")})
+
+	// Assert
+	if err != nil || sent != "ocg/deepseek-v4.1-flash" {
+		t.Fatalf("err %v sent model %q", err, sent)
 	}
 }
