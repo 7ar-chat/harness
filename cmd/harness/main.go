@@ -1,151 +1,138 @@
-// Command harness is a minimal terminal client of the harness library: one
-// in-process harness, one thread, AG-UI events rendered as text. It is a
-// reference for building a real TUI.
+// Command harness is the terminal client of the harness library: one
+// in-process harness, one thread.
 //
 //	LLM_PROVIDER=openai LLM_API_KEY=… LLM_MODELS=gpt-5 \
 //	OPENSANDBOX_URL=http://localhost:8090 harness -model gpt-5
 //
-// Type a message and press enter; type it while a run is going to steer the
-// run; Ctrl-C cancels the run; /quit leaves.
+// Modes:
+//
+//	harness                  interactive terminal UI (when stdin is a terminal)
+//	harness -p "prompt"      print mode: the answer on stdout, tool activity on stderr
+//	echo prompt | harness    print mode, the prompt read from stdin
+//	harness -p … -json       print mode emitting the AG-UI events as JSON lines
+//
+// Print mode exits 0 on success, 1 when the run failed or was cancelled and 2
+// when it ended waiting for an answer or an approval.
 package main
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 
 	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/agui"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/store"
+	"github.com/GhaziBenDahmane/harness/tui"
 )
 
 func main() {
-	model := flag.String("model", "", "model id (default LLM_DEFAULT_MODEL)")
-	user := flag.String("user", "local", "user login")
-	flag.Parse()
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	stat, _ := os.Stdin.Stat()
+	isTTY := stat != nil && stat.Mode()&os.ModeCharDevice != 0
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	code := run(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr, isTTY, newHarness)
+	stop()
+	os.Exit(code)
+}
+
+// factory builds the harness of a run of the command.
+type factory func(cfg *config.Config) (*harness.Harness, error)
+
+func newHarness(cfg *config.Config) (*harness.Harness, error) {
+	return harness.New(harness.Options{Config: cfg, Version: "cli"})
+}
+
+type options struct {
+	model, user, prompt string
+	json, auto          bool
+}
+
+func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, isTTY bool, mk factory) int {
+	var o options
+	fs := flag.NewFlagSet("harness", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.StringVar(&o.model, "model", "", "model id (default LLM_DEFAULT_MODEL)")
+	fs.StringVar(&o.user, "user", "local", "user login")
+	fs.StringVar(&o.prompt, "p", "", "print mode: send this prompt (and stdin, if piped), print the answer, exit")
+	fs.BoolVar(&o.json, "json", false, "print mode: emit the AG-UI events as JSON lines on stdout")
+	fs.BoolVar(&o.auto, "auto", false, "interactive UI: do not ask for approval of risky tool calls")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: slog.LevelWarn})))
+
+	prompt, err := resolvePrompt(o.prompt, stdin, isTTY)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	printMode := prompt != ""
+	if !printMode && !isTTY {
+		return fail(stderr, errors.New("no prompt: pass -p, pipe one on stdin, or run in a terminal"))
+	}
 
 	cfg, err := config.Load()
 	if err != nil {
-		fatal(err)
+		return fail(stderr, err)
 	}
-	if *model == "" {
-		*model = cfg.LLMDefaultModel
+	if o.model == "" {
+		o.model = cfg.LLMDefaultModel
 	}
-	if *model == "" {
-		fatal(fmt.Errorf("no model: pass -model or set LLM_DEFAULT_MODEL"))
+	if o.model == "" {
+		return fail(stderr, errors.New("no model: pass -model or set LLM_DEFAULT_MODEL"))
 	}
-	h, err := harness.New(harness.Options{Config: cfg, Version: "cli"})
+	h, err := mk(cfg)
 	if err != nil {
-		fatal(err)
+		return fail(stderr, err)
 	}
-	ctx, stop := context.WithCancel(context.Background())
+	hctx, stop := context.WithCancel(ctx)
 	defer stop()
-	go func() { _ = h.Run(ctx) }()
+	go func() { _ = h.Run(hctx) }()
 
-	th, err := h.NewThread(ctx, *user, "")
+	th, err := h.NewThread(hctx, o.user, "")
 	if err != nil {
-		fatal(err)
+		return fail(stderr, err)
 	}
-	if !cfg.SandboxEnabled() {
-		fmt.Fprintln(os.Stderr, "(OPENSANDBOX_URL is not set: the agent has no sandbox tools)")
+	be := &tui.HarnessBackend{H: h, User: o.user, ThreadID: th.ID, ModelID: o.model, Interactive: !printMode && !o.auto}
+	if !cfg.SandboxEnabled() && !o.json {
+		fmt.Fprintln(stderr, "(OPENSANDBOX_URL is not set: the agent has no sandbox tools)")
 	}
+	if printMode {
+		return tui.RunPrint(hctx, be, prompt, tui.PrintOptions{Stdout: stdout, Stderr: stderr, JSON: o.json})
+	}
+	if err := tui.Run(hctx, be); err != nil {
+		return fail(stderr, err)
+	}
+	return 0
+}
 
-	in := bufio.NewScanner(os.Stdin)
-	var (
-		mu     sync.Mutex
-		active *store.Run
-	)
-	// Ctrl-C cancels the active run; with none, it leaves.
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt)
-	go func() {
-		for range sig {
-			mu.Lock()
-			r := active
-			mu.Unlock()
-			if r == nil {
-				stop()
-				os.Exit(0)
-			}
-			_ = h.Cancel(context.Background(), *user, r.ID)
-		}
-	}()
-
-	for fmt.Print("> "); in.Scan(); fmt.Print("> ") {
-		text := strings.TrimSpace(in.Text())
-		switch {
-		case text == "":
-			continue
-		case text == "/quit":
-			return
-		}
-		mu.Lock()
-		r := active
-		mu.Unlock()
-		if r != nil { // a run is going: steer it
-			if err := h.Steer(ctx, *user, r.ID, text); err != nil {
-				fmt.Fprintln(os.Stderr, "steer:", err)
-			}
-			continue
-		}
-		run, err := h.Send(ctx, *user, th.ID, text, harness.RunOptions{Model: *model})
+// resolvePrompt combines the -p flag with piped stdin ("" when neither).
+func resolvePrompt(flagPrompt string, stdin io.Reader, isTTY bool) (string, error) {
+	var piped string
+	if !isTTY && stdin != nil {
+		b, err := io.ReadAll(stdin)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "send:", err)
-			continue
+			return "", err
 		}
-		mu.Lock()
-		active = run
-		mu.Unlock()
-		go func() {
-			render(h.Events(context.Background(), run.ID, 0))
-			mu.Lock()
-			active = nil
-			mu.Unlock()
-			fmt.Print("\n> ")
-		}()
+		piped = strings.TrimSpace(string(b))
 	}
+	switch {
+	case flagPrompt != "" && piped != "":
+		return flagPrompt + "\n\n" + piped, nil
+	case flagPrompt != "":
+		return flagPrompt, nil
+	}
+	return piped, nil
 }
 
-// render prints the events of a run as plain text.
-func render(events <-chan store.Event) {
-	for ev := range events {
-		var e map[string]any
-		if json.Unmarshal(ev.Data, &e) != nil {
-			continue
-		}
-		switch ev.Type {
-		case agui.TextMessageContent:
-			fmt.Print(e["delta"])
-		case agui.TextMessageEnd:
-			fmt.Println()
-		case agui.ToolCallStart:
-			fmt.Printf("\n[tool] %v\n", e["toolCallName"])
-		case agui.ToolCallResult:
-			fmt.Printf("[result] %s\n", clip(fmt.Sprint(e["content"]), 200))
-		case agui.RunError:
-			fmt.Printf("\n[error] %v\n", e["message"])
-		}
-	}
-}
-
-func clip(s string, n int) string {
-	s = strings.ReplaceAll(s, "\n", " ")
-	if len(s) > n {
-		return s[:n] + "…"
-	}
-	return s
-}
-
-func fatal(err error) {
-	fmt.Fprintln(os.Stderr, "harness:", err)
-	os.Exit(1)
+func fail(stderr io.Writer, err error) int {
+	fmt.Fprintln(stderr, "harness:", err)
+	return 1
 }
