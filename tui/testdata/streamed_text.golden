@@ -1,0 +1,11 @@
+> write a loop
+
+Here is the plan:
+• first step
+• second
+
+┌ go
+│ for i := 0; i < 3; i++ {
+│ }
+└
+Done.

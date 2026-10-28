@@ -1,0 +1,9 @@
+> fix it
+
+✓ edit_file a.go
+  ⎿ 1 replacement in a.go
+    @@ a.go @@
+     func a() int {
+    -    return 1
+    +    return 2
+     }

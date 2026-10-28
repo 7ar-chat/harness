@@ -1,0 +1,24 @@
+> clean up                                                                      
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+Approval needed: run_command
+  {"command":"rm -rf build"}
+  [y] approve once   [a] always (this run)   [n/esc] deny
+
+ gpt-test · waiting · 0:00  ctrl+o expands tools · ctrl+c quits                 
+│ Message (enter sends, alt+enter or ctrl+j adds a line)                        
+│                                                                               
+│                                                                               
