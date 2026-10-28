@@ -140,6 +140,32 @@ and the run's elapsed time. `edit_file` calls show a diff of `oldText`/`newText`
 `harness.Harness`), with one render function per event type and golden tests in `tui/testdata`
 (`go test ./tui -update` rewrites them). The facade has no call to answer an interrupt, so
 `HarnessBackend.Resume` creates the resume run through `h.Store` and `h.Queue`.
+## Sessions
+
+Local hosts keep their conversations across restarts without Postgres or Redis:
+
+```go
+st, _ := harness.OpenLocalStore("")           // "" = $LOCAL_STATE_DIR, else $XDG_STATE_HOME/harness, else ~/.local/state/harness
+defer st.Close()
+h, _ := harness.New(harness.Options{Config: cfg, Store: st})
+
+ss := st.Sessions()
+list, _ := ss.List(ctx, "alice", 20)          // title, updated, last message preview, active run
+fork, _ := ss.Fork(ctx, "alice", threadID, messageID) // new thread with the history up to that message
+ss.Delete(ctx, "alice", threadID)
+// resume = keep using the thread id: h.Send(ctx, "alice", threadID, "…")
+// old runs replay: h.Events(ctx, oldRunID, 0)
+```
+
+`store/filestore` wraps the in-memory store and appends every change to
+`<dir>/journal.jsonl` (JSON lines, upsert records, one `write(2)` per batch). Threads, messages,
+runs, plans, summaries, compactions, goals, approvals and event logs persist; artifacts, blobs, the
+skills catalog and sandbox ids stay in memory. A `kill -9` loses nothing and can only tear the last
+line, which is cut at the next start; fsync happens every 500 ms and on `Close` (`SyncAlways` /
+`SyncNever` via `filestore.Open(dir, filestore.Options{…})`). Runs that were in flight when the
+process died are marked `interrupted` (with a terminal `RUN_ERROR`) at the next start. One process
+per directory (flock). The journal is compacted on open when it holds many superseded records or
+deleted threads.
 
 ## Sandbox definition
 
