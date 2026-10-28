@@ -74,6 +74,9 @@ type Options struct {
 	// Jobs persists the running background jobs (nil: in memory only, their
 	// keep-alives end with the process).
 	Jobs JobList
+	// Coding describes the tools for a coding agent (AGENT_PROFILE=coding): no
+	// document features in read_file, execute_command and the like (coding.go).
+	Coding bool
 }
 
 // Provider is the sandbox tools provider.
@@ -133,16 +136,27 @@ func (p *Provider) Tools(_ context.Context, rc tools.RunContext) ([]tool.BaseToo
 		}
 	}
 	rw, ro := add(false), add(true)
+	d := workDescriptions
+	readNotice := func(o string, n string) string { return n + "\n" + o }
+	readTool := func() (tool.InvokableTool, error) {
+		return utils.InferTool("read_file", d.read, withRecreateNotice(b.read, readNotice))
+	}
+	if p.opts.Coding {
+		d = codingDescriptions
+		readTool = func() (tool.InvokableTool, error) {
+			return utils.InferTool("read_file", d.read, withRecreateNotice(b.readCoding, readNotice))
+		}
+	}
 	if err := errors.Join(
-		rw(utils.InferTool("execute_command", execDesc, withRecreateNotice(b.execute, func(o *execOutput, n string) *execOutput { o.Notice = n; return o }))),
+		rw(utils.InferTool("execute_command", d.exec, withRecreateNotice(b.execute, func(o *execOutput, n string) *execOutput { o.Notice = n; return o }))),
 		ro(utils.InferTool("job_output", jobOutputDesc, b.jobOutput)),
 		rw(utils.InferTool("job_kill", jobKillDesc, b.jobKill)),
-		ro(utils.InferTool("read_file", readDesc, withRecreateNotice(b.read, func(o string, n string) string { return n + "\n" + o }))),
+		ro(readTool()),
 		ro(utils.InferTool("view_file", viewDesc, withRecreateNotice(b.view, func(o *viewOutput, n string) *viewOutput { o.Notice = n; return o }))),
-		ro(utils.InferTool("search_files", searchDesc, withRecreateNotice(b.search, func(o *searchOutput, n string) *searchOutput { o.Notice = n; return o }))),
-		rw(utils.InferTool("write_file", writeDesc, withRecreateNotice(b.write, func(o *writeOutput, n string) *writeOutput { o.Notice = n; return o }))),
-		rw(utils.InferTool("edit_file", editDesc, withRecreateNotice(b.edit, func(o *editOutput, n string) *editOutput { o.Notice = n; return o }))),
-		ro(utils.InferTool("list_files", listDesc, withRecreateNotice(b.list, func(o *listOutput, n string) *listOutput { o.Notice = n; return o }))),
+		ro(utils.InferTool("search_files", d.search, withRecreateNotice(b.search, func(o *searchOutput, n string) *searchOutput { o.Notice = n; return o }))),
+		rw(utils.InferTool("write_file", d.write, withRecreateNotice(b.write, func(o *writeOutput, n string) *writeOutput { o.Notice = n; return o }))),
+		rw(utils.InferTool("edit_file", d.edit, withRecreateNotice(b.edit, func(o *editOutput, n string) *editOutput { o.Notice = n; return o }))),
+		ro(utils.InferTool("list_files", d.list, withRecreateNotice(b.list, func(o *listOutput, n string) *listOutput { o.Notice = n; return o }))),
 	); err != nil {
 		return nil, nil, err
 	}
