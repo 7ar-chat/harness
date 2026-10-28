@@ -17,8 +17,8 @@ var goRetryLayer = Task{
 	Prompt: "Package api has a Client that calls a Transport. Add a retry layer:\n" +
 		"- Config gets Retries (int, extra attempts after the first; default 0) and Backoff (func(attempt int) time.Duration, attempt counting from 0; nil means 50ms doubling per attempt).\n" +
 		"- Client.Get retries only when the transport error satisfies errors.Is(err, ErrTemporary); any other error is returned at once, unwrapped.\n" +
-		"- Waiting between attempts must stop as soon as the context is done, returning the context's error. A cancelled context is never retried.\n" +
-		"- When retries run out, return the last error wrapped as \"after N attempts: %w\" so errors.Is still works.\n" +
+		"- Waiting between attempts must stop as soon as the context is done, returning the context's error. If the context is already done when Get is called, no transport call is made and Get returns the context's error.\n" +
+		"- When Retries is 0 the transport's error is returned as is, unwrapped. When Retries > 0 and every attempt failed, return the last error wrapped as \"after N attempts: %w\" so errors.Is still works.\n" +
 		"- Client.Stats() returns Stats{Calls, Attempts, Retries int}: Get calls, transport calls, and retries performed; it must be safe for concurrent use.\n" +
 		"- ParseConfig reads RETRIES from the map: absent means 0; anything that is not a non-negative integer is an error mentioning RETRIES." + noAsking,
 	Needs: []string{"go"},
