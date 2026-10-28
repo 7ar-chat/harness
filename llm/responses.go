@@ -3,7 +3,6 @@ package llm
 import (
 	"encoding/json"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/cloudwego/eino/components/model"
@@ -13,23 +12,16 @@ import (
 )
 
 // responsesModel is the Responses API client of a model in LLM_RESPONSES_MODELS:
-// the gateway's Azure-style …/providers/openai/models/{m}/openai/responses?api-version=…
-// (or {LLM_BASE_URL}/responses for the openai provider), over the provider's
-// HTTP client (timeouts, X-Use-Case, x-userinfo, CallInfo).
+// {LLM_BASE_URL}/responses over the provider's HTTP client (timeouts, CallInfo).
 func (p *Provider) responsesModel(name string) (model.ToolCallingChatModel, error) {
-	bare := p.wireName(name)
-	header := http.Header{}
-	var u string
-	switch p.cfg.LLMProvider {
-	case "gateway":
-		u = GatewayBaseURL(p.cfg.LLMGatewayURL, p.cfg.LLMUseCase, name) + "openai/responses?api-version=" + url.QueryEscape(p.cfg.LLMAPIVersion)
-		header.Set("api-key", GatewayDummyKey)
-	default:
-		u = strings.TrimRight(p.cfg.LLMBaseURL, "/") + "/responses"
-		header.Set("Authorization", "Bearer "+p.cfg.LLMAPIKey)
+	base := p.cfg.LLMBaseURL
+	if base == "" {
+		base = "https://api.openai.com/v1"
 	}
+	header := http.Header{}
+	header.Set("Authorization", "Bearer "+p.cfg.LLMAPIKey)
 	return responses.New(responses.Config{
-		URL: u, Model: bare, Name: name, HTTPClient: p.client, Header: header,
+		URL: strings.TrimRight(base, "/") + "/responses", Model: name, Name: name, HTTPClient: p.client, Header: header,
 		OnRefusal: RecordRefusal, ReasoningSummary: "auto",
 	})
 }

@@ -118,7 +118,7 @@ func (m *Model) responsesClient(ctx context.Context, name string) (model.ToolCal
 		return c, nil
 	}
 	f := fake()
-	cfg := &config.Config{LLMProvider: "gateway", LLMGatewayURL: f.srv.URL + "/", LLMUseCase: "5", LLMAPIVersion: "2025-04-01-preview",
+	cfg := &config.Config{LLMProvider: "openai", LLMBaseURL: f.srv.URL + "/v1", LLMAPIKey: "test-key",
 		LLMModels: []string{name}, Responses: config.Responses{LLMResponsesModels: []string{name}}}
 	inner, err := llm.NewWithTransport(cfg, f.transport).Model(ctx, name)
 	if err != nil {
@@ -179,7 +179,7 @@ func (f *fakeResponses) handle(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	p := f.pending[r.Header.Get(TurnHeader)]
 	f.mu.Unlock()
-	if p == nil || !strings.HasSuffix(r.URL.Path, "/openai/responses") {
+	if p == nil || !strings.HasSuffix(r.URL.Path, "/responses") {
 		writeError(w, http.StatusNotFound, "not_found", "llmtest: unknown turn or path "+r.URL.Path, 0)
 		return
 	}
@@ -222,11 +222,14 @@ func writeError(w http.ResponseWriter, status int, code, msg string, retryAfter 
 
 // validate checks a request like the provider: "" when valid.
 func (f *fakeResponses) validate(r *http.Request, name string, req map[string]any) string {
-	if !strings.Contains(r.URL.Path, "/models/"+name+"/") || r.URL.Query().Get("api-version") == "" {
+	if r.URL.Path != "/v1/responses" {
 		return "path " + r.URL.String()
 	}
-	if r.Header.Get("X-Use-Case") == "" || r.Header.Get("api-key") == "" {
-		return "missing X-Use-Case or api-key"
+	if r.Header.Get("Authorization") != "Bearer test-key" {
+		return "missing or wrong Authorization"
+	}
+	if req["model"] != name {
+		return "model must be sent verbatim"
 	}
 	if req["stream"] != true || req["store"] != false {
 		return "stream must be true and store false"

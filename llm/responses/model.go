@@ -1,5 +1,5 @@
 // Package responses is a model.ToolCallingChatModel over the OpenAI Responses
-// API (POST …/responses, streamed), as served by the Studio llm-gateway
+// API (POST …/responses, streamed), as served by the OpenAI-compatible endpoint
 // (docs/spike-responses-api.md). Calls are stateless (store:false) and ask for
 // the encrypted reasoning (include reasoning.encrypted_content): the reasoning
 // items of an answer travel on its schema.Message (ExtraReasoningItems) and
@@ -24,13 +24,13 @@ import (
 
 // Config configures a Responses model.
 type Config struct {
-	// URL is the full POST URL, e.g. {gateway}/usecase/5/providers/openai/models/{m}/openai/responses?api-version=2025-04-01-preview.
+	// URL is the full POST URL, e.g. https://api.openai.com/v1/responses.
 	URL string
-	// Model is the model sent in the body (the bare deployment name).
+	// Model is the model sent in the body (verbatim).
 	Model string
 	// Name is the Work model id: reasoning items are tagged with it and only sent back to it.
 	Name string
-	// HTTPClient sends the requests (the llm provider's client: timeouts, X-Use-Case, x-userinfo).
+	// HTTPClient sends the requests (the llm provider's client: timeouts, CallInfo).
 	HTTPClient *http.Client
 	// Header is added to every request (api-key or Authorization).
 	Header http.Header

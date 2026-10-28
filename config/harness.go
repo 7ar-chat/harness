@@ -27,8 +27,8 @@ type Harness struct {
 	LLMModelLabels    map[string]string
 	// LLMPresetsRaw is LLM_PRESETS: the ordered stops of the composer's "thinking"
 	// slider, "id=model:effort,…" (effort optional: "id=model" or "id=model:" keeps
-	// the model's default effort). GPT-5.6 Sol costs about twice Terra (gateway
-	// catalog), so Terra covers the fast/balanced stops and Sol thinking/deep.
+	// the model's default effort). GPT-5.6 Sol costs about twice Terra (list
+	// prices), so Terra covers the fast/balanced stops and Sol thinking/deep.
 	// caarlos0/env applies envDefault to an empty value (like every list here), so
 	// "none" is the explicit way to configure no presets (the UI then shows the
 	// separate model and reasoning menus).

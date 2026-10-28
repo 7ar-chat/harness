@@ -24,8 +24,8 @@ func WithReasoningEffort(effort string) []model.Option {
 }
 
 // WithPromptCacheKey sends prompt_cache_key (OpenAI prompt caching: calls with
-// the same key are routed to the same cache). Only the gateway's openai
-// provider accepts it; DeepSeek rejects unknown body fields (spike, 2.7).
+// the same key are routed to the same cache). Endpoints that
+// reject unknown body fields need LLM_PROMPT_CACHE_KEY=false.
 func WithPromptCacheKey(key string) []model.Option {
 	return []model.Option{
 		einoopenai.WithExtraFields(map[string]any{"prompt_cache_key": key}),

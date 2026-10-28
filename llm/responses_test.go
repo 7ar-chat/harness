@@ -16,25 +16,23 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/eino-contrib/jsonschema"
 
-	"github.com/GhaziBenDahmane/harness/auth"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/llm"
 	"github.com/GhaziBenDahmane/harness/llm/responses"
 )
 
 type responsesRequest struct {
-	path, query, useCase, userinfo, apiKey string
-	body                                   map[string]any
+	path, authorization string
+	body                map[string]any
 }
 
-// responsesGateway serves the SSE fixture (or the handler's own answer) and records the request.
-func responsesGateway(t *testing.T, fixture string, handler http.HandlerFunc) (*httptest.Server, *[]responsesRequest) {
+// responsesServer serves the SSE fixture (or the handler's own answer) and records the request.
+func responsesServer(t *testing.T, fixture string, handler http.HandlerFunc) (*httptest.Server, *[]responsesRequest) {
 	t.Helper()
 	var got []responsesRequest
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
-		req := responsesRequest{path: r.URL.Path, query: r.URL.RawQuery, useCase: r.Header.Get("X-Use-Case"),
-			userinfo: r.Header.Get("x-userinfo"), apiKey: r.Header.Get("api-key")}
+		req := responsesRequest{path: r.URL.Path, authorization: r.Header.Get("Authorization")}
 		_ = json.Unmarshal(b, &req.body)
 		got = append(got, req)
 		if handler != nil {
@@ -54,7 +52,7 @@ func responsesGateway(t *testing.T, fixture string, handler http.HandlerFunc) (*
 }
 
 func responsesConfig(url string, models ...string) *config.Config {
-	cfg := gatewayConfig(url, 10, models...)
+	cfg := openaiConfig(url, 10, models...)
 	cfg.LLMResponsesModels = models
 	return cfg
 }
@@ -75,18 +73,17 @@ func drain(t *testing.T, sr *schema.StreamReader[*schema.Message]) ([]*schema.Me
 	}
 }
 
-func TestResponsesModelStreamsTheGatewayToolCalls(t *testing.T) {
-	// A model in LLM_RESPONSES_MODELS calls …/providers/openai/models/{m}/openai/responses?api-version=… with the gateway headers, and the recorded gateway stream becomes two parallel tool calls, the usage and the reasoning item of output_item.done.
+func TestResponsesModelStreamsToolCalls(t *testing.T) {
+	// A model in LLM_RESPONSES_MODELS calls {LLM_BASE_URL}/responses with the bearer key, and the recorded stream becomes two parallel tool calls, the usage and the reasoning item of output_item.done.
 	// Arrange
-	ts, got := responsesGateway(t, "tool_calls.sse", nil)
+	ts, got := responsesServer(t, "tool_calls.sse", nil)
 	m, err := llm.New(responsesConfig(ts.URL, "gpt-5.6-terra")).Model(context.Background(), "gpt-5.6-terra")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := auth.WithUserinfo(context.Background(), "eyJsb2dpbiI6ImEifQ==")
 
 	// Act
-	out, err := m.Generate(ctx, []*schema.Message{schema.SystemMessage("sys"), schema.UserMessage("What is (17*23)+(91*7)?")},
+	out, err := m.Generate(context.Background(), []*schema.Message{schema.SystemMessage("sys"), schema.UserMessage("What is (17*23)+(91*7)?")},
 		append(llm.WithReasoningEffort("medium"), llm.WithPromptCacheKey("thread-1")...)...)
 
 	// Assert
@@ -94,8 +91,7 @@ func TestResponsesModelStreamsTheGatewayToolCalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := (*got)[0]
-	if req.path != "/usecase/5/providers/openai/models/gpt-5.6-terra/openai/responses" || req.query != "api-version=2025-04-01-preview" ||
-		req.useCase != "5" || req.userinfo != "eyJsb2dpbiI6ImEifQ==" || req.apiKey != llm.GatewayDummyKey {
+	if req.path != "/v1/responses" || req.authorization != "Bearer test-key" {
 		t.Fatalf("request %+v", req)
 	}
 	b := req.body
@@ -123,7 +119,7 @@ func TestResponsesModelStreamsTheGatewayToolCalls(t *testing.T) {
 func TestResponsesModelStreamsText(t *testing.T) {
 	// output_text deltas stream as content chunks and response.completed ends the answer with finish_reason stop.
 	// Arrange
-	ts, _ := responsesGateway(t, "text.sse", nil)
+	ts, _ := responsesServer(t, "text.sse", nil)
 	m, _ := llm.New(responsesConfig(ts.URL, "gpt-5.6-terra")).Model(context.Background(), "gpt-5.6-terra")
 
 	// Act
@@ -148,7 +144,7 @@ func TestResponsesModelStreamsText(t *testing.T) {
 func TestResponsesIncompleteAnswerFinishesWithLength(t *testing.T) {
 	// response.incomplete (max_output_tokens) maps to finish_reason length, with its usage.
 	// Arrange
-	ts, _ := responsesGateway(t, "incomplete.sse", nil)
+	ts, _ := responsesServer(t, "incomplete.sse", nil)
 	m, _ := llm.New(responsesConfig(ts.URL, "gpt-5.6-terra")).Model(context.Background(), "gpt-5.6-terra")
 
 	// Act
@@ -163,7 +159,7 @@ func TestResponsesIncompleteAnswerFinishesWithLength(t *testing.T) {
 func TestResponsesHistoryCarriesReasoningBeforeItsCalls(t *testing.T) {
 	// An assistant message is sent as its reasoning items (of the same model only), its text and its function calls, followed by the function_call_output items.
 	// Arrange
-	ts, got := responsesGateway(t, "text.sse", nil)
+	ts, got := responsesServer(t, "text.sse", nil)
 	m, _ := llm.New(responsesConfig(ts.URL, "gpt-5.6-terra")).Model(context.Background(), "gpt-5.6-terra")
 	am := schema.AssistantMessage("Let me compute.", []schema.ToolCall{{ID: "c1", Type: "function", Function: schema.FunctionCall{Name: "calc", Arguments: `{"expr":"1+1"}`}}})
 	responses.SetItems(am, []responses.ReasoningItem{
@@ -236,7 +232,7 @@ func TestResponsesErrorsAreClassifiedLikeChatCompletions(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			ts, _ := responsesGateway(t, "", tc.handler)
+			ts, _ := responsesServer(t, "", tc.handler)
 			m, _ := llm.New(responsesConfig(ts.URL, "gpt-5.6-terra")).Model(context.Background(), "gpt-5.6-terra")
 			ctx, info := llm.WithCallInfo(context.Background())
 
@@ -257,7 +253,7 @@ func TestResponsesErrorsAreClassifiedLikeChatCompletions(t *testing.T) {
 func TestResponsesToolsAreStrictOnlyWhenTheirSchemaAllows(t *testing.T) {
 	// Function tools are sent with strict:true when every property is required and additionalProperties is false, otherwise strict:false; the last step's ToolChoiceForbidden is tool_choice none.
 	// Arrange
-	ts, got := responsesGateway(t, "text.sse", nil)
+	ts, got := responsesServer(t, "text.sse", nil)
 	m, _ := llm.New(responsesConfig(ts.URL, "gpt-5.6-terra")).Model(context.Background(), "gpt-5.6-terra")
 	var strict, loose map[string]any
 	_ = json.Unmarshal([]byte(`{"type":"object","properties":{"expr":{"type":"string"}},"required":["expr"],"additionalProperties":false}`), &strict)
@@ -283,7 +279,7 @@ func TestResponsesToolsAreStrictOnlyWhenTheirSchemaAllows(t *testing.T) {
 }
 
 func TestOtherModelsStayOnChatCompletions(t *testing.T) {
-	// Models outside LLM_RESPONSES_MODELS (and DeepSeek even when listed) keep the Chat Completions path.
+	// Models outside LLM_RESPONSES_MODELS keep the Chat Completions path.
 	// Arrange
 	var paths []string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -292,12 +288,12 @@ func TestOtherModelsStayOnChatCompletions(t *testing.T) {
 		_, _ = w.Write([]byte(`{"id":"1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"pong"},"finish_reason":"stop"}]}`))
 	}))
 	t.Cleanup(ts.Close)
-	cfg := gatewayConfig(ts.URL, 10, "gpt-test", "deepseek/DeepSeek-V4-Flash")
-	cfg.LLMResponsesModels = []string{"gpt-5.6-terra", "deepseek/DeepSeek-V4-Flash"}
+	cfg := openaiConfig(ts.URL, 10, "gpt-test")
+	cfg.LLMResponsesModels = []string{"gpt-5.6-terra"}
 	f := llm.New(cfg)
 
 	// Act
-	for _, name := range []string{"gpt-test", "deepseek/DeepSeek-V4-Flash"} {
+	for _, name := range []string{"gpt-test"} {
 		m, err := f.Model(context.Background(), name)
 		if err != nil {
 			t.Fatal(err)
@@ -308,8 +304,7 @@ func TestOtherModelsStayOnChatCompletions(t *testing.T) {
 	}
 
 	// Assert
-	if len(paths) != 2 || !strings.HasSuffix(paths[0], "/openai/deployments/gpt-test/chat/completions") ||
-		paths[1] != "/usecase/5/providers/deepseek/models/DeepSeek-V4-Flash/chat/completions" {
+	if len(paths) != 1 || paths[0] != "/v1/chat/completions" {
 		t.Fatalf("paths %v", paths)
 	}
 }

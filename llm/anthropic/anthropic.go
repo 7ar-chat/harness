@@ -34,7 +34,7 @@ type Config struct {
 	// Model is the model id sent in the body.
 	Model      string
 	HTTPClient *http.Client
-	// Header is added to every request (e.g. a gateway's headers).
+	// Header is added to every request (e.g. a proxy's headers).
 	Header http.Header
 	// CacheTTL is the prompt-cache lifetime of the breakpoints: "" or "5m", or "1h".
 	CacheTTL string
