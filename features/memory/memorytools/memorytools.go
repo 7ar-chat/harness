@@ -79,7 +79,8 @@ func (p *Provider) Name() string { return "memory" }
 
 // Tools implements tools.Provider.
 func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]tool.BaseTool, func(), error) {
-	enabled, err := p.Svc.Enabled(ctx, rc.Login)
+	key := p.Svc.Key(ctx, rc.Login, rc.ThreadID)
+	enabled, err := p.Svc.Enabled(ctx, key)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -92,7 +93,7 @@ func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]tool.BaseT
 		if err := json.Unmarshal([]byte(s.schema), &js); err != nil {
 			return nil, nil, fmt.Errorf("memory tool %s schema: %w", s.name, err)
 		}
-		out = append(out, &memTool{p: p, rc: rc, info: &schema.ToolInfo{Name: s.name, Desc: s.desc,
+		out = append(out, &memTool{p: p, rc: rc, key: key, info: &schema.ToolInfo{Name: s.name, Desc: s.desc,
 			ParamsOneOf: schema.NewParamsOneOfByJSONSchema(&js)}})
 	}
 	return out, func() {}, nil
@@ -101,6 +102,7 @@ func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]tool.BaseT
 type memTool struct {
 	p    *Provider
 	rc   tools.RunContext
+	key  string // the memory of the run: the user's, or the project's
 	info *schema.ToolInfo
 }
 
@@ -118,7 +120,7 @@ func (t *memTool) InvokableRun(ctx context.Context, argsJSON string, _ ...tool.O
 	if msg := validate(name, args); msg != "" {
 		return "", fail(errPayload("invalid_arguments", msg, name))
 	}
-	w := memory.Writer{Login: t.rc.Login, ThreadID: t.rc.ThreadID, Source: store.MemorySourceProxy, Untrusted: tools.Untrusted(ctx)}
+	w := memory.Writer{Login: t.key, ThreadID: t.rc.ThreadID, Source: store.MemorySourceProxy, Untrusted: tools.Untrusted(ctx)}
 	svc := t.p.Svc
 	var r memory.Result
 	switch name {
@@ -127,14 +129,14 @@ func (t *memTool) InvokableRun(ctx context.Context, argsJSON string, _ ...tool.O
 		if n, ok := intArg(args["top_k"]); ok && n != 0 {
 			topK = n
 		}
-		r = svc.Search(ctx, t.rc.Login, memory.SearchInput{Query: str(args["query"]), Scope: str(args["scope"]),
+		r = svc.Search(ctx, t.key, memory.SearchInput{Query: str(args["query"]), Scope: str(args["scope"]),
 			Repository: str(args["repository"]), TopK: topK, Filters: obj(args["filters"])})
 	case "memory_get":
 		include := true
 		if b, ok := args["include_metadata"].(bool); ok {
 			include = b
 		}
-		r = svc.Get(ctx, t.rc.Login, str(args["id"]), str(args["path"]), include)
+		r = svc.Get(ctx, t.key, str(args["id"]), str(args["path"]), include)
 	case "memory_create":
 		r = svc.Create(ctx, w, createInput(args))
 	case "memory_update":

@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -34,6 +35,28 @@ var riskyNames = map[string]bool{
 
 // riskyPrefixes make any tool risky whose (normalized) name starts with them.
 var riskyPrefixes = []string{"delete", "remove", "move", "rename"}
+
+var (
+	extraMu    sync.RWMutex
+	extraRisky = map[string]bool{}
+)
+
+// RegisterRisky makes the named tools need approval in interactive runs, like
+// the built-in risky ones (a host's own tools that act on the world). Call it
+// at start-up, before runs.
+func RegisterRisky(names ...string) {
+	extraMu.Lock()
+	defer extraMu.Unlock()
+	for _, n := range names {
+		extraRisky[normalize(n)] = true
+	}
+}
+
+func registeredRisky(n string) bool {
+	extraMu.RLock()
+	defer extraMu.RUnlock()
+	return extraRisky[n]
+}
 
 func normalize(name string) string {
 	n := strings.ToLower(strings.TrimSpace(name))
@@ -60,7 +83,7 @@ func IsRisky(toolName string) bool {
 		if n == "" {
 			continue
 		}
-		if riskyNames[n] {
+		if riskyNames[n] || registeredRisky(n) {
 			return true
 		}
 		for _, p := range riskyPrefixes {
@@ -223,6 +246,9 @@ func (g *Gate) risky(ctx context.Context, run *store.Run, toolName, arguments st
 		return IsRisky(toolName)
 	}
 	n := normalize(toolName)
+	if registeredRisky(n) {
+		return true
+	}
 	switch n {
 	case "executecommand", "bash":
 		return true

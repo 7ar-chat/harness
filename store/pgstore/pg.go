@@ -354,7 +354,8 @@ func collectRuns(rows pgx.Rows, err error) ([]*store.Run, error) {
 
 func (s *PG) ListMessages(ctx context.Context, threadID string) ([]*store.Message, error) {
 	rows, err := s.pool.Query(ctx, `SELECT id, thread_id::text, coalesce(run_id::text, ''), position, role, content,
-			tool_calls, coalesce(tool_call_id, ''), coalesce(error, ''), metadata, reasoning_items, created_at
+			tool_calls, coalesce(tool_call_id, ''), coalesce(error, ''), metadata, reasoning_items, created_at,
+			coalesce(author_login, ''), coalesce(author_kind, ''), coalesce(on_behalf_of, '')
 		FROM work_messages WHERE thread_id = $1 AND superseded_at IS NULL ORDER BY position`, threadID)
 	if err != nil {
 		return nil, err
@@ -365,7 +366,8 @@ func (s *PG) ListMessages(ctx context.Context, threadID string) ([]*store.Messag
 		var m store.Message
 		var toolCalls, metadata, reasoningItems []byte
 		if err := rows.Scan(&m.ID, &m.ThreadID, &m.RunID, &m.Position, &m.Role, &m.Content, &toolCalls,
-			&m.ToolCallID, &m.Error, &metadata, &reasoningItems, &m.CreatedAt); err != nil {
+			&m.ToolCallID, &m.Error, &metadata, &reasoningItems, &m.CreatedAt,
+			&m.AuthorLogin, &m.AuthorKind, &m.OnBehalfOf); err != nil {
 			return nil, err
 		}
 		if len(toolCalls) > 0 {
@@ -406,9 +408,10 @@ func insertMessage(ctx context.Context, db execer, m *store.Message) error {
 	if len(m.ReasoningItems) > 0 && json.Valid(m.ReasoningItems) {
 		reasoningItems = m.ReasoningItems
 	}
-	return db.QueryRow(ctx, `INSERT INTO work_messages (id, thread_id, run_id, role, content, tool_calls, tool_call_id, error, metadata, reasoning_items)
-		VALUES ($1, $2, $3, $4, $5, $6, nullif($7, ''), nullif($8, ''), $9, $10) RETURNING position, created_at`,
-		m.ID, m.ThreadID, runID, m.Role, m.Content, toolCalls, m.ToolCallID, m.Error, metadata, reasoningItems).Scan(&m.Position, &m.CreatedAt)
+	return db.QueryRow(ctx, `INSERT INTO work_messages (id, thread_id, run_id, role, content, tool_calls, tool_call_id, error, metadata, reasoning_items, author_login, author_kind, on_behalf_of)
+		VALUES ($1, $2, $3, $4, $5, $6, nullif($7, ''), nullif($8, ''), $9, $10, nullif($11, ''), nullif($12, ''), nullif($13, '')) RETURNING position, created_at`,
+		m.ID, m.ThreadID, runID, m.Role, m.Content, toolCalls, m.ToolCallID, m.Error, metadata, reasoningItems,
+		m.AuthorLogin, m.AuthorKind, m.OnBehalfOf).Scan(&m.Position, &m.CreatedAt)
 }
 
 func (s *PG) AppendMessages(ctx context.Context, msgs ...*store.Message) error {

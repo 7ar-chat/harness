@@ -39,6 +39,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/artifacts"
+	"github.com/GhaziBenDahmane/harness/features/memory"
 	"github.com/GhaziBenDahmane/harness/features/skills"
 	"github.com/GhaziBenDahmane/harness/features/workspace"
 	"github.com/GhaziBenDahmane/harness/sandbox"
@@ -98,6 +99,10 @@ type Options struct {
 	Version string
 	// RuntimeID names this process in run ownership (default: hostname-random).
 	RuntimeID string
+	// MemoryKey, when set, names the memory (the key its entries are stored
+	// under) a run of login on threadID reads and writes; "" means login's own.
+	// A team host returns "project:<id>" for project threads.
+	MemoryKey func(ctx context.Context, login, threadID string) string
 }
 
 // Harness runs agent runs for any number of users and threads.
@@ -113,6 +118,8 @@ type Harness struct {
 	Workspace *workspace.Service
 	Runtime   *runtime.Runtime
 	Agent     *agent.Agent
+	// Memory is the memory service (nil without the Memory feature).
+	Memory *memory.Service
 
 	sandboxTools bool
 	redo         redoStacks
@@ -183,7 +190,7 @@ func New(o Options) (*Harness, error) {
 	}
 
 	h := &Harness{cfg: cfg, Store: st, Log: infra.Log, Queue: infra.Broker, Bus: infra.Broker,
-		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace,
+		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace, Memory: b.Memory,
 		sandboxTools: b.sandboxTools != nil}
 	h.Agent = &agent.Agent{
 		Models: models, Tools: registry, Store: st, Steers: h.Bus,
@@ -244,6 +251,20 @@ type RunOptions struct {
 	// Attachments are images sent with the message (at most MaxAttachments of
 	// MaxAttachmentBytes each); they are stored in the thread's workspace.
 	Attachments []Attachment
+	// Author is the user who typed the message when it is not the thread's
+	// owner (a project member), with AuthorKind and OnBehalfOf for a
+	// supervisor; they are recorded on the message and shown to the model in
+	// threads with several speakers. Empty means the owner.
+	Author     string
+	AuthorKind string
+	OnBehalfOf string
+}
+
+// Author identifies who sends a message or a steer.
+type Author struct {
+	Login      string
+	Kind       string
+	OnBehalfOf string
 }
 
 // SandboxMode is RunOptions.Sandbox.
@@ -308,7 +329,8 @@ func (h *Harness) Send(ctx context.Context, user, threadID, text string, o RunOp
 	}
 	run, _, err := h.Store.CreateRun(ctx, store.NewRun{
 		RunID: uuid.NewString(), ThreadID: threadID, UserLogin: user, Model: o.Model,
-		Message:         store.Message{ID: o.MessageID, Role: store.RoleUser, Content: text, Metadata: meta},
+		Message: store.Message{ID: o.MessageID, Role: store.RoleUser, Content: text, Metadata: meta,
+			AuthorLogin: o.Author, AuthorKind: o.AuthorKind, OnBehalfOf: o.OnBehalfOf},
 		Mode:            runMd,
 		AutoTitle:       autoTitle(text),
 		Skills:          o.Skills,
@@ -383,6 +405,11 @@ func (h *Harness) Cancel(ctx context.Context, user, runID string) error {
 
 // Steer adds a message to a running run: the model sees it at its next step.
 func (h *Harness) Steer(ctx context.Context, user, runID, text string) error {
+	return h.SteerAs(ctx, user, runID, text, Author{})
+}
+
+// SteerAs is Steer recording who sent the steer.
+func (h *Harness) SteerAs(ctx context.Context, user, runID, text string, a Author) error {
 	run, err := h.Store.GetUserRun(ctx, user, runID)
 	if err != nil {
 		return err
@@ -390,7 +417,7 @@ func (h *Harness) Steer(ctx context.Context, user, runID, text string) error {
 	if store.IsTerminal(run.Status) {
 		return queue.ErrSteersClosed
 	}
-	return h.Bus.PushSteer(ctx, run.ID, queue.Steer{ID: uuid.NewString(), Text: text})
+	return h.Bus.PushSteer(ctx, run.ID, queue.Steer{ID: uuid.NewString(), Text: text, Author: a.Login, AuthorKind: a.Kind, OnBehalfOf: a.OnBehalfOf})
 }
 
 func autoTitle(text string) string {

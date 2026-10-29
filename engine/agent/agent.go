@@ -299,13 +299,14 @@ func (st *runState) injectSteers(ctx context.Context, final bool) error {
 		if id == "" {
 			id = uuid.NewString()
 		}
-		row := &store.Message{ID: id, Role: store.RoleUser, Content: s.Text, Metadata: map[string]any{"steer": true, "delivered": true}}
+		row := &store.Message{ID: id, Role: store.RoleUser, Content: s.Text, Metadata: map[string]any{"steer": true, "delivered": true},
+			AuthorLogin: s.Author, AuthorKind: s.AuthorKind, OnBehalfOf: s.OnBehalfOf}
 		st.persist(ctx, row)
-		hm := schema.UserMessage(SteerPrefix + s.Text)
+		hm := schema.UserMessage(SteerPrefix + AuthorTag(s.Author, s.AuthorKind, s.OnBehalfOf) + s.Text)
 		compaction.SetPosition(hm, row.Position)
 		compaction.MarkSteer(hm)
 		st.history = append(st.history, hm)
-		if err := st.emit(ctx, agui.SteerEvent(id, s.Text, true)); err != nil {
+		if err := st.emit(ctx, agui.SteerEventBy(id, s.Text, true, s.Author, s.AuthorKind, s.OnBehalfOf)); err != nil {
 			return err
 		}
 	}

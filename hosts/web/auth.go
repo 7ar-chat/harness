@@ -33,7 +33,9 @@ func LocalAuthenticator(user, token string) Authenticator {
 }
 
 // csp is strict: the UI loads only its own scripts and styles, never inline.
-const csp = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; " +
+// Inline style attributes are allowed (component libraries position popovers with them); inline
+// <style> elements and every inline script stay blocked.
+const csp = "default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; " +
 	"object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 
 // wrap adds the security headers, the Host guard, the cross-origin guard and CORS.
@@ -58,7 +60,7 @@ func (s *server) wrap(next http.Handler) http.Handler {
 			h.Set("Access-Control-Expose-Headers", "Content-Disposition")
 			if r.Method == http.MethodOptions {
 				h.Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-				h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Last-Event-ID")
+				h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Last-Event-ID, X-Harness-User")
 				h.Set("Access-Control-Max-Age", "600")
 				w.WriteHeader(http.StatusNoContent)
 				return

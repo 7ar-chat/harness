@@ -201,6 +201,7 @@ func Memory() Feature {
 	return builtin{FeatureMemory, func(b *Builder) error {
 		cfg := b.Config
 		svc := memory.New(b.Store, memory.OptionsFromConfig(cfg))
+		svc.KeyFor = b.Options.MemoryKey
 		b.Memory = svc
 		b.AddTools(memorytools.New(svc))
 		b.Section(b.prof.memorySection(memory.PromptSection(svc)))

@@ -1,0 +1,272 @@
+package httpserver
+
+import (
+	"bytes"
+	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/GhaziBenDahmane/harness/store"
+)
+
+// GitHubApp talks to GitHub as a GitHub App: it finds where the App is
+// installed for a repository and mints short-lived installation tokens (read
+// and write access to the repositories of that installation only), which the
+// project checkout uses to clone and push. Projects never hold a member's
+// personal token.
+type GitHubApp struct {
+	// Slug is the App's URL name, for the install link (https://github.com/apps/<slug>).
+	Slug string
+	// API is the GitHub API base (default https://api.github.com).
+	API string
+	// HTTP is the client used (default http.DefaultClient with a timeout).
+	HTTP *http.Client
+
+	appID string
+	key   *rsa.PrivateKey
+
+	mu     sync.Mutex
+	tokens map[int64]cachedToken
+}
+
+type cachedToken struct {
+	token   string
+	expires time.Time
+}
+
+// NewGitHubApp parses the App's private key (PEM, PKCS#1 or PKCS#8).
+func NewGitHubApp(appID, slug string, privateKeyPEM []byte) (*GitHubApp, error) {
+	block, _ := pem.Decode(privateKeyPEM)
+	if block == nil {
+		return nil, errors.New("github app: the private key is not PEM")
+	}
+	var key *rsa.PrivateKey
+	if k, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
+		key = k
+	} else if k8, err8 := x509.ParsePKCS8PrivateKey(block.Bytes); err8 == nil {
+		rk, ok := k8.(*rsa.PrivateKey)
+		if !ok {
+			return nil, errors.New("github app: the private key is not RSA")
+		}
+		key = rk
+	} else {
+		return nil, fmt.Errorf("github app: parsing the private key: %w", err)
+	}
+	return &GitHubApp{Slug: slug, appID: appID, key: key, tokens: map[int64]cachedToken{}}, nil
+}
+
+func (g *GitHubApp) api() string {
+	if g.API != "" {
+		return strings.TrimRight(g.API, "/")
+	}
+	return "https://api.github.com"
+}
+
+func (g *GitHubApp) client() *http.Client {
+	if g.HTTP != nil {
+		return g.HTTP
+	}
+	return &http.Client{Timeout: 20 * time.Second}
+}
+
+func b64(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
+
+// jwt is the App's own token (RS256, ten minutes), used to ask about installations.
+func (g *GitHubApp) jwt() (string, error) {
+	now := time.Now()
+	hdr, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT"})
+	claims, _ := json.Marshal(map[string]any{"iss": g.appID, "iat": now.Add(-time.Minute).Unix(), "exp": now.Add(9 * time.Minute).Unix()})
+	signing := b64(hdr) + "." + b64(claims)
+	sum := sha256.Sum256([]byte(signing))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, g.key, crypto.SHA256, sum[:])
+	if err != nil {
+		return "", err
+	}
+	return signing + "." + b64(sig), nil
+}
+
+// ErrNotInstalled means the App is not installed on the repository.
+var ErrNotInstalled = errors.New("the GitHub App is not installed on this repository")
+
+func (g *GitHubApp) do(ctx context.Context, method, path, bearer string, body any, out any) (int, error) {
+	var rd io.Reader
+	if body != nil {
+		b, _ := json.Marshal(body)
+		rd = bytes.NewReader(b)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, g.api()+path, rd)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+bearer)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := g.client().Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode >= 300 {
+		return resp.StatusCode, fmt.Errorf("github: %s %s: %d", method, path, resp.StatusCode)
+	}
+	if out != nil {
+		return resp.StatusCode, json.Unmarshal(data, out)
+	}
+	return resp.StatusCode, nil
+}
+
+// RepoInstallation returns the id of the App's installation on owner/repo.
+func (g *GitHubApp) RepoInstallation(ctx context.Context, owner, repo string) (int64, error) {
+	tok, err := g.jwt()
+	if err != nil {
+		return 0, err
+	}
+	var out struct {
+		ID int64 `json:"id"`
+	}
+	status, err := g.do(ctx, http.MethodGet, "/repos/"+url.PathEscape(owner)+"/"+url.PathEscape(repo)+"/installation", tok, nil, &out)
+	if status == http.StatusNotFound {
+		return 0, ErrNotInstalled
+	}
+	return out.ID, err
+}
+
+// InstallationToken returns a token for the installation (cached until shortly before it expires).
+func (g *GitHubApp) InstallationToken(ctx context.Context, installation int64) (string, error) {
+	g.mu.Lock()
+	if c, ok := g.tokens[installation]; ok && time.Until(c.expires) > 2*time.Minute {
+		g.mu.Unlock()
+		return c.token, nil
+	}
+	g.mu.Unlock()
+	jwt, err := g.jwt()
+	if err != nil {
+		return "", err
+	}
+	var out struct {
+		Token     string    `json:"token"`
+		ExpiresAt time.Time `json:"expires_at"`
+	}
+	if _, err := g.do(ctx, http.MethodPost, "/app/installations/"+strconv.FormatInt(installation, 10)+"/access_tokens", jwt, struct{}{}, &out); err != nil {
+		return "", err
+	}
+	g.mu.Lock()
+	g.tokens[installation] = cachedToken{out.Token, out.ExpiresAt}
+	g.mu.Unlock()
+	return out.Token, nil
+}
+
+// ParseRepo extracts owner and repository from a GitHub URL
+// (https://github.com/o/r[.git], ssh://git@github.com/o/r, git@github.com:o/r.git).
+func ParseRepo(raw string) (owner, repo string, ok bool) {
+	raw = strings.TrimSpace(raw)
+	var path string
+	switch {
+	case strings.HasPrefix(raw, "git@github.com:"):
+		path = strings.TrimPrefix(raw, "git@github.com:")
+	default:
+		u, err := url.Parse(raw)
+		if err != nil || !strings.EqualFold(u.Hostname(), "github.com") {
+			return "", "", false
+		}
+		path = strings.TrimPrefix(u.Path, "/")
+	}
+	path = strings.TrimSuffix(strings.TrimSuffix(path, "/"), ".git")
+	parts := strings.Split(path, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+// ---- routes ----
+
+type githubStatus struct {
+	Configured bool   `json:"configured"`
+	Connected  bool   `json:"connected"`
+	InstallURL string `json:"installUrl,omitempty"`
+	Repo       string `json:"repo,omitempty"`
+	Message    string `json:"message,omitempty"`
+}
+
+func (s *server) routeGitHub() {
+	s.route("GET /projects/{pid}/github", s.githubStatus)
+	s.route("POST /projects/{pid}/github/connect", s.githubConnect)
+}
+
+func (s *server) githubState(p *store.Project) githubStatus {
+	st := githubStatus{Configured: s.o.GitHub != nil, Connected: p.GitHubInstallation != 0}
+	if owner, repo, ok := ParseRepo(p.RepoURL); ok {
+		st.Repo = owner + "/" + repo
+	}
+	switch {
+	case !st.Configured:
+		st.Message = "This server has no GitHub App configured; public repositories can still be cloned."
+	case p.RepoURL == "":
+		st.Message = "Set the repository URL first."
+	case st.Repo == "":
+		st.Message = "Only github.com repositories can be connected."
+	case !st.Connected:
+		st.InstallURL = "https://github.com/apps/" + s.o.GitHub.Slug + "/installations/new"
+		st.Message = "Install the GitHub App on this repository, then check again."
+	}
+	return st
+}
+
+func (s *server) githubStatus(w http.ResponseWriter, r *http.Request, c Caller) {
+	p, _, ok := s.project(w, r, c, store.RoleViewer)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, s.githubState(p))
+}
+
+func (s *server) githubConnect(w http.ResponseWriter, r *http.Request, c Caller) {
+	p, _, ok := s.project(w, r, c, store.RoleOwner)
+	if !ok {
+		return
+	}
+	if s.o.GitHub == nil {
+		writeJSON(w, http.StatusOK, s.githubState(p))
+		return
+	}
+	owner, repo, parsed := ParseRepo(p.RepoURL)
+	if !parsed {
+		writeJSON(w, http.StatusOK, s.githubState(p))
+		return
+	}
+	id, err := s.o.GitHub.RepoInstallation(r.Context(), owner, repo)
+	switch {
+	case errors.Is(err, ErrNotInstalled):
+		id = 0
+	case err != nil:
+		writeError(w, http.StatusBadGateway, "github_error", "GitHub could not be reached; try again.")
+		return
+	}
+	up, err := s.team.UpdateProject(r.Context(), p.ID, store.ProjectPatch{GitHubInstallation: &id})
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	s.note(Caller{Actor: c.Actor, ProjectID: p.ID}, "", "github.connect", map[string]any{"connected": id != 0}, FeedEvent{Type: "project.changed"})
+	writeJSON(w, http.StatusOK, s.githubState(up))
+}

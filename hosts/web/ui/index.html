@@ -1,42 +1,15 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Harness</title>
-<link rel="stylesheet" href="/ui/app.css">
-</head>
-<body>
-<div id="app">
-  <aside id="threads" class="panel">
-    <div class="bar"><strong>Harness</strong><button id="new" title="New conversation">+ New</button></div>
-    <ul id="thread-list"></ul>
-  </aside>
-  <main>
-    <header class="bar">
-      <button id="toggle-threads" class="only-narrow" title="Conversations">&#9776;</button>
-      <span id="title">New conversation</span>
-      <select id="model" title="Model"></select>
-      <button id="toggle-files" title="Workspace files">Files</button>
-    </header>
-    <div id="status" class="muted"></div>
-    <div id="transcript" aria-live="polite"></div>
-    <div id="prompt" class="hidden"></div>
-    <form id="composer">
-      <textarea id="input" rows="2" placeholder="Message (Enter to send, Shift+Enter for a new line)"></textarea>
-      <div class="actions">
-        <label class="muted"><input type="checkbox" id="ask" checked> ask before risky tools</label>
-        <button type="button" id="cancel" class="hidden danger">Cancel</button>
-        <button type="submit" id="send">Send</button>
-      </div>
-    </form>
-  </main>
-  <aside id="files" class="panel hidden">
-    <div class="bar"><strong>/workspace</strong><button id="refresh-files" title="Reload">&#8635;</button></div>
-    <div id="crumbs" class="muted"></div>
-    <ul id="file-list"></ul>
-  </aside>
-</div>
-<script src="/ui/app.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" type="image/svg+xml" href="/ui/favicon.svg" />
+    <title>Harness</title>
+    <script type="module" crossorigin src="/ui/assets/index-Bo6RRNKz.js"></script>
+    <link rel="stylesheet" crossorigin href="/ui/assets/index-Cqj2_Me6.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
 </html>

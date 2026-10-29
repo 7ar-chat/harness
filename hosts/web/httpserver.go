@@ -37,6 +37,7 @@
 package httpserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -48,12 +49,21 @@ import (
 
 	"github.com/GhaziBenDahmane/harness"
 	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // Caller is an authenticated user.
 type Caller struct {
-	// Login owns threads and runs.
+	// Login owns threads and runs: what store calls are scoped by. In team
+	// mode it is the owner of the thread being acted on, which is not the
+	// actor for a thread shared through a project.
 	Login string
+	// Actor is the authenticated user (equal to Login outside team mode).
+	Actor string
+	// ProjectID, Role and CreatedBy describe the project thread being acted on.
+	ProjectID string
+	Role      string
+	CreatedBy string
 }
 
 // Options configures the handler.
@@ -84,6 +94,17 @@ type Options struct {
 	PingEvery time.Duration
 	// NoUI leaves out the embedded UI (API only).
 	NoUI bool
+	// Team turns on team mode: projects with members, threads shared inside a
+	// project, authorship of messages, the status feed. Users then come from
+	// OIDC (or Authenticate); see team.go.
+	Team store.TeamStore
+	// OIDC, with Team, adds the login routes (/auth/login, /auth/callback,
+	// /auth/logout) and authenticates requests by session cookie.
+	OIDC *OIDCConfig
+	// Supervisor, with Team, adds the global agent (see supervisor.go).
+	Supervisor *Supervisor
+	// GitHub, with Team, connects projects to GitHub through a GitHub App (see github.go).
+	GitHub *GitHubApp
 }
 
 type server struct {
@@ -91,14 +112,39 @@ type server struct {
 	o    Options
 	auth Authenticator
 	mux  *http.ServeMux
+	team store.TeamStore
+	sup  *Supervisor
+	hub  *hub
+	oidc *oidcAuth
 }
 
-// New returns the HTTP handler.
+// New returns the HTTP handler. It panics when Options are inconsistent (OIDC
+// that cannot be reached); use NewServer to get the error.
 func New(h *harness.Harness, o Options) http.Handler {
+	hd, err := NewServer(h, o)
+	if err != nil {
+		panic(err)
+	}
+	return hd
+}
+
+// NewServer is New returning the error.
+func NewServer(h *harness.Harness, o Options) (http.Handler, error) {
 	if o.PingEvery <= 0 {
 		o.PingEvery = 15 * time.Second
 	}
-	s := &server{h: h, o: o, mux: http.NewServeMux()}
+	s := &server{h: h, o: o, mux: http.NewServeMux(), team: o.Team, hub: newHub()}
+	if o.OIDC != nil {
+		a, err := newOIDC(context.Background(), *o.OIDC, o.Team)
+		if err != nil {
+			return nil, err
+		}
+		s.oidc = a
+		a.mount(s.mux)
+		if o.Authenticate == nil {
+			o.Authenticate = a.authenticator()
+		}
+	}
 	switch {
 	case o.Authenticate != nil:
 		s.auth = o.Authenticate
@@ -130,30 +176,45 @@ func New(h *harness.Harness, o Options) http.Handler {
 	s.route("POST /runs/{id}/steer", s.steer)
 	s.routeHistory()
 	s.routeCommands()
+	s.routeMemory()
+	if s.team != nil {
+		s.routeTeam()
+		if o.Supervisor != nil {
+			s.sup = o.Supervisor
+			s.routeSupervisor()
+			s.sup.bind(s)
+		}
+	}
 	if !o.NoUI {
 		mountUI(s.mux)
 	}
-	return s.wrap(s.mux)
+	return s.wrap(s.mux), nil
 }
 
 // route registers an authenticated route under /api and without the prefix.
 func (s *server) route(pattern string, h handler) {
 	method, path, _ := strings.Cut(pattern, " ")
+	kind := kindOf(path)
 	for _, prefix := range []string{"/api", ""} {
-		s.mux.HandleFunc(method+" "+prefix+path, s.authed(h))
+		s.mux.HandleFunc(method+" "+prefix+path, s.authed(kind, h))
 	}
 }
 
 type handler func(w http.ResponseWriter, r *http.Request, c Caller)
 
-func (s *server) authed(next handler) http.HandlerFunc {
+func (s *server) authed(kind resourceKind, next handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		login, err := s.auth(r)
 		if err != nil || login == "" {
 			writeError(w, http.StatusUnauthorized, "unauthenticated", "Authentication required.")
 			return
 		}
-		next(w, r, Caller{Login: login})
+		c, err := s.resolve(r, kind, login)
+		if err != nil {
+			s.failAccess(w, err)
+			return
+		}
+		next(w, r, c)
 	}
 }
 
@@ -165,7 +226,8 @@ func (s *server) authed(next handler) http.HandlerFunc {
 
 // api is the engine as seen by the caller.
 func (s *server) api(c Caller) client.Client {
-	return client.InProcess(s.h, c.Login, client.WithModels(s.o.Models, s.o.DefaultModel), client.WithModelInfo(s.o.ModelInfo))
+	return client.InProcess(s.h, c.Login, client.WithModels(s.o.Models, s.o.DefaultModel), client.WithModelInfo(s.o.ModelInfo),
+		client.WithAuthor(s.authorOf(c)))
 }
 
 func (s *server) models(w http.ResponseWriter, r *http.Request, c Caller) {
@@ -194,6 +256,10 @@ func limitParam(r *http.Request, def int) int {
 }
 
 func (s *server) createThread(w http.ResponseWriter, r *http.Request, c Caller) {
+	if s.team != nil {
+		s.createThreadTeam(w, r, c)
+		return
+	}
 	var body struct {
 		Title string `json:"title"`
 	}
@@ -209,6 +275,10 @@ func (s *server) createThread(w http.ResponseWriter, r *http.Request, c Caller) 
 }
 
 func (s *server) listThreads(w http.ResponseWriter, r *http.Request, c Caller) {
+	if s.team != nil {
+		s.listThreadsTeam(w, r, c)
+		return
+	}
 	ths, err := s.api(c).ListThreads(r.Context(), limitParam(r, 50))
 	if err != nil {
 		fail(w, err)
@@ -218,6 +288,10 @@ func (s *server) listThreads(w http.ResponseWriter, r *http.Request, c Caller) {
 }
 
 func (s *server) getThread(w http.ResponseWriter, r *http.Request, c Caller) {
+	if s.team != nil {
+		s.getThreadTeam(w, r, c)
+		return
+	}
 	th, err := s.api(c).GetThread(r.Context(), r.PathValue("id"))
 	if err != nil {
 		fail(w, err)
@@ -240,6 +314,10 @@ func (s *server) renameThread(w http.ResponseWriter, r *http.Request, c Caller) 
 }
 
 func (s *server) deleteThread(w http.ResponseWriter, r *http.Request, c Caller) {
+	if s.team != nil {
+		s.deleteThreadTeam(w, r, c)
+		return
+	}
 	if err := s.api(c).DeleteThread(r.Context(), r.PathValue("id")); err != nil {
 		fail(w, err)
 		return
@@ -252,11 +330,13 @@ func (s *server) createRun(w http.ResponseWriter, r *http.Request, c Caller) {
 	if !decodeLimit(w, r, &body, maxRunBody) {
 		return
 	}
+	s.forceSupervisorRun(r, r.PathValue("id"), &body.SendOptions)
 	run, err := s.api(c).Send(r.Context(), r.PathValue("id"), body.Message, body.SendOptions)
 	if err != nil {
 		fail(w, err)
 		return
 	}
+	s.afterRun(c, run, "run.send", nil)
 	writeJSON(w, http.StatusAccepted, run)
 }
 
@@ -265,11 +345,19 @@ func (s *server) resume(w http.ResponseWriter, r *http.Request, c Caller) {
 	if !decode(w, r, &body) {
 		return
 	}
+	if s.sup != nil && s.sup.isSupervisorThread(r.Context(), r.PathValue("id")) {
+		body.Interactive = true
+	}
+	tool := ""
+	if s.team != nil {
+		tool = s.pendingToolName(r, c, r.PathValue("id"))
+	}
 	run, err := s.api(c).Resume(r.Context(), r.PathValue("id"), body)
 	if err != nil {
 		fail(w, err)
 		return
 	}
+	s.afterRun(c, run, "run.resume", map[string]any{"decision": body.Decision, "reason": body.Reason, "tool": tool, "always": body.Always})
 	writeJSON(w, http.StatusAccepted, run)
 }
 
@@ -334,6 +422,7 @@ func (s *server) cancel(w http.ResponseWriter, r *http.Request, c Caller) {
 		fail(w, err)
 		return
 	}
+	s.noteRunAction(r, c, "run.cancel")
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "cancelling"})
 }
 
@@ -348,6 +437,7 @@ func (s *server) steer(w http.ResponseWriter, r *http.Request, c Caller) {
 		fail(w, err)
 		return
 	}
+	s.noteRunAction(r, c, "run.steer")
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
 }
 
@@ -386,4 +476,16 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// noteRunAction records an action on the run named by the route.
+func (s *server) noteRunAction(r *http.Request, c Caller, action string) {
+	if s.team == nil {
+		return
+	}
+	run, err := s.h.Store.GetRun(r.Context(), r.PathValue("id"))
+	if err != nil {
+		return
+	}
+	s.note(c, run.ThreadID, action, nil, FeedEvent{Type: "message.sent", RunID: run.ID})
 }

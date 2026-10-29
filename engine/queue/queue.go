@@ -30,6 +30,10 @@ var (
 type Steer struct {
 	ID   string `json:"id"`
 	Text string `json:"text"`
+	// Author is who sent the steer, with AuthorKind and OnBehalfOf as on store.Message.
+	Author     string `json:"author,omitempty"`
+	AuthorKind string `json:"authorKind,omitempty"`
+	OnBehalfOf string `json:"onBehalfOf,omitempty"`
 }
 
 // Message is a queue entry.
@@ -130,7 +134,8 @@ func SteerMessages(threadID, runID string, steers []Steer) []*store.Message {
 	out := make([]*store.Message, 0, len(steers))
 	for _, st := range steers {
 		out = append(out, &store.Message{ID: st.ID, ThreadID: threadID, RunID: runID, Role: store.RoleUser,
-			Content: st.Text, Metadata: map[string]any{"steer": true, "delivered": false}})
+			Content: st.Text, Metadata: map[string]any{"steer": true, "delivered": false},
+			AuthorLogin: st.Author, AuthorKind: st.AuthorKind, OnBehalfOf: st.OnBehalfOf})
 	}
 	return out
 }
