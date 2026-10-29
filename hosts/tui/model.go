@@ -60,6 +60,7 @@ type block struct {
 	id        string // tool call id
 	delivered bool   // steer
 	open      bool   // assistant/reasoning message still streaming
+	at        time.Time
 }
 
 // pending is the interrupt the last run ended with.
@@ -79,10 +80,16 @@ type Options struct {
 	// Config is the parsed tui.json (nil: the defaults). Run parses ConfigData, the text of the user's tui.json, when Config is nil.
 	Config     *TUIConfig
 	ConfigData []byte
-	// StateDir holds tui-state.json (theme, favorite and recent models); "" keeps them in memory only.
+	// StateDir holds the files of UI state (~/.har): tui-state.json (theme, favorite and recent models),
+	// the input history and the stash; "" keeps them in memory only.
 	StateDir string
 	// Connector backs /connect; nil leaves the command saying it is unavailable.
 	Connector Connector
+	// Workspace is the local project directory: the root of @file mentions and
+	// the working directory of !commands. "" (a remote session) turns both off.
+	Workspace string
+	// Attention configures notifications while the terminal is in the background.
+	Attention Attention
 }
 
 // Model is the Bubble Tea model of the terminal client. It is pure with
@@ -100,6 +107,7 @@ type Model struct {
 	blocks   []block
 	toolIdx  map[string]int
 	expanded bool
+	inp      inputState // input and chrome features (input.go)
 
 	picker  *picker   // open list (/model, /sessions), nil when none
 	sugg    []command // slash completions of the input
@@ -143,6 +151,7 @@ func New(be Backend, o Options) *Model {
 	in.Focus()
 	m := &Model{static: o.StaticCursor, be: be, ctx: o.Context, now: o.Now, in: in, toolIdx: map[string]int{}, width: 80, height: 24}
 	m.initExt(o)
+	m.inp = newInputState(o)
 	m.vp = viewport.New(80, 10)
 	m.initUI(o)
 	m.layout()
@@ -170,6 +179,10 @@ func (m *Model) Transcript() string { return m.renderBlocks() }
 // Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
+	if cmd, ok := m.extraUpdate(msg); ok {
+		m.refresh()
+		return m, tea.Batch(cmd, m.afterUpdate())
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -177,7 +190,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if cmd, handled := m.key(msg); handled {
 			m.refresh()
-			return m, cmd
+			return m, tea.Batch(cmd, m.afterUpdate())
 		}
 		var cmd tea.Cmd
 		m.in, cmd = m.in.Update(msg)
@@ -241,6 +254,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 	m.refresh()
+	cmds = append(cmds, m.afterUpdate())
 	return m, tea.Batch(cmds...)
 }
 
@@ -267,6 +281,9 @@ func (m *Model) key(k tea.KeyMsg) (tea.Cmd, bool) {
 		return nil, true
 	}
 	if cmd, ok := m.navKey(k); ok {
+		return cmd, true
+	}
+	if cmd, ok := m.extraKey(k); ok {
 		return cmd, true
 	}
 	if len(m.sugg) > 0 {
@@ -355,6 +372,9 @@ func (m *Model) submit() tea.Cmd {
 	if text == "" || m.starting {
 		return nil
 	}
+	if cmd, ok := m.preSubmit(m.in.Value()); ok {
+		return cmd
+	}
 	if m.pending == nil {
 		if cmd, ok := m.slash(m.in.Value()); ok {
 			return cmd
@@ -367,11 +387,12 @@ func (m *Model) submit() tea.Cmd {
 		return m.resume(ResumeRequest{Text: text})
 	}
 	m.in.Reset()
+	payload := m.compose(text)
 	if m.running {
 		m.add(block{kind: blockSteer, text: text, delivered: true})
 		runID := m.runID
 		return func() tea.Msg {
-			if err := m.be.Steer(m.ctx, runID, text); err != nil {
+			if err := m.be.Steer(m.ctx, runID, payload); err != nil {
 				return opErrMsg{"steer", err}
 			}
 			return nil
@@ -379,7 +400,7 @@ func (m *Model) submit() tea.Cmd {
 	}
 	m.add(block{kind: blockUser, text: text})
 	m.starting = true
-	return m.start(func() (string, error) { return m.be.Send(m.ctx, text) })
+	return m.start(func() (string, error) { return m.be.Send(m.ctx, payload) })
 }
 
 // resume answers the pending interrupt.
@@ -472,7 +493,10 @@ func (u *Usage) add(o Usage) {
 	u.Reasoning += o.Reasoning
 }
 
-func (m *Model) add(b block) { m.blocks = append(m.blocks, b) }
+func (m *Model) add(b block) {
+	b.at = m.now()
+	m.blocks = append(m.blocks, b)
+}
 
 // last returns the index of the last block of kind that is still open, or -1.
 func (m *Model) openBlock(kind blockKind) int {
@@ -486,6 +510,7 @@ func (m *Model) openBlock(kind blockKind) int {
 
 // apply folds one AG-UI event into the transcript and status.
 func (m *Model) apply(ev Ev) {
+	defer m.observe(ev)
 	switch ev.Type {
 	case agui.StepStarted:
 		m.steps++
@@ -603,30 +628,10 @@ func (m *Model) interrupt(ev Ev) {
 
 // renderBlocks renders the whole transcript.
 func (m *Model) renderBlocks() string {
-	w := max(m.width, 20)
+	w := m.contentWidth()
 	parts := make([]string, 0, len(m.blocks))
-	for _, b := range m.blocks {
-		var s string
-		switch b.kind {
-		case blockUser:
-			s = RenderUser(b.text, w)
-		case blockAssistant:
-			s = RenderMarkdown(b.text, w)
-		case blockTool:
-			s = RenderToolCall(b.tool, w, m.expanded)
-		case blockReasoning:
-			s = RenderReasoning(len([]rune(b.tool.Output)), b.open)
-		case blockSteer:
-			s = RenderSteer(b.text, b.delivered)
-		case blockError:
-			s = b.text
-			if !strings.HasPrefix(s, "error") {
-				s = RenderRunError("", s)
-			}
-		case blockNotice:
-			s = RenderNotice(b.text)
-		}
-		parts = append(parts, s)
+	for i := range m.blocks {
+		parts = append(parts, m.renderBlock(i, w))
 	}
 	return strings.Join(parts, "\n\n")
 }
@@ -677,7 +682,7 @@ func (m *Model) layout() {
 	if o := m.overlay(w); o != "" {
 		promptH += strings.Count(o, "\n") + 2
 	}
-	m.vp.Width = w
+	m.vp.Width = m.contentWidth()
 	m.vp.Height = max(m.height-1-m.in.Height()-promptH, 1)
 }
 
@@ -691,7 +696,7 @@ func (m *Model) refresh() {
 	m.suggSel = min(m.suggSel, max(len(m.sugg)-1, 0))
 	m.layout()
 	atBottom := m.vp.AtBottom()
-	m.vp.SetContent(m.renderBlocks())
+	m.vp.SetContent(m.content())
 	if atBottom {
 		m.vp.GotoBottom()
 	}
@@ -700,7 +705,7 @@ func (m *Model) refresh() {
 // View implements tea.Model.
 func (m *Model) View() string {
 	var b strings.Builder
-	b.WriteString(m.vp.View())
+	b.WriteString(m.withSidebar(m.vp.View()))
 	b.WriteString("\n")
 	if m.pending != nil {
 		b.WriteString(RenderPrompt(m.pending.prompt, max(m.width, 20)))
@@ -726,7 +731,7 @@ func (m *Model) overlay(w int) string {
 	case len(m.sugg) > 0:
 		return renderSuggestions(m.sugg, m.suggSel, w)
 	}
-	return ""
+	return m.extraOverlay(w)
 }
 
 // clearInput empties the input box (the command being run replaces what was typed); it reports true.

@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -14,7 +16,10 @@ func Run(ctx context.Context, b Backend, o Options) error {
 		cfg := ParseTUIConfig(o.ConfigData)
 		o.Config = &cfg
 	}
-	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithContext(ctx)}
+	// Keep the user's terminal title: push it now, pop it on exit (xterm CSI 22/23).
+	fmt.Fprint(os.Stdout, "\x1b[22;0t")
+	defer fmt.Fprint(os.Stdout, "\x1b[23;0t")
+	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus(), tea.WithContext(ctx)}
 	if o.Config.Mouse {
 		opts = append(opts, tea.WithMouseCellMotion())
 	}

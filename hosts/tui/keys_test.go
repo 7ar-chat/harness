@@ -169,7 +169,7 @@ func TestHomeEndMoveTheCursorWhenTyping(t *testing.T) {
 }
 
 func TestConfigRebindsLeaderAndCommand(t *testing.T) {
-	m, _ := newConfigured(t, `{"leader": "ctrl+b", "keybinds": {"palette": ["ctrl+k"], "command.quit": "<leader>x"}}`, "")
+	m, _ := newConfigured(t, `{"leader": "ctrl+b", "keybinds": {"palette": ["ctrl+k"], "command.quit": "<leader>z"}}`, "")
 
 	press(m, tea.KeyCtrlK)
 	opened := m.picker != nil
@@ -179,7 +179,7 @@ func TestConfigRebindsLeaderAndCommand(t *testing.T) {
 	typeText(m, "q")
 	stillHere := !m.quit
 	press(m, tea.KeyCtrlB)
-	typeText(m, "x")
+	typeText(m, "z")
 
 	if !opened || !stillHere || !m.quit {
 		t.Fatalf("palette=%v old-bind-ignored=%v quit=%v", opened, stillHere, m.quit)

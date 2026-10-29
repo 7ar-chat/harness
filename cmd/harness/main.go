@@ -218,6 +218,9 @@ func attach(ctx context.Context, c client.Client, o options, prompt string, prin
 	}
 	to := tuiOptions()
 	to.Connector = o.connector
+	if o.remote == "" {
+		to.Workspace, _ = os.Getwd() // @file and !command act on the local project; a remote session has none
+	}
 	if err := tui.Run(ctx, be, to); err != nil {
 		return fail(stderr, err)
 	}
