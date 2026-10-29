@@ -5,20 +5,6 @@ import (
 	"strings"
 )
 
-// tips rotate in the welcome screen, one per launch.
-var tips = []string{
-	"ctrl+o expands the tool calls of the transcript",
-	"/model switches the model; /sessions resumes an earlier conversation",
-	"alt+up and alt+down select a message, alt+y copies it",
-	"/stash parks the half-written message, /stash pop brings it back",
-	"/editor composes a long message in $EDITOR",
-	"/thinking shows the model's reasoning, /timestamps the time of each message",
-	"ctrl+b opens the side panel with the plan and the files the agent changed",
-	"paste or drop a png/jpg path to attach an image; /image <path> does too",
-	"/export writes the conversation as Markdown",
-	"/notify rings the terminal when a run needs you and the window is in the background",
-}
-
 // welcome is the screen of an empty conversation: the name, the model, the
 // directory, three hints and a tip.
 func (m *Model) welcome() string {
@@ -30,7 +16,9 @@ func (m *Model) welcome() string {
 	}
 	b.WriteString("\n")
 	b.WriteString(styleDim.Render("  / ") + "for commands   " + styleDim.Render("@ ") + "for files   " + styleDim.Render("! ") + "for the shell\n")
-	b.WriteString("\n" + styleDim.Render("  tip: "+tips[m.inp.tipIdx%len(tips)]))
+	if t := m.tipLine(); t != "" {
+		b.WriteString("\n" + styleDim.Render("  "+t))
+	}
 	return b.String()
 }
 

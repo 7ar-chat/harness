@@ -42,7 +42,7 @@ var themes = []Theme{
 
 func init() {
 	applyTheme(themes[0])
-	register(command{name: "themes", args: "[name]", help: "pick a color theme (live preview)", run: (*Model).cmdThemes})
+	register(command{name: "themes", aliases: []string{"theme"}, args: "[name]", help: "pick a color theme (live preview)", run: (*Model).cmdThemes})
 }
 
 // themeByName finds a theme; the match ignores case.

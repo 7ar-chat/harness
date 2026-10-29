@@ -43,7 +43,7 @@ func (m *Model) renderBlock(i, w int) string {
 	case blockAssistant:
 		s = RenderMarkdown(b.text, w)
 	case blockTool:
-		s = RenderToolCall(b.tool, w, m.expanded)
+		s = renderToolCall(b.tool, w, m.expanded, m.useSplitDiff())
 	case blockReasoning:
 		s = m.renderThinking(b, w)
 	case blockSteer:
@@ -206,59 +206,24 @@ func (m *Model) writeClipboard(text string) tea.Cmd {
 
 // --- attention notifications and the terminal title ---
 
-func (m *Model) cmdNotify(string) tea.Cmd {
-	a := &m.inp.attn
-	a.Enabled = !a.Enabled
-	state := "off"
-	if a.Enabled {
-		state = "on"
-		if !a.Notifications && !a.Sound {
-			a.Notifications, a.Sound = true, true
-		}
-	}
-	m.add(block{kind: blockNotice, text: "notifications: " + state + " (only while this terminal is in the background)"})
-	return nil
-}
-
 // attention queues a notification for the events that need the user back.
 func (m *Model) attention(ev Ev) {
 	switch ev.Type {
 	case agui.RunError:
-		m.notify("harness: run failed", ev.Message)
+		m.notify(attnError, "harness: run failed", ev.Message)
 	case agui.RunFinished:
 		switch ev.Outcome {
 		case "cancelled":
 		case "interrupt":
 			if m.pending != nil && m.pending.prompt.Reason == "tool_approval" {
-				m.notify("harness: approval needed", m.pending.prompt.Title)
+				m.notify(attnPermission, "harness: approval needed", m.pending.prompt.Title)
 			} else if m.pending != nil {
-				m.notify("harness: question", m.pending.prompt.Title)
+				m.notify(attnQuestion, "harness: question", m.pending.prompt.Title)
 			}
 		default:
-			m.notify("harness: run finished", m.sessionTitle())
+			m.notify(attnDone, "harness: run finished", m.sessionTitle())
 		}
 	}
-}
-
-// notify rings the bell and sends a desktop notification, when enabled and the
-// terminal is blurred. The text is stripped of control characters.
-func (m *Model) notify(title, body string) {
-	a := m.inp.attn
-	if !a.Enabled || !m.inp.blurred {
-		return
-	}
-	seq := ""
-	if a.Sound {
-		seq += "\a"
-	}
-	if a.Notifications {
-		seq += notifySeq(termProgram(), cleanText(title), cleanText(body))
-	}
-	if seq == "" {
-		return
-	}
-	out := m.inp.out
-	m.inp.cmds = append(m.inp.cmds, func() tea.Msg { fmt.Fprint(out, seq); return nil })
 }
 
 // notifySeq is the escape sequence of a desktop notification: OSC 777 for the

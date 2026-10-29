@@ -412,6 +412,29 @@ func TestSessionsListComesFromTheDurableStoreOnly(t *testing.T) {
 	}
 }
 
+func TestSessionsReportThePinnedFlag(t *testing.T) {
+	// Arrange
+	st, err := harness.OpenLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	r := newRig(t, rigOpts{store: st})
+	id := r.newThread("alice")
+	finished(t, r.stream(r.startRun("alice", id, "pin me"), "alice"))
+	r.json("PATCH", "/api/threads/"+id, "alice", `{"pinned":true}`, 200)
+
+	// Act
+	resp := r.do("GET", "/api/sessions", "alice", "")
+	var list []map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&list)
+
+	// Assert
+	if len(list) != 1 || list[0]["pinned"] != true {
+		t.Fatalf("sessions = %v", list)
+	}
+}
+
 func TestFilesAreListedAndDownloadedReadOnlyInsideTheWorkspace(t *testing.T) {
 	// Arrange
 	r := newRig(t, rigOpts{})

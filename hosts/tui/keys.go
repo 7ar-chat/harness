@@ -175,7 +175,7 @@ type uiState struct {
 	uiStore *stateFile // tui-state.json; nil keeps nothing
 }
 
-// initUI applies the configuration: keymap, theme, scroll speed, cursor.
+// initUI applies the configuration: keymap, theme, cursor (initPrefs does the scroll speed and diff style).
 func (m *Model) initUI(o Options) {
 	cfg := DefaultTUIConfig()
 	if o.Config != nil {
@@ -193,7 +193,6 @@ func (m *Model) initUI(o Options) {
 		}
 	}
 	applyTheme(th)
-	m.vp.MouseWheelDelta = cfg.ScrollSpeed
 	if !cfg.CursorBlink {
 		m.in.Cursor.SetMode(cursor.CursorStatic)
 	}

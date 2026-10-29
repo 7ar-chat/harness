@@ -36,6 +36,8 @@ type picker struct {
 	extra func(m *Model, k tea.KeyMsg) (cmd tea.Cmd, ok bool)
 	// hint replaces the default key hint of the title line; footer is an extra line below the list (a prompt or a confirmation).
 	hint, footer string
+	// rows is how many items show at once (0: pickRows).
+	rows int
 }
 
 func (p *picker) visible() []pickItem {
@@ -106,6 +108,10 @@ func (p *picker) notify() {
 
 func (p *picker) view(width int) string {
 	vis := p.visible()
+	rows := pickRows
+	if p.rows > 0 {
+		rows = p.rows
+	}
 	hint := "type to filter · ↑↓ · enter · esc"
 	if p.hint != "" {
 		hint = p.hint
@@ -113,10 +119,10 @@ func (p *picker) view(width int) string {
 	lines := []string{styleBold.Render(p.title) + styleDim.Render("  "+hint)}
 	lines = append(lines, styleDim.Render("> ")+p.filter)
 	start := 0
-	if p.sel >= pickRows {
-		start = p.sel - pickRows + 1
+	if p.sel >= rows {
+		start = p.sel - rows + 1
 	}
-	for i := start; i < len(vis) && i < start+pickRows; i++ {
+	for i := start; i < len(vis) && i < start+rows; i++ {
 		it := vis[i]
 		if it.group != "" && (i == start || vis[i-1].group != it.group) {
 			lines = append(lines, styleDim.Render("  ── "+it.group))
@@ -145,7 +151,7 @@ func (p *picker) view(width int) string {
 		lines = append(lines, styleDim.Render(fmt.Sprintf("  no match — enter uses %q as is", strings.TrimSpace(p.filter))))
 	case len(vis) == 0:
 		lines = append(lines, styleDim.Render("  no match"))
-	case len(vis) > pickRows:
+	case len(vis) > rows:
 		lines = append(lines, styleDim.Render(fmt.Sprintf("  %d/%d", p.sel+1, len(vis))))
 	}
 	if p.footer != "" {

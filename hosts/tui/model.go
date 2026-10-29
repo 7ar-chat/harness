@@ -127,6 +127,7 @@ type Model struct {
 	static     bool
 
 	uiState          // keymap, leader sequence, state file (keys.go)
+	pf      prefs    // diff style, wheel, mouse, tips (prefs.go)
 	ext     extState // state of the conversation, run-option and connect commands (ext.go)
 }
 
@@ -154,6 +155,7 @@ func New(be Backend, o Options) *Model {
 	m.inp = newInputState(o)
 	m.vp = viewport.New(80, 10)
 	m.initUI(o)
+	m.initPrefs(o)
 	m.layout()
 	return m
 }

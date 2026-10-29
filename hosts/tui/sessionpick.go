@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -47,11 +48,16 @@ func (m *Model) openSessionPickerX(list []client.Session) {
 		m.notice("no saved conversations")
 		return
 	}
+	// Pinned first, each group keeping the order of the backend (newest first).
+	list = append([]client.Session(nil), list...)
+	sort.SliceStable(list, func(i, j int) bool { return list[i].Pinned && !list[j].Pinned })
+	pinned := map[string]bool{}
 	items := make([]pickItem, 0, len(list))
 	for _, s := range list {
 		label := sessionTitle(s)
-		if m.ext.pinned[s.ID] {
-			label = "▲ " + label
+		if s.Pinned {
+			pinned[s.ID] = true
+			label = "★ " + label
 		}
 		items = append(items, pickItem{id: s.ID, label: label,
 			desc: fmt.Sprintf("%s · %d msgs · %s", s.UpdatedAt.Format("Jan 2 15:04"), s.Messages, clip(oneLine(s.Preview), 50))})
@@ -145,8 +151,7 @@ func (m *Model) openSessionPickerX(list []client.Session) {
 				p.footer += styleWarn.Render("  (this is the current conversation)")
 			}
 		case "ctrl+o":
-			pin := !m.ext.pinned[id]
-			m.ext.pinned[id] = pin
+			pin := !pinned[id]
 			verb := "pinned"
 			if !pin {
 				verb = "unpinned"
