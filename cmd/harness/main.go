@@ -214,7 +214,7 @@ func attach(ctx context.Context, c client.Client, o options, prompt string, prin
 	if printMode {
 		return tui.RunPrint(ctx, be, prompt, tui.PrintOptions{Stdout: stdout, Stderr: stderr, JSON: o.json})
 	}
-	if err := tui.Run(ctx, be); err != nil {
+	if err := tui.Run(ctx, be, tuiRunOptions()); err != nil {
 		return fail(stderr, err)
 	}
 	return 0

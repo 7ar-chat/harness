@@ -10,21 +10,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// Styles. With no color profile (tests, pipes) they render as plain text.
-var (
-	styleUser    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
-	styleDim     = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	styleBold    = lipgloss.NewStyle().Bold(true)
-	styleCode    = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	styleErr     = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	styleOK      = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	styleAdd     = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	styleDel     = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	styleHunk    = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
-	styleWarn    = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true)
-	styleStatus  = lipgloss.NewStyle().Reverse(true)
-	styleToolHdr = lipgloss.NewStyle().Bold(true)
-)
+// The styles live in theme.go (applyTheme assigns them); with no color profile
+// (tests, pipes) they render as plain text.
 
 var (
 	reBold = regexp.MustCompile(`\*\*([^*]+?)\*\*`)

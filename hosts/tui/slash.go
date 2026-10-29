@@ -114,11 +114,16 @@ func (m *Model) cmdHelp(string) tea.Cmd {
 		if c.args != "" {
 			use += " " + c.args
 		}
-		fmt.Fprintf(&b, "  %-16s %s\n", use, c.help)
+		hint := ""
+		if k := m.keys.keyLabel(c); k != "" {
+			hint = "  [" + k + "]"
+		}
+		fmt.Fprintf(&b, "  %-16s %s%s\n", use, c.help, hint)
 	}
 	b.WriteString("keys\n")
 	b.WriteString("  enter sends (steers while a run is active) · alt+enter new line · esc cancels the run\n")
-	b.WriteString("  ctrl+o tools · pgup/pgdn scroll · ctrl+c twice quits")
+	b.WriteString("  ctrl+o tools · pgup/pgdn scroll · ctrl+g/end top/bottom · ctrl+c twice quits\n")
+	fmt.Fprintf(&b, "  ctrl+p command palette · %s then a key runs the command with that [bind]", m.keys.Leader())
 	m.add(block{kind: blockNotice, text: b.String()})
 	return nil
 }
