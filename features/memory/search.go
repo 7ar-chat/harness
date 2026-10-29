@@ -202,6 +202,18 @@ func entryTime(e *store.MemoryEntry) time.Time {
 // (0.45 keyword + 0.25 cosine + 0.15 path/tag + 0.10 importance + 0.05
 // recency) and returns the topK best (ties: most recent first).
 func Rank(entries []*store.MemoryEntry, query string, topK int, now time.Time) []Hit {
+	return RankWith(entries, query, topK, now, RankOptions{})
+}
+
+// RankOptions add embeddings to Rank: the query's vector and the entries' by id. An entry with a
+// vector gets the embedding similarity as its semantic component instead of the word cosine.
+type RankOptions struct {
+	QueryVec []float32
+	Vecs     map[string][]float32
+}
+
+// RankWith is Rank with options.
+func RankWith(entries []*store.MemoryEntry, query string, topK int, now time.Time, opts RankOptions) []Hit {
 	qTokens := Tokenize(query)
 	if len(qTokens) == 0 {
 		return nil
@@ -239,6 +251,9 @@ func Rank(entries []*store.MemoryEntry, query string, topK int, now time.Time) [
 			keyword := float64(kw) / float64(len(qSet))
 			pathTag := float64(pt) / float64(len(qSet))
 			semantic := Cosine(qCounter, counter(searchable))
+			if v := opts.Vecs[e.ID]; opts.QueryVec != nil && v != nil {
+				semantic = vecSimilarity(CosineVec(opts.QueryVec, v))
+			}
 			recency := RecencyScore(entryTime(e), now)
 			importance := ImportanceScore(e.Tags, chunk, e.Importance)
 			score := weightKeyword*keyword + weightSemantic*semantic + weightPathTag*pathTag + weightImportance*importance + weightRecency*recency

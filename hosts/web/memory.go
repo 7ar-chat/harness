@@ -2,7 +2,10 @@ package httpserver
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/GhaziBenDahmane/harness/features/memory"
@@ -34,7 +37,46 @@ func MemoryKey(team store.TeamStore) func(ctx context.Context, login, threadID s
 	}
 }
 
+// UserMemoryPrefix starts the key of a user's private layer inside a project ("pu:<project>:<login>").
+const UserMemoryPrefix = "pu:"
+
+// MemoryShared is harness.Options.MemoryShared for team mode: a project's memory is shared.
+func MemoryShared(key string) bool { return strings.HasPrefix(key, ProjectMemoryPrefix) }
+
+// MemoryUserKey is harness.Options.MemoryUserKey for team mode: in a project thread, the user who
+// asked (the author of the thread's last message that is not a steer) has a private layer.
+func MemoryUserKey(team store.TeamStore, messages func(ctx context.Context, threadID string) ([]*store.Message, error)) func(ctx context.Context, login, threadID string) string {
+	return func(ctx context.Context, login, threadID string) string {
+		meta, err := team.GetThreadMeta(ctx, threadID)
+		if err != nil || meta.ProjectID == "" {
+			return ""
+		}
+		msgs, err := messages(ctx, threadID)
+		if err != nil {
+			return ""
+		}
+		for i := len(msgs) - 1; i >= 0; i-- {
+			m := msgs[i]
+			if m.Role != store.RoleUser || m.IsSteer() {
+				continue
+			}
+			who := m.AuthorLogin
+			if m.AuthorKind == store.AuthorSupervisor || m.AuthorKind == store.AuthorSystem {
+				who = m.OnBehalfOf
+			}
+			if who == "" {
+				return ""
+			}
+			return UserMemoryPrefix + meta.ProjectID + ":" + who
+		}
+		return ""
+	}
+}
+
 func (s *server) routeMemory() {
+	s.route("GET /memory/stats", s.memoryStats)
+	s.route("GET /projects/{pid}/memory/export", s.exportMemory)
+	s.route("POST /projects/{pid}/memory/import-agents", s.importAgentsMD)
 	s.route("GET /memory", s.listMemory)
 	s.route("POST /memory", s.createMemory)
 	s.route("PATCH /memory/{mid}", s.patchMemory)
@@ -64,6 +106,9 @@ func (s *server) memoryKey(w http.ResponseWriter, r *http.Request, c Caller, wri
 	if _, err := s.requireProject(r.Context(), pid, c.Actor, need); err != nil {
 		s.failAccess(w, err)
 		return "", false
+	}
+	if r.URL.Query().Get("mine") == "1" { // the user's own layer inside the project: the key comes from the session, never the request
+		return UserMemoryPrefix + pid + ":" + c.Actor, true
 	}
 	return ProjectMemoryPrefix + pid, true
 }
@@ -118,11 +163,15 @@ func (s *server) createMemory(w http.ResponseWriter, r *http.Request, c Caller) 
 		Content string   `json:"content"`
 		Tags    []string `json:"tags"`
 		Path    string   `json:"path"`
+		Pinned  bool     `json:"pinned"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
 	meta := map[string]any{"createdBy": c.Actor}
+	if body.Pinned {
+		meta["pinned"] = true
+	}
 	res := s.h.Memory.Create(r.Context(), memory.Writer{Login: key, Source: store.MemorySourceUser},
 		memory.CreateInput{Content: body.Content, Title: body.Title, Tags: body.Tags, Path: body.Path, Metadata: meta})
 	if res.IsError {
@@ -154,12 +203,16 @@ func (s *server) patchMemory(w http.ResponseWriter, r *http.Request, c Caller) {
 		Title   *string   `json:"title"`
 		Content *string   `json:"content"`
 		Tags    *[]string `json:"tags"`
+		Pinned  *bool     `json:"pinned"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	res := s.h.Memory.Update(r.Context(), memory.Writer{Login: key, Source: store.MemorySourceUser},
-		memory.UpdateInput{ID: r.PathValue("mid"), Title: body.Title, Content: body.Content, Tags: body.Tags})
+	in := memory.UpdateInput{ID: r.PathValue("mid"), Title: body.Title, Content: body.Content, Tags: body.Tags}
+	if body.Pinned != nil {
+		in.Metadata = map[string]any{"pinned": *body.Pinned}
+	}
+	res := s.h.Memory.Update(r.Context(), memory.Writer{Login: key, Source: store.MemorySourceUser}, in)
 	if res.IsError {
 		memoryFail(w, &memory.Error{Code: errStr(res.Data, "code"), Message: errStr(res.Data, "message")})
 		return
@@ -232,4 +285,186 @@ func errStr(m map[string]any, k string) string {
 	}
 	s, _ := m[k].(string)
 	return strings.TrimSpace(s)
+}
+
+// memoryStats describes a memory and what the memory service did in this process.
+//
+//	GET /api/memory/stats[?project=ID[&mine=1]] → {active, pending, pinned, byKind, embeddings:{enabled,model,vectors}, service:{recall…, extraction…}}
+func (s *server) memoryStats(w http.ResponseWriter, r *http.Request, c Caller) {
+	key, ok := s.memoryKey(w, r, c, false)
+	if !ok {
+		return
+	}
+	entries, err := s.h.Store.ListMemoryEntries(r.Context(), key, store.MemoryActive, store.MemoryPending)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	out := map[string]any{"active": 0, "pending": 0, "pinned": 0}
+	kinds := map[string]int{}
+	active, pending, pinned := 0, 0, 0
+	for _, e := range entries {
+		if e.Status == store.MemoryPending || e.Proposal != nil {
+			pending++
+		}
+		if e.Status != store.MemoryActive {
+			continue
+		}
+		active++
+		if memory.IsPinned(e) {
+			pinned++
+		}
+		parts := strings.Split(e.Path, "/")
+		if len(parts) >= 3 && parts[0] == "memories" {
+			kinds[parts[len(parts)-2]]++
+		}
+	}
+	out["active"], out["pending"], out["pinned"], out["byKind"] = active, pending, pinned, kinds
+	emb := map[string]any{"enabled": false}
+	if o := s.h.Memory.Options(); o.Embedder != nil {
+		emb["enabled"], emb["model"] = true, o.Embedder.Model()
+		if vs, ok := s.h.Store.(store.MemoryEmbeddingStore); ok {
+			if v, err := vs.GetMemoryEmbeddings(r.Context(), key); err == nil {
+				emb["vectors"] = len(v)
+			}
+		}
+	}
+	out["embeddings"], out["service"] = emb, s.h.Memory.Stats()
+	writeJSON(w, http.StatusOK, out)
+}
+
+// exportMemory renders the project's pinned and active memories as markdown, to paste into AGENTS.md.
+func (s *server) exportMemory(w http.ResponseWriter, r *http.Request, c Caller) {
+	if s.h.Memory == nil || s.team == nil {
+		writeError(w, http.StatusNotImplemented, "not_supported", "Not available.")
+		return
+	}
+	p, _, ok := s.project(w, r, c, store.RoleViewer)
+	if !ok {
+		return
+	}
+	entries, err := s.h.Store.ListMemoryEntries(r.Context(), ProjectMemoryPrefix+p.ID, store.MemoryActive)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	sort.SliceStable(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
+	var b strings.Builder
+	fmt.Fprintf(&b, "# %s — project memory\n\n", p.Name)
+	section := func(title string, keep func(*store.MemoryEntry) bool) {
+		first := true
+		for _, e := range entries {
+			if !keep(e) || e.Path == agentsMDPath {
+				continue
+			}
+			if first {
+				fmt.Fprintf(&b, "## %s\n\n", title)
+				first = false
+			}
+			body := strings.TrimSpace(e.Content)
+			fmt.Fprintf(&b, "- **%s** — %s\n", firstLine(e.Title, e.Path), strings.ReplaceAll(body, "\n", "\n  "))
+		}
+		if !first {
+			b.WriteString("\n")
+		}
+	}
+	section("Always apply", memory.IsPinned)
+	for _, k := range memory.SemanticKinds {
+		kind := k
+		section(strings.ToUpper(kind[:1])+kind[1:], func(e *store.MemoryEntry) bool {
+			return !memory.IsPinned(e) && strings.Contains(e.Path, "/"+kind+"/")
+		})
+	}
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="MEMORY.md"`)
+	_, _ = w.Write([]byte(b.String()))
+}
+
+func firstLine(title, path string) string {
+	if strings.TrimSpace(title) != "" {
+		return strings.TrimSpace(title)
+	}
+	return path
+}
+
+// agentsMDPath is where the repository's AGENTS.md lives in the project memory.
+const agentsMDPath = "memories/core/agents-md.md"
+
+// importAgentsMD reads the repository's AGENTS.md (else CLAUDE.md) through the GitHub App and keeps it
+// as a pinned entry of the project memory, so the file the humans maintain is what every agent starts with.
+//
+//	POST /api/projects/{pid}/memory/import-agents → the entry
+func (s *server) importAgentsMD(w http.ResponseWriter, r *http.Request, c Caller) {
+	if s.h.Memory == nil || s.team == nil {
+		writeError(w, http.StatusNotImplemented, "not_supported", "Not available.")
+		return
+	}
+	p, _, ok := s.project(w, r, c, store.RoleMember)
+	if !ok {
+		return
+	}
+	e, err := s.syncAgentsMD(r.Context(), p, c.Actor)
+	switch {
+	case errors.Is(err, errNoRepoFile):
+		writeError(w, http.StatusNotFound, "not_found", "The repository has no AGENTS.md or CLAUDE.md (or the GitHub App cannot read it).")
+	case err != nil:
+		writeError(w, http.StatusBadGateway, "github_error", "The file could not be read from GitHub.")
+	default:
+		s.noteMemory(r, c, "memory.import_agents", e.ID)
+		writeJSON(w, http.StatusOK, entryView(e))
+	}
+}
+
+var errNoRepoFile = errors.New("no AGENTS.md in the repository")
+
+// syncAgentsMD creates or refreshes the pinned AGENTS.md entry of a project.
+func (s *server) syncAgentsMD(ctx context.Context, p *store.Project, actor string) (*store.MemoryEntry, error) {
+	owner, repo, ok := ParseRepo(p.RepoURL)
+	if !ok || s.o.GitHub == nil || p.GitHubInstallation == 0 {
+		return nil, errNoRepoFile
+	}
+	var data []byte
+	var file string
+	for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {
+		b, err := s.o.GitHub.FileContent(ctx, p.GitHubInstallation, owner, repo, name, p.DefaultBranch)
+		if errors.Is(err, errNoRepoFile) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		data, file = b, name
+		break
+	}
+	if data == nil {
+		return nil, errNoRepoFile
+	}
+	content := strings.TrimSpace(string(data))
+	if len(content) > 20000 {
+		content = content[:20000] + "\n\n(truncated)"
+	}
+	key := ProjectMemoryPrefix + p.ID
+	w := memory.Writer{Login: key, Source: store.MemorySourceUser}
+	meta := map[string]any{"pinned": true, "source": "repo", "file": file, "createdBy": actor}
+	if cur, err := s.h.Store.GetMemoryEntryByPath(ctx, key, agentsMDPath); err == nil && cur.Status != store.MemoryDeleted {
+		if cur.Content == content {
+			return cur, nil
+		}
+		res := s.h.Memory.Update(ctx, w, memory.UpdateInput{ID: cur.ID, Content: &content, Metadata: meta})
+		if res.IsError {
+			return nil, fmt.Errorf("updating AGENTS.md: %v", res.Data)
+		}
+		return s.h.Store.GetMemoryEntry(ctx, key, cur.ID)
+	}
+	title := file + " (from the repository)"
+	res := s.h.Memory.Create(ctx, w, memory.CreateInput{Content: content, Title: &title, Path: agentsMDPath, Metadata: meta, Tags: []string{"pinned"}})
+	if res.IsError {
+		return nil, fmt.Errorf("creating AGENTS.md: %v", res.Data)
+	}
+	for _, ch := range res.Changes {
+		if ch.Entry != nil {
+			return ch.Entry, nil
+		}
+	}
+	return nil, errors.New("AGENTS.md not stored")
 }

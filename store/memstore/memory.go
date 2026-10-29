@@ -14,7 +14,8 @@ import (
 // memory is the in-memory state of the memory entries.
 type memory struct {
 	entries  []*store.MemoryEntry
-	disabled map[string]bool // users with memory disabled
+	disabled map[string]bool                            // users with memory disabled
+	vectors  map[string]map[string]store.EntryEmbedding // login → entry id → embedding
 }
 
 func (s *Store) memInit() {

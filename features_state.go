@@ -201,8 +201,12 @@ func Memory() Feature {
 	return builtin{FeatureMemory, func(b *Builder) error {
 		cfg := b.Config
 		svc := memory.New(b.Store, memory.OptionsFromConfig(cfg))
-		svc.KeyFor = b.Options.MemoryKey
+		svc.KeyFor, svc.UserKeyFor, svc.Shared = b.Options.MemoryKey, b.Options.MemoryUserKey, b.Options.MemoryShared
+		svc.Messages = b.Store.ListMessages
 		b.Memory = svc
+		if svc.Options().Extract {
+			b.EndOfRun(&memory.Extractor{Svc: svc, Models: b.Models, SupportsReasoning: b.Config.SupportsReasoning})
+		}
 		b.AddTools(memorytools.New(svc))
 		b.Section(b.prof.memorySection(memory.PromptSection(svc)))
 		b.ContextSection(b.prof.memorySection(memory.RecallSection(svc)))

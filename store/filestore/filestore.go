@@ -403,11 +403,13 @@ func (s *Store) replay(path string) (replayStats, error) {
 		compacts = map[string][]store.Compaction{}
 		msgs     = map[string]*store.Message{}
 		events   = map[string][]store.Event{}
+		memory   = map[string]*store.MemoryEntry{}
+		memoff   = map[string]bool{}
 		stats    replayStats
 		seen     = map[string]bool{}
 	)
 	_, truncated, err := scan(path, func(r record) error {
-		if r.T != "events" && r.T != "msg" {
+		if r.T != "events" && r.T != "msg" && r.T != "mem" {
 			stats.upserts++
 			if k := r.T + "\x00" + r.K; !seen[k] {
 				seen[k] = true
@@ -471,6 +473,20 @@ func (s *Store) replay(path string) (replayStats, error) {
 			if err = json.Unmarshal(r.V, &v); err == nil {
 				events[r.K] = append(events[r.K], v...)
 			}
+		case "mem": // a memory entry; null is a tombstone
+			var v *store.MemoryEntry
+			if err = json.Unmarshal(r.V, &v); err == nil {
+				if v == nil {
+					delete(memory, r.K)
+				} else {
+					memory[r.K] = v
+				}
+			}
+		case "memoff":
+			var v bool
+			if err = json.Unmarshal(r.V, &v); err == nil {
+				memoff[r.K] = v
+			}
 		}
 		if err != nil {
 			return fmt.Errorf("%w: record %s/%s: %v", ErrCorrupt, r.T, r.K, err)
@@ -513,6 +529,17 @@ func (s *Store) replay(path string) (replayStats, error) {
 	for run, evs := range events {
 		s.Store.ImportEvents(run, evs)
 	}
+	var memEntries []*store.MemoryEntry
+	for _, e := range memory {
+		memEntries = append(memEntries, e)
+	}
+	var memDisabled []string
+	for l, off := range memoff {
+		if off {
+			memDisabled = append(memDisabled, l)
+		}
+	}
+	s.Store.ImportMemory(memEntries, memDisabled)
 	// Everything replayed is what the journal already holds: warm the dedupe
 	// cache so the next sync does not rewrite it.
 	s.jmu.Lock()
@@ -588,6 +615,13 @@ func (s *Store) compact() error {
 		return err
 	}
 	b := &batch{s: s}
+	entries, disabled := s.Store.ExportMemory()
+	for _, e := range entries {
+		b.add("mem", e.ID, e, true)
+	}
+	for _, l := range disabled {
+		b.add("memoff", l, true, true)
+	}
 	for _, id := range s.Store.ThreadIDs() {
 		st, _, ok := s.Store.ExportThread(id)
 		if !ok || st.Deleted {

@@ -65,6 +65,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		setDefault("SANDBOX_BACKEND", "local")
 		setDefault("AGENT_PROFILE", "coding")
 	}
+	if *team { // a team's agents share what they learn: memory on in the coding profile, and proposed after each run
+		setDefault("MEMORY_IN_CODING", "true")
+		setDefault("HARNESS_MEMORY_EXTRACT", "true")
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		return fail(stderr, err)

@@ -38,7 +38,8 @@ var specs = []spec{
 		"id":{"type":"string"},"path":{"type":"string"},"include_metadata":{"type":"boolean"}}}`},
 	{"memory_create", "Create a durable memory entry.", `{"type":"object","properties":{
 		"content":{"type":"string"},"metadata":{"type":"object"},"tags":{"type":"array","items":{"type":"string"}},
-		"scope":{"type":"string","enum":["personal","repository","workspace"]},"repository":{"type":"string"},"path":{"type":"string"}},
+		"scope":{"type":"string","enum":["personal","repository","workspace"]},"repository":{"type":"string"},"path":{"type":"string"},
+		"audience":{"type":"string","enum":["project","me"],"description":"In a project: project (default) is shared by the team, me is the current user's own memory inside this project."}},
 		"required":["content"]}`},
 	{"memory_update", "Update durable memory content and/or metadata.", `{"type":"object","properties":{
 		"id":{"type":"string"},"path":{"type":"string"},"content":{"type":"string"},"metadata":{"type":"object"},
@@ -79,8 +80,8 @@ func (p *Provider) Name() string { return "memory" }
 
 // Tools implements tools.Provider.
 func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]tool.BaseTool, func(), error) {
-	key := p.Svc.Key(ctx, rc.Login, rc.ThreadID)
-	enabled, err := p.Svc.Enabled(ctx, key)
+	layers := p.Svc.Layers(ctx, rc.Login, rc.ThreadID)
+	enabled, err := p.Svc.Enabled(ctx, layers[0].Key)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -93,17 +94,19 @@ func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]tool.BaseT
 		if err := json.Unmarshal([]byte(s.schema), &js); err != nil {
 			return nil, nil, fmt.Errorf("memory tool %s schema: %w", s.name, err)
 		}
-		out = append(out, &memTool{p: p, rc: rc, key: key, info: &schema.ToolInfo{Name: s.name, Desc: s.desc,
+		out = append(out, &memTool{p: p, rc: rc, layers: layers, info: &schema.ToolInfo{Name: s.name, Desc: s.desc,
 			ParamsOneOf: schema.NewParamsOneOfByJSONSchema(&js)}})
 	}
 	return out, func() {}, nil
 }
 
 type memTool struct {
-	p    *Provider
-	rc   tools.RunContext
-	key  string // the memory of the run: the user's, or the project's
-	info *schema.ToolInfo
+	p  *Provider
+	rc tools.RunContext
+	// layers are the memories of the run: the project's (or the user's own in a personal thread) first,
+	// then the user's private layer inside a project.
+	layers []memory.Layer
+	info   *schema.ToolInfo
 }
 
 func (t *memTool) Info(context.Context) (*schema.ToolInfo, error) { return t.info, nil }
@@ -120,8 +123,25 @@ func (t *memTool) InvokableRun(ctx context.Context, argsJSON string, _ ...tool.O
 	if msg := validate(name, args); msg != "" {
 		return "", fail(errPayload("invalid_arguments", msg, name))
 	}
-	w := memory.Writer{Login: t.key, ThreadID: t.rc.ThreadID, Source: store.MemorySourceProxy, Untrusted: tools.Untrusted(ctx)}
+	key := t.layers[0].Key
+	if aud, _ := args["audience"].(string); aud == "me" && len(t.layers) > 1 {
+		key = t.layers[1].Key
+	}
+	w := memory.Writer{Login: key, ThreadID: t.rc.ThreadID, Source: store.MemorySourceProxy, Untrusted: tools.Untrusted(ctx)}
 	svc := t.p.Svc
+	// Operations on an existing entry find it in any layer.
+	onLayers := func(op func(w memory.Writer) memory.Result) memory.Result {
+		var r memory.Result
+		for i, l := range t.layers {
+			lw := w
+			lw.Login = l.Key
+			r = op(lw)
+			if !r.IsError || i == len(t.layers)-1 || errCode(r.Data) != "memory_not_found" {
+				return r
+			}
+		}
+		return r
+	}
 	var r memory.Result
 	switch name {
 	case "memory_search":
@@ -129,14 +149,16 @@ func (t *memTool) InvokableRun(ctx context.Context, argsJSON string, _ ...tool.O
 		if n, ok := intArg(args["top_k"]); ok && n != 0 {
 			topK = n
 		}
-		r = svc.Search(ctx, t.key, memory.SearchInput{Query: str(args["query"]), Scope: str(args["scope"]),
+		r = svc.SearchAll(ctx, t.layers, memory.SearchInput{Query: str(args["query"]), Scope: str(args["scope"]),
 			Repository: str(args["repository"]), TopK: topK, Filters: obj(args["filters"])})
 	case "memory_get":
 		include := true
 		if b, ok := args["include_metadata"].(bool); ok {
 			include = b
 		}
-		r = svc.Get(ctx, t.key, str(args["id"]), str(args["path"]), include)
+		r = onLayers(func(w memory.Writer) memory.Result {
+			return svc.Get(ctx, w.Login, str(args["id"]), str(args["path"]), include)
+		})
 	case "memory_create":
 		r = svc.Create(ctx, w, createInput(args))
 	case "memory_update":
@@ -148,9 +170,11 @@ func (t *memTool) InvokableRun(ctx context.Context, argsJSON string, _ ...tool.O
 			tags := strs(list)
 			in.Tags = &tags
 		}
-		r = svc.Update(ctx, w, in)
+		r = onLayers(func(w memory.Writer) memory.Result { return svc.Update(ctx, w, in) })
 	case "memory_delete":
-		r = svc.Delete(ctx, w, str(args["id"]), str(args["path"]), obj(args["metadata"]), "")
+		r = onLayers(func(w memory.Writer) memory.Result {
+			return svc.Delete(ctx, w, str(args["id"]), str(args["path"]), obj(args["metadata"]), "")
+		})
 	case "memory_create_batch":
 		var entries []memory.CreateInput
 		for _, item := range args["entries"].([]any) {
@@ -422,4 +446,13 @@ func validate(name string, args map[string]any) string {
 		}
 	}
 	return ""
+}
+
+// errCode is the code of a memory error payload ({"error": {"code": …}} or {"code": …}).
+func errCode(data map[string]any) string {
+	if e, ok := data["error"].(map[string]any); ok {
+		data = e
+	}
+	c, _ := data["code"].(string)
+	return c
 }

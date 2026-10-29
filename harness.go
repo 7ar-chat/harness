@@ -103,6 +103,10 @@ type Options struct {
 	// under) a run of login on threadID reads and writes; "" means login's own.
 	// A team host returns "project:<id>" for project threads.
 	MemoryKey func(ctx context.Context, login, threadID string) string
+	// MemoryUserKey names the user's private layer inside a shared memory ("" for none), MemoryShared
+	// says whether a key is a memory shared between people (a project's).
+	MemoryUserKey func(ctx context.Context, login, threadID string) string
+	MemoryShared  func(key string) bool
 }
 
 // Harness runs agent runs for any number of users and threads.

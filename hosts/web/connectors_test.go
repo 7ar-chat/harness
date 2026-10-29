@@ -98,9 +98,10 @@ func TestProfileDisplayNameAndAvatar(t *testing.T) {
 // ---- GitHub ----
 
 type fakeGitHub struct {
-	srv   *httptest.Server
-	repos map[int][]map[string]any // installation id → repositories
-	users map[string]string        // access token → github login
+	agents string // the repository's AGENTS.md ("" for none)
+	srv    *httptest.Server
+	repos  map[int][]map[string]any // installation id → repositories
+	users  map[string]string        // access token → github login
 }
 
 func newFakeGitHub(t *testing.T) *fakeGitHub {
@@ -131,6 +132,16 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 			ins = append(ins, map[string]any{"id": 11})
 		}
 		json.NewEncoder(w).Encode(map[string]any{"installations": ins})
+	})
+	mux.HandleFunc("/app/installations/11/access_tokens", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"token": "ghs_inst", "expires_at": time.Now().Add(time.Hour)})
+	})
+	mux.HandleFunc("/repos/acme/web/contents/AGENTS.md", func(w http.ResponseWriter, r *http.Request) {
+		if f.agents == "" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write([]byte(f.agents))
 	})
 	mux.HandleFunc("/user/installations/11/repositories", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"repositories": f.repos[11]})

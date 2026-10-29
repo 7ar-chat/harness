@@ -257,3 +257,81 @@ func (s *Store) SetThreadInteractionMode(ctx context.Context, login, threadID, m
 func (s *Store) SupersedeFrom(ctx context.Context, login, threadID, messageID string) error {
 	return s.after(s.Store.SupersedeFrom(ctx, login, threadID, messageID), threadID)
 }
+
+// ---- memory entries ----
+
+// journalMemory writes the entries (a nil entry value is a tombstone).
+func (s *Store) journalMemory(entries ...*store.MemoryEntry) error {
+	s.jmu.Lock()
+	defer s.jmu.Unlock()
+	b := &batch{s: s}
+	for _, e := range entries {
+		b.add("mem", e.ID, e, true)
+	}
+	return b.flush()
+}
+
+func (s *Store) journalMemoryGone(ids ...string) error {
+	s.jmu.Lock()
+	defer s.jmu.Unlock()
+	b := &batch{s: s}
+	for _, id := range ids {
+		delete(s.cache, "mem\x00"+id)
+		b.add("mem", id, (*store.MemoryEntry)(nil), false)
+	}
+	return b.flush()
+}
+
+func (s *Store) CreateMemoryEntry(ctx context.Context, e *store.MemoryEntry, limits store.MemoryLimits) (*store.MemoryEntry, error) {
+	out, err := s.Store.CreateMemoryEntry(ctx, e, limits)
+	if err != nil {
+		return nil, err
+	}
+	return out, s.journalMemory(out)
+}
+
+func (s *Store) UpdateMemoryEntry(ctx context.Context, e *store.MemoryEntry, limits store.MemoryLimits) (*store.MemoryEntry, error) {
+	out, err := s.Store.UpdateMemoryEntry(ctx, e, limits)
+	if err != nil {
+		return nil, err
+	}
+	return out, s.journalMemory(out)
+}
+
+func (s *Store) DeleteMemoryEntry(ctx context.Context, login, id, expectStatus string) error {
+	if err := s.Store.DeleteMemoryEntry(ctx, login, id, expectStatus); err != nil {
+		return err
+	}
+	return s.journalMemoryGone(id)
+}
+
+func (s *Store) SetMemoryEnabled(ctx context.Context, login string, enabled bool) error {
+	if err := s.Store.SetMemoryEnabled(ctx, login, enabled); err != nil {
+		return err
+	}
+	s.jmu.Lock()
+	defer s.jmu.Unlock()
+	b := &batch{s: s}
+	b.add("memoff", login, !enabled, true)
+	return b.flush()
+}
+
+func (s *Store) PurgeDeletedMemoryEntries(ctx context.Context, before time.Time) (int, error) {
+	was, _ := s.Store.ExportMemory()
+	n, err := s.Store.PurgeDeletedMemoryEntries(ctx, before)
+	if err != nil || n == 0 {
+		return n, err
+	}
+	now, _ := s.Store.ExportMemory()
+	alive := map[string]bool{}
+	for _, e := range now {
+		alive[e.ID] = true
+	}
+	var gone []string
+	for _, e := range was {
+		if !alive[e.ID] {
+			gone = append(gone, e.ID)
+		}
+	}
+	return n, s.journalMemoryGone(gone...)
+}

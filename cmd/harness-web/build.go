@@ -94,6 +94,8 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		}
 		b.github = gh
 		o.MemoryKey = httpserver.MemoryKey(ts)
+		o.MemoryUserKey = httpserver.MemoryUserKey(ts, o.Store.ListMessages)
+		o.MemoryShared = httpserver.MemoryShared
 		b.sup = httpserver.NewSupervisor(ts)
 		o.Tools = append(o.Tools, b.sup.Tools())
 		o.Features = append(harness.ProfileNamed(cfg.AgentProfile), b.sup.Feature(),

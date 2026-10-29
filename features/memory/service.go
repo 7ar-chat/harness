@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -54,6 +55,13 @@ type Options struct {
 	// RecallInjection adds the "[Repository Memory Recall]" block to the system prompt.
 	RecallInjection bool
 	Now             func() time.Time
+	// Embedder, when set, gives entries and queries vectors: search and recall then rank by meaning
+	// as well as by words (HARNESS_MEMORY_EMBEDDING_BACKEND=openai).
+	Embedder Embedder
+	// Extract turns on the end-of-run extraction of memories from the conversation; ExtractModel
+	// is the model it uses (default: the run's own).
+	Extract      bool
+	ExtractModel string
 }
 
 func (o Options) normalized() Options {
@@ -167,6 +175,44 @@ type Service struct {
 	// project's memory, so what is learned there is shared by its members and
 	// no member's personal memory leaks into a shared thread).
 	KeyFor func(ctx context.Context, login, threadID string) string
+	// UserKeyFor, when set, names a second, private layer of the same run: what the acting user keeps
+	// for themselves inside a shared (project) memory ("" for none).
+	UserKeyFor func(ctx context.Context, login, threadID string) string
+	// Shared reports whether a memory key is shared between people (a project's), which selects the
+	// project memory policy in the prompt.
+	Shared func(key string) bool
+	// Messages reads a thread's messages (recall uses the last user message as its query; extraction
+	// reads the run).
+	Messages func(ctx context.Context, threadID string) ([]*store.Message, error)
+
+	stats serviceStats
+}
+
+// Layer is one memory a run sees: the shared or personal one (Key), or the user's own inside a project.
+type Layer struct {
+	Key  string
+	Name string // "project", "user" (personal thread) or "me" (the user's layer inside a project)
+}
+
+// Layers lists the memories of a run, the primary one first.
+func (s *Service) Layers(ctx context.Context, login, threadID string) []Layer {
+	primary := s.Key(ctx, login, threadID)
+	name := "user"
+	if s.Shared != nil && s.Shared(primary) {
+		name = "project"
+	}
+	out := []Layer{{primary, name}}
+	if s.UserKeyFor != nil {
+		if k := s.UserKeyFor(ctx, login, threadID); k != "" && k != primary {
+			out = append(out, Layer{k, "me"})
+		}
+	}
+	return out
+}
+
+// SharedMemory reports whether the run's primary memory is shared between people.
+func (s *Service) SharedMemory(ctx context.Context, login, threadID string) bool {
+	return s.Shared != nil && s.Shared(s.Key(ctx, login, threadID))
 }
 
 // Key is the memory key of a run of login on threadID.
@@ -422,7 +468,17 @@ func (s *Service) Search(ctx context.Context, login string, in SearchInput) Resu
 			candidates = append(candidates, e)
 		}
 	}
-	hits := Rank(candidates, in.Query, topK, s.now())
+	opts := RankOptions{}
+	if len(candidates) > 0 {
+		if qv := s.embedQuery(ctx, in.Query); qv != nil {
+			opts = RankOptions{QueryVec: qv, Vecs: s.vectors(ctx, login, candidates)}
+		}
+	}
+	hits := RankWith(candidates, in.Query, topK, s.now(), opts)
+	s.stats.searches.Add(1)
+	if len(hits) > 0 {
+		s.stats.searchHits.Add(1)
+	}
 	results := make([]map[string]any, 0, len(hits))
 	for _, h := range hits {
 		results = append(results, map[string]any{
@@ -441,7 +497,7 @@ func (s *Service) Search(ctx context.Context, login string, in SearchInput) Resu
 		"results": results,
 		"trace": map[string]any{
 			"used_memory": len(results) > 0, "reason": reason, "query": redactedQuery, "scope": scope, "repository": repo,
-			"semantic_backend": s.o.EmbeddingBackend, "semantic_fallback": !s.o.SemanticAvailable(), "index_version": SearchIndexVersion,
+			"semantic_backend": s.semanticBackend(), "semantic_fallback": !s.o.SemanticAvailable() || len(opts.Vecs) == 0, "index_version": SearchIndexVersion,
 			"candidate_count": len(candidates), "chunk_count": len(hits), "precedence": append([]string{}, Precedence...),
 		},
 		"provenance": map[string]any{"source": "memory_proxy", "timestamp": ts(s.now())},
@@ -624,6 +680,7 @@ func (s *Service) create(ctx context.Context, w Writer, in CreateInput) (*store.
 	case err != nil:
 		return nil, nil, internalError("create", err)
 	}
+	s.embedAsync(w.Login, out)
 	data := map[string]any{"memory": PublicEntry(out), "policy": d.Payload()}
 	if out.Status == store.MemoryPending {
 		data["confirmation"] = confirmation()
@@ -701,6 +758,10 @@ func (s *Service) Update(ctx context.Context, w Writer, in UpdateInput) Result {
 		e.Content = d.RedactedContent
 		e.ContentHash = sha(e.Content)
 		e.ContentUpdatedAt = now
+		// A proposal records its revision when it is confirmed, not now.
+		if !(w.Untrusted && target.Status == store.MemoryActive) {
+			addRevision(e, target.Title, target.Content, now, w.ThreadID)
+		}
 	}
 	tagsChanged := in.Tags != nil
 	if tagsChanged {
@@ -752,6 +813,7 @@ func (s *Service) Update(ctx context.Context, w Writer, in UpdateInput) Result {
 	case err != nil:
 		return Result{Data: internalError("update", err).Payload(), IsError: true}
 	}
+	s.embedAsync(w.Login, out)
 	data := map[string]any{"memory": PublicEntry(out), "policy": d.Payload(), "changes": changes}
 	action := "updated"
 	if w.Untrusted && out.Status == store.MemoryPending {
@@ -989,11 +1051,18 @@ func (s *Service) Confirm(ctx context.Context, login, id string, exp Expect) (*s
 	switch {
 	case e.Proposal != nil:
 		p := e.Proposal
+		prevTitle, prevContent := e.Title, e.Content
 		if p.Content != e.Content {
 			e.ContentUpdatedAt = now
 		}
 		e.Path, e.Title, e.Content, e.Tags, e.Importance, e.Metadata, e.ContentHash =
 			p.Path, p.Title, p.Content, p.Tags, p.Importance, p.Metadata, p.ContentHash
+		if prevContent != e.Content {
+			if e.Metadata == nil {
+				e.Metadata = map[string]any{}
+			}
+			addRevision(e, prevTitle, prevContent, now, p.ThreadID)
+		}
 		e.Proposal = nil
 	case e.Status == store.MemoryPending:
 		e.Status = store.MemoryActive
@@ -1014,6 +1083,7 @@ func (s *Service) Confirm(ctx context.Context, login, id string, exp Expect) (*s
 	case err != nil:
 		return nil, internalError("confirm", err)
 	}
+	s.embedAsync(login, out)
 	return out, nil
 }
 
@@ -1083,4 +1153,55 @@ func (s *Service) Restore(ctx context.Context, login, id string) (*store.MemoryE
 		return nil, internalError("restore", err)
 	}
 	return out, nil
+}
+
+func (s *Service) semanticBackend() string {
+	if s.o.Embedder != nil {
+		return "embeddings:" + s.o.Embedder.Model()
+	}
+	return s.o.EmbeddingBackend
+}
+
+// SearchAll searches several layers (the shared memory and the user's own) and merges the results by score.
+func (s *Service) SearchAll(ctx context.Context, layers []Layer, in SearchInput) Result {
+	if len(layers) == 1 {
+		return s.Search(ctx, layers[0].Key, in)
+	}
+	topK := in.TopK
+	if topK == 0 {
+		topK = DefaultTopK
+	}
+	var merged []map[string]any
+	var first Result
+	for i, l := range layers {
+		r := s.Search(ctx, l.Key, in)
+		if i == 0 {
+			first = r
+		}
+		if r.IsError {
+			return r
+		}
+		list, _ := r.Data["results"].([]map[string]any)
+		for _, h := range list {
+			h["layer"] = l.Name
+			merged = append(merged, h)
+		}
+	}
+	sort.SliceStable(merged, func(i, j int) bool {
+		a, _ := merged[i]["score"].(float64)
+		b, _ := merged[j]["score"].(float64)
+		return a > b
+	})
+	if len(merged) > topK {
+		merged = merged[:topK]
+	}
+	first.Data["results"] = merged
+	if tr, ok := first.Data["trace"].(map[string]any); ok {
+		tr["used_memory"] = len(merged) > 0
+		tr["chunk_count"] = len(merged)
+		if len(merged) > 0 {
+			tr["reason"] = "matches_found"
+		}
+	}
+	return first
 }

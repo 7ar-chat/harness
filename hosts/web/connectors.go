@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sort"
@@ -405,5 +406,15 @@ func (s *server) importProject(w http.ResponseWriter, r *http.Request, c Caller)
 		return
 	}
 	s.note(Caller{Actor: c.Actor, ProjectID: p.ID}, "", "project.import", map[string]any{"repo": found.FullName}, FeedEvent{Type: "project.changed", affects: c.Actor})
+	if s.h.Memory != nil { // the repository's AGENTS.md becomes the project's pinned memory
+		proj := *p
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if _, err := s.syncAgentsMD(ctx, &proj, c.Actor); err != nil && !errors.Is(err, errNoRepoFile) {
+				slog.Warn("project import: AGENTS.md not imported", "project", proj.ID, "error", err)
+			}
+		}()
+	}
 	writeJSON(w, http.StatusCreated, projectView{*p, store.RoleOwner})
 }

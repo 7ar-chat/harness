@@ -391,6 +391,14 @@
     "description": "Create a durable memory entry.",
     "parameters": {
       "properties": {
+        "audience": {
+          "description": "In a project: project (default) is shared by the team, me is the current user's own memory inside this project.",
+          "enum": [
+            "project",
+            "me"
+          ],
+          "type": "string"
+        },
         "content": {
           "type": "string"
         },

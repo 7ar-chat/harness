@@ -170,6 +170,15 @@ type Config struct {
 	MemoryMaxContentBytes      int    `env:"HARNESS_MEMORY_MAX_CONTENT_BYTES" envDefault:"200000"`
 	MemoryConsolidationHours   int    `env:"HARNESS_MEMORY_CONSOLIDATION_HOURS" envDefault:"168"`
 	MemoryDeletedRetentionDays int    `env:"HARNESS_MEMORY_DELETED_RETENTION_DAYS" envDefault:"30"`
+	// MemoryExtract proposes memories from each completed run (pending until confirmed), with
+	// MemoryExtractModel (default: the run's model). With HARNESS_MEMORY_EMBEDDING_BACKEND=openai,
+	// entries and queries get vectors from the OpenAI-compatible endpoint MemoryEmbeddingURL
+	// (default: LLM_BASE_URL, else api.openai.com) with MemoryEmbeddingKey (default LLM_API_KEY).
+	MemoryExtract        bool   `env:"HARNESS_MEMORY_EXTRACT"`
+	MemoryExtractModel   string `env:"HARNESS_MEMORY_EXTRACT_MODEL"`
+	MemoryEmbeddingURL   string `env:"HARNESS_MEMORY_EMBEDDING_URL"`
+	MemoryEmbeddingKey   string `env:"HARNESS_MEMORY_EMBEDDING_KEY"`
+	MemoryEmbeddingModel string `env:"HARNESS_MEMORY_EMBEDDING_MODEL"`
 	// Harness v2 §4–§9 (context windows, reasoning/vision models — LLM_VISION_MODELS
 	// also decides which models receive attached images —, compaction).
 	Harness

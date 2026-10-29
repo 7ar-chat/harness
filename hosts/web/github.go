@@ -282,3 +282,35 @@ func (s *server) githubConnect(w http.ResponseWriter, r *http.Request, c Caller)
 	s.note(Caller{Actor: c.Actor, ProjectID: p.ID}, "", "github.connect", map[string]any{"connected": id != 0}, FeedEvent{Type: "project.changed"})
 	writeJSON(w, http.StatusOK, s.githubState(up))
 }
+
+// FileContent reads a file of the repository at ref (the default branch when empty) with the
+// installation's token; errNoRepoFile when it does not exist.
+func (g *GitHubApp) FileContent(ctx context.Context, installation int64, owner, repo, path, ref string) ([]byte, error) {
+	tok, err := g.InstallationToken(ctx, installation)
+	if err != nil {
+		return nil, err
+	}
+	u := g.api() + "/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(repo) + "/contents/" + path
+	if ref != "" {
+		u += "?ref=" + url.QueryEscape(ref)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Accept", "application/vnd.github.raw+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	resp, err := g.client().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, errNoRepoFile
+	}
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("github: reading %s: %d", path, resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+}

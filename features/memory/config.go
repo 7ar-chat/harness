@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"strings"
 	"time"
 
 	"github.com/GhaziBenDahmane/harness/config"
@@ -8,11 +9,23 @@ import (
 
 // OptionsFromConfig maps the HARNESS_MEMORY_* settings.
 func OptionsFromConfig(cfg *config.Config) Options {
-	return Options{
+	o := Options{
 		WriteMode: cfg.MemoryWriteMode, DeleteMode: cfg.MemoryDeleteMode, DefaultScope: cfg.MemoryDefaultScope,
 		EmbeddingBackend: cfg.MemoryEmbeddingBackend, RecallInjection: cfg.MemoryRecallInjection,
 		MaxEntries: entriesLimit(cfg.MemoryMaxEntries), MaxContentBytes: cfg.MemoryMaxContentBytes,
+		Extract: cfg.MemoryExtract, ExtractModel: cfg.MemoryExtractModel,
 	}
+	if strings.EqualFold(strings.TrimSpace(cfg.MemoryEmbeddingBackend), "openai") {
+		url, key := cfg.MemoryEmbeddingURL, cfg.MemoryEmbeddingKey
+		if url == "" {
+			url = cfg.LLMBaseURL
+		}
+		if key == "" {
+			key = cfg.LLMAPIKey
+		}
+		o.Embedder = &OpenAIEmbedder{BaseURL: url, APIKey: key, ModelName: cfg.MemoryEmbeddingModel}
+	}
+	return o
 }
 
 // entriesLimit maps "≤ 0: no limit" to the service's negative value (0 is the default there).

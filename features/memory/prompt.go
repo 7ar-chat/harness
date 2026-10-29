@@ -98,6 +98,9 @@ func PromptSection(svc *Service) agent.PromptSection {
 		if !svc.enabledFor(ctx, in) {
 			return ""
 		}
+		if svc.SharedMemory(ctx, in.Run.UserLogin, in.Run.ThreadID) {
+			return prompts.ProjectMemoryPolicy
+		}
 		return prompts.MemoryPolicy
 	}
 }
@@ -109,12 +112,14 @@ func RecallSection(svc *Service) agent.PromptSection {
 		if !svc.o.RecallInjection || !svc.enabledFor(ctx, in) {
 			return ""
 		}
-		entries, err := svc.st.ListMemoryEntries(ctx, svc.Key(ctx, in.Run.UserLogin, in.Run.ThreadID), store.MemoryActive)
-		if err != nil {
-			slog.Warn("memory: listing memories failed", "run_id", in.Run.ID, "error", err)
-			return ""
-		}
-		return RecallContext(RecallItems(entries, MaxRecallItems))
+		layers := svc.Layers(ctx, in.Run.UserLogin, in.Run.ThreadID)
+		text, info := svc.RecallBlock(ctx, layers, svc.lastUserText(ctx, in.Run.ThreadID))
+		svc.stats.recallRuns.Add(1)
+		svc.stats.recallItems.Add(int64(len(info.Pinned) + len(info.Relevant)))
+		svc.stats.recallPinned.Add(int64(len(info.Pinned)))
+		svc.stats.recallChars.Add(int64(info.Chars))
+		slog.Debug("memory: recall", "run_id", in.Run.ID, "pinned", len(info.Pinned), "relevant", len(info.Relevant), "fallback", info.Fallback)
+		return text
 	}
 }
 
