@@ -2,8 +2,6 @@ package client
 
 import "context"
 
-var _ Extras = (*inProcess)(nil)
-
 func (c *inProcess) Compact(context.Context, string) (*CompactResult, error) {
 	return nil, ErrNotSupported
 }

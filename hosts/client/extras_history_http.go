@@ -2,8 +2,6 @@ package client
 
 import "context"
 
-var _ Extras = (*httpClient)(nil)
-
 func (c *httpClient) Compact(context.Context, string) (*CompactResult, error) {
 	return nil, ErrNotSupported
 }

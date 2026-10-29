@@ -68,3 +68,8 @@ type Attachment struct {
 	// Data is the content (base64 on the wire).
 	Data []byte `json:"data"`
 }
+
+var (
+	_ Extras = (*inProcess)(nil)
+	_ Extras = (*httpClient)(nil)
+)
