@@ -9,6 +9,10 @@ export interface User {
   name?: string;
   email?: string;
   avatarUrl?: string;
+  /** The user's own display name override ("" when using the default). */
+  displayName?: string;
+  defaultName?: string;
+  hasCustomAvatar?: boolean;
 }
 
 export interface Project {
@@ -265,4 +269,27 @@ export interface FeedEvent {
 export interface SupervisorSettings {
   watch: boolean;
   stuckMinutes: number;
+}
+
+export interface Connector {
+  kind: "github" | "telegram";
+  configured: boolean;
+  connected: boolean;
+  account?: string;
+  label?: string;
+  message?: string;
+  connectUrl?: string;
+  pending?: { code: string; url: string; expiresAt: string };
+}
+export interface GithubRepo {
+  fullName: string;
+  private: boolean;
+  description?: string;
+  defaultBranch?: string;
+  installationId?: number;
+  imported?: string;
+}
+export interface GithubRepos {
+  repos: GithubRepo[];
+  installUrl?: string;
 }

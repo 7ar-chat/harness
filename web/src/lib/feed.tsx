@@ -1,10 +1,11 @@
 // The live status feed (GET /api/events): keeps the overview and open threads fresh,
 // raises toasts and browser notifications when a session needs a person.
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useLocation, useNavigate } from "@tanstack/react-router";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { openSse } from "@/lib/sse";
+import { cue, soundFor } from "@/lib/sound";
 import { qk, useMe } from "@/api/queries";
 import type { FeedEvent, Overview, ThreadStatus } from "@/api/types";
 
@@ -51,6 +52,9 @@ export function FeedProvider({ children }: { children: ReactNode }) {
   const me = useMe().data?.user.login;
   const meRef = useRef(me);
   meRef.current = me;
+  const pathname = useLocation({ select: (l) => l.pathname });
+  const openThread = useRef<string>();
+  openThread.current = /^\/t\/([^/]+)/.exec(pathname)?.[1];
   const [conn, setConn] = useState<Conn>("connecting");
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
   const timer = useRef<number>();
@@ -72,6 +76,8 @@ export function FeedProvider({ children }: { children: ReactNode }) {
         if (ev.projectId) void qc.invalidateQueries({ queryKey: ["project", ev.projectId] });
       }
       if (ev.type === "memory.changed") void qc.invalidateQueries({ queryKey: ["memory"] });
+      const sound = soundFor(ev, { me: meRef.current, watching: document.hasFocus() && !document.hidden ? openThread.current : undefined });
+      if (sound) cue(sound);
       if (ev.type === "run.finished" && ev.status && NEEDS_YOU[ev.status] && ev.threadId) {
         const id = ev.threadId;
         const title = ev.title || "A session";

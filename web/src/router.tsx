@@ -4,6 +4,7 @@ import { Empty, ErrorState } from "@/components/app/common";
 import { Button } from "@/components/ui/button";
 import { Dashboard } from "@/pages/Dashboard";
 import { MemoryPage } from "@/pages/Memory";
+import { ProfilePage } from "@/pages/Profile";
 import { ProjectPage } from "@/pages/ProjectPage";
 import { SessionPage, SupervisorPage } from "@/pages/SessionPage";
 import { FeedProvider } from "@/lib/feed";
@@ -42,6 +43,7 @@ const routeTree = root.addChildren([
     validateSearch: (s: Record<string, unknown>): { tab?: Tab } => ({ tab: tabs.find((t) => t === s.tab) }),
   }),
   createRoute({ getParentRoute: () => root, path: "/memory", component: MemoryPage }),
+  createRoute({ getParentRoute: () => root, path: "/profile", component: ProfilePage }),
 ]);
 
 export const router = createRouter({ routeTree, history: createHashHistory(), defaultPreload: "intent" });

@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, useNavigate, useParams } from "@tanstack/react-router";
-import { Bell, Bot, Brain, ChevronRight, LayoutDashboard, LogOut, Monitor, Moon, Plus, Search, Sun, WifiOff } from "lucide-react";
+import { Bot, Brain, ChevronRight, LayoutDashboard, LogOut, Monitor, Moon, Plus, Search, Sun, UserCog, WifiOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { getDevUser, setDevUser } from "@/api/client";
@@ -77,7 +77,6 @@ function ProjectGroup({ p, openId, openProject }: { p: OverviewProject; openId?:
 function UserMenu() {
   const me = useMe().data?.user;
   const { theme, setTheme } = useTheme();
-  const { notifyPermission, askNotify } = useFeed();
   const { isMobile } = useSidebar();
   const [dev, setDev] = useState(getDevUser());
   const logout = async () => {
@@ -90,15 +89,19 @@ function UserMenu() {
   if (!me) return null;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <SidebarMenuButton size="lg" aria-label="User menu">
+      <div className="flex items-center gap-1">
+        <Link to="/profile" aria-label="Your profile" className="shrink-0 rounded-full p-1 hover:bg-sidebar-accent">
           <UserAvatar login={me.login} name={me.name} url={me.avatarUrl} className="size-7" />
-          <div className="grid min-w-0 flex-1 text-left leading-tight">
-            <span className="truncate text-sm font-medium">{me.name || me.login}</span>
-            <span className="truncate text-xs text-muted-foreground">{me.email || me.login}</span>
-          </div>
-        </SidebarMenuButton>
-      </DropdownMenuTrigger>
+        </Link>
+        <DropdownMenuTrigger asChild>
+          <SidebarMenuButton size="lg" aria-label="User menu" className="flex-1">
+            <div className="grid min-w-0 flex-1 text-left leading-tight">
+              <span className="truncate text-sm font-medium">{me.name || me.login}</span>
+              <span className="truncate text-xs text-muted-foreground">{me.email || me.login}</span>
+            </div>
+          </SidebarMenuButton>
+        </DropdownMenuTrigger>
+      </div>
       <DropdownMenuContent side={isMobile ? "bottom" : "right"} align="end" className="w-60">
         <DropdownMenuLabel>Theme</DropdownMenuLabel>
         {([["light", "Light", Sun], ["dark", "Dark", Moon], ["system", "System", Monitor]] as const).map(([v, label, Icon]) => (
@@ -112,11 +115,11 @@ function UserMenu() {
             <Brain /> My memory
           </Link>
         </DropdownMenuItem>
-        {notifyPermission === "default" ? (
-          <DropdownMenuItem onSelect={askNotify}>
-            <Bell /> Enable notifications
-          </DropdownMenuItem>
-        ) : null}
+        <DropdownMenuItem asChild>
+          <Link to="/profile">
+            <UserCog /> Profile, connectors and sounds
+          </Link>
+        </DropdownMenuItem>
         {import.meta.env.DEV ? (
           <>
             <DropdownMenuSeparator />
@@ -188,7 +191,7 @@ function AppSidebar({ openId, openProject }: { openId?: string; openProject?: st
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={loc.pathname === "/supervisor"}>
               <Link to="/supervisor" onClick={close}>
-                <Bot /> Global agent
+                <Bot /> My assistant
                 <StatusDot status={svStatus} className="ml-auto" />
               </Link>
             </SidebarMenuButton>
@@ -251,7 +254,7 @@ function Palette({ open, setOpen }: { open: boolean; setOpen: (o: boolean) => vo
         <CommandEmpty>Nothing found.</CommandEmpty>
         <CommandGroup heading="Go to">
           <CommandItem onSelect={go(() => void navigate({ to: "/" }))}>Dashboard</CommandItem>
-          <CommandItem onSelect={go(() => void navigate({ to: "/supervisor" }))}>Global agent</CommandItem>
+          <CommandItem onSelect={go(() => void navigate({ to: "/supervisor" }))}>My assistant</CommandItem>
           <CommandItem onSelect={go(() => void navigate({ to: "/memory" }))}>My memory</CommandItem>
         </CommandGroup>
         <CommandGroup heading="Actions">

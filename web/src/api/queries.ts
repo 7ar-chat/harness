@@ -1,8 +1,9 @@
-import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { toast } from "sonner";
-import { api, ApiError, isUnsupported } from "./client";
+import { api, ApiError, isUnsupported, putBytes } from "./client";
 import type {
-  AuditEntry, Command, GithubStatus, Invite, Me, Member, MemoryEntry, MemoryInput, MemoryList, Models, Overview,
+  AuditEntry, Connector, GithubRepos, User, Command, GithubStatus, Invite, Me, Member, MemoryEntry, MemoryInput, MemoryList, Models, Overview,
   Project, ProjectWithRole, Role, Thread, WorkspaceFile,
 } from "./types";
 
@@ -138,3 +139,47 @@ export const useSupervisorSettings = () =>
   });
 export const useSaveSupervisorSettings = () =>
   useAction((v: import("./types").SupervisorSettings) => api.put<import("./types").SupervisorSettings>("/supervisor/settings", v), () => [["supervisor", "settings"]]);
+
+// ---- profile and connectors ----
+export const useConnectors = (refetchInterval?: number) =>
+  useQuery({
+    queryKey: ["connectors"],
+    queryFn: async () => {
+      try {
+        return await api.get<Connector[]>("/connectors");
+      } catch (e) {
+        if (isUnsupported(e)) return [];
+        throw e;
+      }
+    },
+    refetchInterval,
+    retry: false,
+  });
+
+/** After a profile change, user objects appear in me, messages and members: refresh them all. */
+const profileKeys = () => [qk.me, ["thread"], ["project"], qk.overview] as const;
+export const useSaveProfile = () => useAction((displayName: string) => api.patch<User>("/me/profile", { displayName }), profileKeys, "Profile saved");
+export const useUploadAvatar = () => useAction((blob: Blob) => putBytes<User>("/me/avatar", blob), profileKeys, "Avatar updated");
+export const useRemoveAvatar = () => useAction(() => api.del<User>("/me/avatar"), profileKeys, "Avatar removed");
+export const useDisconnect = (kind: "github" | "telegram") => useAction(() => api.del(`/connectors/${kind}`), () => [["connectors"]], "Disconnected");
+export const useTelegramLink = () => useAction(() => api.post<{ code: string; url: string; expiresAt: string }>("/connectors/telegram/link"), () => [["connectors"]]);
+export const useTelegramTest = () => useAction(() => api.post("/connectors/telegram/test"), () => [], "Test message sent");
+export const useGithubRepos = (q: string, enabled: boolean) =>
+  useQuery({ queryKey: ["github-repos", q], queryFn: () => api.get<GithubRepos>(`/connectors/github/repos?q=${encodeURIComponent(q)}`), enabled, retry: false, staleTime: 15_000 });
+export const useImportProject = () => useAction((repo: string) => api.post<Project>("/projects/import", { repo }), () => [qk.me, qk.overview, ["github-repos"]], "Project imported");
+
+/** Every user we know of (me and the members of my projects) by login: name and avatar. */
+export function useUserDirectory(): Map<string, User> {
+  const me = useMe().data;
+  const projects = me?.projects ?? [];
+  const members = useQueries({
+    queries: projects.map((p) => ({ queryKey: qk.members(p.id), queryFn: () => api.get<Member[]>(`/projects/${p.id}/members`), staleTime: 120_000 })),
+    combine: (rs) => rs.flatMap((r) => r.data ?? []),
+  });
+  return useMemo(() => {
+    const m = new Map<string, User>();
+    for (const x of members) m.set(x.login, { login: x.login, name: x.name, avatarUrl: x.avatarUrl, email: x.email });
+    if (me) m.set(me.user.login, me.user);
+    return m;
+  }, [members, me]);
+}

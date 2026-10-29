@@ -10,7 +10,9 @@ const CSP = "default-src 'self'; script-src 'self'; style-src 'self'; style-src-
 const now = Date.now();
 const iso = (m) => new Date(now - m * 60000).toISOString();
 
-const me = { login: "alice", name: "Alice Doe", email: "alice@example.com", avatarUrl: "" };
+const me = { login: "alice", name: "Alice Doe", displayName: "", defaultName: "Alice Doe", email: "alice@example.com", avatarUrl: "/api/users/alice/avatar?v=1", hasCustomAvatar: true };
+let tgConnected = false, tgLinkAt = 0;
+const avatarSvg = (c) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="${c}"/><circle cx="32" cy="26" r="12" fill="#fff" opacity=".85"/><rect x="12" y="42" width="40" height="22" rx="11" fill="#fff" opacity=".85"/></svg>`;
 const project = { id: "p1", name: "payments-api", description: "The payments service", repoUrl: "https://github.com/acme/payments-api", defaultBranch: "main", createdBy: "alice", createdAt: iso(9000), updatedAt: iso(5), role: "owner" };
 const sum = (id, title, status, extra = {}) => ({ id, title, projectId: "p1", createdBy: "alice", kind: "chat", status, createdAt: iso(60), updatedAt: iso(3), ...extra });
 const threads = [
@@ -72,6 +74,25 @@ const server = http.createServer((req, res) => {
   const p = u.pathname;
   if (p.startsWith("/api/")) {
     const a = p.slice(4);
+    let um;
+    if ((um = /^\/users\/([^/]+)\/avatar$/.exec(a))) { res.writeHead(200, { "content-type": "image/svg+xml", "content-security-policy": CSP }); return res.end(avatarSvg(um[1] === "alice" ? "#6d5dfc" : "#f59e0b")); }
+    if (a === "/me/profile" && req.method === "PATCH") { let b = ""; req.on("data", (d) => (b += d)); req.on("end", () => { me.displayName = JSON.parse(b).displayName; me.name = me.displayName || me.defaultName; send(res, 200, me); }); return; }
+    if (a === "/me/avatar") { req.resume(); req.on("end", () => { me.hasCustomAvatar = req.method === "PUT"; me.avatarUrl = req.method === "PUT" ? "/api/users/alice/avatar?v=2" : ""; send(res, 200, me); }); return; }
+    if (a === "/connectors" && req.method === "GET") {
+      if (tgLinkAt && Date.now() - tgLinkAt > 4000) tgConnected = true;
+      return send(res, 200, [
+        { kind: "github", configured: true, connected: true, account: "alice-dev", label: "GitHub", installUrl: "https://github.com/apps/x" },
+        { kind: "telegram", configured: true, connected: tgConnected, account: tgConnected ? "@alice_bot_user" : undefined, label: "Telegram" },
+      ]);
+    }
+    if (a === "/connectors/telegram/link") return send(res, 200, { code: "ABC123", url: "https://t.me/harness_bot?start=ABC123", expiresAt: new Date(Date.now() + 600000).toISOString() }, (tgLinkAt = Date.now()));
+    if (a === "/connectors/telegram" && req.method === "DELETE") { tgConnected = false; tgLinkAt = 0; return send(res, 204); }
+    if (a === "/connectors/telegram/test") return send(res, 204);
+    if (a.startsWith("/connectors/github/repos")) return send(res, 200, { installUrl: "https://github.com/apps/x/installations/new", repos: [
+      { fullName: "acme/payments-api", private: true, description: "The payments service", imported: "p1" },
+      { fullName: "acme/web-shop", private: false, description: "Storefront in React", defaultBranch: "main" },
+      { fullName: "alice-dev/dotfiles", private: true, description: "" } ] });
+    if (a === "/projects/import") return send(res, 201, project);
     if (a === "/me") return send(res, 200, { user: me, projects: [project] });
     if (a === "/overview") return send(res, 200, { personal, projects: [{ ...project, threads }] });
     if (a === "/models") return send(res, 200, { models: ["claude-sonnet", "gpt-5"], default: "claude-sonnet" });

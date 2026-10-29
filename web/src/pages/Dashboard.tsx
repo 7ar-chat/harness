@@ -8,6 +8,7 @@ import { qk, toastError, useOverview } from "@/api/queries";
 import type { Thread, ThreadStatus, ThreadSummary } from "@/api/types";
 import { Empty, ErrorState, ListSkeleton, StatusBadge, UserAvatar, isActive, needsYou } from "@/components/app/common";
 import { useDialogs } from "@/components/app/dialogs";
+import { ImportEntry } from "@/components/app/github-import";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -83,7 +84,7 @@ export function SessionCard({ t }: { t: Row }) {
 
 export function Dashboard() {
   const { data, isLoading, error, refetch } = useOverview();
-  const { newProject, newSession } = useDialogs();
+  const { newProject, newSession, importGithub } = useDialogs();
   if (isLoading) return <ListSkeleton rows={5} />;
   if (error || !data) return <ErrorState error={error} retry={() => void refetch()} />;
   const rows: Row[] = [
@@ -106,9 +107,12 @@ export function Dashboard() {
         {!data.projects.length && !data.personal.length ? (
           <Empty icon={<FolderPlus className="size-10" />} title="Create your first project">
             <p>A project is a repository whose sessions, memory and members are shared with your team.</p>
-            <Button className="mt-3" onClick={newProject}>
-              <Plus /> New project
-            </Button>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              <Button onClick={newProject}>
+                <Plus /> New project
+              </Button>
+              <ImportEntry onImport={importGithub} />
+            </div>
           </Empty>
         ) : null}
         <section aria-labelledby="active-h" className="space-y-3">

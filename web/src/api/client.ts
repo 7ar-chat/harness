@@ -101,3 +101,15 @@ export const isOwner = (r?: Role) => r === "owner";
 
 /** True for "this feature is not available on this server" answers. */
 export const isUnsupported = (e: unknown) => e instanceof ApiError && (e.status === 404 || e.status === 501);
+
+/** Uploads raw bytes (the avatar); everything else goes through `api`. */
+export async function putBytes<T>(path: string, body: Blob): Promise<T> {
+  const r = await fetch("/api" + path, { method: "PUT", headers: { ...authHeaders(), "Content-Type": body.type }, body, credentials: "same-origin" });
+  if (r.status === 401) {
+    onUnauthorized();
+    throw new ApiError(401, "unauthenticated", "Authentication required.");
+  }
+  const j = (await r.json().catch(() => ({}))) as { error?: { code?: string; message?: string } };
+  if (!r.ok) throw new ApiError(r.status, j.error?.code ?? "error", j.error?.message ?? `HTTP ${r.status}`);
+  return j as T;
+}

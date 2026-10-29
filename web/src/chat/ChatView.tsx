@@ -24,12 +24,12 @@ import type { ChatMessage } from "./model";
 const adapter = new SimpleImageAttachmentAdapter();
 
 function AuthorHeader({ author, steer, at }: { author?: Author; steer?: boolean; at?: string }) {
-  const name = author?.name || author?.login || (author?.kind === "system" ? "Watcher" : author?.kind === "supervisor" ? "Global agent" : "You");
+  const name = author?.name || author?.login || (author?.kind === "system" ? "Watcher" : author?.kind === "supervisor" ? "My assistant" : "You");
   return (
     <div className="mb-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
       {author?.login ? <UserAvatar login={author.login} name={author.name} url={author.avatarUrl} className="size-5" /> : null}
       <span className="font-medium text-foreground">{name}</span>
-      {author?.kind === "supervisor" ? <span className="rounded bg-secondary px-1.5 py-0.5">{author.login ? "via supervisor" : "supervisor"}{author.onBehalfOf ? ` for ${author.onBehalfOf}` : ""}</span> : null}
+      {author?.kind === "supervisor" ? <span className="rounded bg-secondary px-1.5 py-0.5">{author.login ? "via my assistant" : "my assistant"}{author.onBehalfOf ? ` for ${author.onBehalfOf}` : ""}</span> : null}
       {steer ? <span className="rounded bg-secondary px-1.5 py-0.5">steer</span> : null}
       {at ? <time dateTime={at}>{format(new Date(at), "HH:mm")}</time> : null}
     </div>

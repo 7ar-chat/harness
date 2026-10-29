@@ -9,6 +9,7 @@ import type { PlanItem, WorkspaceFile } from "@/api/types";
 import { Empty, ListSkeleton } from "@/components/app/common";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { blobToDataUrl } from "@/lib/utils";
 import { useElementSize } from "@/lib/hooks";
 
 interface TreeNode {
@@ -45,14 +46,13 @@ function Preview({ threadId, node, onClose }: { threadId: string; node: TreeNode
   useEffect(() => {
     setState({});
     if (!node) return;
-    let url: string | undefined;
     let alive = true;
     (async () => {
       try {
         const r = await fetch(`/api/threads/${threadId}/files/download?path=${encodeURIComponent(node.path)}`, { headers: authHeaders() });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         if (isImage(node.name)) {
-          url = URL.createObjectURL(await r.blob());
+          const url = await blobToDataUrl(await r.blob());
           if (alive) setState({ img: url });
         } else if (node.size > 300_000) {
           if (alive) setState({ err: "Too large to preview. Download it instead." });
@@ -66,7 +66,6 @@ function Preview({ threadId, node, onClose }: { threadId: string; node: TreeNode
     })();
     return () => {
       alive = false;
-      if (url) URL.revokeObjectURL(url);
     };
   }, [node, threadId]);
   return (

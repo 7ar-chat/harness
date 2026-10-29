@@ -9,13 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ImportEntry, ImportGithubDialog } from "./github-import";
 
 interface Ctx {
   newSession: (projectId?: string) => void;
   newProject: () => void;
   openPalette: () => void;
+  importGithub: () => void;
 }
-const DialogsCtx = createContext<Ctx>({ newSession: () => {}, newProject: () => {}, openPalette: () => {} });
+const DialogsCtx = createContext<Ctx>({ newSession: () => {}, newProject: () => {}, openPalette: () => {}, importGithub: () => {} });
 export const useDialogs = () => useContext(DialogsCtx);
 
 const PERSONAL = "__personal";
@@ -23,11 +25,13 @@ const PERSONAL = "__personal";
 export function DialogsProvider({ children, openPalette }: { children: ReactNode; openPalette: () => void }) {
   const [session, setSession] = useState<{ open: boolean; project: string }>({ open: false, project: PERSONAL });
   const [project, setProject] = useState(false);
+  const [imp, setImp] = useState(false);
   return (
-    <DialogsCtx.Provider value={{ newSession: (p) => setSession({ open: true, project: p ?? PERSONAL }), newProject: () => setProject(true), openPalette }}>
+    <DialogsCtx.Provider value={{ newSession: (p) => setSession({ open: true, project: p ?? PERSONAL }), newProject: () => setProject(true), openPalette, importGithub: () => setImp(true) }}>
       {children}
       <NewSessionDialog open={session.open} project={session.project} onClose={() => setSession((s) => ({ ...s, open: false }))} />
-      <NewProjectDialog open={project} onClose={() => setProject(false)} />
+      <NewProjectDialog open={project} onClose={() => setProject(false)} onImport={() => (setProject(false), setImp(true))} />
+      <ImportGithubDialog open={imp} onClose={() => setImp(false)} />
     </DialogsCtx.Provider>
   );
 }
@@ -98,7 +102,7 @@ function NewSessionDialog({ open, project, onClose }: { open: boolean; project: 
   );
 }
 
-function NewProjectDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function NewProjectDialog({ open, onClose, onImport }: { open: boolean; onClose: () => void; onImport: () => void }) {
   const [f, setF] = useState({ name: "", description: "", repoUrl: "", defaultBranch: "main" });
   const create = useCreateProject();
   const navigate = useNavigate();
@@ -125,6 +129,7 @@ function NewProjectDialog({ open, onClose }: { open: boolean; onClose: () => voi
             <DialogTitle>New project</DialogTitle>
             <DialogDescription>A project is a repository whose sessions, memory and members are shared.</DialogDescription>
           </DialogHeader>
+          <ImportEntry onImport={onImport} onNavigate={onClose} />
           <div className="my-4 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="np-name">Name</Label>

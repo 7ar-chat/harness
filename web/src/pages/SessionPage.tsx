@@ -150,7 +150,7 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
       models={infoModels}
       suggestions={supervisor ? SUGGESTIONS : undefined}
       onStatus={setStatus}
-      emptyHint={supervisor ? "Ask the global agent about your running sessions. It can watch them, answer for you, and nudge stuck ones." : "Send a message to start. Everyone with access to this project can see this session."}
+      emptyHint={supervisor ? "Ask your assistant about your running sessions. It can watch them, answer for you, and nudge stuck ones." : "Send a message to start. Everyone with access to this project can see this session."}
     />
   );
 
@@ -159,7 +159,7 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
       <header className="shrink-0 space-y-2 border-b px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
           {supervisor ? <Bot className="size-5" /> : null}
-          {supervisor ? <h1 className="text-base font-semibold">Global agent</h1> : <TitleEditor id={threadId} title={t.title} editable={!readOnly} />}
+          {supervisor ? <h1 className="text-base font-semibold">My assistant</h1> : <TitleEditor id={threadId} title={t.title} editable={!readOnly} />}
           <StatusBadge status={t.status} />
           {project ? (
             <Link to="/p/$projectId" params={{ projectId: project.id }} search={{ tab: undefined }} className="text-xs text-muted-foreground hover:underline">
@@ -280,6 +280,6 @@ export function SupervisorPage() {
   const q = useQuery(supervisorQuery);
   if (q.isLoading) return <ListSkeleton rows={5} />;
   if (q.error) return <ErrorState error={q.error} retry={() => void q.refetch()} />;
-  if (!q.data) return <ErrorState error={new ApiError(404, "not_found", "The global agent is not available on this server.")} />;
+  if (!q.data) return <ErrorState error={new ApiError(404, "not_found", "Your assistant is not available on this server.")} />;
   return <SessionView threadId={q.data.id} supervisor />;
 }
