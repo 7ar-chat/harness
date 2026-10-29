@@ -1,0 +1,16 @@
+//go:build unix
+
+package main
+
+import (
+	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/sandbox"
+	"github.com/GhaziBenDahmane/harness/sandbox/local"
+)
+
+// teamLocalBackend is the local sandbox with a directory of its own per thread
+// (no shared project directory): every session of a team gets its own
+// /workspace, where its project repository is cloned.
+func teamLocalBackend(cfg *config.Config) (sandbox.Backend, error) {
+	return local.New(local.Options{StateDir: cfg.LocalStateDir})
+}

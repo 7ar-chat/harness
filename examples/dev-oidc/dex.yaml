@@ -1,0 +1,23 @@
+issuer: http://localhost:5556/dex
+storage:
+  type: memory
+web:
+  http: 0.0.0.0:5556
+oauth2:
+  skipApprovalScreen: true
+enablePasswordDB: true
+staticClients:
+  - id: harness
+    name: Harness
+    secret: harness-dev-secret
+    redirectURIs:
+      - http://localhost:8080/auth/callback
+staticPasswords:
+  - email: alice@example.com
+    hash: "$2a$10$JPIvRViwR8ixMDJoCGPG5uvu40ZpH515dX1yRenXZ/IAPN/A.q4Zq"
+    username: alice
+    userID: 08a8684b-db88-4b73-90a9-3cd1661f5466
+  - email: bob@example.com
+    hash: "$2a$10$JPIvRViwR8ixMDJoCGPG5uvu40ZpH515dX1yRenXZ/IAPN/A.q4Zq"
+    username: bob
+    userID: 08a8684b-db88-4b73-90a9-3cd1661f5467

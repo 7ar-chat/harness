@@ -73,3 +73,10 @@ as a `[watcher]` message that it answers once.
 * The watcher and the live feed are per process: with several `harness-web` replicas, events for runs
   started on another replica reach this one only through the run's own stream (not the feed).
 * A thread stays stored under its creator's login; deleting that user's data would need a transfer step.
+
+## Trying it locally with OIDC
+
+`examples/dev-oidc/run.sh` starts Dex in Docker (users `alice@example.com` and `bob@example.com`, password
+`password`) and `harness-web -local` on http://localhost:8080 with OIDC login (`OIDC_LOGIN_CLAIM=name`, so the
+logins are `alice` and `bob`). A user's first login registers them; projects can then be shared by invite or by
+login. With `-local` in team mode every session gets its own local sandbox directory.

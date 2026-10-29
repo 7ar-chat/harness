@@ -76,6 +76,16 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		}
 	}
 	b := &built{team: ts, closer: closers}
+	if ts != nil && cfg.LocalSandbox() {
+		be, err := teamLocalBackend(cfg)
+		if err != nil {
+			_ = closers.Close()
+			return nil, err
+		}
+		if be != nil {
+			o.Backend = be
+		}
+	}
 	if ts != nil {
 		gh, err := githubFromEnv(os.Getenv)
 		if err != nil {
