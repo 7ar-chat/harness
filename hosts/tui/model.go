@@ -76,6 +76,9 @@ type Options struct {
 	Context context.Context
 	// StaticCursor disables cursor blinking (tests).
 	StaticCursor bool
+	// Config is the parsed tui.json (nil: the defaults); StatePath the file the theme choice is kept in ("" for none).
+	Config    *TUIConfig
+	StatePath string
 }
 
 // Model is the Bubble Tea model of the terminal client. It is pure with
@@ -110,6 +113,8 @@ type Model struct {
 	pending    *pending
 	quit       bool
 	static     bool
+
+	uiState // keymap, leader sequence, state file (keys.go)
 }
 
 // New returns the model for a backend.
@@ -133,6 +138,7 @@ func New(be Backend, o Options) *Model {
 	in.Focus()
 	m := &Model{static: o.StaticCursor, be: be, ctx: o.Context, now: o.Now, in: in, toolIdx: map[string]int{}, width: 80, height: 24}
 	m.vp = viewport.New(80, 10)
+	m.initUI(o)
 	m.layout()
 	return m
 }
@@ -192,6 +198,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.finishRun()
 			m.add(block{kind: blockNotice, text: "the event stream ended without a result"})
 		}
+	case leaderExpireMsg:
+		m.leaderExpire(msg)
 	case tickMsg:
 		if m.running {
 			m.elapsed = m.now().Sub(m.runStart)
@@ -230,7 +238,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // key handles the keys with a meaning of their own; handled=false passes the
 // key to the input box.
 func (m *Model) key(k tea.KeyMsg) (tea.Cmd, bool) {
-	s := k.String()
+	s := m.keys.canon(k.String())
 	if s != "ctrl+c" {
 		m.quitArmed = false
 	}
@@ -243,6 +251,9 @@ func (m *Model) key(k tea.KeyMsg) (tea.Cmd, bool) {
 			return p.pick(m, *it), true
 		}
 		return nil, true
+	}
+	if cmd, ok := m.navKey(k); ok {
+		return cmd, true
 	}
 	if len(m.sugg) > 0 {
 		switch s {
@@ -692,6 +703,8 @@ func (m *Model) overlay(w int) string {
 	switch {
 	case m.picker != nil:
 		return m.picker.view(w)
+	case m.lead.on:
+		return m.whichKey(w)
 	case len(m.sugg) > 0:
 		return renderSuggestions(m.sugg, m.suggSel, w)
 	}

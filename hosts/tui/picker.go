@@ -5,10 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
-
-var styleSel = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
 
 // pickRows is how many items a picker shows at once.
 const pickRows = 8
@@ -30,6 +27,9 @@ type picker struct {
 	// custom lets enter choose the typed filter when nothing matches (a model id the list lacks).
 	custom bool
 	pick   func(m *Model, it pickItem) tea.Cmd
+	// preview (optional) is called with the highlighted item whenever the selection moves; cancel when esc leaves the picker.
+	preview func(it pickItem)
+	cancel  func()
 }
 
 func (p *picker) visible() []pickItem {
@@ -52,6 +52,9 @@ func (p *picker) key(k tea.KeyMsg) (done bool, chosen *pickItem) {
 	vis := p.visible()
 	switch k.String() {
 	case "esc", "ctrl+c":
+		if p.cancel != nil {
+			p.cancel()
+		}
 		return true, nil
 	case "up", "ctrl+p":
 		if p.sel > 0 {
@@ -84,7 +87,15 @@ func (p *picker) key(k tea.KeyMsg) (done bool, chosen *pickItem) {
 			p.sel = 0
 		}
 	}
+	p.notify()
 	return false, nil
+}
+
+// notify previews the highlighted item (the picker is closed when preview is nil).
+func (p *picker) notify() {
+	if vis := p.visible(); p.preview != nil && p.sel < len(vis) {
+		p.preview(vis[p.sel])
+	}
 }
 
 func (p *picker) view(width int) string {
