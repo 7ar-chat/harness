@@ -109,7 +109,7 @@ func (m *Model) modelItems(ids []string, cur string) []pickItem {
 		if !grouped {
 			group = ""
 		}
-		items = append(items, pickItem{id: id, label: label, current: id == cur, group: group})
+		items = append(items, pickItem{id: id, label: label, desc: m.modelBadges(id), current: id == cur, group: group})
 	}
 	for _, id := range favs {
 		add(id, "favorites")
@@ -136,7 +136,7 @@ func (m *Model) modelItems(ids []string, cur string) []pickItem {
 
 func (m *Model) openModelPickerX(ids []string) {
 	cur := m.be.Model()
-	p := &picker{title: "Model", custom: true, hint: "type to filter · ↑↓ · enter · ctrl+f favorite · esc",
+	p := &picker{title: "Model", custom: true, dimDesc: true, hint: "type to filter · ↑↓ · enter · ctrl+f favorite · esc",
 		pick: func(m *Model, it pickItem) tea.Cmd {
 			m.useModel(m.be.(ModelBackend), it.id)
 			return nil

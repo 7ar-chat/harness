@@ -5,7 +5,8 @@
     @@ a/b.go @@                                                                                                    │                                 
     -x                                                                                                              │ Context                         
     +y                                                                                                              │ in 1.2k out 300                 
-                                                                                                                    │ window 12.0k / 100.0k (12%)     
+                                                                                                                    │ window 12.0k / 100k (12%)       
+                                                                                                                    │ ██░░░░░░░░░░░░░░░░░░            
                                                                                                                     │                                 
                                                                                                                     │ Plan                            
                                                                                                                     │ ☑ read code                     
@@ -17,8 +18,13 @@
                                                                                                                     │                                 
                                                                                                                     │ MCP                             
                                                                                                                     │ fs                              
-                                                                                                                    │ …                               
- BUILD · gpt-test · running · in 1.2k out 300 · 0:00  enter steers · esc cancels                                                                      
+                                                                                                                    │                                 
+                                                                                                                    │ Skills                          
+                                                                                                                    │ review                          
+                                                                                                                    │                                 
+                                                                                                                    │                                 
+                                                                                                                    │                                 
+ BUILD · gpt-test · running · in 1.2k out 300 · ctx 12.0k/100k (12%) · 0:00  enter steers · esc cancels                                               
 build │ Message (enter sends, alt+enter or ctrl+j adds a line)                                                                                        
 build │                                                                                                                                               
 build │                                                                                                                                               

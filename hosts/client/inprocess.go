@@ -27,11 +27,18 @@ func WithModels(models []string, def string) InProcessOption {
 	return func(c *inProcess) { c.models, c.def = models, def }
 }
 
+// WithModelInfo sets where Models gets the description of each model it lists
+// (context window, prices, capabilities); without it the list carries none.
+func WithModelInfo(lookup func(id string) (ModelInfo, bool)) InProcessOption {
+	return func(c *inProcess) { c.info = lookup }
+}
+
 type inProcess struct {
 	h      *harness.Harness
 	user   string
 	models []string
 	def    string
+	info   func(id string) (ModelInfo, bool)
 	// projectDir is where Commands looks for the project's .har directory from.
 	projectDir string
 }
@@ -79,7 +86,18 @@ func (c *inProcess) Models(context.Context) (ModelList, error) {
 	if m == nil {
 		m = []string{}
 	}
-	return ModelList{Models: m, Default: c.def}, nil
+	list := ModelList{Models: m, Default: c.def}
+	if c.info != nil {
+		for _, id := range append([]string{c.def}, m...) {
+			if i, ok := c.info(id); ok && id != "" {
+				if list.Info == nil {
+					list.Info = map[string]ModelInfo{}
+				}
+				list.Info[id] = i
+			}
+		}
+	}
+	return list, nil
 }
 
 func toThread(t *store.Thread) Thread {

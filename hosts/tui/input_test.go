@@ -401,7 +401,7 @@ func TestTimestampsAndDetailsToggles(t *testing.T) {
 func TestSidebarShowsPlanFilesAndModel(t *testing.T) {
 	be := &optsBackend{}
 	m := New(be, Options{Now: func() time.Time { return t0 }, StaticCursor: true})
-	m.Update(tea.WindowSizeMsg{Width: 150, Height: 24})
+	m.Update(tea.WindowSizeMsg{Width: 150, Height: 30})
 	startRun(t, m, "plan it")
 	feed(t, m, agui.StateSnapshotEvent(map[string]any{"plan": []map[string]string{
 		{"id": "1", "title": "read code", "status": "completed"},

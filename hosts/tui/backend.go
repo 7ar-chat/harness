@@ -3,6 +3,8 @@ package tui
 import (
 	"context"
 	"encoding/json"
+	"sync"
+	"time"
 
 	"github.com/GhaziBenDahmane/harness/engine/agui"
 	"github.com/GhaziBenDahmane/harness/hosts/client"
@@ -60,8 +62,16 @@ type ClientBackend struct {
 	Discover func(ctx context.Context) ([]string, error)
 	// RunMode is client.ModeBuild (default) or client.ModePlan.
 	RunMode string
+	// InfoFunc (optional) describes a model locally, live, for models the server's list does not cover
+	// (an in-process table that loads in the background).
+	InfoFunc func(id string) (client.ModelInfo, bool)
 
 	attach []client.Attachment // for the next Send
+
+	infoMu      sync.Mutex
+	info        map[string]client.ModelInfo // the info of the last Models answer
+	infoAt      time.Time
+	infoLoading bool
 }
 
 // sendOptions are the options of the next run; the queued attachments go with it, once.
@@ -148,6 +158,7 @@ func (b *ClientBackend) Models(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	b.setInfo(list.Info)
 	seen := map[string]bool{}
 	var out []string
 	add := func(ids ...string) {
@@ -196,4 +207,40 @@ func (b *ClientBackend) OpenThread(ctx context.Context, id string) (*client.Thre
 	}
 	b.ThreadID = th.ID
 	return th, nil
+}
+
+func (b *ClientBackend) setInfo(info map[string]client.ModelInfo) {
+	b.infoMu.Lock()
+	b.info, b.infoAt = info, time.Now()
+	b.infoMu.Unlock()
+}
+
+// ModelInfo implements InfoBackend. It never blocks: it answers from InfoFunc or
+// from the last Models answer (refreshed by /model); a miss makes one background
+// request for a fresh answer every infoRefresh, since a server loads its model
+// table after it starts.
+func (b *ClientBackend) ModelInfo(ctx context.Context, id string) (client.ModelInfo, bool) {
+	if b.InfoFunc != nil {
+		if i, ok := b.InfoFunc(id); ok {
+			return i, true
+		}
+	}
+	b.infoMu.Lock()
+	defer b.infoMu.Unlock()
+	if i, ok := b.info[id]; ok {
+		return i, true
+	}
+	if !b.infoLoading && time.Since(b.infoAt) > infoRefresh {
+		b.infoLoading, b.infoAt = true, time.Now()
+		go func() {
+			list, err := b.C.Models(context.WithoutCancel(ctx))
+			b.infoMu.Lock()
+			b.infoLoading = false
+			b.infoMu.Unlock()
+			if err == nil {
+				b.setInfo(list.Info)
+			}
+		}()
+	}
+	return client.ModelInfo{}, false
 }

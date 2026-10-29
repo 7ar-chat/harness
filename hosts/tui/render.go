@@ -296,6 +296,9 @@ type StatusView struct {
 	Hint    string
 	Mode    string // plan or build; "" when the backend has no modes
 	Effort  string // reasoning effort; "" is the model's default
+
+	CtxUsed, CtxWindow int    // context tokens of the last step and the model's window (0: unknown)
+	Cost               string // session cost, "~" prefixed when partial; "" when unknown
 }
 
 // FormatTokens abbreviates a token count (1234 → 1.2k).
@@ -308,6 +311,9 @@ func FormatTokens(n int) string {
 	}
 	return fmt.Sprint(n)
 }
+
+// formatWindow abbreviates a context window without a trailing ".0" (200000 → 200k).
+func formatWindow(n int) string { return strings.Replace(FormatTokens(n), ".0", "", 1) }
 
 // RenderUsage is the token part of the status line.
 func RenderUsage(u Usage) string {
@@ -333,17 +339,68 @@ func RenderStatus(s StatusView, width int) string {
 	if s.Usage.In+s.Usage.Out > 0 {
 		parts = append(parts, RenderUsage(s.Usage))
 	}
+	ctx, ctxStyle := renderCtx(s)
+	ctxAt := -1
+	if ctx != "" {
+		ctxAt = len(parts)
+		parts = append(parts, ctx)
+	}
+	if s.Cost != "" {
+		parts = append(parts, s.Cost)
+	}
 	if s.Elapsed != "" {
 		parts = append(parts, s.Elapsed)
 	}
-	line := " " + strings.Join(parts, " · ")
+	// The context part is drawn in its own colour when the window is filling up;
+	// the rest of the line keeps the status style.
+	head, tail := " "+strings.Join(parts, " · "), ""
+	if ctxStyle != nil {
+		head = " " + strings.Join(parts[:ctxAt], " · ")
+		if ctxAt > 0 {
+			head += " · "
+		}
+		tail = strings.Join(parts[ctxAt+1:], " · ")
+		if tail != "" {
+			tail = " · " + tail
+		}
+	}
+	rest := tail
 	if s.Hint != "" {
-		line += "  " + s.Hint
+		rest += "  " + s.Hint
 	}
-	if pad := width - lipgloss.Width(line); pad > 0 {
-		line += strings.Repeat(" ", pad)
+	w := lipgloss.Width(head) + lipgloss.Width(rest)
+	if ctxStyle != nil {
+		w += lipgloss.Width(ctx)
 	}
-	return styleStatus.Render(line)
+	if pad := width - w; pad > 0 {
+		rest += strings.Repeat(" ", pad)
+	}
+	if ctxStyle == nil {
+		return styleStatus.Render(head + rest)
+	}
+	return styleStatus.Render(head) + ctxStyle.Render(ctx) + styleStatus.Render(rest)
+}
+
+// renderCtx is "ctx 12.3k/200k (6%)", with the style that flags a window more
+// than 70% (warn) or 90% (error) full; nil when it is not.
+func renderCtx(s StatusView) (string, *lipgloss.Style) {
+	if s.CtxUsed <= 0 {
+		return "", nil
+	}
+	if s.CtxWindow <= 0 {
+		return "ctx " + FormatTokens(s.CtxUsed), nil
+	}
+	pct := s.CtxUsed * 100 / s.CtxWindow
+	text := fmt.Sprintf("ctx %s/%s (%d%%)", FormatTokens(s.CtxUsed), formatWindow(s.CtxWindow), pct)
+	switch {
+	case pct > 90:
+		st := styleStatus.Foreground(styleErr.GetForeground())
+		return text, &st
+	case pct > 70:
+		st := styleStatus.Foreground(styleWarn.GetForeground())
+		return text, &st
+	}
+	return text, nil
 }
 
 // Prompt is a pending question to the user (an interrupt of the run).

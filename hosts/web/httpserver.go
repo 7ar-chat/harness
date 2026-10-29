@@ -78,6 +78,8 @@ type Options struct {
 	Models []string
 	// DefaultModel is used when a run request names none.
 	DefaultModel string
+	// ModelInfo (optional) describes the models for GET /api/models: context window, prices, capabilities.
+	ModelInfo func(id string) (client.ModelInfo, bool)
 	// PingEvery keeps idle event streams open through proxies (default 15 s).
 	PingEvery time.Duration
 	// NoUI leaves out the embedded UI (API only).
@@ -163,7 +165,7 @@ func (s *server) authed(next handler) http.HandlerFunc {
 
 // api is the engine as seen by the caller.
 func (s *server) api(c Caller) client.Client {
-	return client.InProcess(s.h, c.Login, client.WithModels(s.o.Models, s.o.DefaultModel))
+	return client.InProcess(s.h, c.Login, client.WithModels(s.o.Models, s.o.DefaultModel), client.WithModelInfo(s.o.ModelInfo))
 }
 
 func (s *server) models(w http.ResponseWriter, r *http.Request, c Caller) {

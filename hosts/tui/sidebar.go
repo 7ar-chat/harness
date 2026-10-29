@@ -46,12 +46,16 @@ type planEntry struct{ ID, Title, Status string }
 
 // sidebar is the state of the right-hand panel.
 type sidebar struct {
-	mode           sidebarMode
-	title          string
-	plan           []planEntry
-	files          []string // files edited or written, in first-touch order
-	cost, costBase float64
-	ctx, window    int
+	mode        sidebarMode
+	title       string
+	plan        []planEntry
+	files       []string // files edited or written, in first-touch order
+	ctx, window int      // context tokens of the last step, and the window the run reported
+
+	rows      []costRow // usage and price of each finished run, per model (cost.go)
+	nRuns     int
+	live      Usage // usage of the run in progress
+	runMaxCtx int   // its largest prompt, which selects the price tier
 }
 
 func init() {
@@ -121,10 +125,8 @@ func (m *Model) observe(ev Ev) {
 				sb.title = t
 			}
 		case agui.CustomUsage:
-			sb.ctx, sb.window = m.cur.Context, m.cur.Window
-			if c, ok := ev.Value["cost"].(float64); ok {
-				sb.cost = c
-			}
+			sb.ctx, sb.window, sb.live = m.cur.Context, m.cur.Window, m.cur
+			sb.runMaxCtx = max(sb.runMaxCtx, m.cur.Context)
 		}
 	case agui.ToolCallResult:
 		i, ok := m.toolIdx[ev.ToolCallID]
@@ -139,8 +141,9 @@ func (m *Model) observe(ev Ev) {
 			}
 		}
 	case agui.RunFinished:
-		sb.costBase += sb.cost
-		sb.cost = 0
+		m.recordRun(ev.Usage)
+	case agui.RunError:
+		m.recordRun(nil)
 	}
 	m.attention(ev)
 }
@@ -209,16 +212,7 @@ func (m *Model) renderSidebar(w, h int) string {
 	u := m.base
 	u.add(m.cur)
 	ls = append(ls, styleDim.Render(fmt.Sprintf("in %s out %s", FormatTokens(u.In), FormatTokens(u.Out))))
-	if sb.ctx > 0 {
-		c := fmt.Sprintf("window %s", FormatTokens(sb.ctx))
-		if sb.window > 0 {
-			c = fmt.Sprintf("window %s / %s (%d%%)", FormatTokens(sb.ctx), FormatTokens(sb.window), sb.ctx*100/sb.window)
-		}
-		ls = append(ls, styleDim.Render(clip(c, in)))
-	}
-	if cost := sb.costBase + sb.cost; cost > 0 {
-		ls = append(ls, styleDim.Render(fmt.Sprintf("cost $%.4f", cost)))
-	}
+	ls = append(ls, m.contextLines(in)...)
 	if len(sb.plan) > 0 {
 		section("Plan")
 		ls = append(ls, renderPlan(sb.plan, in)...)
@@ -264,4 +258,50 @@ func orDefault(s, d string) string {
 		return d
 	}
 	return s
+}
+
+// contextLines are the window, cost and price lines of the sidebar's Context section.
+func (m *Model) contextLines(in int) []string {
+	var ls []string
+	dim := func(s string) { ls = append(ls, styleDim.Render(clip(s, in))) }
+	used, window := m.inp.sb.ctx, m.contextWindow()
+	switch {
+	case used > 0 && window > 0:
+		pct := used * 100 / window
+		dim(fmt.Sprintf("window %s / %s (%d%%)", FormatTokens(used), formatWindow(window), pct))
+		ls = append(ls, usageBar(pct, min(in, 20)))
+	case used > 0:
+		dim("window " + FormatTokens(used))
+	case window > 0:
+		dim("window " + formatWindow(window))
+	}
+	if usd, partial, known := m.sessionCost(); known {
+		c := fmtUSD(usd)
+		if partial {
+			c = "~" + c
+		}
+		dim("cost " + c)
+	}
+	if i, ok := m.modelInfo(m.be.Model()); ok {
+		if p := priceLine(i); p != "" {
+			dim(p)
+		}
+		if i.MaxOutput > 0 {
+			dim("max output " + formatWindow(i.MaxOutput))
+		}
+	}
+	return ls
+}
+
+// usageBar draws pct (0-100) as a bar w cells wide, coloured by how full it is.
+func usageBar(pct, w int) string {
+	n := min(max(pct, 0), 100) * w / 100
+	st := styleDim
+	switch {
+	case pct > 90:
+		st = styleErr
+	case pct > 70:
+		st = styleWarn
+	}
+	return st.Render(strings.Repeat("█", n)) + styleDim.Render(strings.Repeat("░", w-n))
 }
