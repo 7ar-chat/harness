@@ -1,0 +1,168 @@
+package store
+
+import (
+	"context"
+	"errors"
+	"time"
+)
+
+// Project roles (Member.Role), from the most to the least powerful.
+const (
+	// RoleOwner manages members, settings and the repository link.
+	RoleOwner = "owner"
+	// RoleMember reads and works: creates threads, sends, steers, approves.
+	RoleMember = "member"
+	// RoleViewer only reads.
+	RoleViewer = "viewer"
+)
+
+// Thread kinds (ThreadMeta.Kind).
+const (
+	ThreadChat       = "chat"
+	ThreadSupervisor = "supervisor"
+)
+
+var (
+	// ErrForbidden means the user is known but may not do this.
+	ErrForbidden = errors.New("forbidden")
+	// ErrLastOwner means the change would leave a project without owner.
+	ErrLastOwner = errors.New("a project needs at least one owner")
+)
+
+// ValidRole reports whether r is a project role.
+func ValidRole(r string) bool { return r == RoleOwner || r == RoleMember || r == RoleViewer }
+
+// RoleAtLeast reports whether have is at least as powerful as want.
+func RoleAtLeast(have, want string) bool {
+	rank := map[string]int{RoleViewer: 1, RoleMember: 2, RoleOwner: 3}
+	return rank[have] > 0 && rank[have] >= rank[want]
+}
+
+// User is a person known from the identity provider. Login is the stable key
+// used everywhere (threads, memory, membership): the OIDC subject.
+type User struct {
+	Login     string    `json:"login"`
+	Email     string    `json:"email,omitempty"`
+	Name      string    `json:"name,omitempty"`
+	AvatarURL string    `json:"avatarUrl,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	LastSeen  time.Time `json:"lastSeen"`
+}
+
+// Project is a repository the team works on.
+type Project struct {
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Description   string `json:"description,omitempty"`
+	RepoURL       string `json:"repoUrl,omitempty"`
+	DefaultBranch string `json:"defaultBranch,omitempty"`
+	// GitHubInstallation is the id of the GitHub App installation that grants
+	// access to the repository (0 when not connected).
+	GitHubInstallation int64     `json:"githubInstallation,omitempty"`
+	CreatedBy          string    `json:"createdBy"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
+}
+
+// ProjectPatch is a partial project update.
+type ProjectPatch struct {
+	Name               *string
+	Description        *string
+	RepoURL            *string
+	DefaultBranch      *string
+	GitHubInstallation *int64
+}
+
+// Member is a user's role in a project.
+type Member struct {
+	ProjectID string    `json:"projectId"`
+	Login     string    `json:"login"`
+	Role      string    `json:"role"`
+	AddedAt   time.Time `json:"addedAt"`
+}
+
+// Invite is a membership waiting for its email to log in.
+type Invite struct {
+	ProjectID string    `json:"projectId"`
+	Email     string    `json:"email"`
+	Role      string    `json:"role"`
+	InvitedBy string    `json:"invitedBy"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// ThreadMeta ties a thread to a project and records who created it. Owner is
+// the login the thread is stored under (store calls for the thread use it);
+// CreatedBy is the user who started it.
+type ThreadMeta struct {
+	ThreadID  string    `json:"threadId"`
+	ProjectID string    `json:"projectId,omitempty"`
+	Owner     string    `json:"owner"`
+	CreatedBy string    `json:"createdBy"`
+	Kind      string    `json:"kind"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// AuditEntry records an action taken on a project or thread by a user.
+type AuditEntry struct {
+	ID         int64          `json:"id"`
+	ProjectID  string         `json:"projectId,omitempty"`
+	ThreadID   string         `json:"threadId,omitempty"`
+	Actor      string         `json:"actor"`
+	OnBehalfOf string         `json:"onBehalfOf,omitempty"`
+	Action     string         `json:"action"`
+	Detail     map[string]any `json:"detail,omitempty"`
+	At         time.Time      `json:"at"`
+}
+
+// TeamStore persists users, projects, memberships and the thread-to-project
+// mapping. It is separate from Store: threads stay stored under their owner's
+// login and the host decides, from here, who may act on them.
+type TeamStore interface {
+	// UpsertUser records the user at login and claims the invites sent to the
+	// email (the memberships are created).
+	UpsertUser(ctx context.Context, u User) (*User, error)
+	GetUser(ctx context.Context, login string) (*User, error)
+	// GetUsers returns the known users among logins, by login.
+	GetUsers(ctx context.Context, logins []string) (map[string]*User, error)
+	GetUserByEmail(ctx context.Context, email string) (*User, error)
+
+	// CreateProject stores p (a fresh id when empty) and makes owner its owner.
+	CreateProject(ctx context.Context, p Project, owner string) (*Project, error)
+	GetProject(ctx context.Context, id string) (*Project, error)
+	UpdateProject(ctx context.Context, id string, patch ProjectPatch) (*Project, error)
+	// DeleteProject removes the project, its memberships, invites and thread links.
+	DeleteProject(ctx context.Context, id string) error
+	// ListProjects returns the projects login belongs to, with its role.
+	ListProjects(ctx context.Context, login string) ([]ProjectRole, error)
+
+	// MemberRole is login's role in the project, ErrNotFound when not a member.
+	MemberRole(ctx context.Context, projectID, login string) (string, error)
+	ListMembers(ctx context.Context, projectID string) ([]Member, error)
+	// SetMember adds login or changes its role (ErrLastOwner when it would demote the last owner).
+	SetMember(ctx context.Context, projectID, login, role string) error
+	// RemoveMember removes login (ErrLastOwner for the last owner).
+	RemoveMember(ctx context.Context, projectID, login string) error
+	// CreateInvite invites an email; when a user with that email exists it is added at once and nil is returned.
+	CreateInvite(ctx context.Context, in Invite) (*Invite, error)
+	ListInvites(ctx context.Context, projectID string) ([]Invite, error)
+	DeleteInvite(ctx context.Context, projectID, email string) error
+
+	// SetThreadMeta links a thread (idempotent).
+	SetThreadMeta(ctx context.Context, m ThreadMeta) error
+	// GetThreadMeta returns the link of a thread, ErrNotFound for a thread
+	// created before the team layer (then only its owner has access).
+	GetThreadMeta(ctx context.Context, threadID string) (*ThreadMeta, error)
+	ListProjectThreads(ctx context.Context, projectID string) ([]ThreadMeta, error)
+	// SupervisorThread returns the user's supervisor thread link, ErrNotFound when none.
+	SupervisorThread(ctx context.Context, login string) (*ThreadMeta, error)
+	DeleteThreadMeta(ctx context.Context, threadID string) error
+
+	Audit(ctx context.Context, e AuditEntry) error
+	ListAudit(ctx context.Context, projectID string, limit int) ([]AuditEntry, error)
+}
+
+// ProjectRole is a project with the caller's role in it.
+type ProjectRole struct {
+	Project
+	Role string `json:"role"`
+}

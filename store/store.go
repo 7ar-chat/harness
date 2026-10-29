@@ -157,7 +157,22 @@ type Message struct {
 	// message (column reasoning_items; never exposed by the API).
 	ReasoningItems json.RawMessage
 	CreatedAt      time.Time
+	// Authorship. AuthorLogin is the user who typed a user message (empty for
+	// assistant and tool messages, and for messages of single-user threads
+	// written before authorship existed); AuthorKind says what wrote it
+	// (AuthorUser, AuthorSupervisor, AuthorSystem; empty is the thread owner's
+	// or the model's own message); OnBehalfOf is the user a supervisor acted for.
+	AuthorLogin string
+	AuthorKind  string
+	OnBehalfOf  string
 }
+
+// Author kinds of a message (Message.AuthorKind).
+const (
+	AuthorUser       = "user"
+	AuthorSupervisor = "supervisor"
+	AuthorSystem     = "system"
+)
 
 // IsSteer reports whether the message is a steer injected during a run.
 func (m *Message) IsSteer() bool {

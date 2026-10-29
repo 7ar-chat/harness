@@ -1,0 +1,463 @@
+// Package teamstore implements store.TeamStore: Mem (in memory, optionally
+// persisted to a JSON file, for local and single-process hosts) and PG.
+package teamstore
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/GhaziBenDahmane/harness/store"
+)
+
+// Mem is a TeamStore in memory. With a path, every change is written to it
+// (atomically, by rename) and the file is read back by Open.
+type Mem struct {
+	mu   sync.Mutex
+	path string
+	d    data
+}
+
+type data struct {
+	Users    map[string]*store.User       `json:"users"`
+	Projects map[string]*store.Project    `json:"projects"`
+	Members  map[string][]store.Member    `json:"members"` // by project
+	Invites  map[string][]store.Invite    `json:"invites"` // by project
+	Threads  map[string]*store.ThreadMeta `json:"threads"`
+	Audit    []store.AuditEntry           `json:"audit"`
+	NextAud  int64                        `json:"nextAudit"`
+}
+
+// NewMem returns an empty in-memory store that is never persisted.
+func NewMem() *Mem {
+	m := &Mem{}
+	m.reset()
+	return m
+}
+
+// Open returns a Mem persisted to path ("" for none), loading it if it exists.
+func Open(path string) (*Mem, error) {
+	m := &Mem{path: path}
+	m.reset()
+	if path == "" {
+		return m, nil
+	}
+	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return m, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(b, &m.d); err != nil {
+		return nil, err
+	}
+	m.fill()
+	return m, nil
+}
+
+func (m *Mem) reset() { m.d = data{}; m.fill() }
+
+func (m *Mem) fill() {
+	if m.d.Users == nil {
+		m.d.Users = map[string]*store.User{}
+	}
+	if m.d.Projects == nil {
+		m.d.Projects = map[string]*store.Project{}
+	}
+	if m.d.Members == nil {
+		m.d.Members = map[string][]store.Member{}
+	}
+	if m.d.Invites == nil {
+		m.d.Invites = map[string][]store.Invite{}
+	}
+	if m.d.Threads == nil {
+		m.d.Threads = map[string]*store.ThreadMeta{}
+	}
+}
+
+// save writes the state; the caller holds mu.
+func (m *Mem) save() error {
+	if m.path == "" {
+		return nil
+	}
+	b, err := json.Marshal(&m.d)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(m.path), 0o700); err != nil {
+		return err
+	}
+	tmp := m.path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, m.path)
+}
+
+func norm(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
+
+func (m *Mem) UpsertUser(_ context.Context, u store.User) (*store.User, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := time.Now().UTC()
+	cur := m.d.Users[u.Login]
+	if cur == nil {
+		cur = &store.User{Login: u.Login, CreatedAt: now}
+		m.d.Users[u.Login] = cur
+	}
+	cur.Email, cur.Name, cur.AvatarURL, cur.LastSeen = norm(u.Email), u.Name, u.AvatarURL, now
+	if cur.Email != "" {
+		for pid, list := range m.d.Invites {
+			var keep []store.Invite
+			for _, iv := range list {
+				if iv.Email == cur.Email {
+					m.setMember(pid, cur.Login, iv.Role)
+					continue
+				}
+				keep = append(keep, iv)
+			}
+			m.d.Invites[pid] = keep
+		}
+	}
+	out := *cur
+	return &out, m.save()
+}
+
+func (m *Mem) GetUser(_ context.Context, login string) (*store.User, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u := m.d.Users[login]
+	if u == nil {
+		return nil, store.ErrNotFound
+	}
+	out := *u
+	return &out, nil
+}
+
+func (m *Mem) GetUsers(_ context.Context, logins []string) (map[string]*store.User, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := map[string]*store.User{}
+	for _, l := range logins {
+		if u := m.d.Users[l]; u != nil {
+			c := *u
+			out[l] = &c
+		}
+	}
+	return out, nil
+}
+
+func (m *Mem) GetUserByEmail(_ context.Context, email string) (*store.User, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	email = norm(email)
+	for _, u := range m.d.Users {
+		if u.Email == email && email != "" {
+			c := *u
+			return &c, nil
+		}
+	}
+	return nil, store.ErrNotFound
+}
+
+func (m *Mem) CreateProject(_ context.Context, p store.Project, owner string) (*store.Project, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if p.ID == "" {
+		p.ID = uuid.NewString()
+	}
+	if _, dup := m.d.Projects[p.ID]; dup {
+		return nil, store.ErrConflict
+	}
+	now := time.Now().UTC()
+	p.CreatedBy, p.CreatedAt, p.UpdatedAt = owner, now, now
+	m.d.Projects[p.ID] = &p
+	m.setMember(p.ID, owner, store.RoleOwner)
+	out := p
+	return &out, m.save()
+}
+
+func (m *Mem) GetProject(_ context.Context, id string) (*store.Project, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	p := m.d.Projects[id]
+	if p == nil {
+		return nil, store.ErrNotFound
+	}
+	out := *p
+	return &out, nil
+}
+
+func (m *Mem) UpdateProject(_ context.Context, id string, patch store.ProjectPatch) (*store.Project, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	p := m.d.Projects[id]
+	if p == nil {
+		return nil, store.ErrNotFound
+	}
+	if patch.Name != nil {
+		p.Name = *patch.Name
+	}
+	if patch.Description != nil {
+		p.Description = *patch.Description
+	}
+	if patch.RepoURL != nil {
+		p.RepoURL = *patch.RepoURL
+	}
+	if patch.DefaultBranch != nil {
+		p.DefaultBranch = *patch.DefaultBranch
+	}
+	if patch.GitHubInstallation != nil {
+		p.GitHubInstallation = *patch.GitHubInstallation
+	}
+	p.UpdatedAt = time.Now().UTC()
+	out := *p
+	return &out, m.save()
+}
+
+func (m *Mem) DeleteProject(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.d.Projects[id] == nil {
+		return store.ErrNotFound
+	}
+	delete(m.d.Projects, id)
+	delete(m.d.Members, id)
+	delete(m.d.Invites, id)
+	for tid, t := range m.d.Threads {
+		if t.ProjectID == id {
+			delete(m.d.Threads, tid)
+		}
+	}
+	return m.save()
+}
+
+func (m *Mem) ListProjects(_ context.Context, login string) ([]store.ProjectRole, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []store.ProjectRole
+	for pid, list := range m.d.Members {
+		for _, mb := range list {
+			if mb.Login == login && m.d.Projects[pid] != nil {
+				out = append(out, store.ProjectRole{Project: *m.d.Projects[pid], Role: mb.Role})
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+func (m *Mem) MemberRole(_ context.Context, projectID, login string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, mb := range m.d.Members[projectID] {
+		if mb.Login == login {
+			return mb.Role, nil
+		}
+	}
+	return "", store.ErrNotFound
+}
+
+func (m *Mem) ListMembers(_ context.Context, projectID string) ([]store.Member, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]store.Member(nil), m.d.Members[projectID]...), nil
+}
+
+// setMember adds or updates; the caller holds mu.
+func (m *Mem) setMember(pid, login, role string) {
+	list := m.d.Members[pid]
+	for i := range list {
+		if list[i].Login == login {
+			list[i].Role = role
+			return
+		}
+	}
+	m.d.Members[pid] = append(list, store.Member{ProjectID: pid, Login: login, Role: role, AddedAt: time.Now().UTC()})
+}
+
+func (m *Mem) owners(pid string) int {
+	n := 0
+	for _, mb := range m.d.Members[pid] {
+		if mb.Role == store.RoleOwner {
+			n++
+		}
+	}
+	return n
+}
+
+func (m *Mem) SetMember(_ context.Context, projectID, login, role string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.d.Projects[projectID] == nil {
+		return store.ErrNotFound
+	}
+	if !store.ValidRole(role) {
+		return store.ErrConflict
+	}
+	for _, mb := range m.d.Members[projectID] {
+		if mb.Login == login && mb.Role == store.RoleOwner && role != store.RoleOwner && m.owners(projectID) == 1 {
+			return store.ErrLastOwner
+		}
+	}
+	m.setMember(projectID, login, role)
+	return m.save()
+}
+
+func (m *Mem) RemoveMember(_ context.Context, projectID, login string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	list := m.d.Members[projectID]
+	for i, mb := range list {
+		if mb.Login != login {
+			continue
+		}
+		if mb.Role == store.RoleOwner && m.owners(projectID) == 1 {
+			return store.ErrLastOwner
+		}
+		m.d.Members[projectID] = append(list[:i:i], list[i+1:]...)
+		return m.save()
+	}
+	return store.ErrNotFound
+}
+
+func (m *Mem) CreateInvite(_ context.Context, in store.Invite) (*store.Invite, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.d.Projects[in.ProjectID] == nil {
+		return nil, store.ErrNotFound
+	}
+	if !store.ValidRole(in.Role) {
+		return nil, store.ErrConflict
+	}
+	in.Email = norm(in.Email)
+	for _, u := range m.d.Users {
+		if u.Email == in.Email {
+			m.setMember(in.ProjectID, u.Login, in.Role)
+			return nil, m.save()
+		}
+	}
+	in.CreatedAt = time.Now().UTC()
+	list := m.d.Invites[in.ProjectID]
+	for i := range list {
+		if list[i].Email == in.Email {
+			list[i] = in
+			return &in, m.save()
+		}
+	}
+	m.d.Invites[in.ProjectID] = append(list, in)
+	return &in, m.save()
+}
+
+func (m *Mem) ListInvites(_ context.Context, projectID string) ([]store.Invite, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]store.Invite(nil), m.d.Invites[projectID]...), nil
+}
+
+func (m *Mem) DeleteInvite(_ context.Context, projectID, email string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	email = norm(email)
+	list := m.d.Invites[projectID]
+	for i, iv := range list {
+		if iv.Email == email {
+			m.d.Invites[projectID] = append(list[:i:i], list[i+1:]...)
+			return m.save()
+		}
+	}
+	return store.ErrNotFound
+}
+
+func (m *Mem) SetThreadMeta(_ context.Context, t store.ThreadMeta) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if t.Kind == "" {
+		t.Kind = store.ThreadChat
+	}
+	if t.CreatedAt.IsZero() {
+		t.CreatedAt = time.Now().UTC()
+	}
+	m.d.Threads[t.ThreadID] = &t
+	return m.save()
+}
+
+func (m *Mem) GetThreadMeta(_ context.Context, threadID string) (*store.ThreadMeta, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	t := m.d.Threads[threadID]
+	if t == nil {
+		return nil, store.ErrNotFound
+	}
+	out := *t
+	return &out, nil
+}
+
+func (m *Mem) ListProjectThreads(_ context.Context, projectID string) ([]store.ThreadMeta, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []store.ThreadMeta
+	for _, t := range m.d.Threads {
+		if t.ProjectID == projectID {
+			out = append(out, *t)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
+	return out, nil
+}
+
+func (m *Mem) SupervisorThread(_ context.Context, login string) (*store.ThreadMeta, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, t := range m.d.Threads {
+		if t.Kind == store.ThreadSupervisor && t.Owner == login {
+			out := *t
+			return &out, nil
+		}
+	}
+	return nil, store.ErrNotFound
+}
+
+func (m *Mem) DeleteThreadMeta(_ context.Context, threadID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.d.Threads, threadID)
+	return m.save()
+}
+
+func (m *Mem) Audit(_ context.Context, e store.AuditEntry) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.d.NextAud++
+	e.ID, e.At = m.d.NextAud, time.Now().UTC()
+	m.d.Audit = append(m.d.Audit, e)
+	if len(m.d.Audit) > 5000 {
+		m.d.Audit = m.d.Audit[len(m.d.Audit)-5000:]
+	}
+	return m.save()
+}
+
+func (m *Mem) ListAudit(_ context.Context, projectID string, limit int) ([]store.AuditEntry, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if limit <= 0 {
+		limit = 100
+	}
+	var out []store.AuditEntry
+	for i := len(m.d.Audit) - 1; i >= 0 && len(out) < limit; i-- {
+		if m.d.Audit[i].ProjectID == projectID {
+			out = append(out, m.d.Audit[i])
+		}
+	}
+	return out, nil
+}
+
+var _ store.TeamStore = (*Mem)(nil)

@@ -33,7 +33,15 @@ func WithModelInfo(lookup func(id string) (ModelInfo, bool)) InProcessOption {
 	return func(c *inProcess) { c.info = lookup }
 }
 
+// WithAuthor sets who the client's messages and steers are recorded as coming
+// from, when that is not the thread owner the client acts for (a project
+// member working on a shared thread, or a supervisor).
+func WithAuthor(a harness.Author) InProcessOption {
+	return func(c *inProcess) { c.author = a }
+}
+
 type inProcess struct {
+	author harness.Author
 	h      *harness.Harness
 	user   string
 	models []string
@@ -109,6 +117,13 @@ func toThread(t *store.Thread) Thread {
 	return d
 }
 
+func toAuthor(m *store.Message) *Author {
+	if m.AuthorLogin == "" && m.AuthorKind == "" {
+		return nil
+	}
+	return &Author{Login: m.AuthorLogin, Kind: m.AuthorKind, OnBehalfOf: m.OnBehalfOf}
+}
+
 func toRun(r *store.Run) *Run {
 	return &Run{ID: r.ID, ThreadID: r.ThreadID, Status: r.Status, Model: r.Model, Error: r.Error, ErrorCode: r.ErrorCode,
 		LastSeq: r.LastSeq, CreatedAt: r.CreatedAt, Sandbox: r.Sandbox}
@@ -155,7 +170,7 @@ func (c *inProcess) GetThread(ctx context.Context, id string) (*Thread, error) {
 	d.Messages = make([]Message, 0, len(msgs))
 	for _, m := range msgs {
 		d.Messages = append(d.Messages, Message{ID: m.ID, RunID: m.RunID, Role: m.Role, Content: m.Content, ToolCalls: m.ToolCalls,
-			ToolCallID: m.ToolCallID, Error: m.Error, Metadata: m.Metadata, CreatedAt: m.CreatedAt})
+			ToolCallID: m.ToolCallID, Error: m.Error, Metadata: m.Metadata, CreatedAt: m.CreatedAt, Author: toAuthor(m)})
 	}
 	return &d, nil
 }
@@ -207,6 +222,7 @@ func (c *inProcess) Send(ctx context.Context, threadID, text string, o SendOptio
 	run, err := c.h.Send(ctx, c.user, threadID, text, harness.RunOptions{
 		Model: c.modelOr(o.Model), ReasoningEffort: o.ReasoningEffort, Skills: o.Skills, Interactive: o.Interactive,
 		Sandbox: harness.SandboxMode(o.Sandbox), Mode: harness.RunMode(o.Mode), Attachments: toAttachments(o.Attachments),
+		Author: c.author.Login, AuthorKind: c.author.Kind, OnBehalfOf: c.author.OnBehalfOf,
 	})
 	if err != nil {
 		return nil, mapErr(err)
@@ -254,7 +270,7 @@ func (c *inProcess) Steer(ctx context.Context, runID, text string) error {
 	if strings.TrimSpace(text) == "" {
 		return errorf(ErrInvalidRequest, "text is required.")
 	}
-	return mapErr(c.h.Steer(ctx, c.user, runID, text))
+	return mapErr(c.h.SteerAs(ctx, c.user, runID, text, c.author))
 }
 
 func (c *inProcess) Cancel(ctx context.Context, runID string) error {

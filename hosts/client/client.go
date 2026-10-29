@@ -218,6 +218,20 @@ type Message struct {
 	Error      string         `json:"error,omitempty"`
 	Metadata   map[string]any `json:"metadata,omitempty"`
 	CreatedAt  time.Time      `json:"createdAt"`
+	// Author is who wrote a user message in a shared thread (nil for the
+	// model's messages and for messages without a recorded author).
+	Author *Author `json:"author,omitempty"`
+}
+
+// Author identifies the speaker of a user message. Kind is "user" or
+// "supervisor"; a supervisor acts OnBehalfOf a user. Name and AvatarURL are
+// filled in by servers that know their users.
+type Author struct {
+	Login      string `json:"login"`
+	Kind       string `json:"kind,omitempty"`
+	OnBehalfOf string `json:"onBehalfOf,omitempty"`
+	Name       string `json:"name,omitempty"`
+	AvatarURL  string `json:"avatarUrl,omitempty"`
 }
 
 // Run is one execution of the agent.

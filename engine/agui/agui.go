@@ -105,6 +105,21 @@ func SteerEvent(id, text string, delivered bool) Event {
 	return CustomEvent(CustomSteer, map[string]any{"id": id, "text": text, "delivered": delivered})
 }
 
+// SteerEventBy is SteerEvent with the author of the steer.
+func SteerEventBy(id, text string, delivered bool, author, kind, onBehalfOf string) Event {
+	v := map[string]any{"id": id, "text": text, "delivered": delivered}
+	if author != "" {
+		v["author"] = author
+	}
+	if kind != "" {
+		v["authorKind"] = kind
+	}
+	if onBehalfOf != "" {
+		v["onBehalfOf"] = onBehalfOf
+	}
+	return CustomEvent(CustomSteer, v)
+}
+
 // CustomEvent builds a CUSTOM event.
 func CustomEvent(name string, value any) Event {
 	return New(Custom, map[string]any{"name": name, "value": value})

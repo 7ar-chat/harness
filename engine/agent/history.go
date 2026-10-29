@@ -61,6 +61,7 @@ func BuildHistoryWith(msgs []*store.Message, opts HistoryOptions) []*schema.Mess
 		}
 	}
 
+	multi := multiAuthor(filtered)
 	var out []*schema.Message
 	add := func(m *schema.Message, pos int64) {
 		compaction.SetPosition(m, pos)
@@ -71,6 +72,9 @@ func BuildHistoryWith(msgs []*store.Message, opts HistoryOptions) []*schema.Mess
 		switch m.Role {
 		case store.RoleUser:
 			content := m.Content
+			if multi {
+				content = AuthorTag(m.AuthorLogin, m.AuthorKind, m.OnBehalfOf) + content
+			}
 			if m.IsSteer() {
 				content = SteerPrefix + content
 			}
@@ -128,3 +132,42 @@ func BuildHistoryWith(msgs []*store.Message, opts HistoryOptions) []*schema.Mess
 // truncateOld keeps the head and tail of an old tool output (its stderr and
 // exitCode come last, A-24).
 func truncateOld(s string) string { return compaction.Preview(s, oldToolOutputChars) }
+
+// multiAuthor reports whether the user messages come from more than one
+// speaker (several users, or a supervisor next to a user): only then is each
+// message tagged with its author in the model's history, so single-user
+// threads keep the prompts they always had.
+func multiAuthor(msgs []*store.Message) bool {
+	seen := map[string]bool{}
+	for _, m := range msgs {
+		if m.Role != store.RoleUser {
+			continue
+		}
+		who := m.AuthorLogin
+		if m.AuthorKind == store.AuthorSupervisor {
+			who = "supervisor:" + m.OnBehalfOf
+		}
+		if who == "" {
+			continue
+		}
+		seen[who] = true
+		if len(seen) > 1 {
+			return true
+		}
+	}
+	return false
+}
+
+// AuthorTag is the "[alice] " prefix that tells the model who wrote a user
+// message ("" when the author is unknown).
+func AuthorTag(login, kind, onBehalfOf string) string {
+	switch {
+	case kind == store.AuthorSupervisor && onBehalfOf != "":
+		return "[supervisor, for " + onBehalfOf + "] "
+	case kind == store.AuthorSupervisor:
+		return "[supervisor] "
+	case login != "":
+		return "[" + login + "] "
+	}
+	return ""
+}
