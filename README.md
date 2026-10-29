@@ -174,6 +174,20 @@ cancelled, 2 when it ended waiting for an answer or approval (the question goes 
 | `y` / `a` / `n` (or `esc`) | tool approval: approve once / approve for this run / deny |
 | `1`-`9`, or text + `enter` | answer an `ask_user` question |
 
+Slash commands (type `/` for the completion list, `tab` completes, `enter` runs the highlighted one):
+
+| Command | Action |
+|---|---|
+| `/model [id]` | filterable picker of the configured models plus the ones the provider reports (`GET {base}/models`; Anthropic `/v1/models`); a typed id the list lacks is accepted; `/model <id>` sets it directly. Applies to the next run |
+| `/sessions` (`/resume`) | pick a saved conversation; its messages and tool calls are replayed |
+| `/new` (`/clear`) | start an empty conversation |
+| `/tools`, `/help`, `/quit` | expand tool calls, list commands and keys, leave |
+
+`/model`, `/sessions` and `/new` are refused while a run is active. A message that only looks like a command
+(`/etc/hosts is wrong`) is sent as text; start with a space to send an unknown `/word` literally. Backends opt in
+through `tui.ModelBackend` and `tui.SessionBackend` (`ClientBackend` implements both; `ClientBackend.Discover`
+is the provider lookup, wired by `cmd/harness` for the in-process engine).
+
 The status line shows the model, state, step count, tokens in/out/cached (with the cache share)
 and the run's elapsed time. `edit_file` calls show a diff of `oldText`/`newText`. The UI is a pure
 `tui.Model` fed by `client.Event`s through a `tui.Backend` (`tui.ClientBackend` adapts any `client.Client`),

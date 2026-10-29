@@ -56,6 +56,19 @@ type ClientBackend struct {
 	Interactive bool
 	// ReasoningEffort is passed to every run.
 	ReasoningEffort string
+	// Discover asks the model provider which models it serves (optional).
+	Discover func(ctx context.Context) ([]string, error)
+	// RunMode is client.ModeBuild (default) or client.ModePlan.
+	RunMode string
+
+	attach []client.Attachment // for the next Send
+}
+
+// sendOptions are the options of the next run; the queued attachments go with it, once.
+func (b *ClientBackend) sendOptions() client.SendOptions {
+	o := client.SendOptions{Model: b.ModelID, Interactive: b.Interactive, ReasoningEffort: b.ReasoningEffort, Mode: b.RunMode, Attachments: b.attach}
+	b.attach = nil
+	return o
 }
 
 // Model implements Backend.
@@ -63,9 +76,7 @@ func (b *ClientBackend) Model() string { return b.ModelID }
 
 // Send implements Backend.
 func (b *ClientBackend) Send(ctx context.Context, text string) (string, error) {
-	run, err := b.C.Send(ctx, b.ThreadID, text, client.SendOptions{
-		Model: b.ModelID, Interactive: b.Interactive, ReasoningEffort: b.ReasoningEffort,
-	})
+	run, err := b.C.Send(ctx, b.ThreadID, text, b.sendOptions())
 	if err != nil {
 		return "", err
 	}
@@ -105,4 +116,84 @@ func (b *ClientBackend) Resume(ctx context.Context, r ResumeRequest) (string, er
 		return "", err
 	}
 	return run.ID, nil
+}
+
+// ModelBackend is implemented by backends that can list and switch models.
+// The slash command /model needs it; without it the command says so.
+type ModelBackend interface {
+	// Models lists the ids runs may use: the configured ones first, then the
+	// ones the provider reports, without duplicates.
+	Models(ctx context.Context) ([]string, error)
+	// SetModel changes the model of the next runs.
+	SetModel(id string)
+}
+
+// SessionBackend is implemented by backends that can switch conversations.
+// /new and /sessions need it.
+type SessionBackend interface {
+	// Sessions lists the saved conversations, newest first.
+	Sessions(ctx context.Context) ([]client.Session, error)
+	// NewThread starts an empty conversation and makes it the current one.
+	NewThread(ctx context.Context) error
+	// OpenThread makes a saved conversation the current one and returns it
+	// with its messages.
+	OpenThread(ctx context.Context, id string) (*client.Thread, error)
+}
+
+// Models implements ModelBackend. Discover (when set) adds what the provider
+// reports; a provider that cannot be asked is not an error, the configured
+// list stands.
+func (b *ClientBackend) Models(ctx context.Context) ([]string, error) {
+	list, err := b.C.Models(ctx)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var out []string
+	add := func(ids ...string) {
+		for _, id := range ids {
+			if id != "" && !seen[id] {
+				seen[id] = true
+				out = append(out, id)
+			}
+		}
+	}
+	add(list.Default)
+	add(list.Models...)
+	if b.Discover != nil {
+		found, derr := b.Discover(ctx)
+		add(found...)
+		if derr != nil && len(out) == 0 {
+			return nil, derr
+		}
+	}
+	return out, nil
+}
+
+// SetModel implements ModelBackend.
+func (b *ClientBackend) SetModel(id string) { b.ModelID = id }
+
+// Sessions implements SessionBackend.
+func (b *ClientBackend) Sessions(ctx context.Context) ([]client.Session, error) {
+	return b.C.Sessions(ctx, 50)
+}
+
+// NewThread implements SessionBackend.
+func (b *ClientBackend) NewThread(ctx context.Context) error {
+	th, err := b.C.CreateThread(ctx, "")
+	if err != nil {
+		return err
+	}
+	b.ThreadID = th.ID
+	return nil
+}
+
+// OpenThread implements SessionBackend.
+func (b *ClientBackend) OpenThread(ctx context.Context, id string) (*client.Thread, error) {
+	th, err := b.C.GetThread(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	b.ThreadID = th.ID
+	return th, nil
 }

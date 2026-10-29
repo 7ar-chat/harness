@@ -170,6 +170,10 @@ type SendOptions struct {
 	Skills []string `json:"skills,omitempty"`
 	// Interactive makes risky tool calls wait for a decision (Resume).
 	Interactive bool `json:"interactive,omitempty"`
+	// Mode is ModeBuild (default) or ModePlan (read-only investigation).
+	Mode string `json:"mode,omitempty"`
+	// Attachments are files (images) sent with the message.
+	Attachments []Attachment `json:"attachments,omitempty"`
 	// Sandbox is auto (default: sandbox tools when the server has a backend, created on first use), off (no
 	// sandbox tools for this run) or on (fail when the server has no sandbox).
 	Sandbox string `json:"sandbox,omitempty"`

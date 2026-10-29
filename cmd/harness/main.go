@@ -74,6 +74,7 @@ type options struct {
 	list, undo          bool
 	remote              string
 	configDump          bool
+	discover            func(context.Context) ([]string, error) // model discovery of /model (in-process only)
 }
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, isTTY bool, mk factory) int {
@@ -168,6 +169,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	defer stop()
 	go func() { _ = h.Run(hctx) }()
 
+	o.discover = discoverer(cfg)
 	c := client.InProcess(h, o.user, client.WithModels(cfg.LLMModels, o.model))
 	if !cfg.SandboxEnabled() && !o.json {
 		fmt.Fprintln(stderr, "(no sandbox: set SANDBOX_BACKEND=local or OPENSANDBOX_URL; the agent has no tools)")
@@ -208,7 +210,7 @@ func attach(ctx context.Context, c client.Client, o options, prompt string, prin
 	if err != nil {
 		return fail(stderr, err)
 	}
-	be := &tui.ClientBackend{C: c, ThreadID: th.ID, ModelID: o.model, Interactive: !printMode && !o.auto}
+	be := &tui.ClientBackend{C: c, ThreadID: th.ID, ModelID: o.model, Interactive: !printMode && !o.auto, Discover: o.discover}
 	if printMode {
 		return tui.RunPrint(ctx, be, prompt, tui.PrintOptions{Stdout: stdout, Stderr: stderr, JSON: o.json})
 	}

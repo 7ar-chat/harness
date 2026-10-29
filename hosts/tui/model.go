@@ -94,6 +94,10 @@ type Model struct {
 	toolIdx  map[string]int
 	expanded bool
 
+	picker  *picker   // open list (/model, /sessions), nil when none
+	sugg    []command // slash completions of the input
+	suggSel int
+
 	runID      string
 	starting   bool // Send/Resume in flight
 	running    bool
@@ -195,6 +199,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case opErrMsg:
 		m.add(block{kind: blockNotice, text: msg.op + ": " + msg.err.Error()})
+	case modelsMsg:
+		if msg.err != nil && len(msg.ids) == 0 {
+			m.add(block{kind: blockNotice, text: "models: " + msg.err.Error() + " — /model <id> sets one by hand"})
+			break
+		}
+		m.openModelPicker(msg.ids)
+	case sessionsMsg:
+		if msg.err != nil {
+			m.add(block{kind: blockNotice, text: "sessions: " + msg.err.Error()})
+			break
+		}
+		m.openSessionPicker(msg.list)
+	case threadMsg:
+		if msg.err != nil {
+			m.add(block{kind: blockError, text: msg.err.Error()})
+			break
+		}
+		m.loadThread(msg.th)
+		m.vp.GotoBottom()
 	default:
 		var cmd tea.Cmd
 		m.in, cmd = m.in.Update(msg)
@@ -210,6 +233,35 @@ func (m *Model) key(k tea.KeyMsg) (tea.Cmd, bool) {
 	s := k.String()
 	if s != "ctrl+c" {
 		m.quitArmed = false
+	}
+	if p := m.picker; p != nil {
+		done, it := p.key(k)
+		if done {
+			m.picker = nil
+		}
+		if it != nil {
+			return p.pick(m, *it), true
+		}
+		return nil, true
+	}
+	if len(m.sugg) > 0 {
+		switch s {
+		case "up":
+			m.suggSel = (m.suggSel + len(m.sugg) - 1) % len(m.sugg)
+			return nil, true
+		case "down":
+			m.suggSel = (m.suggSel + 1) % len(m.sugg)
+			return nil, true
+		case "tab":
+			m.in.SetValue("/" + m.sugg[m.suggSel].name + " ")
+			m.in.CursorEnd()
+			return nil, true
+		case "enter":
+			return m.sugg[m.suggSel].run(m, ""), m.clearInput()
+		case "esc":
+			m.in.Reset()
+			return nil, true
+		}
 	}
 	// Approval prompt: single keys.
 	if p := m.pending; p != nil && p.prompt.Reason == client.ReasonToolApproval {
@@ -274,6 +326,11 @@ func (m *Model) submit() tea.Cmd {
 	text := strings.TrimSpace(m.in.Value())
 	if text == "" || m.starting {
 		return nil
+	}
+	if m.pending == nil {
+		if cmd, ok := m.slash(m.in.Value()); ok {
+			return cmd
+		}
 	}
 	if p := m.pending; p != nil {
 		if p.prompt.Reason == client.ReasonToolApproval {
@@ -588,6 +645,9 @@ func (m *Model) layout() {
 	if m.pending != nil {
 		promptH = strings.Count(RenderPrompt(m.pending.prompt, w), "\n") + 2
 	}
+	if o := m.overlay(w); o != "" {
+		promptH += strings.Count(o, "\n") + 2
+	}
 	m.vp.Width = w
 	m.vp.Height = max(m.height-1-m.in.Height()-promptH, 1)
 }
@@ -595,6 +655,11 @@ func (m *Model) layout() {
 // refresh re-renders the transcript into the viewport, keeping the bottom in
 // view when it was there.
 func (m *Model) refresh() {
+	m.sugg = nil
+	if m.picker == nil && m.pending == nil {
+		m.sugg = suggest(m.in.Value())
+	}
+	m.suggSel = min(m.suggSel, max(len(m.sugg)-1, 0))
 	m.layout()
 	atBottom := m.vp.AtBottom()
 	m.vp.SetContent(m.renderBlocks())
@@ -612,8 +677,26 @@ func (m *Model) View() string {
 		b.WriteString(RenderPrompt(m.pending.prompt, max(m.width, 20)))
 		b.WriteString("\n\n")
 	}
+	if o := m.overlay(max(m.width, 20)); o != "" {
+		b.WriteString(o)
+		b.WriteString("\n\n")
+	}
 	b.WriteString(RenderStatus(m.statusView(), max(m.width, 20)))
 	b.WriteString("\n")
 	b.WriteString(m.in.View())
 	return b.String()
 }
+
+// overlay is the picker or the slash completion list shown above the status line.
+func (m *Model) overlay(w int) string {
+	switch {
+	case m.picker != nil:
+		return m.picker.view(w)
+	case len(m.sugg) > 0:
+		return renderSuggestions(m.sugg, m.suggSel, w)
+	}
+	return ""
+}
+
+// clearInput empties the input box (the command being run replaces what was typed); it reports true.
+func (m *Model) clearInput() bool { m.in.Reset(); return true }
