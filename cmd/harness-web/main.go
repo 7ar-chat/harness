@@ -43,6 +43,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	model := fs.String("model", "", "default model id (default LLM_DEFAULT_MODEL)")
 	local := fs.Bool("local", false, "work on the current directory: SANDBOX_BACKEND=local, the coding profile, durable sessions")
 	user := fs.String("user", "local", "user login of the single local user")
+	team := fs.Bool("team", getenv("OIDC_ISSUER") != "" || getenv("HARNESS_TEAM") == "1", "team mode: OIDC login, projects, shared threads (env OIDC_ISSUER or HARNESS_TEAM=1)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -50,8 +51,12 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		return 2
 	}
 	token := getenv("HARNESS_WEB_TOKEN")
-	if !isLoopback(*addr) && token == "" {
-		return fail(stderr, fmt.Errorf("refusing to listen on %s without HARNESS_WEB_TOKEN: set a token, or bind a loopback address", *addr))
+	oidcCfg, err := oidcFromEnv(getenv, *team)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	if !isLoopback(*addr) && token == "" && oidcCfg == nil {
+		return fail(stderr, fmt.Errorf("refusing to listen on %s without HARNESS_WEB_TOKEN: set a token, configure OIDC (OIDC_ISSUER), or bind a loopback address", *addr))
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: slog.LevelWarn})))
 	if *local {
@@ -68,7 +73,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if !cfg.ModelAllowed(*model) {
 		return fail(stderr, fmt.Errorf("model %q is not allowed (LLM_MODELS)", *model))
 	}
-	h, closer, err := buildHarness(cfg, *local)
+	h, teamStore, closer, err := buildWith(ctx, cfg, *local, *team)
 	if err != nil {
 		return fail(stderr, err)
 	}
@@ -80,6 +85,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	opts := httpserver.Options{
 		Token: token, LocalUser: *user, Models: cfg.LLMModels, DefaultModel: *model,
 		AllowedOrigins: splitList(getenv("HARNESS_WEB_ORIGINS")),
+		Team:           teamStore, OIDC: oidcCfg,
+	}
+	if *team && oidcCfg == nil { // team mode without OIDC: every request acts as -user (local development)
+		fmt.Fprintln(stderr, "harness-web: team mode without OIDC_ISSUER: everyone is", *user)
 	}
 	if mo, ok := config.ModelPriceOptions(); ok { // loaded in the background: the list gains its info once it arrives
 		opts.ModelInfo = client.TableLookup(modelinfo.LoadAsync(hctx, mo), cfg.LLMProviderName, cfg.LLMProvider)
@@ -91,7 +100,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if err != nil {
 		return fail(stderr, err)
 	}
-	srv := &http.Server{Handler: httpserver.New(h, opts), ReadHeaderTimeout: 10 * time.Second}
+	handler, err := httpserver.NewServer(h, opts)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	fmt.Fprintf(stdout, "harness-web: http://%s/  (model %s)\n", ln.Addr(), *model)
 	if !cfg.SandboxEnabled() {
 		fmt.Fprintln(stderr, "(no sandbox: use -local, SANDBOX_BACKEND=local or OPENSANDBOX_URL; the agent has no tools)")
@@ -106,6 +119,28 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		return fail(stderr, err)
 	}
 	return 0
+}
+
+// oidcFromEnv reads OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_REDIRECT_URL,
+// OIDC_SCOPES, OIDC_LOGIN_CLAIM, OIDC_ALLOWED_DOMAINS and OIDC_SESSION_KEY. nil without an issuer.
+func oidcFromEnv(getenv func(string) string, team bool) (*httpserver.OIDCConfig, error) {
+	issuer := getenv("OIDC_ISSUER")
+	if issuer == "" {
+		return nil, nil
+	}
+	if !team {
+		return nil, errors.New("OIDC_ISSUER needs team mode (-team)")
+	}
+	c := &httpserver.OIDCConfig{
+		Issuer: issuer, ClientID: getenv("OIDC_CLIENT_ID"), ClientSecret: getenv("OIDC_CLIENT_SECRET"),
+		RedirectURL: getenv("OIDC_REDIRECT_URL"), Scopes: splitList(getenv("OIDC_SCOPES")),
+		LoginClaim: getenv("OIDC_LOGIN_CLAIM"), AllowedDomains: splitList(getenv("OIDC_ALLOWED_DOMAINS")),
+		SessionKey: []byte(getenv("OIDC_SESSION_KEY")),
+	}
+	if c.ClientID == "" || c.RedirectURL == "" {
+		return nil, errors.New("OIDC_ISSUER needs OIDC_CLIENT_ID and OIDC_REDIRECT_URL (https://host/auth/callback)")
+	}
+	return c, nil
 }
 
 // isLoopback reports whether addr binds only the loopback interface.

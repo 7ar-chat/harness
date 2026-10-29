@@ -109,7 +109,7 @@ func RecallSection(svc *Service) agent.PromptSection {
 		if !svc.o.RecallInjection || !svc.enabledFor(ctx, in) {
 			return ""
 		}
-		entries, err := svc.st.ListMemoryEntries(ctx, in.Run.UserLogin, store.MemoryActive)
+		entries, err := svc.st.ListMemoryEntries(ctx, svc.Key(ctx, in.Run.UserLogin, in.Run.ThreadID), store.MemoryActive)
 		if err != nil {
 			slog.Warn("memory: listing memories failed", "run_id", in.Run.ID, "error", err)
 			return ""
@@ -140,7 +140,7 @@ func RecallContext(items []string) string {
 }
 
 func (svc *Service) enabledFor(ctx context.Context, in agent.Input) bool {
-	enabled, err := svc.st.MemoryEnabled(ctx, in.Run.UserLogin)
+	enabled, err := svc.st.MemoryEnabled(ctx, svc.Key(ctx, in.Run.UserLogin, in.Run.ThreadID))
 	if err != nil {
 		slog.Warn("memory: reading the memory setting failed", "run_id", in.Run.ID, "error", err)
 		return false

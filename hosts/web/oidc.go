@@ -250,14 +250,9 @@ func (a *oidcAuth) callback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, f.Next, http.StatusFound)
 }
 
-func str(m map[string]any, k string) string {
-	s, _ := m[k].(string)
-	return strings.TrimSpace(s)
-}
-
 // userFromClaims builds the user and applies the domain allowlist.
 func (a *oidcAuth) userFromClaims(claims map[string]any, sub string) (store.User, error) {
-	email := strings.ToLower(str(claims, "email"))
+	email := strings.ToLower(claimStr(claims, "email"))
 	if claims["email_verified"] == false {
 		// An unverified address must not claim project invites.
 		email = ""
@@ -277,11 +272,11 @@ func (a *oidcAuth) userFromClaims(claims map[string]any, sub string) (store.User
 	claim := a.cfg.LoginClaim
 	login := ""
 	if claim != "" {
-		login = str(claims, claim)
+		login = claimStr(claims, claim)
 	} else {
 		// The email is only a login when verified: an unverified one could
 		// otherwise take over the login of whoever owns that address.
-		if login = str(claims, "preferred_username"); login == "" {
+		if login = claimStr(claims, "preferred_username"); login == "" {
 			login = email
 		}
 	}
@@ -292,14 +287,19 @@ func (a *oidcAuth) userFromClaims(claims map[string]any, sub string) (store.User
 	if login == "" || strings.ContainsAny(login, " \t\r\n/") {
 		return store.User{}, errors.New("The identity provider returned no usable login.")
 	}
-	name := str(claims, "name")
+	name := claimStr(claims, "name")
 	if name == "" {
 		name = login
 	}
-	return store.User{Login: login, Email: email, Name: name, AvatarURL: str(claims, "picture")}, nil
+	return store.User{Login: login, Email: email, Name: name, AvatarURL: claimStr(claims, "picture")}, nil
 }
 
 func (a *oidcAuth) logout(w http.ResponseWriter, r *http.Request) {
 	a.setCookie(w, sessionCookie, "", -1)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func claimStr(m map[string]any, k string) string {
+	s, _ := m[k].(string)
+	return strings.TrimSpace(s)
 }

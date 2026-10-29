@@ -171,6 +171,7 @@ func NewServer(h *harness.Harness, o Options) (http.Handler, error) {
 	s.route("POST /runs/{id}/steer", s.steer)
 	s.routeHistory()
 	s.routeCommands()
+	s.routeMemory()
 	if s.team != nil {
 		s.routeTeam()
 	}

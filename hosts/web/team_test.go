@@ -3,6 +3,7 @@ package httpserver_test
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"io"
 	"strings"
 	"testing"
@@ -168,5 +169,49 @@ func rawBody(resp io.Reader) string {
 		if err != nil {
 			return sb.String()
 		}
+	}
+}
+
+func TestMemoryScopesAreSeparate(t *testing.T) {
+	tm := teamstore.NewMem()
+	ctx := context.Background()
+	for _, l := range []string{"alice", "bob", "carol"} {
+		tm.UpsertUser(ctx, store.User{Login: l})
+	}
+	r := newRig(t, rigOpts{web: httpserver.Options{Team: tm}, store: nil, env: nil, team: true})
+	p := r.json("POST", "/api/projects", "alice", `{"name":"api"}`, 201)["id"].(string)
+	r.json("PUT", "/api/projects/"+p+"/members/bob", "alice", `{"role":"member"}`, 204)
+	r.json("PUT", "/api/projects/"+p+"/members/carol", "alice", `{"role":"viewer"}`, 204)
+
+	r.json("POST", "/api/memory?project="+p, "bob", `{"content":"deploys go through staging first","title":"deploys"}`, 201)
+	r.json("POST", "/api/memory", "alice", `{"content":"alice likes terse answers","title":"style"}`, 201)
+
+	has := func(user, query, needle string) bool {
+		m := r.json("GET", "/api/memory"+query, user, "", 200)
+		b, _ := json.Marshal(m["entries"])
+		return strings.Contains(string(b), needle)
+	}
+	if !has("alice", "?project="+p, "staging first") || !has("carol", "?project="+p, "staging first") {
+		t.Fatal("members and viewers read the project memory")
+	}
+	if has("alice", "?project="+p, "terse") || has("bob", "", "terse") || has("alice", "", "staging") {
+		t.Fatal("global and project memory must stay apart")
+	}
+	if !has("alice", "", "terse") {
+		t.Fatal("alice lost her own memory")
+	}
+	r.json("POST", "/api/memory?project="+p, "carol", `{"content":"x"}`, 403) // viewers cannot write
+	r.do("GET", "/api/memory?project="+p, "mallory", "")
+	if got := r.do("GET", "/api/memory?project="+p, "mallory", "").StatusCode; got != 404 {
+		t.Fatalf("outsider = %d", got)
+	}
+
+	// An agent run in a project thread uses the project's key.
+	th := r.json("POST", "/api/threads", "alice", `{"projectId":"`+p+`"}`, 201)["id"].(string)
+	if k := httpserver.MemoryKey(tm)(ctx, "alice", th); k != "project:"+p {
+		t.Fatalf("project thread memory key = %q", k)
+	}
+	if k := httpserver.MemoryKey(tm)(ctx, "alice", "unknown"); k != "alice" {
+		t.Fatalf("personal memory key = %q", k)
 	}
 }

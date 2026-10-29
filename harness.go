@@ -39,6 +39,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/artifacts"
+	"github.com/GhaziBenDahmane/harness/features/memory"
 	"github.com/GhaziBenDahmane/harness/features/skills"
 	"github.com/GhaziBenDahmane/harness/features/workspace"
 	"github.com/GhaziBenDahmane/harness/sandbox"
@@ -98,6 +99,10 @@ type Options struct {
 	Version string
 	// RuntimeID names this process in run ownership (default: hostname-random).
 	RuntimeID string
+	// MemoryKey, when set, names the memory (the key its entries are stored
+	// under) a run of login on threadID reads and writes; "" means login's own.
+	// A team host returns "project:<id>" for project threads.
+	MemoryKey func(ctx context.Context, login, threadID string) string
 }
 
 // Harness runs agent runs for any number of users and threads.
@@ -113,6 +118,8 @@ type Harness struct {
 	Workspace *workspace.Service
 	Runtime   *runtime.Runtime
 	Agent     *agent.Agent
+	// Memory is the memory service (nil without the Memory feature).
+	Memory *memory.Service
 
 	sandboxTools bool
 	redo         redoStacks
@@ -183,7 +190,7 @@ func New(o Options) (*Harness, error) {
 	}
 
 	h := &Harness{cfg: cfg, Store: st, Log: infra.Log, Queue: infra.Broker, Bus: infra.Broker,
-		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace,
+		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace, Memory: b.Memory,
 		sandboxTools: b.sandboxTools != nil}
 	h.Agent = &agent.Agent{
 		Models: models, Tools: registry, Store: st, Steers: h.Bus,

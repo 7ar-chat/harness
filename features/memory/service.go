@@ -162,6 +162,21 @@ type Result struct {
 type Service struct {
 	st store.MemoryStore
 	o  Options
+	// KeyFor, when set, names the memory a run reads and writes: the login by
+	// default, or another key (a team host maps a project thread to the
+	// project's memory, so what is learned there is shared by its members and
+	// no member's personal memory leaks into a shared thread).
+	KeyFor func(ctx context.Context, login, threadID string) string
+}
+
+// Key is the memory key of a run of login on threadID.
+func (s *Service) Key(ctx context.Context, login, threadID string) string {
+	if s.KeyFor != nil {
+		if k := s.KeyFor(ctx, login, threadID); k != "" {
+			return k
+		}
+	}
+	return login
 }
 
 // New returns the service.
