@@ -93,6 +93,13 @@ const (
 	DecisionRespond    = store.DecisionRespond
 )
 
+// Roles of a Message.
+const (
+	RoleUser      = store.RoleUser
+	RoleAssistant = store.RoleAssistant
+	RoleTool      = store.RoleTool
+)
+
 // ModelList is the answer of Models.
 type ModelList struct {
 	Models  []string `json:"models"`

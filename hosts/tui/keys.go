@@ -170,9 +170,9 @@ type leaderExpireMsg struct{ seq int }
 
 // uiState is what the foundation adds to Model: keys, leader sequence, config.
 type uiState struct {
-	keys      *Keymap
-	lead      leaderState
-	statePath string
+	keys    *Keymap
+	lead    leaderState
+	uiStore *stateFile // tui-state.json; nil keeps nothing
 }
 
 // initUI applies the configuration: keymap, theme, scroll speed, cursor.
@@ -182,9 +182,11 @@ func (m *Model) initUI(o Options) {
 		cfg = *o.Config
 	}
 	m.keys = NewKeymap(cfg)
-	m.statePath = o.StatePath
+	m.uiStore = newStateFile(o.StateDir)
 	th := themes[0]
-	for _, name := range []string{loadState(o.StatePath, "theme"), cfg.Theme} {
+	var saved string
+	_ = m.uiStore.get("theme", &saved)
+	for _, name := range []string{saved, cfg.Theme} {
 		if t, ok := themeByName(name); ok && name != "" {
 			th = t
 			break

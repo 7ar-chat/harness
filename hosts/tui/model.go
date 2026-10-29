@@ -76,9 +76,13 @@ type Options struct {
 	Context context.Context
 	// StaticCursor disables cursor blinking (tests).
 	StaticCursor bool
-	// Config is the parsed tui.json (nil: the defaults); StatePath the file the theme choice is kept in ("" for none).
-	Config    *TUIConfig
-	StatePath string
+	// Config is the parsed tui.json (nil: the defaults). Run parses ConfigData, the text of the user's tui.json, when Config is nil.
+	Config     *TUIConfig
+	ConfigData []byte
+	// StateDir holds tui-state.json (theme, favorite and recent models); "" keeps them in memory only.
+	StateDir string
+	// Connector backs /connect; nil leaves the command saying it is unavailable.
+	Connector Connector
 }
 
 // Model is the Bubble Tea model of the terminal client. It is pure with
@@ -114,7 +118,8 @@ type Model struct {
 	quit       bool
 	static     bool
 
-	uiState // keymap, leader sequence, state file (keys.go)
+	uiState          // keymap, leader sequence, state file (keys.go)
+	ext     extState // state of the conversation, run-option and connect commands (ext.go)
 }
 
 // New returns the model for a backend.
@@ -137,6 +142,7 @@ func New(be Backend, o Options) *Model {
 	}
 	in.Focus()
 	m := &Model{static: o.StaticCursor, be: be, ctx: o.Context, now: o.Now, in: in, toolIdx: map[string]int{}, width: 80, height: 24}
+	m.initExt(o)
 	m.vp = viewport.New(80, 10)
 	m.initUI(o)
 	m.layout()
@@ -145,10 +151,11 @@ func New(be Backend, o Options) *Model {
 
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
-	if m.static {
-		return nil
+	cmds := m.initCmds()
+	if !m.static {
+		cmds = append(cmds, textarea.Blink)
 	}
-	return textarea.Blink
+	return tea.Batch(cmds...)
 }
 
 // Quit reports whether the model asked to leave.
@@ -175,6 +182,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.in, cmd = m.in.Update(msg)
 		cmds = append(cmds, cmd)
+	case selfMsg:
+		cmds = append(cmds, msg.apply(m))
 	case runStartedMsg:
 		m.starting = false
 		if msg.err != nil {
@@ -243,6 +252,11 @@ func (m *Model) key(k tea.KeyMsg) (tea.Cmd, bool) {
 		m.quitArmed = false
 	}
 	if p := m.picker; p != nil {
+		if p.extra != nil {
+			if cmd, ok := p.extra(m, k); ok {
+				return cmd, true
+			}
+		}
 		done, it := p.key(k)
 		if done {
 			m.picker = nil
@@ -288,6 +302,9 @@ func (m *Model) key(k tea.KeyMsg) (tea.Cmd, bool) {
 		default:
 			return nil, true // swallow typing while an approval waits
 		}
+	}
+	if cmd, ok := m.extKey(s); ok {
+		return cmd, true
 	}
 	switch s {
 	case "ctrl+c":
@@ -628,6 +645,7 @@ func (m *Model) statusView() StatusView {
 	case m.pending != nil:
 		sv.State = "waiting"
 	}
+	m.extStatus(&sv)
 	if m.runID != "" {
 		el := m.elapsed
 		sv.Elapsed = fmtDuration(el)

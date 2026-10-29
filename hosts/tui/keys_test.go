@@ -11,12 +11,12 @@ import (
 )
 
 // newConfigured is newModel with a tui.json (text) and a state file.
-func newConfigured(t *testing.T, cfgText, statePath string) (*Model, *time.Time) {
+func newConfigured(t *testing.T, cfgText, stateDir string) (*Model, *time.Time) {
 	t.Helper()
 	t.Cleanup(func() { applyTheme(themes[0]) })
 	cfg := ParseTUIConfig([]byte(cfgText))
 	now := t0
-	m := New(&fakeBackend{}, Options{Now: func() time.Time { return now }, StaticCursor: true, Config: &cfg, StatePath: statePath})
+	m := New(&fakeBackend{}, Options{Now: func() time.Time { return now }, StaticCursor: true, Config: &cfg, StateDir: stateDir})
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	return m, &now
 }
@@ -102,6 +102,7 @@ func TestPaletteListsAllCommandsAndRunsOne(t *testing.T) {
 		}
 	}
 	typeText(m, "quit")
+	v = m.View()
 	press(m, tea.KeyEnter)
 
 	if !strings.Contains(v, "[ctrl+x q]") {
@@ -261,11 +262,12 @@ func TestConfigNoticesAppearInTheTranscript(t *testing.T) {
 }
 
 func TestThemeCommandAppliesAndPersistsMergingState(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "tui-state.json")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tui-state.json")
 	if err := os.WriteFile(path, []byte(`{"other": 1}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	m, _ := newConfigured(t, ``, path)
+	m, _ := newConfigured(t, ``, dir)
 
 	typeText(m, "/themes nord")
 	press(m, tea.KeyEnter)
@@ -274,7 +276,7 @@ func TestThemeCommandAppliesAndPersistsMergingState(t *testing.T) {
 	if curTheme != "nord" || !strings.Contains(string(data), `"theme": "nord"`) || !strings.Contains(string(data), `"other": 1`) {
 		t.Fatalf("theme=%s state=%s", curTheme, data)
 	}
-	m2, _ := newConfigured(t, `{"theme": "gruvbox"}`, path)
+	m2, _ := newConfigured(t, `{"theme": "gruvbox"}`, dir)
 	_ = m2
 	if curTheme != "nord" {
 		t.Fatalf("the saved choice must win over tui.json, got %s", curTheme)

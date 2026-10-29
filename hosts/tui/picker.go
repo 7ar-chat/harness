@@ -15,6 +15,8 @@ type pickItem struct {
 	label   string
 	desc    string
 	current bool
+	// group heads a run of items in the list ("" for none); the view prints it when it changes.
+	group string
 }
 
 // picker is a filterable list shown above the input: type to narrow, up/down
@@ -30,6 +32,10 @@ type picker struct {
 	// preview (optional) is called with the highlighted item whenever the selection moves; cancel when esc leaves the picker.
 	preview func(it pickItem)
 	cancel  func()
+	// extra sees every key first; ok=true means it consumed the key (rename, delete, favorite, key entry).
+	extra func(m *Model, k tea.KeyMsg) (cmd tea.Cmd, ok bool)
+	// hint replaces the default key hint of the title line; footer is an extra line below the list (a prompt or a confirmation).
+	hint, footer string
 }
 
 func (p *picker) visible() []pickItem {
@@ -100,7 +106,11 @@ func (p *picker) notify() {
 
 func (p *picker) view(width int) string {
 	vis := p.visible()
-	lines := []string{styleBold.Render(p.title) + styleDim.Render("  type to filter · ↑↓ · enter · esc")}
+	hint := "type to filter · ↑↓ · enter · esc"
+	if p.hint != "" {
+		hint = p.hint
+	}
+	lines := []string{styleBold.Render(p.title) + styleDim.Render("  "+hint)}
 	lines = append(lines, styleDim.Render("> ")+p.filter)
 	start := 0
 	if p.sel >= pickRows {
@@ -108,6 +118,9 @@ func (p *picker) view(width int) string {
 	}
 	for i := start; i < len(vis) && i < start+pickRows; i++ {
 		it := vis[i]
+		if it.group != "" && (i == start || vis[i-1].group != it.group) {
+			lines = append(lines, styleDim.Render("  ── "+it.group))
+		}
 		mark := "  "
 		if it.current {
 			mark = "● "
@@ -134,6 +147,9 @@ func (p *picker) view(width int) string {
 		lines = append(lines, styleDim.Render("  no match"))
 	case len(vis) > pickRows:
 		lines = append(lines, styleDim.Render(fmt.Sprintf("  %d/%d", p.sel+1, len(vis))))
+	}
+	if p.footer != "" {
+		lines = append(lines, p.footer)
 	}
 	return strings.Join(lines, "\n")
 }

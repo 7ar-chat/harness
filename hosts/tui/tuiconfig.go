@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -260,46 +258,4 @@ func dropTrailingCommas(src []byte) []byte {
 		out.WriteByte(c)
 	}
 	return out.Bytes()
-}
-
-// loadState reads one string value of the state file ("" when absent or unreadable).
-func loadState(path, key string) string {
-	if path == "" {
-		return ""
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
-	var kv map[string]any
-	if json.Unmarshal(data, &kv) != nil {
-		return ""
-	}
-	s, _ := kv[key].(string)
-	return s
-}
-
-// saveState sets one key of the state file (~/.har/tui-state.json), keeping
-// the keys other features wrote. An empty path is a no-op.
-func saveState(path, key string, value any) error {
-	if path == "" {
-		return nil
-	}
-	kv := map[string]any{}
-	if data, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(data, &kv) // a corrupt file is replaced
-	}
-	kv[key] = value
-	out, err := json.MarshalIndent(kv, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(out, '\n'), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
 }

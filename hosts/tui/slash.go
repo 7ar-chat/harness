@@ -32,7 +32,7 @@ var registry []command
 func register(cs ...command) { registry = append(registry, cs...) }
 
 // commands returns the registered slash commands, in the order /help and the completion list show them.
-func commands() []command { return registry }
+func commands() []command { return withUserCommands(registry) }
 
 func init() {
 	register(
@@ -120,6 +120,7 @@ func (m *Model) cmdHelp(string) tea.Cmd {
 		}
 		fmt.Fprintf(&b, "  %-16s %s%s\n", use, c.help, hint)
 	}
+	b.WriteString(helpExtra())
 	b.WriteString("keys\n")
 	b.WriteString("  enter sends (steers while a run is active) · alt+enter new line · esc cancels the run\n")
 	b.WriteString("  ctrl+o tools · pgup/pgdn scroll · ctrl+g/end top/bottom · ctrl+c twice quits\n")

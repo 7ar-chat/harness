@@ -119,7 +119,7 @@ func (m *Model) cmdThemes(arg string) tea.Cmd {
 // setTheme applies the theme and remembers the choice in the state file.
 func (m *Model) setTheme(t Theme) {
 	applyTheme(t)
-	if err := saveState(m.statePath, "theme", t.Name); err != nil {
+	if err := m.uiStore.set("theme", t.Name); err != nil {
 		m.add(block{kind: blockNotice, text: "theme: could not save the choice: " + err.Error()})
 	}
 }
