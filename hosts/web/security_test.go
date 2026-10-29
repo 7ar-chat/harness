@@ -2,7 +2,9 @@ package httpserver_test
 
 import (
 	"errors"
+	"io/fs"
 	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -24,7 +26,7 @@ func TestStaticTokenIsRequiredForTheAPIButNotForTheUIOrHealth(t *testing.T) {
 		{"legacy route needs it too", "/threads", nil, 401},
 		{"health is open", "/healthz", nil, 200},
 		{"ui is open", "/", nil, 200},
-		{"ui assets are open", "/ui/app.js", nil, 200},
+		{"ui assets are open", "/ui/" + uiAssetsOf(t)[0], nil, 200},
 	}
 
 	for _, c := range cases {
@@ -123,7 +125,12 @@ func TestHostGuardRefusesUnknownHostNames(t *testing.T) {
 
 func TestUIIsServedWithAStrictContentSecurityPolicy(t *testing.T) {
 	r := newRig(t, rigOpts{})
-	for _, path := range []string{"/", "/ui/app.js", "/ui/app.css", "/api/models", "/healthz"} {
+	assets := uiAssetsOf(t)
+	paths := []string{"/", "/api/models", "/healthz"}
+	for _, a := range assets {
+		paths = append(paths, "/ui/"+a)
+	}
+	for _, path := range paths {
 		resp := r.do("GET", path, "alice", "")
 		csp := resp.Header.Get("Content-Security-Policy")
 		if resp.StatusCode != 200 || !strings.Contains(csp, "default-src 'self'") || strings.Contains(strings.Replace(csp, "style-src-attr 'unsafe-inline'", "", 1), "unsafe-") ||
@@ -132,8 +139,18 @@ func TestUIIsServedWithAStrictContentSecurityPolicy(t *testing.T) {
 		}
 	}
 	index := r.do("GET", "/", "", "")
-	js := r.do("GET", "/ui/app.js", "", "")
-	css := r.do("GET", "/ui/app.css", "", "")
+	var js, css *http.Response
+	for _, a := range assets {
+		switch {
+		case strings.HasSuffix(a, ".js"):
+			js = r.do("GET", "/ui/"+a, "", "")
+		case strings.HasSuffix(a, ".css"):
+			css = r.do("GET", "/ui/"+a, "", "")
+		}
+	}
+	if js == nil || css == nil {
+		t.Fatalf("index.html references %v: want a script and a stylesheet", assets)
+	}
 	if !strings.HasPrefix(index.Header.Get("Content-Type"), "text/html") ||
 		!strings.Contains(js.Header.Get("Content-Type"), "javascript") || !strings.HasPrefix(css.Header.Get("Content-Type"), "text/css") {
 		t.Fatalf("types: %q %q %q", index.Header.Get("Content-Type"), js.Header.Get("Content-Type"), css.Header.Get("Content-Type"))
@@ -148,4 +165,21 @@ func TestNoUIOptionServesOnlyTheAPI(t *testing.T) {
 	if r.do("GET", "/", "alice", "").StatusCode != 404 || r.do("GET", "/healthz", "alice", "").StatusCode != 200 {
 		t.Fatal("NoUI must drop / and keep the API")
 	}
+}
+
+// uiAssetsOf lists the built files the embedded index.html loads, read from the embedded FS.
+func uiAssetsOf(t *testing.T) []string {
+	t.Helper()
+	b, err := fs.ReadFile(httpserver.UI(), "index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, m := range regexp.MustCompile(`(?:src|href)="/ui/([^"]+)"`).FindAllStringSubmatch(string(b), -1) {
+		out = append(out, m[1])
+	}
+	if len(out) == 0 {
+		t.Fatal("index.html references no built assets: run `make web`")
+	}
+	return out
 }
