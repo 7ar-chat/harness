@@ -30,6 +30,11 @@ require (
 )
 
 require (
+	github.com/coreos/go-oidc/v3 v3.21.0 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
+)
+
+require (
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.20 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.4 // indirect
@@ -91,7 +96,7 @@ require (
 	golang.org/x/arch v0.11.0 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1 // indirect
-	golang.org/x/oauth2 v0.35.0 // indirect
+	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0
 	golang.org/x/time v0.15.0 // indirect

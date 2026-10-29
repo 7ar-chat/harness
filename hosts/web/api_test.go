@@ -22,6 +22,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	httpserver "github.com/GhaziBenDahmane/harness/hosts/web"
 	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
+	"github.com/GhaziBenDahmane/harness/store/teamstore"
 )
 
 // rig is a harness behind the web handler, with a scripted model.
@@ -40,6 +41,7 @@ type rigOpts struct {
 	local     bool // local sandbox backend instead of the in-memory fake
 	noSandbox bool // no backend at all
 	rawAuth   bool // keep the web options' authentication (default: the X-User header)
+	team      bool // team mode on an in-memory TeamStore
 }
 
 // scripted asks for one tool call, then answers "done" once it has seen the tool result.
@@ -91,6 +93,9 @@ func newRig(t *testing.T, o rigOpts) *rig {
 	w := o.web
 	if !o.rawAuth && w.Authenticate == nil && w.User == nil && w.Token == "" {
 		w.Authenticate = func(r *http.Request) (string, error) { return r.Header.Get("X-User"), nil }
+	}
+	if o.team && w.Team == nil {
+		w.Team = teamstore.NewMem()
 	}
 	w.DefaultModel = "gpt-test"
 	w.Models = cfg.LLMModels
