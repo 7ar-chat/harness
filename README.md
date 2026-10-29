@@ -203,11 +203,22 @@ message and `alt+y` copies it. A message that only looks like a command (`/etc/h
 start with a space to send an unknown `/word` literally. The history commands are refused while a run is active.
 
 `~/.har/tui.json` (JSONC allowed; never read from a project) sets `theme`, `leader`, `leader_timeout`,
-`scroll_speed`, `cursor`, `mouse` and `keybinds` (merged with the defaults; `"command.<name>": "<leader>x"` rebinds
-a command). Backends opt into each capability through the interfaces in `hosts/tui/backend*.go`
-(`ModelBackend`, `SessionBackend`, `HistoryBackend`, `CommandBackend`, `RunOptionsBackend`); on the wire, the
-operations beyond the core `client.Client` are `client.Extras` (compact, undo, redo, fork, commands), which an older
-server answers with `ErrNotSupported` and the UI reports as a notice.
+`scroll_speed`, `scroll_acceleration`, `diff_style` (`auto` is side by side from 120 columns, or `stacked`), `cursor`,
+`mouse`, `attention` (notifications, bell count, a `sound_command` argv run without a shell) and `keybinds` (merged
+with the defaults; `"command.<name>": "<leader>x"` rebinds a command). More commands: `/timeline` (g) jumps to a
+message, `/children` lists the sub-agent (explore) runs of the conversation and opens one, `/diff`, `/mouse`,
+`/tips` (h), `/status` (i), `/skills`, `/mcp`, `ctrl+z` suspends. The explore tool shows its steps live under its
+tool call (`work.subagent` events; expand with `ctrl+o`).
+
+**Model info and cost.** Context windows and prices come from LiteLLM's public table
+(`raw.githubusercontent.com/BerriAI/litellm/.../model_prices_and_context_window.json`), fetched in the background
+with a plain GET (nothing about you is sent), cached for 24 hours in `~/.har/cache/` and never blocking startup.
+The status line shows `ctx 12.3k/200k (6%)` and the session cost (`~` when some usage had no price), the sidebar
+a usage bar and the model's price per million tokens, the model picker the window, price and vision/reasoning
+badges; `/cost` gives a per-run breakdown and `/context` the window usage. `HARNESS_MODEL_PRICES` is a file path or
+URL replacing the source, or `off` to disable it; `~/.har/model-prices.json` (same schema) overrides or adds models,
+e.g. a private endpoint. With `-remote` the server's table is used. Cache-write tokens are not priced and sub-agent
+tokens only join the total when the run ends.
 
 The status line shows the model, state, step count, tokens in/out/cached (with the cache share)
 and the run's elapsed time. `edit_file` calls show a diff of `oldText`/`newText`. The UI is a pure
