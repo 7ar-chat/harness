@@ -174,19 +174,40 @@ cancelled, 2 when it ended waiting for an answer or approval (the question goes 
 | `y` / `a` / `n` (or `esc`) | tool approval: approve once / approve for this run / deny |
 | `1`-`9`, or text + `enter` | answer an `ask_user` question |
 
-Slash commands (type `/` for the completion list, `tab` completes, `enter` runs the highlighted one):
+Slash commands (type `/` for the completion list, `tab` completes, `enter` runs the highlighted one; `ctrl+p`
+opens a palette over all of them). Most also have a leader keybind: `ctrl+x` then a letter, with a which-key hint.
 
-| Command | Action |
+| Command (leader key) | Action |
 |---|---|
-| `/model [id]` | filterable picker of the configured models plus the ones the provider reports (`GET {base}/models`; Anthropic `/v1/models`); a typed id the list lacks is accepted; `/model <id>` sets it directly. Applies to the next run |
-| `/sessions` (`/resume`) | pick a saved conversation; its messages and tool calls are replayed |
-| `/new` (`/clear`) | start an empty conversation |
-| `/tools`, `/help`, `/quit` | expand tool calls, list commands and keys, leave |
+| `/model [id]` (m) | filterable picker of the configured models plus the ones the provider reports (`GET {base}/models`; Anthropic `/v1/models`); `ctrl+f` favorites, `f2`/`shift+f2` cycle recent models; a typed id the list lacks is accepted. Applies to the next run |
+| `/sessions` (l) | switch to a saved conversation (messages and tool calls are replayed); `ctrl+r` rename, `ctrl+d` delete, `ctrl+o` pin |
+| `/new` (n) | start an empty conversation |
+| `/undo` (u), `/redo` (r) | remove the last prompt and its answers and restore the workspace files (git workspaces); the prompt returns to the input |
+| `/compact` (c), `/fork` (f) | summarise the history now; copy the conversation into a new one |
+| `/plan`, `/build` (`tab` toggles) | plan mode is read-only, enforced by the engine: only read-only tools plus `update_plan` and `ask_user` |
+| `/effort [low\|medium\|high\|default]` (`ctrl+t` cycles) | reasoning effort of the next runs |
+| `/connect` | pick a provider and enter its API key (stored in `~/.har/auth.json`, 0600); applies after a restart |
+| `/init`, `/<your command>` | custom commands: markdown prompt templates in `~/.har/commands` and `<project>/.har/commands` (`$ARGUMENTS`, `$1`..`$9`, nested folders as `dir:name`), plus installed skills; `/init` writes `AGENTS.md`. `/reload` rereads them |
+| `/themes` | seven themes with live preview; the choice is kept in `~/.har/tui-state.json` |
+| `/thinking`, `/details`, `/timestamps` | show reasoning text, tool details (`ctrl+o`), message times |
+| `/sidebar` (b, `ctrl+b`) | right panel: title, model and mode, token usage, the agent's plan, modified files, MCP servers |
+| `/editor` (e), `/export` (x) | compose in `$EDITOR`; export the conversation to Markdown and open it |
+| `/stash [pop\|list]` (s), `/image <path>`, `/copy`, `/notify` | park the input; attach an image; copy a message (OSC 52); desktop notification when the terminal is in the background |
+| `/help`, `/tools`, `/quit` (q) | list commands and keys, expand tool calls, leave |
 
-`/model`, `/sessions` and `/new` are refused while a run is active. A message that only looks like a command
-(`/etc/hosts is wrong`) is sent as text; start with a space to send an unknown `/word` literally. Backends opt in
-through `tui.ModelBackend` and `tui.SessionBackend` (`ClientBackend` implements both; `ClientBackend.Discover`
-is the provider lookup, wired by `cmd/harness` for the in-process engine).
+In the input: `@` fuzzy-picks a workspace file whose content is sent with the message (never outside the workspace;
+local sessions only); a message starting with `!` runs a shell command on your machine and shows its output (it
+also becomes context of your next message and is never a model tool call); `up`/`down` walk the input history;
+pasting an image path attaches it, and long pastes are shown as `[pasted N lines]`. `alt+up`/`alt+down` select a
+message and `alt+y` copies it. A message that only looks like a command (`/etc/hosts is wrong`) is sent as text;
+start with a space to send an unknown `/word` literally. The history commands are refused while a run is active.
+
+`~/.har/tui.json` (JSONC allowed; never read from a project) sets `theme`, `leader`, `leader_timeout`,
+`scroll_speed`, `cursor`, `mouse` and `keybinds` (merged with the defaults; `"command.<name>": "<leader>x"` rebinds
+a command). Backends opt into each capability through the interfaces in `hosts/tui/backend*.go`
+(`ModelBackend`, `SessionBackend`, `HistoryBackend`, `CommandBackend`, `RunOptionsBackend`); on the wire, the
+operations beyond the core `client.Client` are `client.Extras` (compact, undo, redo, fork, commands), which an older
+server answers with `ErrNotSupported` and the UI reports as a notice.
 
 The status line shows the model, state, step count, tokens in/out/cached (with the cache share)
 and the run's elapsed time. `edit_file` calls show a diff of `oldText`/`newText`. The UI is a pure
