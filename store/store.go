@@ -110,6 +110,9 @@ type Run struct {
 	// Sandbox is the run's sandbox mode: SandboxAuto ("" too), SandboxOff or
 	// SandboxOn. A resumed run keeps the mode of the thread's previous run.
 	Sandbox string
+	// Mode is the run's mode: ModeBuild ("" too) or ModePlan (read-only). A resumed
+	// run keeps the mode of the thread's previous run.
+	Mode string
 	// ApprovedTools are the tool kinds approved with scope "run" in this run
 	// chain (the run and its resume runs): they run without asking again.
 	ApprovedTools   []string
@@ -215,7 +218,18 @@ type NewRun struct {
 	// Empty inherits the mode of the thread's latest run (resume, goal and
 	// compaction runs), else auto.
 	Sandbox string
+	// Mode is the run's mode (ModeBuild, ModePlan). Empty inherits the mode of
+	// the thread's latest run (resume runs), else build.
+	Mode string
 }
+
+// Modes of a run (Run.Mode).
+const (
+	// ModeBuild: the run has all the tools its profile allows.
+	ModeBuild = "build"
+	// ModePlan: read-only; the engine offers no tool that changes anything.
+	ModePlan = "plan"
+)
 
 // Sandbox modes of a run (Run.Sandbox).
 const (

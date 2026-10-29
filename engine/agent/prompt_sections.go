@@ -65,7 +65,7 @@ func (st *runState) buildPrompt(ctx context.Context, now time.Time) {
 	sctx := context.WithValue(ctx, taintKey{}, tainted)
 	vision := st.a.Harness.Vision != nil && st.a.Harness.Vision(st.in.Run.Model)
 	st.h.prompt = prompts.Prompt{Variant: st.in.Variant, Now: now, FirstName: st.in.FirstName, Sandbox: st.in.Sandbox, Vision: vision,
-		Sections: st.a.render(sctx, st.in, st.a.Harness.Sections), Context: st.a.render(sctx, st.in, st.a.Harness.Context)}
+		Sections: st.a.render(sctx, st.in, append(append([]PromptSection(nil), st.a.Harness.Sections...), func(_ context.Context, in Input) string { return planModeSection(in) })), Context: st.a.render(sctx, st.in, st.a.Harness.Context)}
 	st.h.systemBase = st.h.prompt.Render("")
 	if tail := st.a.render(sctx, st.in, st.a.Harness.Tail); len(tail) > 0 {
 		st.h.tail = "<system-reminder>\n" + strings.Join(tail, "\n") + "\n</system-reminder>"

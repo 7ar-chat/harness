@@ -17,15 +17,17 @@
 //	GET    /api/threads/{id}                         → Thread + messages (+ pendingApproval, pendingQuestion, activeRun)
 //	PATCH  /api/threads/{id}       {"title"}         → Thread
 //	DELETE /api/threads/{id}                         → 204
-//	POST   /api/threads/{id}/runs  {"message","model","reasoningEffort","skills","interactive","sandbox":"auto|off|on"} → 202 Run
-//	POST   /api/threads/{id}/resume {"interruptId","reason","decision":"approve|deny","always","text","model","interactive"} → 202 Run
+//	POST   /api/threads/{id}/runs  {"message","model","reasoningEffort","skills","interactive","sandbox":"auto|off|on","mode":"build|plan","attachments":[{"name","mime","data":base64}]} → 202 Run
+//	POST   /api/threads/{id}/resume {"interruptId","reason","decision":"approve|deny","always","text","model","interactive","mode"} → 202 Run
 //	GET    /api/threads/{id}/files?path=             → [File]   (read-only, confined to /workspace)
 //	GET    /api/threads/{id}/files/download?path=    → file bytes, Content-Disposition: attachment
 //	GET    /api/runs/{id}                            → Run
 //	GET    /api/runs/{id}/events?after=              → text/event-stream of AG-UI events (or Last-Event-ID)
 //	POST   /api/runs/{id}/cancel                     → 202
 //	POST   /api/runs/{id}/steer    {"text"}          → 202
-//	GET    /, /ui/...                                → the embedded UI
+//	GET    /api/commands                             → [Command]  (custom commands, skills, builtins)
+//	POST   /api/commands/{name}/expand {"args"}      → {"prompt"}
+//	GET    /, /ui/...                              → the embedded UI
 //
 // Resuming: a run that ends with RUN_FINISHED outcome "interrupt" waits for an
 // answer. Post it to /resume with the interrupt id (the approval id for reason
@@ -124,6 +126,7 @@ func New(h *harness.Harness, o Options) http.Handler {
 	s.route("GET /runs/{id}/events", s.events)
 	s.route("POST /runs/{id}/cancel", s.cancel)
 	s.route("POST /runs/{id}/steer", s.steer)
+	s.routeCommands()
 	if !o.NoUI {
 		mountUI(s.mux)
 	}
@@ -243,7 +246,7 @@ func (s *server) deleteThread(w http.ResponseWriter, r *http.Request, c Caller) 
 
 func (s *server) createRun(w http.ResponseWriter, r *http.Request, c Caller) {
 	var body client.RunRequest
-	if !decode(w, r, &body) {
+	if !decodeLimit(w, r, &body, maxRunBody) {
 		return
 	}
 	run, err := s.api(c).Send(r.Context(), r.PathValue("id"), body.Message, body.SendOptions)
@@ -346,7 +349,14 @@ func (s *server) steer(w http.ResponseWriter, r *http.Request, c Caller) {
 }
 
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+	return decodeLimit(w, r, v, 2<<20)
+}
+
+// maxRunBody bounds a run-creation request: the attachments (base64: 4/3 of their size) and the rest.
+const maxRunBody = harness.MaxAttachments*harness.MaxAttachmentBytes*4/3 + 2<<20
+
+func decodeLimit(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	// An empty body is fine: every field is optional.
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil && !errors.Is(err, io.EOF) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid JSON body.")
