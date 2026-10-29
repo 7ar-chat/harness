@@ -273,3 +273,17 @@ func TestGitHubConnectFindsTheInstallation(t *testing.T) {
 		t.Fatalf("after uninstall = %v", st)
 	}
 }
+
+func TestForkOfAProjectThreadStaysInTheProject(t *testing.T) {
+	r := newTeamRig(t)
+	th := r.json("POST", "/api/threads", "alice", `{"projectId":"`+r.project+`"}`, 201)["id"].(string)
+	finished(t, r.stream(r.startRun("alice", th, "hello"), "alice"))
+	r.waitIdle(th, "alice")
+	msgs := r.json("GET", "/api/threads/"+th, "bob", "", 200)["messages"].([]any)
+	fork := r.json("POST", "/api/threads/"+th+"/fork", "bob", `{"messageId":"`+msgs[0].(map[string]any)["id"].(string)+`"}`, 201)["id"].(string)
+	got := r.json("GET", "/api/threads/"+fork, "alice", "", 200)
+	if got["projectId"] != r.project || got["createdBy"] != "bob" {
+		t.Fatalf("fork = %v", got)
+	}
+	r.json("GET", "/api/threads/"+fork, "carol", "", 404)
+}

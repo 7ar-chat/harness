@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // routeHistory registers the history operations of client.Extras.
@@ -55,6 +56,15 @@ func (s *server) fork(w http.ResponseWriter, r *http.Request, c Caller) {
 	if err != nil {
 		fail(w, err)
 		return
+	}
+	if s.team != nil { // the fork belongs to the same project, started by the actor
+		meta := store.ThreadMeta{ThreadID: th.ID, ProjectID: c.ProjectID, Owner: c.Login, CreatedBy: c.Actor, Kind: store.ThreadChat}
+		if err := s.team.SetThreadMeta(r.Context(), meta); err != nil {
+			_, _ = s.h.Store.DeleteThread(r.Context(), c.Login, th.ID)
+			fail(w, err)
+			return
+		}
+		s.note(c, th.ID, "thread.fork", map[string]any{"from": r.PathValue("id")}, FeedEvent{Type: "thread.created", Title: th.Title})
 	}
 	writeJSON(w, http.StatusCreated, th)
 }
