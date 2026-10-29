@@ -81,3 +81,59 @@ func TestRoleAtLeast(t *testing.T) {
 		t.Fatal("role order")
 	}
 }
+
+func TestProfileAvatarAndConnectors(t *testing.T) {
+	ctx := context.Background()
+	m := NewMem()
+	m.UpsertUser(ctx, store.User{Login: "alice", Name: "Alice A"})
+	m.UpsertUser(ctx, store.User{Login: "bob", Name: "Bob B"})
+	if err := m.SetDisplayName(ctx, "alice", "Ali"); err != nil {
+		t.Fatal(err)
+	}
+	// A new login refreshes the provider's name but keeps the user's choice.
+	m.UpsertUser(ctx, store.User{Login: "alice", Name: "Alice Anderson"})
+	u, _ := m.GetUser(ctx, "alice")
+	if u.Label() != "Ali" || u.Name != "Alice Anderson" {
+		t.Fatalf("user = %+v", u)
+	}
+	if err := m.SetDisplayName(ctx, "nobody", "x"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("unknown user: %v", err)
+	}
+	v1, _ := m.SetAvatar(ctx, "alice", "image/png", []byte("one"))
+	v2, _ := m.SetAvatar(ctx, "alice", "image/png", []byte("two"))
+	if v1 == "" || v1 == v2 {
+		t.Fatalf("versions %q %q", v1, v2)
+	}
+	if mime, data, err := m.GetAvatar(ctx, "alice"); err != nil || mime != "image/png" || string(data) != "two" {
+		t.Fatalf("avatar = %q %q %v", mime, data, err)
+	}
+	u, _ = m.GetUser(ctx, "alice")
+	if u.Avatar() != "/api/users/alice/avatar?v="+v2 {
+		t.Fatalf("avatar url = %q", u.Avatar())
+	}
+	m.SetAvatar(ctx, "alice", "", nil)
+	if _, _, err := m.GetAvatar(ctx, "alice"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("avatar not removed: %v", err)
+	}
+
+	c := store.Connector{Login: "alice", Kind: store.ConnectorTelegram, Account: "111", Label: "@a", Data: []byte("sealed")}
+	if err := m.SetConnector(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := m.FindConnector(ctx, store.ConnectorTelegram, "111"); err != nil || got.Login != "alice" {
+		t.Fatalf("find = %+v, %v", got, err)
+	}
+	c.Login = "bob"
+	if err := m.SetConnector(ctx, c); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("an account linked to two users: %v", err)
+	}
+	if list, _ := m.ListConnectors(ctx, "alice"); len(list) != 1 {
+		t.Fatalf("list = %v", list)
+	}
+	if err := m.DeleteConnector(ctx, "alice", store.ConnectorTelegram); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.FindConnector(ctx, store.ConnectorTelegram, "111"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("still found: %v", err)
+	}
+}

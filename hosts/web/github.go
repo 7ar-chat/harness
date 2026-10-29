@@ -34,6 +34,11 @@ type GitHubApp struct {
 	Slug string
 	// API is the GitHub API base (default https://api.github.com).
 	API string
+	// ClientID and ClientSecret are the App's OAuth credentials, used to link a
+	// user's GitHub account (connector) so they can import their repositories.
+	ClientID, ClientSecret string
+	// WebBase is GitHub's website base (default https://github.com), for OAuth.
+	WebBase string
 	// HTTP is the client used (default http.DefaultClient with a timeout).
 	HTTP *http.Client
 
@@ -75,6 +80,13 @@ func (g *GitHubApp) api() string {
 		return strings.TrimRight(g.API, "/")
 	}
 	return "https://api.github.com"
+}
+
+func (g *GitHubApp) web() string {
+	if g.WebBase != "" {
+		return strings.TrimRight(g.WebBase, "/")
+	}
+	return "https://github.com"
 }
 
 func (g *GitHubApp) client() *http.Client {

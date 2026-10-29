@@ -4,6 +4,8 @@ package teamstore
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -25,15 +27,22 @@ type Mem struct {
 	d    data
 }
 
+type avatar struct {
+	MIME string `json:"mime"`
+	Data []byte `json:"data"`
+}
+
 type data struct {
-	Users    map[string]*store.User       `json:"users"`
-	Prefs    map[string]map[string]any    `json:"prefs"`
-	Projects map[string]*store.Project    `json:"projects"`
-	Members  map[string][]store.Member    `json:"members"` // by project
-	Invites  map[string][]store.Invite    `json:"invites"` // by project
-	Threads  map[string]*store.ThreadMeta `json:"threads"`
-	Audit    []store.AuditEntry           `json:"audit"`
-	NextAud  int64                        `json:"nextAudit"`
+	Users    map[string]*store.User                `json:"users"`
+	Prefs    map[string]map[string]any             `json:"prefs"`
+	Projects map[string]*store.Project             `json:"projects"`
+	Members  map[string][]store.Member             `json:"members"` // by project
+	Invites  map[string][]store.Invite             `json:"invites"` // by project
+	Threads  map[string]*store.ThreadMeta          `json:"threads"`
+	Audit    []store.AuditEntry                    `json:"audit"`
+	NextAud  int64                                 `json:"nextAudit"`
+	Avatars  map[string]avatar                     `json:"avatars"`
+	Conns    map[string]map[string]store.Connector `json:"connectors"`
 }
 
 // NewMem returns an empty in-memory store that is never persisted.
@@ -69,6 +78,12 @@ func (m *Mem) reset() { m.d = data{}; m.fill() }
 func (m *Mem) fill() {
 	if m.d.Users == nil {
 		m.d.Users = map[string]*store.User{}
+	}
+	if m.d.Avatars == nil {
+		m.d.Avatars = map[string]avatar{}
+	}
+	if m.d.Conns == nil {
+		m.d.Conns = map[string]map[string]store.Connector{}
 	}
 	if m.d.Projects == nil {
 		m.d.Projects = map[string]*store.Project{}
@@ -140,6 +155,107 @@ func (m *Mem) ListUsers(_ context.Context) ([]store.User, error) {
 		out = append(out, *u)
 	}
 	return out, nil
+}
+
+func (m *Mem) SetDisplayName(_ context.Context, login, name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u := m.d.Users[login]
+	if u == nil {
+		return store.ErrNotFound
+	}
+	u.DisplayName = name
+	return m.save()
+}
+
+func (m *Mem) SetAvatar(_ context.Context, login, mime string, data []byte) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u := m.d.Users[login]
+	if u == nil {
+		return "", store.ErrNotFound
+	}
+	if len(data) == 0 {
+		delete(m.d.Avatars, login)
+		u.AvatarVersion = ""
+		return "", m.save()
+	}
+	sum := sha256.Sum256(data)
+	u.AvatarVersion = hex.EncodeToString(sum[:4])
+	m.d.Avatars[login] = avatar{MIME: mime, Data: append([]byte(nil), data...)}
+	return u.AvatarVersion, m.save()
+}
+
+func (m *Mem) GetAvatar(_ context.Context, login string) (string, []byte, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	a, ok := m.d.Avatars[login]
+	if !ok {
+		return "", nil, store.ErrNotFound
+	}
+	return a.MIME, append([]byte(nil), a.Data...), nil
+}
+
+func (m *Mem) SetConnector(_ context.Context, c store.Connector) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.d.Users[c.Login] == nil {
+		return store.ErrNotFound
+	}
+	// A provider account belongs to one user.
+	for login, byKind := range m.d.Conns {
+		if old, ok := byKind[c.Kind]; ok && old.Account == c.Account && login != c.Login {
+			return store.ErrConflict
+		}
+	}
+	if m.d.Conns[c.Login] == nil {
+		m.d.Conns[c.Login] = map[string]store.Connector{}
+	}
+	c.CreatedAt = time.Now().UTC()
+	m.d.Conns[c.Login][c.Kind] = c
+	return m.save()
+}
+
+func (m *Mem) GetConnector(_ context.Context, login, kind string) (*store.Connector, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.d.Conns[login][kind]
+	if !ok {
+		return nil, store.ErrNotFound
+	}
+	return &c, nil
+}
+
+func (m *Mem) ListConnectors(_ context.Context, login string) ([]store.Connector, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []store.Connector
+	for _, c := range m.d.Conns[login] {
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Kind < out[j].Kind })
+	return out, nil
+}
+
+func (m *Mem) DeleteConnector(_ context.Context, login, kind string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.d.Conns[login][kind]; !ok {
+		return store.ErrNotFound
+	}
+	delete(m.d.Conns[login], kind)
+	return m.save()
+}
+
+func (m *Mem) FindConnector(_ context.Context, kind, account string) (*store.Connector, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, byKind := range m.d.Conns {
+		if c, ok := byKind[kind]; ok && c.Account == account {
+			return &c, nil
+		}
+	}
+	return nil, store.ErrNotFound
 }
 
 func (m *Mem) UserPrefs(_ context.Context, login string) (map[string]any, error) {

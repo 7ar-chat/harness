@@ -2,12 +2,15 @@ package teamstore
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/GhaziBenDahmane/harness/store"
@@ -37,8 +40,8 @@ func (s *PG) UpsertUser(ctx context.Context, u store.User) (*store.User, error) 
 	var out store.User
 	err = tx.QueryRow(ctx, `INSERT INTO work_users (login, email, name, avatar_url) VALUES ($1, $2, $3, $4)
 		ON CONFLICT (login) DO UPDATE SET email = $2, name = $3, avatar_url = $4, last_seen = now()
-		RETURNING login, email, name, avatar_url, created_at, last_seen`,
-		u.Login, norm(u.Email), u.Name, u.AvatarURL).Scan(&out.Login, &out.Email, &out.Name, &out.AvatarURL, &out.CreatedAt, &out.LastSeen)
+		RETURNING `+userCols,
+		u.Login, norm(u.Email), u.Name, u.AvatarURL).Scan(&out.Login, &out.Email, &out.Name, &out.AvatarURL, &out.CreatedAt, &out.LastSeen, &out.DisplayName, &out.AvatarVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -52,11 +55,11 @@ func (s *PG) UpsertUser(ctx context.Context, u store.User) (*store.User, error) 
 	return &out, tx.Commit(ctx)
 }
 
-const userCols = `login, email, name, avatar_url, created_at, last_seen`
+const userCols = `login, email, name, avatar_url, created_at, last_seen, display_name, avatar_version`
 
 func scanUser(r pgx.Row) (*store.User, error) {
 	var u store.User
-	if err := r.Scan(&u.Login, &u.Email, &u.Name, &u.AvatarURL, &u.CreatedAt, &u.LastSeen); err != nil {
+	if err := r.Scan(&u.Login, &u.Email, &u.Name, &u.AvatarURL, &u.CreatedAt, &u.LastSeen, &u.DisplayName, &u.AvatarVersion); err != nil {
 		return nil, notFound(err)
 	}
 	return &u, nil
@@ -81,6 +84,110 @@ func (s *PG) ListUsers(ctx context.Context) ([]store.User, error) {
 		out = append(out, *u)
 	}
 	return out, rows.Err()
+}
+
+func (s *PG) SetDisplayName(ctx context.Context, login, name string) error {
+	tag, err := s.pool.Exec(ctx, `UPDATE work_users SET display_name = $2 WHERE login = $1`, login, name)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return store.ErrNotFound
+	}
+	return nil
+}
+
+func (s *PG) SetAvatar(ctx context.Context, login, mime string, data []byte) (string, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+	version := ""
+	if len(data) == 0 {
+		if _, err := tx.Exec(ctx, `DELETE FROM work_user_avatars WHERE login = $1`, login); err != nil {
+			return "", err
+		}
+	} else {
+		sum := sha256.Sum256(data)
+		version = hex.EncodeToString(sum[:4])
+		if _, err := tx.Exec(ctx, `INSERT INTO work_user_avatars (login, mime, data) VALUES ($1, $2, $3)
+			ON CONFLICT (login) DO UPDATE SET mime = $2, data = $3`, login, mime, data); err != nil {
+			return "", err
+		}
+	}
+	tag, err := tx.Exec(ctx, `UPDATE work_users SET avatar_version = $2 WHERE login = $1`, login, version)
+	if err != nil {
+		return "", err
+	}
+	if tag.RowsAffected() == 0 {
+		return "", store.ErrNotFound
+	}
+	return version, tx.Commit(ctx)
+}
+
+func (s *PG) GetAvatar(ctx context.Context, login string) (string, []byte, error) {
+	var mime string
+	var data []byte
+	err := s.pool.QueryRow(ctx, `SELECT mime, data FROM work_user_avatars WHERE login = $1`, login).Scan(&mime, &data)
+	return mime, data, notFound(err)
+}
+
+const connCols = `login, kind, account, label, data, created_at`
+
+func scanConn(r pgx.Row) (*store.Connector, error) {
+	var c store.Connector
+	if err := r.Scan(&c.Login, &c.Kind, &c.Account, &c.Label, &c.Data, &c.CreatedAt); err != nil {
+		return nil, notFound(err)
+	}
+	return &c, nil
+}
+
+func (s *PG) SetConnector(ctx context.Context, c store.Connector) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO work_connectors (login, kind, account, label, data) VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (login, kind) DO UPDATE SET account = $3, label = $4, data = $5, created_at = now()`,
+		c.Login, c.Kind, c.Account, c.Label, c.Data)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" { // the account belongs to another user
+		return store.ErrConflict
+	}
+	return err
+}
+
+func (s *PG) GetConnector(ctx context.Context, login, kind string) (*store.Connector, error) {
+	return scanConn(s.pool.QueryRow(ctx, `SELECT `+connCols+` FROM work_connectors WHERE login = $1 AND kind = $2`, login, kind))
+}
+
+func (s *PG) ListConnectors(ctx context.Context, login string) ([]store.Connector, error) {
+	rows, err := s.pool.Query(ctx, `SELECT `+connCols+` FROM work_connectors WHERE login = $1 ORDER BY kind`, login)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []store.Connector
+	for rows.Next() {
+		c, err := scanConn(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *c)
+	}
+	return out, rows.Err()
+}
+
+func (s *PG) DeleteConnector(ctx context.Context, login, kind string) error {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM work_connectors WHERE login = $1 AND kind = $2`, login, kind)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return store.ErrNotFound
+	}
+	return nil
+}
+
+func (s *PG) FindConnector(ctx context.Context, kind, account string) (*store.Connector, error) {
+	return scanConn(s.pool.QueryRow(ctx, `SELECT `+connCols+` FROM work_connectors WHERE kind = $1 AND account = $2`, kind, account))
 }
 
 func (s *PG) UserPrefs(ctx context.Context, login string) (map[string]any, error) {

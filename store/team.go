@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"net/url"
 	"time"
 )
 
@@ -47,6 +48,46 @@ type User struct {
 	AvatarURL string    `json:"avatarUrl,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	LastSeen  time.Time `json:"lastSeen"`
+	// DisplayName is the name the user chose; empty means Name (from the identity provider: first and last name).
+	DisplayName string `json:"displayName,omitempty"`
+	// AvatarVersion identifies the uploaded avatar ("" when none); AvatarURL is then superseded.
+	AvatarVersion string `json:"avatarVersion,omitempty"`
+}
+
+// Label is the name shown for the user: their display name, else the provider's name, else the login.
+func (u User) Label() string {
+	switch {
+	case u.DisplayName != "":
+		return u.DisplayName
+	case u.Name != "":
+		return u.Name
+	}
+	return u.Login
+}
+
+// Avatar is the avatar URL to show: the uploaded one, else the provider's.
+func (u User) Avatar() string {
+	if u.AvatarVersion != "" {
+		return "/api/users/" + url.PathEscape(u.Login) + "/avatar?v=" + u.AvatarVersion
+	}
+	return u.AvatarURL
+}
+
+// Connector kinds.
+const (
+	ConnectorGitHub   = "github"
+	ConnectorTelegram = "telegram"
+)
+
+// Connector links a user to an outside account (GitHub, Telegram). Data is
+// opaque to the store (the host encrypts it: tokens live there).
+type Connector struct {
+	Login     string    `json:"login"`
+	Kind      string    `json:"kind"`
+	Account   string    `json:"account"` // the account's id at the provider (GitHub login, Telegram chat id)
+	Label     string    `json:"label"`   // what to show (@name)
+	Data      []byte    `json:"data"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // Project is a repository the team works on.
@@ -125,6 +166,21 @@ type TeamStore interface {
 	// GetUsers returns the known users among logins, by login.
 	GetUsers(ctx context.Context, logins []string) (map[string]*User, error)
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
+	// SetDisplayName sets the name the user chose ("" goes back to the provider's).
+	SetDisplayName(ctx context.Context, login, name string) error
+	// SetAvatar stores the user's avatar image and returns its version; empty data removes it.
+	SetAvatar(ctx context.Context, login, mime string, data []byte) (string, error)
+	// GetAvatar returns the uploaded avatar, ErrNotFound when none.
+	GetAvatar(ctx context.Context, login string) (mime string, data []byte, err error)
+
+	// Connectors: SetConnector replaces the user's connector of that kind.
+	SetConnector(ctx context.Context, c Connector) error
+	GetConnector(ctx context.Context, login, kind string) (*Connector, error)
+	ListConnectors(ctx context.Context, login string) ([]Connector, error)
+	DeleteConnector(ctx context.Context, login, kind string) error
+	// FindConnector finds the connector of a provider account (who owns Telegram chat 123).
+	FindConnector(ctx context.Context, kind, account string) (*Connector, error)
+
 	// ListUsers returns every known user (small teams: the supervisor watcher walks them).
 	ListUsers(ctx context.Context) ([]User, error)
 	// UserPrefs returns the user's preferences (an empty map when none were set).

@@ -105,6 +105,14 @@ type Options struct {
 	Supervisor *Supervisor
 	// GitHub, with Team, connects projects to GitHub through a GitHub App (see github.go).
 	GitHub *GitHubApp
+	// Telegram, with Team, lets users talk to their assistant from Telegram (see telegram.go).
+	Telegram *Telegram
+	// SecretKey encrypts the connector tokens kept in the store (HARNESS_SECRET_KEY, else the OIDC
+	// session key). Without it, connectors are unavailable.
+	SecretKey []byte
+	// PublicURL is the address users reach the server at (https://harness.example.com); OAuth callbacks
+	// are built from it. Default: derived from the OIDC redirect URL, else from the request.
+	PublicURL string
 }
 
 type server struct {
@@ -114,6 +122,8 @@ type server struct {
 	mux  *http.ServeMux
 	team store.TeamStore
 	sup  *Supervisor
+	box  *secretBox
+	tg   *telegramBridge
 	hub  *hub
 	oidc *oidcAuth
 }
@@ -133,6 +143,7 @@ func NewServer(h *harness.Harness, o Options) (http.Handler, error) {
 	if o.PingEvery <= 0 {
 		o.PingEvery = 15 * time.Second
 	}
+	var err error
 	s := &server{h: h, o: o, mux: http.NewServeMux(), team: o.Team, hub: newHub()}
 	if o.OIDC != nil {
 		a, err := newOIDC(context.Background(), *o.OIDC, o.Team)
@@ -178,6 +189,11 @@ func NewServer(h *harness.Harness, o Options) (http.Handler, error) {
 	s.routeCommands()
 	s.routeMemory()
 	if s.team != nil {
+		if len(o.SecretKey) > 0 {
+			if s.box, err = newSecretBox(o.SecretKey); err != nil {
+				return nil, err
+			}
+		}
 		s.routeTeam()
 		if o.Supervisor != nil {
 			s.sup = o.Supervisor

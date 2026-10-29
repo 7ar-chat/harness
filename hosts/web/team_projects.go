@@ -12,6 +12,8 @@ import (
 
 func (s *server) routeTeam() {
 	s.route("GET /me", s.me)
+	s.routeProfile()
+	s.routeConnectors()
 	s.route("GET /projects", s.listProjects)
 	s.route("POST /projects", s.createProject)
 	s.route("GET /projects/{pid}", s.getProject)
@@ -47,7 +49,7 @@ func (s *server) me(w http.ResponseWriter, r *http.Request, c Caller) {
 		fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"user": u, "projects": nonNil(list)})
+	writeJSON(w, http.StatusOK, map[string]any{"user": viewOf(*u), "projects": nonNil(list)})
 }
 
 func nonNil[T any](l []T) []T {
@@ -207,7 +209,7 @@ func (s *server) listMembers(w http.ResponseWriter, r *http.Request, c Caller) {
 	for _, m := range members {
 		v := memberView{Login: m.Login, Name: m.Login, Role: m.Role, AddedAt: m.AddedAt}
 		if u := users[m.Login]; u != nil {
-			v.Name, v.AvatarURL = u.Name, u.AvatarURL
+			v.Name, v.AvatarURL = u.Label(), u.Avatar()
 			if role == store.RoleOwner {
 				v.Email = u.Email
 			}

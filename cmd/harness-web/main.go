@@ -89,6 +89,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		Token: token, LocalUser: *user, Models: cfg.LLMModels, DefaultModel: *model,
 		AllowedOrigins: splitList(getenv("HARNESS_WEB_ORIGINS")),
 		Team:           teamStore, OIDC: oidcCfg, Supervisor: sup, GitHub: bt.github,
+		PublicURL: getenv("HARNESS_PUBLIC_URL"), SecretKey: secretKey(getenv, oidcCfg),
+	}
+	if tok := getenv("TELEGRAM_BOT_TOKEN"); tok != "" && *team {
+		opts.Telegram = &httpserver.Telegram{Token: tok, Username: strings.TrimPrefix(getenv("TELEGRAM_BOT_USERNAME"), "@")}
 	}
 	if *devUsers {
 		if !*team || oidcCfg != nil || !isLoopback(*addr) {
@@ -128,6 +132,17 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		return fail(stderr, err)
 	}
 	return 0
+}
+
+// secretKey is the key that encrypts connector tokens: HARNESS_SECRET_KEY, else the OIDC session key.
+func secretKey(getenv func(string) string, oidc *httpserver.OIDCConfig) []byte {
+	if k := getenv("HARNESS_SECRET_KEY"); k != "" {
+		return []byte(k)
+	}
+	if oidc != nil && len(oidc.SessionKey) > 0 {
+		return oidc.SessionKey
+	}
+	return nil
 }
 
 // oidcFromEnv reads OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_REDIRECT_URL,

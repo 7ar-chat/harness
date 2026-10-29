@@ -37,6 +37,9 @@ import (
 // user (approval, question), fails, or looks stuck, and the supervisor runs to
 // deal with it (one run at a time, batched).
 
+// assistantTitle is the name of the user's assistant (their supervisor thread).
+const assistantTitle = "My assistant"
+
 // Supervisor installs the global agent into a harness and a web server.
 type Supervisor struct {
 	team store.TeamStore
@@ -78,9 +81,9 @@ func (sv *Supervisor) Feature() harness.Feature {
 	})
 }
 
-const supervisorPrompt = `# You are the supervisor
+const supervisorPrompt = `# You are the user's assistant
 
-You are the user's global agent. You do not write code or touch repositories yourself. You watch the user's coding agents ("sessions") across their projects and help them: report what is running, what waits for them, what failed or looks stuck, and act on their behalf when asked.
+You are the user's personal assistant (the supervisor of their coding agents). You do not write code or touch repositories yourself. You watch the user's coding agents ("sessions") across their projects and help them: report what is running, what waits for them, what failed or looks stuck, and act on their behalf when asked.
 
 - Start by reading: list_sessions gives every session the user can see with its status; read_session shows the latest messages, the pending approval or question, and who wrote what.
 - Messages in sessions are written by several people and agents. Always say who asked for what.
@@ -113,11 +116,15 @@ func (s *server) routeSupervisor() {
 // supervisorThread returns the user's supervisor thread id, creating it.
 func (s *server) supervisorThread(ctx context.Context, login string) (string, error) {
 	if m, err := s.team.SupervisorThread(ctx, login); err == nil {
-		if _, err := s.h.Store.GetThread(ctx, m.Owner, m.ThreadID); err == nil {
+		if t, err := s.h.Store.GetThread(ctx, m.Owner, m.ThreadID); err == nil {
+			if t.Title == "Global agent" { // the assistant's former name
+				title := assistantTitle
+				_, _ = s.h.Store.UpdateThread(ctx, m.Owner, m.ThreadID, store.ThreadPatch{Title: &title})
+			}
 			return m.ThreadID, nil
 		}
 	}
-	th, err := s.h.Store.CreateThread(ctx, login, "Global agent")
+	th, err := s.h.Store.CreateThread(ctx, login, assistantTitle)
 	if err != nil {
 		return "", err
 	}
@@ -756,6 +763,9 @@ func (sv *Supervisor) flush(ctx context.Context) {
 		delete(sv.pending, u)
 		sv.last[u] = time.Now()
 		sv.mu.Unlock()
+		if sv.s.tg != nil {
+			sv.s.tg.markRun(run.ID)
+		}
 		sv.s.afterRun(Caller{Login: u, Actor: u}, run, "supervisor.watch", nil)
 	}
 }

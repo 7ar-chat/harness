@@ -126,7 +126,12 @@ func githubFromEnv(getenv func(string) string) (*httpserver.GitHubApp, error) {
 	if len(key) == 0 {
 		return nil, fmt.Errorf("GITHUB_APP_ID needs GITHUB_APP_PRIVATE_KEY or GITHUB_APP_PRIVATE_KEY_FILE")
 	}
-	return httpserver.NewGitHubApp(id, getenv("GITHUB_APP_SLUG"), key)
+	app, err := httpserver.NewGitHubApp(id, getenv("GITHUB_APP_SLUG"), key)
+	if err != nil {
+		return nil, err
+	}
+	app.ClientID, app.ClientSecret = getenv("GITHUB_APP_CLIENT_ID"), getenv("GITHUB_APP_CLIENT_SECRET")
+	return app, nil
 }
 
 type multiCloser []io.Closer

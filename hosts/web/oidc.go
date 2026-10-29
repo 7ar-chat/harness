@@ -287,7 +287,11 @@ func (a *oidcAuth) userFromClaims(claims map[string]any, sub string) (store.User
 	if login == "" || strings.ContainsAny(login, " \t\r\n/") {
 		return store.User{}, errors.New("The identity provider returned no usable login.")
 	}
-	name := claimStr(claims, "name")
+	// The default display name is the first and last name.
+	name := strings.TrimSpace(claimStr(claims, "given_name") + " " + claimStr(claims, "family_name"))
+	if name == "" {
+		name = claimStr(claims, "name")
+	}
 	if name == "" {
 		name = login
 	}

@@ -47,7 +47,7 @@ repository is cloned into `/workspace/repo` on a branch `har/<thread>`; the clon
 installation token (never a member's personal token), kept in a credential file of the sandbox and renewed at the
 start of each run. Public repositories clone without an App. The token is never placed on a command line.
 
-## The global agent (supervisor)
+## My assistant (the supervisor)
 
 `GET /api/supervisor` returns the caller's supervisor thread (kind `supervisor`). It runs without a sandbox, with
 tools to look and to act on every session the user can see:
@@ -60,6 +60,27 @@ tools to look and to act on every session the user can see:
 `PUT /api/supervisor/settings {watch, stuckMinutes}` turns on the watcher: sessions that wait for the user, fail,
 or run silently for `stuckMinutes` are queued and, in batches (at most every two minutes), put to the supervisor
 as a `[watcher]` message that it answers once.
+
+## Profile and connectors
+
+Each user has a **display name** (default: first and last name from the identity provider's `given_name` /
+`family_name`, else `name`; their own choice survives later logins) and an uploaded **avatar** (PNG, JPEG, WebP or
+GIF up to 512 KB, type checked from the bytes; no SVG), shown on every message, member list and session.
+`PATCH /api/me/profile`, `PUT/DELETE /api/me/avatar`, `GET /api/users/{login}/avatar`.
+
+**Connectors** (`GET /api/connectors`; tokens are stored encrypted with `HARNESS_SECRET_KEY`, else the OIDC session key):
+
+* **GitHub — project import.** Give the GitHub App OAuth credentials (`GITHUB_APP_CLIENT_ID`,
+  `GITHUB_APP_CLIENT_SECRET`; callback `<public url>/auth/github/callback`, set `HARNESS_PUBLIC_URL` behind a proxy).
+  A user links their account; `GET /api/connectors/github/repos` lists the repositories they can reach through the
+  App's installations and `POST /api/projects/import {repo}` creates the project already connected to its installation
+  (the server looks the repository up with the user's own token; the client's word is not trusted).
+* **Telegram — talk to your assistant.** Create a bot with @BotFather and set `TELEGRAM_BOT_TOKEN`
+  (`TELEGRAM_BOT_USERNAME` optional). The profile page shows a deep link with a one-time code; `/start <code>`
+  links the chat. Messages go to the assistant (steer, answer its question, or a new run), its replies come back,
+  and an approval it waits for arrives with Approve / Deny buttons; `/status` lists sessions. Sessions that wait for
+  a user with Telegram linked produce a short note (unless the watcher is on, which hands them to the assistant).
+  The bot long-polls, so no public webhook is needed; run it in one replica only.
 
 ## Wiring it yourself
 

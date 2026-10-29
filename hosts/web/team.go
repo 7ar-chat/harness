@@ -301,7 +301,7 @@ func (s *server) withAuthors(ctx context.Context, th *client.Thread) {
 			continue
 		}
 		if u := users[a.Login]; u != nil {
-			a.Name, a.AvatarURL = u.Name, u.AvatarURL
+			a.Name, a.AvatarURL = u.Label(), u.Avatar()
 		}
 	}
 }

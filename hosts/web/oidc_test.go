@@ -159,3 +159,21 @@ func TestOIDCDomainAllowlistAndUnverifiedEmail(t *testing.T) {
 		t.Fatalf("unverified email must not be used to claim invites: %+v", u)
 	}
 }
+
+func TestDefaultDisplayNameIsFirstAndLastName(t *testing.T) {
+	a := &oidcAuth{}
+	for name, tc := range map[string]struct {
+		claims map[string]any
+		want   string
+	}{
+		"first and last": {map[string]any{"given_name": "Ada", "family_name": "Lovelace", "name": "ada.l", "preferred_username": "ada"}, "Ada Lovelace"},
+		"first only":     {map[string]any{"given_name": "Ada", "preferred_username": "ada"}, "Ada"},
+		"name claim":     {map[string]any{"name": "Ada L.", "preferred_username": "ada"}, "Ada L."},
+		"login":          {map[string]any{"preferred_username": "ada"}, "ada"},
+	} {
+		u, err := a.userFromClaims(tc.claims, "sub")
+		if err != nil || u.Name != tc.want {
+			t.Errorf("%s: name = %q, %v; want %q", name, u.Name, err, tc.want)
+		}
+	}
+}
