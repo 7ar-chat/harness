@@ -110,6 +110,7 @@ type Model struct {
 	inp      inputState // input and chrome features (input.go)
 
 	picker  *picker   // open list (/model, /sessions), nil when none
+	sub     subState  // sub-agent transcript pane (/children, subagent.go)
 	sugg    []command // slash completions of the input
 	suggSel int
 
@@ -264,6 +265,9 @@ func (m *Model) key(k tea.KeyMsg) (tea.Cmd, bool) {
 	s := m.keys.canon(k.String())
 	if s != "ctrl+c" {
 		m.quitArmed = false
+	}
+	if cmd, ok := m.subKey(k); ok {
+		return cmd, true
 	}
 	if p := m.picker; p != nil {
 		if p.extra != nil {
@@ -578,6 +582,8 @@ func (m *Model) custom(ev Ev) {
 		if i, ok := m.toolIdx[id]; ok {
 			m.blocks[i].tool.Output += text
 		}
+	case agui.CustomSubagent:
+		m.subagentEvent(ev)
 	case agui.CustomSteer:
 		if d, _ := ev.Value["delivered"].(bool); !d {
 			text, _ := ev.Value["text"].(string)
@@ -704,6 +710,9 @@ func (m *Model) refresh() {
 
 // View implements tea.Model.
 func (m *Model) View() string {
+	if m.sub.open {
+		return m.subView()
+	}
 	var b strings.Builder
 	b.WriteString(m.withSidebar(m.vp.View()))
 	b.WriteString("\n")

@@ -114,7 +114,8 @@ type ToolView struct {
 	Name   string
 	Args   string // JSON arguments
 	Result string
-	Output string // live output (work.tool_output) while the call runs
+	Output string    // live output (work.tool_output) while the call runs
+	Sub    *Subagent // the sub-agent's activity (work.subagent), nil for other tools
 	Done   bool
 	Err    bool
 }
@@ -128,6 +129,9 @@ const (
 // RenderToolCall renders a tool call: header (name and key argument), the
 // clipped result, and for a successful edit_file the diff of oldText/newText.
 func RenderToolCall(t ToolView, width int, expanded bool) string {
+	if t.Sub != nil {
+		return renderSubagent(t, width, expanded)
+	}
 	mark := styleDim.Render("…")
 	switch {
 	case t.Done && t.Err:

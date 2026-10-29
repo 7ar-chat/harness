@@ -152,6 +152,7 @@ type harnessState struct {
 	// untrusted is set once the model's context holds untrusted content.
 	untrusted  bool
 	extraUsage map[string]*agui.Usage
+	usageMu    sync.Mutex // guards extraUsage (sub-agent usage arrives from parallel tool calls)
 	summarizer model.BaseChatModel
 	// Approvals: the approval this run resumes, whether the run carries its own
 	// user message, and the history slots of calls finished by this run.
@@ -341,6 +342,8 @@ func (st *runState) addModelUsage(name string, msg *schema.Message) {
 	if msg == nil || msg.ResponseMeta == nil || msg.ResponseMeta.Usage == nil {
 		return
 	}
+	st.h.usageMu.Lock()
+	defer st.h.usageMu.Unlock()
 	if st.h.extraUsage == nil {
 		st.h.extraUsage = map[string]*agui.Usage{}
 	}
@@ -357,7 +360,31 @@ func (st *runState) addModelUsage(name string, msg *schema.Message) {
 	u.CachedInputTokens += r.PromptTokenDetails.CachedTokens
 }
 
+// AddSubagentUsage implements tools.LiveEmitter: the sub-agent's usage joins the
+// run's per-model totals under "<model> (sub-agent)", so it is neither lost nor
+// mixed into the main loop's counters (tools may run in parallel).
+func (e *toolEmitter) AddSubagentUsage(model string, in, out, cached int) {
+	h := &e.st.h
+	h.usageMu.Lock()
+	defer h.usageMu.Unlock()
+	name := model + " (sub-agent)"
+	if h.extraUsage == nil {
+		h.extraUsage = map[string]*agui.Usage{}
+	}
+	u := h.extraUsage[name]
+	if u == nil {
+		u = &agui.Usage{Model: name}
+		h.extraUsage[name] = u
+	}
+	u.InputTokens += in
+	u.OutputTokens += out
+	u.TotalTokens += in + out
+	u.CachedInputTokens += cached
+}
+
 func (st *runState) usages() []agui.Usage {
+	st.h.usageMu.Lock()
+	defer st.h.usageMu.Unlock()
 	out := []agui.Usage{st.usage}
 	for _, u := range st.h.extraUsage {
 		out = append(out, *u)
@@ -560,9 +587,13 @@ type toolEmitter struct {
 }
 
 func (e *toolEmitter) ToolOutput(toolCallID, stream, text string) {
-	ev := agui.CustomEvent(agui.CustomToolOutput, map[string]any{
+	e.EmitLive(agui.CustomEvent(agui.CustomToolOutput, map[string]any{
 		"toolCallId": toolCallID, "stream": stream, "text": text,
-	})
+	}))
+}
+
+// EmitLive implements tools.LiveEmitter.
+func (e *toolEmitter) EmitLive(ev agui.Event) {
 	if e.buffered {
 		e.mu.Lock()
 		e.output = append(e.output, ev)

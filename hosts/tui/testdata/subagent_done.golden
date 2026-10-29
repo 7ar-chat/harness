@@ -1,0 +1,13 @@
+> where is Handle?
+
+✓ ⎇ explore  "where is Handle defined and who calls i…"  step 7 · 3.0k tokens
+    … 2 earlier
+    ✓ read_file pkg/a.go:10-40
+    ✓ search_files "foo4"
+    ✗ read_file missing.go
+    ✓ search_files "foo6"
+    ✓ search_files "foo7"
+  ⎿ Handle is in pkg/a.go:3.
+    
+    Callers:
+    … +3 lines (ctrl+o expands)

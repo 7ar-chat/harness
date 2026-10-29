@@ -28,6 +28,16 @@ const (
 	CustomToolOutput = "work.tool_output"
 	CustomSteer      = "work.steer"
 	CustomUsage      = "work.usage"
+	CustomSubagent   = "work.subagent"
+)
+
+// Phases of a work.subagent event.
+const (
+	SubagentStart = "start"
+	SubagentStep  = "step"
+	SubagentTool  = "tool"
+	SubagentText  = "text"
+	SubagentEnd   = "end"
 )
 
 // RUN_ERROR codes.
@@ -99,3 +109,8 @@ func SteerEvent(id, text string, delivered bool) Event {
 func CustomEvent(name string, value any) Event {
 	return New(Custom, map[string]any{"name": name, "value": value})
 }
+
+// SubagentEvent builds the CUSTOM work.subagent event of a tool that runs a
+// sub-agent: value carries toolCallId, phase (SubagentStart…SubagentEnd),
+// agent, step, tool{name,args,result,isError}, text, model and usage{in,out,cached}.
+func SubagentEvent(value map[string]any) Event { return CustomEvent(CustomSubagent, value) }

@@ -47,6 +47,34 @@ func AfterResult(ctx context.Context, ev agui.Event) {
 	}
 }
 
+// LiveEmitter is implemented by the agent's emitter: events emitted with Live
+// are written while the tool runs (in call order when calls run in parallel),
+// and sub-agent usage is added to the run's usage totals.
+type LiveEmitter interface {
+	EmitLive(ev agui.Event)
+	AddSubagentUsage(model string, in, out, cached int)
+}
+
+// Live emits an AG-UI event while the current tool call runs (dropped when the
+// call has no agent emitter, e.g. in isolation).
+func Live(ctx context.Context, ev agui.Event) {
+	if _, e := CallFromContext(ctx); e != nil {
+		if le, ok := e.(LiveEmitter); ok {
+			le.EmitLive(ev)
+		}
+	}
+}
+
+// SubagentUsage adds the token usage of a sub-agent's model calls to the run's
+// totals (reported under its own model name; no-op without an agent emitter).
+func SubagentUsage(ctx context.Context, model string, in, out, cached int) {
+	if _, e := CallFromContext(ctx); e != nil {
+		if le, ok := e.(LiveEmitter); ok {
+			le.AddSubagentUsage(model, in, out, cached)
+		}
+	}
+}
+
 // UntrustedSource is implemented by the agent's emitter: it reports whether
 // the model's context holds untrusted content (tool output, attachments, a
 // user skill, a compaction summary) at the time of the current tool call.

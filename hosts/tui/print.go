@@ -96,8 +96,17 @@ func (p *printer) handle(ev Ev) (int, bool) {
 		}
 		fmt.Fprintf(p.o.Stderr, "  %s: %s\n", mark, clip(oneLine(ev.Content), 160))
 	case agui.Custom:
-		if ev.Name == agui.CustomSteer {
+		switch ev.Name {
+		case agui.CustomSteer:
 			fmt.Fprintf(p.o.Stderr, "  steer: %v\n", ev.Value["text"])
+		case agui.CustomSubagent:
+			if e := ev.SubagentValue(); e.Phase == agui.SubagentTool {
+				mark := ""
+				if e.Tool.Err {
+					mark = " (error)"
+				}
+				fmt.Fprintf(p.o.Stderr, "  ⎇ %s %s%s\n", e.Tool.Name, clip(e.Tool.Args, 120), mark)
+			}
 		}
 	}
 	return p.finish(ev, false)
