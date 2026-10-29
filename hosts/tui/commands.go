@@ -94,6 +94,7 @@ func (m *Model) resetTranscript() {
 	m.blocks, m.toolIdx = nil, map[string]int{}
 	m.runID, m.steps, m.elapsed = "", 0, 0
 	m.base, m.cur = Usage{}, Usage{}
+	m.inp.sb.resetCost()
 	m.pending, m.quitArmed = nil, false
 	m.in.Reset()
 	m.vp.GotoTop()

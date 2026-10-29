@@ -659,6 +659,7 @@ func (m *Model) statusView() StatusView {
 		sv.State = "waiting"
 	}
 	m.extStatus(&sv)
+	m.costStatus(&sv)
 	if m.runID != "" {
 		el := m.elapsed
 		sv.Elapsed = fmtDuration(el)

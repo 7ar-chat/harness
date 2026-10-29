@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/modelinfo"
 	"github.com/GhaziBenDahmane/harness/store"
 )
 
@@ -104,6 +105,73 @@ const (
 type ModelList struct {
 	Models  []string `json:"models"`
 	Default string   `json:"default"`
+	// Info describes the models it knows (context window, prices, capabilities),
+	// by id; absent from servers that have no model table.
+	Info map[string]ModelInfo `json:"info,omitempty"`
+}
+
+// ModelInfo describes a model; a zero field is unknown. Prices are dollars per token.
+type ModelInfo struct {
+	Provider      string `json:"provider,omitempty"`
+	ContextWindow int    `json:"contextWindow,omitempty"`
+	MaxOutput     int    `json:"maxOutput,omitempty"`
+	// Priced is false when the model has no price (zero prices then mean unknown).
+	Priced             bool    `json:"priced,omitempty"`
+	InputPerToken      float64 `json:"inputPerToken,omitempty"`
+	OutputPerToken     float64 `json:"outputPerToken,omitempty"`
+	CacheReadPerToken  float64 `json:"cacheReadPerToken,omitempty"`
+	CacheWritePerToken float64 `json:"cacheWritePerToken,omitempty"`
+	// Tier lists the higher prices of prompts above Tier.Above tokens.
+	Tier      *PriceTier `json:"tier,omitempty"`
+	Vision    bool       `json:"vision,omitempty"`
+	Reasoning bool       `json:"reasoning,omitempty"`
+	Tools     bool       `json:"tools,omitempty"`
+}
+
+// PriceTier is the price list of prompts above Above tokens (dollars per token).
+type PriceTier struct {
+	Above      int     `json:"above"`
+	Input      float64 `json:"input,omitempty"`
+	Output     float64 `json:"output,omitempty"`
+	CacheRead  float64 `json:"cacheRead,omitempty"`
+	CacheWrite float64 `json:"cacheWrite,omitempty"`
+}
+
+// Cost is the price in dollars of in input tokens (cached of them served from the
+// prompt cache) and out output tokens (reasoning included); prompt is the largest
+// single prompt, which selects the price tier (0: the base prices). ok is false
+// when the model has no price.
+func (m ModelInfo) Cost(in, out, cached, prompt int) (usd float64, ok bool) {
+	i := modelinfo.Info{Priced: m.Priced, InputPerToken: m.InputPerToken, OutputPerToken: m.OutputPerToken,
+		CacheReadPerToken: m.CacheReadPerToken, CacheWritePerToken: m.CacheWritePerToken}
+	if t := m.Tier; t != nil {
+		i.Tier = &modelinfo.Tier{Above: t.Above, Input: t.Input, Output: t.Output, CacheRead: t.CacheRead, CacheWrite: t.CacheWrite}
+	}
+	return modelinfo.Cost(i, modelinfo.Usage{In: in, Out: out, Cached: cached, Prompt: prompt})
+}
+
+// TableLookup is the WithModelInfo lookup over a price table; hints are the
+// provider names to prefer, tried in order (the configured provider name, then its type).
+func TableLookup(t *modelinfo.Table, hints ...string) func(id string) (ModelInfo, bool) {
+	return func(id string) (ModelInfo, bool) {
+		for _, h := range append(hints, "") {
+			if i, ok := t.Lookup(id, h); ok {
+				return FromModelInfo(i), true
+			}
+		}
+		return ModelInfo{}, false
+	}
+}
+
+// FromModelInfo converts a table entry to its wire form.
+func FromModelInfo(i modelinfo.Info) ModelInfo {
+	m := ModelInfo{Provider: i.Provider, ContextWindow: i.ContextWindow, MaxOutput: i.MaxOutput, Priced: i.Priced,
+		InputPerToken: i.InputPerToken, OutputPerToken: i.OutputPerToken, CacheReadPerToken: i.CacheReadPerToken,
+		CacheWritePerToken: i.CacheWritePerToken, Vision: i.Vision, Reasoning: i.Reasoning, Tools: i.Tools}
+	if t := i.Tier; t != nil {
+		m.Tier = &PriceTier{Above: t.Above, Input: t.Input, Output: t.Output, CacheRead: t.CacheRead, CacheWrite: t.CacheWrite}
+	}
+	return m
 }
 
 // ThreadPatch changes a thread; nil fields stay as they are.

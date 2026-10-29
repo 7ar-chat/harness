@@ -42,6 +42,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/features/permissions"
 	"github.com/GhaziBenDahmane/harness/hosts/client"
 	"github.com/GhaziBenDahmane/harness/hosts/tui"
+	"github.com/GhaziBenDahmane/harness/modelinfo"
 	"github.com/GhaziBenDahmane/harness/store/filestore"
 )
 
@@ -77,6 +78,7 @@ type options struct {
 	discover            func(context.Context) ([]string, error)         // model discovery of /model (in-process only)
 	connector           tui.Connector                                   // /connect (in-process only)
 	status              func(context.Context) ([]tui.StatusItem, error) // /status and /mcp (in-process only)
+	info                func(string) (client.ModelInfo, bool)           // model table lookup, also for discovered models (in-process only)
 }
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, isTTY bool, mk factory) int {
@@ -174,11 +176,24 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	o.discover = discoverer(cfg)
 	o.connector = newAuthConnector(cfg)
 	o.status = statusFunc(cfg)
-	c := client.InProcess(h, o.user, client.WithModels(cfg.LLMModels, o.model))
+	lookup := modelLookup(hctx, cfg)
+	o.info = lookup
+	c := client.InProcess(h, o.user, client.WithModels(cfg.LLMModels, o.model), client.WithModelInfo(lookup))
 	if !cfg.SandboxEnabled() && !o.json {
 		fmt.Fprintln(stderr, "(no sandbox: set SANDBOX_BACKEND=local or OPENSANDBOX_URL; the agent has no tools)")
 	}
 	return attach(hctx, c, o, prompt, printMode, st != nil, stdout, stderr)
+}
+
+// modelLookup loads the model price table in the background (never blocking the
+// start) and returns its lookup for the configured provider; nil when disabled
+// (HARNESS_MODEL_PRICES=off).
+func modelLookup(ctx context.Context, cfg *config.Config) func(string) (client.ModelInfo, bool) {
+	opts, ok := config.ModelPriceOptions()
+	if !ok {
+		return nil
+	}
+	return client.TableLookup(modelinfo.LoadAsync(ctx, opts), cfg.LLMProviderName, cfg.LLMProvider)
 }
 
 // runRemote attaches the terminal UI to the harness-web server at o.remote.
@@ -214,7 +229,7 @@ func attach(ctx context.Context, c client.Client, o options, prompt string, prin
 	if err != nil {
 		return fail(stderr, err)
 	}
-	be := &tui.ClientBackend{C: c, ThreadID: th.ID, ModelID: o.model, Interactive: !printMode && !o.auto, Discover: o.discover, RemoteURL: o.remote, StatusFunc: o.status}
+	be := &tui.ClientBackend{C: c, ThreadID: th.ID, ModelID: o.model, Interactive: !printMode && !o.auto, Discover: o.discover, RemoteURL: o.remote, StatusFunc: o.status, InfoFunc: o.info}
 	if printMode {
 		return tui.RunPrint(ctx, be, prompt, tui.PrintOptions{Stdout: stdout, Stderr: stderr, JSON: o.json})
 	}

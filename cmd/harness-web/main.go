@@ -24,7 +24,9 @@ import (
 	"time"
 
 	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/hosts/client"
 	httpserver "github.com/GhaziBenDahmane/harness/hosts/web"
+	"github.com/GhaziBenDahmane/harness/modelinfo"
 )
 
 func main() {
@@ -78,6 +80,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	opts := httpserver.Options{
 		Token: token, LocalUser: *user, Models: cfg.LLMModels, DefaultModel: *model,
 		AllowedOrigins: splitList(getenv("HARNESS_WEB_ORIGINS")),
+	}
+	if mo, ok := config.ModelPriceOptions(); ok { // loaded in the background: the list gains its info once it arrives
+		opts.ModelInfo = client.TableLookup(modelinfo.LoadAsync(hctx, mo), cfg.LLMProviderName, cfg.LLMProvider)
 	}
 	if token == "" { // DNS-rebinding guard for the token-less loopback server
 		opts.AllowedHosts = []string{"localhost", "127.0.0.1", "::1"}

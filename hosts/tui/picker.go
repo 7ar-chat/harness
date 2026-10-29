@@ -38,6 +38,8 @@ type picker struct {
 	hint, footer string
 	// rows is how many items show at once (0: pickRows).
 	rows int
+	// dimDesc dims only the description of a row, not its label.
+	dimDesc bool
 }
 
 func (p *picker) visible() []pickItem {
@@ -131,13 +133,16 @@ func (p *picker) view(width int) string {
 		if it.current {
 			mark = "● "
 		}
-		line := mark + it.label
+		head := mark + it.label
+		line := head
 		if it.desc != "" {
 			line += "  " + it.desc
 		}
 		line = clip(line, width-2)
 		if i == p.sel {
 			line = styleSel.Render("▸ " + line)
+		} else if r := []rune(line); p.dimDesc && it.desc != "" && len(r) > len([]rune(head)) {
+			line = "  " + string(r[:len([]rune(head))]) + styleDim.Render(string(r[len([]rune(head)):]))
 		} else {
 			line = "  " + line
 			if it.desc != "" {

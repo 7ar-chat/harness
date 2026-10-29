@@ -12,7 +12,7 @@ const module = "github.com/GhaziBenDahmane/harness"
 // layer says where a package of this module sits. A package may import only packages of its own layer or a
 // lower one; the rules below tighten that further.
 //
-//	0 foundation  store (interfaces), config, engine/agui, engine/syncx, engine/agent/prompts
+//	0 foundation  store (interfaces), config, modelinfo, engine/agui, engine/syncx, engine/agent/prompts
 //	1 sandbox     the sandbox contract, its manager and backends
 //	2 engine      the agent loop, LLM clients, tools, runtime, event log, queue, approvals
 //	3 adapters    store implementations (memory, file, Postgres), Redis helpers
@@ -24,7 +24,7 @@ func layer(p string) int {
 	switch {
 	case rel == "":
 		return 5
-	case rel == "store", rel == "config", rel == "engine/agui", rel == "engine/syncx", rel == "engine/agent/prompts":
+	case rel == "store", rel == "config", rel == "modelinfo", rel == "engine/agui", rel == "engine/syncx", rel == "engine/agent/prompts":
 		return 0
 	case strings.HasPrefix(rel, "sandbox"):
 		return 1

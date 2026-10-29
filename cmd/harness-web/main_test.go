@@ -5,10 +5,17 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
 )
+
+// TestMain keeps the tests from downloading the model price table.
+func TestMain(m *testing.M) {
+	os.Setenv("HARNESS_MODEL_PRICES", "off")
+	os.Exit(m.Run())
+}
 
 func env(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
 

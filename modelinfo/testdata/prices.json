@@ -1,0 +1,108 @@
+{
+  "sample_spec": {
+    "input_cost_per_token": 0.0,
+    "litellm_provider": "one of https://docs.litellm.ai/docs/providers",
+    "max_input_tokens": "max input tokens, if the provider specifies it",
+    "max_output_tokens": "max output tokens, if the provider specifies it",
+    "mode": "one of: chat, embedding, completion",
+    "supports_vision": true
+  },
+  "claude-sonnet-4-5": {
+    "cache_creation_input_token_cost": 3.75e-06,
+    "cache_read_input_token_cost": 3e-07,
+    "input_cost_per_token": 3e-06,
+    "litellm_provider": "anthropic",
+    "max_input_tokens": 200000,
+    "max_output_tokens": 64000,
+    "mode": "chat",
+    "output_cost_per_token": 1.5e-05,
+    "supports_function_calling": true,
+    "supports_reasoning": true,
+    "supports_vision": true
+  },
+  "anthropic.claude-sonnet-4-20250514-v1:0": {
+    "cache_creation_input_token_cost": 3.75e-06,
+    "cache_read_input_token_cost": 3e-07,
+    "input_cost_per_token": 3e-06,
+    "input_cost_per_token_above_200k_tokens": 6e-06,
+    "cache_read_input_token_cost_above_200k_tokens": 6e-07,
+    "output_cost_per_token_above_200k_tokens": 2.25e-05,
+    "litellm_provider": "bedrock_converse",
+    "max_input_tokens": 200000,
+    "max_output_tokens": 64000,
+    "mode": "chat",
+    "output_cost_per_token": 1.5e-05,
+    "supports_function_calling": true,
+    "supports_vision": true
+  },
+  "claude-opus-4-5-20251101": {
+    "input_cost_per_token": 5e-06,
+    "litellm_provider": "anthropic",
+    "max_input_tokens": 200000,
+    "max_output_tokens": 64000,
+    "mode": "chat",
+    "output_cost_per_token": 2.5e-05
+  },
+  "gpt-5": {
+    "cache_read_input_token_cost": 1.25e-07,
+    "input_cost_per_token": 1.25e-06,
+    "litellm_provider": "openai",
+    "max_input_tokens": 272000,
+    "max_output_tokens": 128000,
+    "mode": "chat",
+    "output_cost_per_token": 1e-05,
+    "supports_function_calling": true,
+    "supports_reasoning": true,
+    "supports_vision": true
+  },
+  "gpt-5-mini": {
+    "input_cost_per_token": 2.5e-07,
+    "litellm_provider": "openai",
+    "max_input_tokens": 272000,
+    "mode": "chat",
+    "output_cost_per_token": 2e-06
+  },
+  "openrouter/deepseek/deepseek-r1": {
+    "input_cost_per_token": 5.5e-07,
+    "litellm_provider": "openrouter",
+    "max_input_tokens": 65336,
+    "max_output_tokens": 8192,
+    "mode": "chat",
+    "output_cost_per_token": 2.19e-06,
+    "supports_reasoning": true
+  },
+  "azure_ai/gpt-5": {
+    "input_cost_per_token": 9e-06,
+    "litellm_provider": "azure_ai",
+    "max_input_tokens": 100000,
+    "mode": "chat",
+    "output_cost_per_token": 9e-05
+  },
+  "ollama/llama3": {
+    "input_cost_per_token": 0.0,
+    "litellm_provider": "ollama",
+    "max_tokens": 8192,
+    "mode": "chat",
+    "output_cost_per_token": 0.0
+  },
+  "legacy-model": {
+    "max_tokens": 4096,
+    "litellm_provider": "openai",
+    "mode": "chat"
+  },
+  "junk-model": {
+    "input_cost_per_token": "free",
+    "output_cost_per_token": null,
+    "max_input_tokens": "lots",
+    "max_output_tokens": -5,
+    "supports_vision": "yes",
+    "mode": "chat"
+  },
+  "text-embedding-3-small": {
+    "input_cost_per_token": 2e-08,
+    "litellm_provider": "openai",
+    "max_input_tokens": 8191,
+    "mode": "embedding"
+  },
+  "not-an-object": 42
+}

@@ -64,6 +64,7 @@ func (m *Model) attachImage(p string) bool {
 		return false
 	}
 	m.inp.atts = append(m.inp.atts, attachment{a})
+	m.warnVision()
 	return true
 }
 
@@ -150,6 +151,7 @@ func (m *Model) clipImageDone(r clipImageMsg) {
 	}
 	name := fmt.Sprintf("clipboard-%s.png", m.now().Format("150405"))
 	m.inp.atts = append(m.inp.atts, attachment{client.Attachment{Name: name, MIME: "image/png", Data: r.data}})
+	m.warnVision()
 }
 
 // clipboardImage reads a PNG from the macOS clipboard with pngpaste, or with

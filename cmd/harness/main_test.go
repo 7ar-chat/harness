@@ -24,7 +24,8 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	os.Setenv("LOCAL_STATE_DIR", dir)
-	os.Setenv("HOME", dir) // not the developer's ~/.har
+	os.Setenv("HOME", dir)                   // not the developer's ~/.har
+	os.Setenv("HARNESS_MODEL_PRICES", "off") // no download of the price table
 	code := m.Run()
 	os.RemoveAll(dir)
 	os.Exit(code)
