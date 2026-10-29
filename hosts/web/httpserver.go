@@ -101,6 +101,8 @@ type Options struct {
 	// OIDC, with Team, adds the login routes (/auth/login, /auth/callback,
 	// /auth/logout) and authenticates requests by session cookie.
 	OIDC *OIDCConfig
+	// Supervisor, with Team, adds the global agent (see supervisor.go).
+	Supervisor *Supervisor
 }
 
 type server struct {
@@ -109,6 +111,7 @@ type server struct {
 	auth Authenticator
 	mux  *http.ServeMux
 	team store.TeamStore
+	sup  *Supervisor
 	hub  *hub
 	oidc *oidcAuth
 }
@@ -174,6 +177,11 @@ func NewServer(h *harness.Harness, o Options) (http.Handler, error) {
 	s.routeMemory()
 	if s.team != nil {
 		s.routeTeam()
+		if o.Supervisor != nil {
+			s.sup = o.Supervisor
+			s.routeSupervisor()
+			s.sup.bind(s)
+		}
 	}
 	if !o.NoUI {
 		mountUI(s.mux)
@@ -320,6 +328,7 @@ func (s *server) createRun(w http.ResponseWriter, r *http.Request, c Caller) {
 	if !decodeLimit(w, r, &body, maxRunBody) {
 		return
 	}
+	s.forceSupervisorRun(r, r.PathValue("id"), &body.SendOptions)
 	run, err := s.api(c).Send(r.Context(), r.PathValue("id"), body.Message, body.SendOptions)
 	if err != nil {
 		fail(w, err)
@@ -333,6 +342,9 @@ func (s *server) resume(w http.ResponseWriter, r *http.Request, c Caller) {
 	var body client.ResumeRequest
 	if !decode(w, r, &body) {
 		return
+	}
+	if s.sup != nil && s.sup.isSupervisorThread(r.Context(), r.PathValue("id")) {
+		body.Interactive = true
 	}
 	tool := ""
 	if s.team != nil {

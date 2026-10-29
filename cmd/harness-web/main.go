@@ -27,6 +27,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/hosts/client"
 	httpserver "github.com/GhaziBenDahmane/harness/hosts/web"
 	"github.com/GhaziBenDahmane/harness/modelinfo"
+	"github.com/GhaziBenDahmane/harness/store"
 )
 
 func main() {
@@ -43,6 +44,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	model := fs.String("model", "", "default model id (default LLM_DEFAULT_MODEL)")
 	local := fs.Bool("local", false, "work on the current directory: SANDBOX_BACKEND=local, the coding profile, durable sessions")
 	user := fs.String("user", "local", "user login of the single local user")
+	devUsers := fs.Bool("dev-users", false, "team mode on a loopback address: act as the user named by the X-Harness-User header (development only)")
 	team := fs.Bool("team", getenv("OIDC_ISSUER") != "" || getenv("HARNESS_TEAM") == "1", "team mode: OIDC login, projects, shared threads (env OIDC_ISSUER or HARNESS_TEAM=1)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -73,7 +75,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if !cfg.ModelAllowed(*model) {
 		return fail(stderr, fmt.Errorf("model %q is not allowed (LLM_MODELS)", *model))
 	}
-	h, teamStore, closer, err := buildWith(ctx, cfg, *local, *team)
+	h, teamStore, sup, closer, err := buildWith(ctx, cfg, *local, *team)
 	if err != nil {
 		return fail(stderr, err)
 	}
@@ -85,7 +87,13 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	opts := httpserver.Options{
 		Token: token, LocalUser: *user, Models: cfg.LLMModels, DefaultModel: *model,
 		AllowedOrigins: splitList(getenv("HARNESS_WEB_ORIGINS")),
-		Team:           teamStore, OIDC: oidcCfg,
+		Team:           teamStore, OIDC: oidcCfg, Supervisor: sup,
+	}
+	if *devUsers {
+		if !*team || oidcCfg != nil || !isLoopback(*addr) {
+			return fail(stderr, errors.New("-dev-users needs -team, no OIDC_ISSUER, and a loopback address"))
+		}
+		opts.Authenticate = devAuthenticator(teamStore, *user)
 	}
 	if *team && oidcCfg == nil { // team mode without OIDC: every request acts as -user (local development)
 		fmt.Fprintln(stderr, "harness-web: team mode without OIDC_ISSUER: everyone is", *user)
@@ -182,4 +190,22 @@ func setDefault(k, v string) {
 func fail(stderr io.Writer, err error) int {
 	fmt.Fprintln(stderr, "harness-web:", err)
 	return 1
+}
+
+// devAuthenticator acts as the user in the X-Harness-User header (else def),
+// recording them as known users. Only for loopback development servers.
+func devAuthenticator(ts store.TeamStore, def string) httpserver.Authenticator {
+	return func(r *http.Request) (string, error) {
+		login := strings.ToLower(strings.TrimSpace(r.Header.Get("X-Harness-User")))
+		if login == "" {
+			login = def
+		}
+		if _, err := ts.GetUser(r.Context(), login); err != nil {
+			name := strings.ToUpper(login[:1]) + login[1:]
+			if _, err := ts.UpsertUser(r.Context(), store.User{Login: login, Name: name, Email: login + "@dev.local"}); err != nil {
+				return "", err
+			}
+		}
+		return login, nil
+	}
 }

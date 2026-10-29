@@ -66,6 +66,45 @@ func (s *PG) GetUser(ctx context.Context, login string) (*store.User, error) {
 	return scanUser(s.pool.QueryRow(ctx, `SELECT `+userCols+` FROM work_users WHERE login = $1`, login))
 }
 
+func (s *PG) ListUsers(ctx context.Context) ([]store.User, error) {
+	rows, err := s.pool.Query(ctx, `SELECT `+userCols+` FROM work_users ORDER BY login`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []store.User
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *u)
+	}
+	return out, rows.Err()
+}
+
+func (s *PG) UserPrefs(ctx context.Context, login string) (map[string]any, error) {
+	var raw []byte
+	err := s.pool.QueryRow(ctx, `SELECT prefs FROM work_users WHERE login = $1`, login).Scan(&raw)
+	out := map[string]any{}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return out, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &out)
+	}
+	return out, nil
+}
+
+func (s *PG) SetUserPrefs(ctx context.Context, login string, prefs map[string]any) error {
+	b, _ := json.Marshal(prefs)
+	_, err := s.pool.Exec(ctx, `UPDATE work_users SET prefs = $2 WHERE login = $1`, login, b)
+	return err
+}
+
 func (s *PG) GetUserByEmail(ctx context.Context, email string) (*store.User, error) {
 	return scanUser(s.pool.QueryRow(ctx, `SELECT `+userCols+` FROM work_users WHERE email = $1 AND email <> '' LIMIT 1`, norm(email)))
 }

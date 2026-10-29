@@ -84,15 +84,26 @@ func (s *server) resolve(r *http.Request, kind resourceKind, actor string) (Call
 	if s.team == nil || kind == kindNone {
 		return c, nil
 	}
-	ctx := r.Context()
 	threadID := r.PathValue("id")
 	if kind == kindRun {
-		run, err := s.h.Store.GetRun(ctx, threadID)
+		run, err := s.h.Store.GetRun(r.Context(), threadID)
 		if err != nil {
 			return c, errNotFound
 		}
 		threadID = run.ThreadID
 	}
+	need := store.RoleViewer
+	if isWrite(r.Method) {
+		need = store.RoleMember
+	}
+	return s.access(r.Context(), actor, threadID, need)
+}
+
+// access checks that actor holds at least role need on the thread and returns
+// the Caller to act as: for a project thread, the thread's owner (whose
+// login the store scopes it by) with the actor kept for authorship.
+func (s *server) access(ctx context.Context, actor, threadID, need string) (Caller, error) {
+	c := Caller{Login: actor, Actor: actor}
 	meta, err := s.team.GetThreadMeta(ctx, threadID)
 	if errors.Is(err, store.ErrNotFound) {
 		return c, nil // not linked: the store scopes it to its owner
@@ -113,10 +124,6 @@ func (s *server) resolve(r *http.Request, kind resourceKind, actor string) (Call
 	}
 	if err != nil {
 		return c, err
-	}
-	need := store.RoleViewer
-	if isWrite(r.Method) {
-		need = store.RoleMember
 	}
 	if !store.RoleAtLeast(role, need) {
 		return c, errForbidden

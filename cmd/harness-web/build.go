@@ -21,14 +21,19 @@ import (
 // and event logs on disk (harness.OpenLocalStore); otherwise they live in memory.
 // The returned closer releases the store.
 func buildHarness(cfg *config.Config, durable bool) (*harness.Harness, io.Closer, error) {
-	h, _, closer, err := buildWith(context.Background(), cfg, durable, false)
+	h, _, _, closer, err := buildWith(context.Background(), cfg, durable, false)
 	return h, closer, err
 }
 
 // buildWith is buildHarness that can also build the team store: in team mode
 // the main store is Postgres when POSTGRES_HOST is set (the team tables live
 // beside the threads), else the durable local store with team.json next to it.
-func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*harness.Harness, store.TeamStore, io.Closer, error) {
+func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*harness.Harness, store.TeamStore, *httpserver.Supervisor, io.Closer, error) {
+	h, ts, sup, closer, err := buildTeam(ctx, cfg, durable, team)
+	return h, ts, sup, closer, err
+}
+
+func buildTeam(ctx context.Context, cfg *config.Config, durable, team bool) (*harness.Harness, store.TeamStore, *httpserver.Supervisor, io.Closer, error) {
 	o := harness.Options{Config: cfg, Version: "web"}
 	var closers multiCloser
 	var ts store.TeamStore
@@ -37,18 +42,18 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*ha
 	case team && havePG:
 		pool, err := pgstore.NewPool(ctx, cfg.PostgresDSN(), cfg.DBPoolMaxConns, cfg.PingDBAtStartup)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("connect to Postgres: %w", err)
+			return nil, nil, nil, nil, fmt.Errorf("connect to Postgres: %w", err)
 		}
 		closers = append(closers, poolCloser{pool.Close})
 		if err := migrate.Run(ctx, pool, cfg.PostgresSchema); err != nil {
 			_ = closers.Close()
-			return nil, nil, nil, fmt.Errorf("migrate Postgres: %w", err)
+			return nil, nil, nil, nil, fmt.Errorf("migrate Postgres: %w", err)
 		}
 		o.Store, ts = pgstore.NewPG(pool), teamstore.NewPG(pool)
 	case durable || team:
 		st, err := harness.OpenLocalStore(cfg.LocalStateDir)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("open the session store: %w", err)
+			return nil, nil, nil, nil, fmt.Errorf("open the session store: %w", err)
 		}
 		closers = append(closers, st)
 		o.Store = st
@@ -59,19 +64,23 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*ha
 			}
 			if ts, err = teamstore.Open(filepath.Join(dir, "team.json")); err != nil {
 				_ = closers.Close()
-				return nil, nil, nil, fmt.Errorf("open the team store: %w", err)
+				return nil, nil, nil, nil, fmt.Errorf("open the team store: %w", err)
 			}
 		}
 	}
+	var sup *httpserver.Supervisor
 	if ts != nil {
 		o.MemoryKey = httpserver.MemoryKey(ts)
+		sup = httpserver.NewSupervisor(ts)
+		o.Tools = append(o.Tools, sup.Tools())
+		o.Features = append(harness.ProfileNamed(cfg.AgentProfile), sup.Feature())
 	}
 	h, err := harness.New(o)
 	if err != nil {
 		_ = closers.Close()
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	return h, ts, closers, nil
+	return h, ts, sup, closers, nil
 }
 
 type multiCloser []io.Closer

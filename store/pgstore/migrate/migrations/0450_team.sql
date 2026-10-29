@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS work_users (
     created_at  timestamptz NOT NULL DEFAULT now(),
     last_seen   timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE work_users ADD COLUMN IF NOT EXISTS prefs jsonb;
 CREATE INDEX IF NOT EXISTS work_users_email_idx ON work_users (email) WHERE email <> '';
 
 CREATE TABLE IF NOT EXISTS work_projects (

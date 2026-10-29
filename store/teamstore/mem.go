@@ -27,6 +27,7 @@ type Mem struct {
 
 type data struct {
 	Users    map[string]*store.User       `json:"users"`
+	Prefs    map[string]map[string]any    `json:"prefs"`
 	Projects map[string]*store.Project    `json:"projects"`
 	Members  map[string][]store.Member    `json:"members"` // by project
 	Invites  map[string][]store.Invite    `json:"invites"` // by project
@@ -129,6 +130,40 @@ func (m *Mem) UpsertUser(_ context.Context, u store.User) (*store.User, error) {
 	}
 	out := *cur
 	return &out, m.save()
+}
+
+func (m *Mem) ListUsers(_ context.Context) ([]store.User, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]store.User, 0, len(m.d.Users))
+	for _, u := range m.d.Users {
+		out = append(out, *u)
+	}
+	return out, nil
+}
+
+func (m *Mem) UserPrefs(_ context.Context, login string) (map[string]any, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := map[string]any{}
+	for k, v := range m.d.Prefs[login] {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (m *Mem) SetUserPrefs(_ context.Context, login string, prefs map[string]any) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.d.Prefs == nil {
+		m.d.Prefs = map[string]map[string]any{}
+	}
+	cp := make(map[string]any, len(prefs))
+	for k, v := range prefs {
+		cp[k] = v
+	}
+	m.d.Prefs[login] = cp
+	return m.save()
 }
 
 func (m *Mem) GetUser(_ context.Context, login string) (*store.User, error) {

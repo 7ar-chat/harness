@@ -125,6 +125,12 @@ type TeamStore interface {
 	// GetUsers returns the known users among logins, by login.
 	GetUsers(ctx context.Context, logins []string) (map[string]*User, error)
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
+	// ListUsers returns every known user (small teams: the supervisor watcher walks them).
+	ListUsers(ctx context.Context) ([]User, error)
+	// UserPrefs returns the user's preferences (an empty map when none were set).
+	UserPrefs(ctx context.Context, login string) (map[string]any, error)
+	// SetUserPrefs replaces the user's preferences.
+	SetUserPrefs(ctx context.Context, login string, prefs map[string]any) error
 
 	// CreateProject stores p (a fresh id when empty) and makes owner its owner.
 	CreateProject(ctx context.Context, p Project, owner string) (*Project, error)

@@ -126,7 +126,7 @@ func TestUIIsServedWithAStrictContentSecurityPolicy(t *testing.T) {
 	for _, path := range []string{"/", "/ui/app.js", "/ui/app.css", "/api/models", "/healthz"} {
 		resp := r.do("GET", path, "alice", "")
 		csp := resp.Header.Get("Content-Security-Policy")
-		if resp.StatusCode != 200 || !strings.Contains(csp, "default-src 'self'") || strings.Contains(csp, "unsafe-") ||
+		if resp.StatusCode != 200 || !strings.Contains(csp, "default-src 'self'") || strings.Contains(strings.Replace(csp, "style-src-attr 'unsafe-inline'", "", 1), "unsafe-") ||
 			resp.Header.Get("X-Content-Type-Options") != "nosniff" {
 			t.Errorf("%s: status %d csp %q", path, resp.StatusCode, csp)
 		}

@@ -42,6 +42,7 @@ type rigOpts struct {
 	noSandbox bool // no backend at all
 	rawAuth   bool // keep the web options' authentication (default: the X-User header)
 	team      bool // team mode on an in-memory TeamStore
+	sup       *httpserver.Supervisor
 }
 
 // scripted asks for one tool call, then answers "done" once it has seen the tool result.
@@ -83,6 +84,10 @@ func newRig(t *testing.T, o rigOpts) *rig {
 	ho := harness.Options{Config: cfg, Models: llmtest.Factory{M: o.model}, Store: o.store}
 	if !o.local && !o.noSandbox {
 		ho.Backend = sandboxtest.NewBackend()
+	}
+	if o.sup != nil {
+		ho.Tools = append(ho.Tools, o.sup.Tools())
+		o.web.Supervisor = o.sup
 	}
 	h, err := harness.New(ho)
 	if err != nil {
