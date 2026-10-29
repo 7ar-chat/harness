@@ -75,6 +75,7 @@ type options struct {
 	remote              string
 	configDump          bool
 	discover            func(context.Context) ([]string, error) // model discovery of /model (in-process only)
+	connector           tui.Connector                           // /connect (in-process only)
 }
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, isTTY bool, mk factory) int {
@@ -170,6 +171,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	go func() { _ = h.Run(hctx) }()
 
 	o.discover = discoverer(cfg)
+	o.connector = newAuthConnector(cfg)
 	c := client.InProcess(h, o.user, client.WithModels(cfg.LLMModels, o.model))
 	if !cfg.SandboxEnabled() && !o.json {
 		fmt.Fprintln(stderr, "(no sandbox: set SANDBOX_BACKEND=local or OPENSANDBOX_URL; the agent has no tools)")
@@ -214,7 +216,7 @@ func attach(ctx context.Context, c client.Client, o options, prompt string, prin
 	if printMode {
 		return tui.RunPrint(ctx, be, prompt, tui.PrintOptions{Stdout: stdout, Stderr: stderr, JSON: o.json})
 	}
-	if err := tui.Run(ctx, be); err != nil {
+	if err := tui.RunWith(ctx, be, tui.Options{StateDir: config.UserDir(), Connector: o.connector}); err != nil {
 		return fail(stderr, err)
 	}
 	return 0

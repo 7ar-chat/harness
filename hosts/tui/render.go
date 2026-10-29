@@ -307,6 +307,8 @@ type StatusView struct {
 	Usage   Usage
 	Elapsed string
 	Hint    string
+	Mode    string // plan or build; "" when the backend has no modes
+	Effort  string // reasoning effort; "" is the model's default
 }
 
 // FormatTokens abbreviates a token count (1234 → 1.2k).
@@ -332,6 +334,12 @@ func RenderUsage(u Usage) string {
 // RenderStatus renders the status line, padded to width.
 func RenderStatus(s StatusView, width int) string {
 	parts := []string{s.Model, s.State}
+	if s.Effort != "" {
+		parts = []string{s.Model, "effort " + s.Effort, s.State}
+	}
+	if s.Mode != "" {
+		parts = append([]string{strings.ToUpper(s.Mode)}, parts...)
+	}
 	if s.Steps > 0 {
 		parts = append(parts, fmt.Sprintf("step %d", s.Steps))
 	}

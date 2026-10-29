@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"fmt"
-
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GhaziBenDahmane/harness/hosts/client"
@@ -51,8 +49,7 @@ func (m *Model) cmdModel(arg string) tea.Cmd {
 		return nil
 	}
 	if arg != "" {
-		mb.SetModel(arg)
-		m.add(block{kind: blockNotice, text: "model: " + arg})
+		m.useModel(mb, arg)
 		return nil
 	}
 	m.add(block{kind: blockNotice, text: "asking the provider for its models…"})
@@ -62,29 +59,7 @@ func (m *Model) cmdModel(arg string) tea.Cmd {
 	}
 }
 
-func (m *Model) openModelPicker(ids []string) {
-	cur := m.be.Model()
-	items := make([]pickItem, 0, len(ids)+1)
-	found := false
-	for _, id := range ids {
-		items = append(items, pickItem{id: id, label: id, current: id == cur})
-		found = found || id == cur
-	}
-	if !found && cur != "" {
-		items = append([]pickItem{{id: cur, label: cur, current: true}}, items...)
-	}
-	sel := 0
-	for i, it := range items {
-		if it.current {
-			sel = i
-		}
-	}
-	m.picker = &picker{title: "Model", items: items, sel: sel, custom: true, pick: func(m *Model, it pickItem) tea.Cmd {
-		m.be.(ModelBackend).SetModel(it.id)
-		m.add(block{kind: blockNotice, text: "model: " + it.id})
-		return nil
-	}}
-}
+func (m *Model) openModelPicker(ids []string) { m.openModelPickerX(ids) }
 
 func (m *Model) cmdSessions(string) tea.Cmd {
 	sb, ok := m.be.(SessionBackend)
@@ -101,28 +76,7 @@ func (m *Model) cmdSessions(string) tea.Cmd {
 	}
 }
 
-func (m *Model) openSessionPicker(list []client.Session) {
-	if len(list) == 0 {
-		m.add(block{kind: blockNotice, text: "no saved conversations"})
-		return
-	}
-	items := make([]pickItem, 0, len(list))
-	for _, s := range list {
-		title := s.Title
-		if title == "" {
-			title = "(untitled)"
-		}
-		items = append(items, pickItem{id: s.ID, label: title,
-			desc: fmt.Sprintf("%s · %d msgs · %s", s.UpdatedAt.Format("Jan 2 15:04"), s.Messages, clip(oneLine(s.Preview), 50))})
-	}
-	m.picker = &picker{title: "Conversations", items: items, pick: func(m *Model, it pickItem) tea.Cmd {
-		sb := m.be.(SessionBackend)
-		return func() tea.Msg {
-			th, err := sb.OpenThread(m.ctx, it.id)
-			return threadMsg{th, err}
-		}
-	}}
-}
+func (m *Model) openSessionPicker(list []client.Session) { m.openSessionPickerX(list) }
 
 func (m *Model) cmdNew(string) tea.Cmd {
 	if m.busy("/new") {
