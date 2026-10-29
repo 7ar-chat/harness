@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/approvals"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 func TestGateAsksOnlyForRiskyActions(t *testing.T) {

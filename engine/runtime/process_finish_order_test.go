@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/store"
+	"github.com/GhaziBenDahmane/harness/core/store"
 )
 
 func TestTerminalEventIsPublishedAfterRunIsFinished(t *testing.T) {

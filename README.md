@@ -13,7 +13,7 @@ a terminal client (`cmd/harness`), a `net/http` + SSE server package and a bench
 HTTP APIs (authentication, multi-tenant routing) are left to the embedding application.
 
 ```
-        web UI ──► hosts/web (net/http, SSE) ──┐
+        web UI ──► product ► hosts/httpapi (net/http, SSE) ──┐
         TUI    ──► cmd/harness (reference)  ───┤
         your app ──────────────────────────────┤
                                                ▼
@@ -51,7 +51,7 @@ h.Cancel(ctx, "alice", run.ID)
 * **Credentials**: `harness auth login <provider>` stores an API key in `~/.har/auth.json` (mode 0600), never in a
   repository; `HAR_HOME` relocates `~/.har`, and servers set `HARNESS_NO_USER_DIR=1` and use the environment
   (see [Configuration files and standards](#configuration-files-and-standards)).
-* **Web**: `httpserver.New(h, httpserver.Options{…})` (`hosts/web`) serves threads, runs, approvals,
+* **Web**: `httpapi.New(h, httpapi.Options{…})` (`hosts/httpapi`) serves threads, runs, approvals,
   files and the run's events as SSE (`id` = seq, so reconnects resume without loss), plus a built-in
   browser UI; `cmd/harness-web` runs it (see [Web host](#web-host)).
 * **TUI**: `cmd/harness` is a Bubble Tea terminal client with a print mode (see
@@ -60,19 +60,19 @@ h.Cancel(ctx, "alice", run.ID)
 * **Your own front end**: write it against `hosts/client`, one narrow interface with an in-process and an HTTP
   implementation (see [Front ends and the client contract](#front-ends-and-the-client-contract)).
 * **Single process** (default): store, event log and queue live in memory — nothing to run
-  except the sandbox server. **Multi process**: pass `Options.Store` (`store/pgstore` +
-  `store/pgstore/migrate`) and `Options.Redis` (or any `Options.Infra`, see
+  except the sandbox server. **Multi process**: pass `Options.Store` (`adapters/store/pgstore` +
+  `adapters/store/pgstore/migrate`) and `Options.Redis` (or any `Options.Infra`, see
   [Infrastructure](#infrastructure)); replicas then share runs, logs, sandbox locks
   and skill installs, and a crashed runtime's runs are finished as `interrupted` by another.
 * **Local, no container**: `SANDBOX_BACKEND=local` (optionally `LOCAL_WORKSPACE=dir`, default the current
-  directory) runs the tools on this machine through `sandbox/local`; the agent still sees `/workspace`.
+  directory) runs the tools on this machine through `adapters/sandbox/local`; the agent still sees `/workspace`.
   There is no isolation beyond path confinement of the file API: use it on your own machine or inside a container.
 * **Your own sandbox**: implement `sandbox.Backend` (Create/Connect/Kill) returning
   `sandbox.Instance` (Exec, ReadFile, WriteFile, MkdirAll, List, Stat, Healthy…), prove it with
-  `sandboxtest.RunConformance` and select it with `SANDBOX_BACKEND=<name>` (`sandbox.Register`); see
-  [docs/sandbox-adapters.md](docs/sandbox-adapters.md). `sandbox/sandboxtest` is an in-memory fake for tests.
+  `sandboxtest.RunConformance` and select it with `SANDBOX_BACKEND=<name>` (`backends.Register`); see
+  [docs/sandbox-adapters.md](docs/sandbox-adapters.md). `core/sandbox/sandboxtest` is an in-memory fake for tests.
 * **A website**: [docs/embedding.md](docs/embedding.md) and `examples/website` (own auth, per-user threads, a
-  custom tool, a sandbox only for the requests that need one, `hosts/web` mounted under `/agent/`).
+  custom tool, a sandbox only for the requests that need one, `hosts/httpapi` mounted under `/agent/`).
 * **Your own tools**: `Options.Tools` takes `tools.Provider`s (eino tools, per-run).
 
 ## Coding profile
@@ -224,11 +224,11 @@ The status line shows the model, state, step count, tokens in/out/cached (with t
 and the run's elapsed time. `edit_file` calls show a diff of `oldText`/`newText`. The UI is a pure
 `tui.Model` fed by `client.Event`s through a `tui.Backend` (`tui.ClientBackend` adapts any `client.Client`),
 with one render function per event type and golden tests in `hosts/tui/testdata`
-(`go test ./hosts/tui -update` rewrites them). The package imports only `hosts/client` and `engine/agui`.
+(`go test ./hosts/tui -update` rewrites them). The package imports only `hosts/client` and `core/agui`.
 
 ## Web host
 
-`hosts/web` (package `httpserver`) is a standalone HTTP server for any web front end, with a small browser UI
+`hosts/httpapi` (package `httpapi`) is a standalone HTTP server for any web front end, with a small browser UI
 embedded. `cmd/harness-web` runs it:
 
 ```
@@ -241,7 +241,7 @@ HARNESS_WEB_ADDR=0.0.0.0:8080 HARNESS_WEB_TOKEN=secret OPENSANDBOX_URL=… harne
 `-user` (the single user's login, default `local`). A non-loopback address is refused unless `HARNESS_WEB_TOKEN` is set.
 
 **Routes** (all under `/api`, also served without the prefix; errors are `{"error":{"code","message"}}`; the full
-table with bodies is the doc comment of `hosts/web/httpserver.go`):
+table with bodies is the doc comment of `hosts/httpapi/httpapi.go`):
 
 | Route | |
 |---|---|
@@ -260,7 +260,7 @@ decides who calls; the default is one local user, with an optional static bearer
 `HARNESS_WEB_ORIGINS` is a comma-separated CORS allowlist; other cross-origin requests are refused (403), and without a
 token the server only answers loopback `Host` names. Every response carries a strict CSP (`default-src 'self'`).
 
-**UI** (`hosts/web/ui`, `go:embed`, about 450 lines of plain HTML/CSS/JS, no build step, no CDN): conversation list,
+**UI** (`hosts/httpapi/ui`, `go:embed`, about 450 lines of plain HTML/CSS/JS, no build step, no CDN): conversation list,
 streamed transcript with basic markdown, collapsible tool calls (edit diffs), status line (model, steps, tokens,
 cache %), send / steer / cancel, approval and question prompts, a file panel with downloads, light and dark themes,
 phone-width layout. With a token set the UI asks for it once and keeps it for the tab.
@@ -275,7 +275,7 @@ engine/ features/ store/ sandbox/            the core (a library, no HTTP, no UI
         ▲
    harness.Harness                           the facade
         ▲                       ▲
-  client.InProcess(h, user)   hosts/web      the HTTP API server (JSON + SSE, bearer auth)
+  client.InProcess(h, user)   hosts/httpapi      the HTTP API server (JSON + SSE, bearer auth)
         │                       ▲
         │                client.HTTP(url, token)     Last-Event-ID reconnect with backoff
         └───────────┬───────────┘
@@ -290,7 +290,7 @@ resumable from any seq), `Steer`, `Cancel`, `Resume` (answers a tool approval or
 `ListFiles`, `DownloadFile`; `Sessions`. Errors are `*client.Error` values matched with `errors.Is` against
 `client.ErrNotFound` (also what another user's thread or run gives), `ErrInvalidRequest`, `ErrRunNotActive`,
 `ErrNotSupported`... The DTOs (`Thread`, `Message`, `Run`, `File`, `Session`, `SendOptions`, `ResumeRequest`) are the
-JSON that `hosts/web` serves: the server uses these very types, so the wire format has a single definition. The
+JSON that `hosts/httpapi` serves: the server uses these very types, so the wire format has a single definition. The
 run-creation request also takes an optional `sandbox` string, which the server forwards once the engine supports a
 per-run sandbox.
 
@@ -336,11 +336,11 @@ A run that ends with `RUN_FINISHED` outcome `interrupt` is waiting for the user:
 whose connection cannot be recovered ends with a synthetic `RUN_ERROR` (code `stream_lost`), so a consumer that
 waits for a terminal event never hangs.
 
-**Dependency rules** (`layers_test.go`): `hosts/tui` imports only `hosts/client` and `engine/agui` (never package
-`harness`, `hosts/web`, `hosts/worker`, the store, the features or the sandbox); `hosts/web` and `hosts/worker`
-import no other host; `hosts/client` imports no host above it; `engine/`, `features/`, `store/` and `sandbox/` import no
-host and not the facade, and the facade imports no host. Package `harness` is imported only by the composition roots
-(`cmd/`), `hosts/web`'s server side and `client.InProcess`.
+**Dependency rules** (`layers_test.go`; see [docs/architecture.md](docs/architecture.md)): `core/` imports only `core/`;
+`engine/` imports `core/` and `engine/`; features import `core/`, `engine/` and `coding/`, never another feature;
+`adapters/` and `coding/` do not import each other; `hosts/tui` imports only `hosts/client` and `core/agui`;
+`hosts/httpapi` imports only the facade, `hosts/client` and `core/`; `product/` builds on `hosts/httpapi`; the facade
+imports no host.
 
 ## Sessions
 
@@ -359,7 +359,7 @@ ss.Delete(ctx, "alice", threadID)
 // old runs replay: h.Events(ctx, oldRunID, 0)
 ```
 
-`store/filestore` wraps the in-memory store and appends every change to
+`adapters/store/filestore` wraps the in-memory store and appends every change to
 `<dir>/journal.jsonl` (JSON lines, upsert records, one `write(2)` per batch). Threads, messages,
 runs, plans, summaries, compactions, goals, approvals and event logs persist; artifacts, blobs
 and sandbox ids stay in memory. A `kill -9` loses nothing and can only tear the last
@@ -522,7 +522,7 @@ The sandbox is optional for each run: `RunOptions.Sandbox` (JSON `sandbox` on `P
 first command), `off` (no sandbox tools, the no-sandbox prompt, `Backend.Create` is never called) or `on`
 (like `auto`, but `Send` fails with `ErrInvalidRequest` when the harness has no sandbox). The choice is kept in
 the run record and inherited by the thread's resumed runs. `SANDBOX_BACKEND` names the backend: `local`, `opensandbox`,
-`none` or one registered with `sandbox.Register`. See [docs/embedding.md](docs/embedding.md).
+`none` or one registered with `backends.Register`. See [docs/embedding.md](docs/embedding.md).
 
 ## Infrastructure
 
@@ -544,29 +544,34 @@ not both). To run on NATS or SQS, implement the interfaces above and pass them i
 ## Layout
 
 The repository is one Go module in strict layers; a lower layer never imports a higher one
-(`layers_test.go` enforces it).
+(`layers_test.go` enforces it; the reasoning is in [docs/architecture.md](docs/architecture.md)).
 
 ```
-config/ store/                 foundation: configuration, the persistence interfaces
-engine/agui, syncx, prompts    foundation: AG-UI events, small helpers, prompt text
-sandbox/                       where tools run: contract + manager; local (your machine), opensandbox (remote), sandboxtest (fake)
+core/                          the vocabulary: no dependencies on the rest of the module
+  agui/       AG-UI events           store/     domain types + persistence ports (Store, Full, TeamStore…)
+  sandbox/    sandbox contract, manager, background-job port, sandboxtest (fake)   blobs/   content-store port
+config/ modelinfo/ engine/syncx engine/agent/prompts    settings, model table, small helpers, prompt text
 engine/                        the reusable intelligence
   agent/      the ReAct loop: steps, streaming, retries, steering, hooks, spill, masking
   llm/        OpenAI chat + Responses, Anthropic Messages, retry, test doubles (llm/llmtest)
-  tools/      tool interfaces; tools/sandboxtools = read/write/edit/search/exec/jobs
+  tools/      tool interfaces and the registry
   runtime/    run claiming, heartbeat, sweeper, end-of-run hooks
   eventlog/ queue/ compaction/ approvals/   (interfaces and in-memory implementations only)
-store/{memstore,filestore,pgstore}   persistence adapters (memory, durable local files, Postgres)
-redisx/                        the Redis adapters: queue + bus, event log, coordinator, job list, skill installs
-features/                      optional capabilities a host switches on
-  permissions/ gitsafe/ codecheck/ projectdocs/ explore/ plan/ mcp/
-  memory/ skills/ goals/ titles/ verify/ artifacts/ workspace/
+coding/                        the coding toolset: sandboxtools (read/write/edit/search/exec/jobs), gitsafe, codecheck
+adapters/                      implementations of the ports
+  store/{memstore,filestore,pgstore,teamstore}   memory, durable local files, Postgres
+  redisx/                      Redis: queue + bus, event log, coordinator, job list, skill installs
+  sandbox/{local,opensandbox,backends}   your machine (trusted), OpenSandbox (remote), the SANDBOX_BACKEND registry
+  blobs/s3blobs/               S3-compatible blob store
+features/                      optional capabilities a host switches on (never import each other)
+  permissions/ projectdocs/ explore/ plan/ mcp/ memory/ skills/ goals/ titles/ verify/ artifacts/ (+ artifacts/workspace)
+harness.go feature*.go profiles.go infra.go   the facade: New / Send / Events / Steer / Cancel / Resume, Feature + Builder, profiles, Infra
 hosts/                         ways to drive the engine, and the contract front ends are written against
   client/ (the Client contract: in-process + HTTP; client/clienttest = its conformance suite)
-  tui/ (terminal)   web/ (HTTP + SSE + embedded UI)   worker/ (headless queue consumer + admin endpoints)
-harness.go                     the facade: New / Send / Events / Steer / Cancel / Resume
-feature*.go profiles.go infra.go   Feature + Builder, the built-in features and profiles, Infra
+  tui/ (terminal)   httpapi/ (HTTP + SSE + embedded UI; a Policy/Extension seam)   worker/ (headless queue consumer)
+product/                       the team product on top of hosts/httpapi: OIDC, projects, audit, feed, assistant, connectors, memory review
 cmd/harness  cmd/harness-web  cmd/harness-worker  cmd/bench   binaries;  bench/ longtest/ = benchmark and long-session tests
+web/                           the React app; `make web` builds it into hosts/httpapi/ui (not committed)
 ```
 
 ## Worker
@@ -933,7 +938,7 @@ names are read); the model, sandbox and storage settings keep their descriptive 
 | `HARNESS_MCP_STDIO` | unset | `1` allows MCP servers that are local programs (stdio); local backend only. Wins over the user file's `mcp.allow_stdio` |
 | `HARNESS_USER_INSTRUCTIONS` | unset | `1` reads the host user's `~/.har/AGENTS.md` also with a remote sandbox backend (always read with the local one) |
 | `HARNESS_TRUST_PROJECT` | unset | `1` trusts the current project for this process (its `allow` permission rules and MCP servers apply); see `harness trust` |
-| `HARNESS_TEST_DATABASE_URL` | unset | Postgres used by the `store/pgstore` tests (skipped when unset) |
+| `HARNESS_TEST_DATABASE_URL` | unset | Postgres used by the `adapters/store/pgstore` tests (skipped when unset) |
 | `HARNESS_TEST_S3_ENDPOINT`, `_ACCESS_KEY`, `_SECRET_KEY` | unset | S3-compatible endpoint for the artifact blob tests (skipped when unset) |
 
 Memory entries live in the store; their logical paths (`memories/semantic/facts.md`, ...) may be written with
@@ -948,7 +953,7 @@ because it keeps the symbol table and DWARF). Idle resident memory is about 20 M
 
 ## Status / known gaps
 
-* Requires Go 1.26 (`go test ./...`). `store/pgstore` tests need a Postgres (`HARNESS_TEST_DATABASE_URL`) and skip otherwise.
+* Requires Go 1.26 (`go test ./...`). `adapters/store/pgstore` tests need a Postgres (`HARNESS_TEST_DATABASE_URL`) and skip otherwise.
 * Project skills are read from the host directories of the local backend. A remote sandbox's own
   `/workspace/.har/skills` is not discovered (the registry is global and read at start-up, a remote
   workspace is per thread). Follow-up.

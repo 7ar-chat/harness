@@ -18,9 +18,9 @@ import (
 
 	"github.com/GhaziBenDahmane/harness"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/engine/agui"
+	"github.com/GhaziBenDahmane/harness/core/agui"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // permRig is a harness on the local backend with a scripted model: the model

@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/engine/agui"
+	"github.com/GhaziBenDahmane/harness/core/agui"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // EndOfRunHook is the runtime hook that snapshots /workspace when a run ends

@@ -11,11 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/core/agui"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/agui"
 	"github.com/GhaziBenDahmane/harness/engine/eventlog"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 var (
@@ -106,7 +106,7 @@ type Purger interface {
 // Runtime is a run worker.
 type Runtime struct {
 	opts  Options
-	store store.Store
+	store store.Full
 	log   eventlog.Log
 	q     RunQueue
 	bus   queue.Bus
@@ -160,7 +160,7 @@ func (r *Runtime) Health() error {
 }
 
 // New builds a runtime. locks is used for the sweeper lock and run liveness (nil: single process).
-func New(opts Options, st store.Store, log eventlog.Log, q RunQueue, bus queue.Bus, exec Executor, locks Locks) *Runtime {
+func New(opts Options, st store.Full, log eventlog.Log, q RunQueue, bus queue.Bus, exec Executor, locks Locks) *Runtime {
 	if opts.Concurrency < 1 {
 		opts.Concurrency = 1
 	}

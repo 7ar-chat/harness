@@ -4,15 +4,15 @@ WORKDIR /src
 COPY web/package.json web/package-lock.json web/
 RUN cd web && npm ci
 COPY web web
-# vite builds into ../hosts/web/ui, which the Go binary embeds
-RUN mkdir -p hosts/web && cd web && npm run build
+# vite builds into ../hosts/httpapi/ui, which the Go binary embeds
+RUN mkdir -p hosts/httpapi && cd web && npm run build
 
 FROM golang:1.26-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-COPY --from=web /src/hosts/web/ui hosts/web/ui
+COPY --from=web /src/hosts/httpapi/ui hosts/httpapi/ui
 RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/harness-web ./cmd/harness-web
 
 FROM debian:bookworm-slim

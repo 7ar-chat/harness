@@ -7,8 +7,8 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // Harness v3 §3: images are sent once, at most maxRequestImages /

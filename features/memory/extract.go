@@ -12,9 +12,9 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // Extraction. When a run completes, a model reads it and proposes the durable knowledge it contains:

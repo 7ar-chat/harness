@@ -9,13 +9,13 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/GhaziBenDahmane/harness/engine/agui"
+	"github.com/GhaziBenDahmane/harness/adapters/redisx"
+	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
+	"github.com/GhaziBenDahmane/harness/core/agui"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/features/artifacts"
-	"github.com/GhaziBenDahmane/harness/redisx"
-	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/store"
-	"github.com/GhaziBenDahmane/harness/store/memstore"
 )
 
 func TestSnapshotSaysOnceWhenAFileIsTooLargeToSave(t *testing.T) {

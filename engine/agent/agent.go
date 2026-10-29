@@ -18,13 +18,13 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/google/uuid"
 
-	"github.com/GhaziBenDahmane/harness/engine/agui"
+	"github.com/GhaziBenDahmane/harness/core/agui"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/compaction"
 	"github.com/GhaziBenDahmane/harness/engine/eventlog"
 	"github.com/GhaziBenDahmane/harness/engine/llm"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // SteerPrefix prefixes steer messages in the model history.
@@ -138,7 +138,7 @@ type runState struct {
 	base    model.ToolCallingChatModel
 	h       harnessState
 	g       guardState
-	v3      v3State // harness v3 tool-side state (tool images, verification…)
+	v3      toolRunState // harness v3 tool-side state (tool images, verification…)
 }
 
 // Run executes the loop. It returns ctx.Err() when cancelled, *Error for run failures.

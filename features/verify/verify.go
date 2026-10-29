@@ -15,11 +15,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/tools/sandboxtools"
-	"github.com/GhaziBenDahmane/harness/features/goals"
-	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // Checker is the command checking one file type; {file} in Command is
@@ -485,7 +484,7 @@ const maxEvidence = 8
 // deliverables of every turn since the goal was set (g; nil: the run's turn)
 // with their latest checker result and the start of their extracted text
 // (the live sandbox only: none is created for it).
-func (v *Verifier) Evidence(ctx context.Context, run *store.Run, g *store.Goal) []goals.Evidence {
+func (v *Verifier) Evidence(ctx context.Context, run *store.Run, g *store.Goal) []store.GoalEvidence {
 	var ds []agent.Deliverable
 	if g == nil {
 		ds = v.Deliverables(ctx, run)
@@ -504,9 +503,9 @@ func (v *Verifier) Evidence(ctx context.Context, run *store.Run, g *store.Goal) 
 	if v.o.Sandbox != nil {
 		sb, _ = v.o.Sandbox.Get(ctx, run.ThreadID)
 	}
-	out := make([]goals.Evidence, 0, len(ds))
+	out := make([]store.GoalEvidence, 0, len(ds))
 	for _, d := range ds {
-		e := goals.Evidence{Path: d.Path, Checker: d.Checker, OK: d.OK, Summary: d.Summary}
+		e := store.GoalEvidence{Path: d.Path, Checker: d.Checker, OK: d.OK, Summary: d.Summary}
 		if sb != nil {
 			if text, err := sandboxtools.ExtractText(ctx, sb, d.Path, EvidenceChars); err == nil {
 				e.Text = text

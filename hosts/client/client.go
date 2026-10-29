@@ -26,8 +26,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/modelinfo"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // Client is what a front end needs from a harness.

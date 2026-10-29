@@ -7,12 +7,12 @@ import (
 	"os"
 
 	"github.com/GhaziBenDahmane/harness"
+	"github.com/GhaziBenDahmane/harness/adapters/redisx"
+	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
+	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore"
+	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore/migrate"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
-	"github.com/GhaziBenDahmane/harness/redisx"
-	"github.com/GhaziBenDahmane/harness/store/memstore"
-	"github.com/GhaziBenDahmane/harness/store/pgstore"
-	"github.com/GhaziBenDahmane/harness/store/pgstore/migrate"
 )
 
 // Wiring says what the harness of a worker is connected to.

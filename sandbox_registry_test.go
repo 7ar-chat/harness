@@ -1,18 +1,19 @@
 package harness_test
 
 import (
+	"github.com/GhaziBenDahmane/harness/adapters/sandbox/backends"
 	"testing"
 
 	"github.com/GhaziBenDahmane/harness"
 	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 )
 
 func TestSandboxBackendSelectsARegisteredAdapter(t *testing.T) {
 	// Arrange: a host registers its adapter, the environment names it
-	sandbox.Register("harness-registry-test", func(*config.Config) (sandbox.Backend, error) { return sandboxtest.NewBackend(), nil })
+	backends.Register("harness-registry-test", func(*config.Config) (sandbox.Backend, error) { return sandboxtest.NewBackend(), nil })
 	cfg := featureConfig(t, map[string]string{"SANDBOX_BACKEND": "harness-registry-test"})
 
 	// Act

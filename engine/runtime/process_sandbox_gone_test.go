@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // killed removes the thread's sandbox at the provider while this runtime still
 // holds its handle, checked healthy less than 30 s ago (no new process).
-func (v *v2rig) killed() string {
+func (v *scriptedRig) killed() string {
 	v.t.Helper()
 	id := v.sandbox().ID()
 	if err := v.backend.Kill(context.Background(), id); err != nil {
@@ -23,7 +23,7 @@ func (v *v2rig) killed() string {
 func TestASandboxKilledRightAfterARunIsReplacedOnTheNextRun(t *testing.T) {
 	// A sandbox that died within the health-check window is detected on its first failing call: the next run gets a new sandbox with the workspace restored, and no tool fails.
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "write_file", `{"path":"keep.txt","content":"saved"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Done")},
 		llmtest.Turn{Chunks: streamedCall("call_2", "execute_command", `{"command":"ls"}`)},
@@ -63,7 +63,7 @@ func TestASandboxKilledRightAfterARunIsReplacedOnTheNextRun(t *testing.T) {
 func TestEndOfRunSnapshotOfAKilledSandboxForgetsIt(t *testing.T) {
 	// When only the end-of-run snapshot meets the dead sandbox, the thread forgets it (the next tool call creates a new one) without creating a sandbox for nothing.
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "write_file", `{"path":"keep.txt","content":"saved"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Done")},
 		llmtest.Turn{Chunks: llmtest.Text("Nothing to do")},
@@ -90,7 +90,7 @@ func TestEndOfRunSnapshotOfAKilledSandboxForgetsIt(t *testing.T) {
 func TestLoadSkillOnAKilledSandboxIsInstalledInTheNextOne(t *testing.T) {
 	// load_skill after the thread's sandbox died starts no sandbox; the next command's new sandbox gets the skill installed and the model is told about the restore.
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "write_file", `{"path":"keep.txt","content":"saved"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Done")},
 		llmtest.Turn{Chunks: streamedCall("call_2", "load_skill", `{"name":"fixture-doc"}`)},

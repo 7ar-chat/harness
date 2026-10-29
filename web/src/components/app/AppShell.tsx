@@ -1,3 +1,4 @@
+import { Logo } from "@/components/app/Logo";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import { Bot, Brain, ChevronRight, LayoutDashboard, LogOut, Monitor, Moon, Plus, Search, Sun, UserCog, WifiOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -170,8 +171,9 @@ function AppSidebar({ openId, openProject }: { openId?: string; openProject?: st
     <Sidebar>
       <SidebarHeader>
         <div className="flex items-center justify-between px-2 pt-1">
-          <Link to="/" className="text-base font-semibold tracking-tight" onClick={close}>
-            Harness
+          <Link to="/" className="flex items-center gap-1.5 text-base font-semibold tracking-tight" onClick={close}>
+            <Logo className="size-5" />
+            har
           </Link>
           <div className="flex items-center gap-1">
             {conn === "offline" ? (
@@ -320,7 +322,8 @@ export function AppShell() {
         <SidebarInset className="min-h-0 min-w-0">
           <header className="flex h-11 shrink-0 items-center gap-2 border-b px-3 md:hidden">
             <SidebarTrigger aria-label="Open navigation" />
-            <span className="text-sm font-medium">Harness</span>
+            <Logo className="size-4" />
+            <span className="text-sm font-medium">har</span>
           </header>
           <div className="min-h-0 flex-1 overflow-hidden">
             <ErrorBoundary reset={loc.pathname}>

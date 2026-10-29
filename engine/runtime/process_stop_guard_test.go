@@ -7,9 +7,9 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 const emptyNudge = "You stopped without answering. Continue the task, or give the user a short summary of what you did and found."
@@ -263,7 +263,7 @@ func TestProcessDoesNotRemindAboutAFinishedPlanOrAPlanOfAnEarlierRun(t *testing.
 func TestProcessKeepsAcceptingSteersWhileAnAnswerNoteContinuesTheRun(t *testing.T) {
 	// The answer checker's corrective note (dangling file link) is also decided before steers are closed.
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: llmtest.Text("See [x](workspace-file:///workspace/outputs/x.pdf)")},
 		llmtest.Turn{Chunks: llmtest.Text("No file was produced.")},
 	)

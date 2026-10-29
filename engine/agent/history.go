@@ -3,9 +3,9 @@ package agent
 import (
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/compaction"
 	"github.com/GhaziBenDahmane/harness/engine/llm"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // BuildHistory turns persisted messages into a provider-valid model history:

@@ -4,3 +4,12 @@
 .env
 .claude/
 bin/
+
+# local junk
+/Library/
+/out/
+/outputs/
+
+# the browser UI is built from web/ (make web); only the placeholder is tracked
+/hosts/httpapi/ui/*
+!/hosts/httpapi/ui/.gitkeep

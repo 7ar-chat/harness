@@ -24,10 +24,11 @@ import (
 	"time"
 
 	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/hosts/client"
-	httpserver "github.com/GhaziBenDahmane/harness/hosts/web"
+	"github.com/GhaziBenDahmane/harness/hosts/httpapi"
 	"github.com/GhaziBenDahmane/harness/modelinfo"
-	"github.com/GhaziBenDahmane/harness/store"
+	"github.com/GhaziBenDahmane/harness/product"
 )
 
 func main() {
@@ -73,6 +74,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if err != nil {
 		return fail(stderr, err)
 	}
+	if err := checkLocalSandbox(cfg, *team, *addr, getenv); err != nil {
+		return fail(stderr, err)
+	}
 	if *model == "" {
 		*model = cfg.LLMDefaultModel
 	}
@@ -89,14 +93,16 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	defer cancel()
 	go func() { _ = h.Run(hctx) }()
 
-	opts := httpserver.Options{
+	opts := httpapi.Options{
 		Token: token, LocalUser: *user, Models: cfg.LLMModels, DefaultModel: *model,
 		AllowedOrigins: splitList(getenv("HARNESS_WEB_ORIGINS")),
-		Team:           teamStore, OIDC: oidcCfg, Supervisor: sup, GitHub: bt.github,
+	}
+	prod := product.Options{
+		Team: teamStore, OIDC: oidcCfg, Supervisor: sup, GitHub: bt.github,
 		PublicURL: getenv("HARNESS_PUBLIC_URL"), SecretKey: secretKey(getenv, oidcCfg),
 	}
 	if tok := getenv("TELEGRAM_BOT_TOKEN"); tok != "" && *team {
-		opts.Telegram = &httpserver.Telegram{Token: tok, Username: strings.TrimPrefix(getenv("TELEGRAM_BOT_USERNAME"), "@")}
+		prod.Telegram = &product.Telegram{Token: tok, Username: strings.TrimPrefix(getenv("TELEGRAM_BOT_USERNAME"), "@")}
 	}
 	if *devUsers {
 		if !*team || oidcCfg != nil || !isLoopback(*addr) {
@@ -117,7 +123,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if err != nil {
 		return fail(stderr, err)
 	}
-	handler, err := httpserver.NewServer(h, opts)
+	handler, err := product.New(h, opts, prod)
 	if err != nil {
 		return fail(stderr, err)
 	}
@@ -139,7 +145,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 }
 
 // secretKey is the key that encrypts connector tokens: HARNESS_SECRET_KEY, else the OIDC session key.
-func secretKey(getenv func(string) string, oidc *httpserver.OIDCConfig) []byte {
+func secretKey(getenv func(string) string, oidc *product.OIDCConfig) []byte {
 	if k := getenv("HARNESS_SECRET_KEY"); k != "" {
 		return []byte(k)
 	}
@@ -151,7 +157,7 @@ func secretKey(getenv func(string) string, oidc *httpserver.OIDCConfig) []byte {
 
 // oidcFromEnv reads OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_REDIRECT_URL,
 // OIDC_SCOPES, OIDC_LOGIN_CLAIM, OIDC_ALLOWED_DOMAINS and OIDC_SESSION_KEY. nil without an issuer.
-func oidcFromEnv(getenv func(string) string, team bool) (*httpserver.OIDCConfig, error) {
+func oidcFromEnv(getenv func(string) string, team bool) (*product.OIDCConfig, error) {
 	issuer := getenv("OIDC_ISSUER")
 	if issuer == "" {
 		return nil, nil
@@ -159,7 +165,7 @@ func oidcFromEnv(getenv func(string) string, team bool) (*httpserver.OIDCConfig,
 	if !team {
 		return nil, errors.New("OIDC_ISSUER needs team mode (-team)")
 	}
-	c := &httpserver.OIDCConfig{
+	c := &product.OIDCConfig{
 		Issuer: issuer, ClientID: getenv("OIDC_CLIENT_ID"), ClientSecret: getenv("OIDC_CLIENT_SECRET"),
 		RedirectURL: getenv("OIDC_REDIRECT_URL"), Scopes: splitList(getenv("OIDC_SCOPES")),
 		LoginClaim: getenv("OIDC_LOGIN_CLAIM"), AllowedDomains: splitList(getenv("OIDC_ALLOWED_DOMAINS")),
@@ -214,7 +220,7 @@ func fail(stderr io.Writer, err error) int {
 
 // devAuthenticator acts as the user in the X-Harness-User header (else def),
 // recording them as known users. Only for loopback development servers.
-func devAuthenticator(ts store.TeamStore, def string) httpserver.Authenticator {
+func devAuthenticator(ts store.TeamStore, def string) httpapi.Authenticator {
 	return func(r *http.Request) (string, error) {
 		login := strings.ToLower(strings.TrimSpace(r.Header.Get("X-Harness-User")))
 		if login == "" {
@@ -228,4 +234,18 @@ func devAuthenticator(ts store.TeamStore, def string) httpserver.Authenticator {
 		}
 		return login, nil
 	}
+}
+
+// checkLocalSandbox refuses the local sandbox backend where more than one person (or the network) can reach the
+// agent: its commands run on this machine with this user's rights, with no isolation beyond the approval policy.
+// A shared server needs a real sandbox (SANDBOX_BACKEND=opensandbox); HARNESS_ALLOW_LOCAL_SANDBOX=1 accepts the risk.
+func checkLocalSandbox(cfg *config.Config, team bool, addr string, getenv func(string) string) error {
+	if cfg.SandboxBackendName() != config.BackendLocal || getenv("HARNESS_ALLOW_LOCAL_SANDBOX") == "1" {
+		return nil
+	}
+	if team || !isLoopback(addr) {
+		return errors.New("SANDBOX_BACKEND=local runs the agent's commands on this machine without isolation: " +
+			"not allowed in team mode or on a non-loopback address; use SANDBOX_BACKEND=opensandbox, or set HARNESS_ALLOW_LOCAL_SANDBOX=1 to accept the risk")
+	}
+	return nil
 }

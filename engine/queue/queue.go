@@ -7,7 +7,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/store"
+	"github.com/GhaziBenDahmane/harness/core/store"
 )
 
 const (

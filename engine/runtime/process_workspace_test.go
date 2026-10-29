@@ -7,23 +7,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/adapters/redisx"
+	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/engine/tools/sandboxtools"
+	"github.com/GhaziBenDahmane/harness/features/artifacts/workspace"
 	"github.com/GhaziBenDahmane/harness/features/plan"
-	"github.com/GhaziBenDahmane/harness/features/workspace"
-	"github.com/GhaziBenDahmane/harness/redisx"
-	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // wsRig is the v2 rig with the workspace checkpoints wired like cmd/work
 // (real git / tar scripts on the in-memory sandboxes).
 type wsRig struct {
-	*v2rig
+	*scriptedRig
 	ws *workspace.Service
 }
 
@@ -34,7 +34,7 @@ func newWSRig(t *testing.T, turns ...llmtest.Turn) *wsRig {
 			t.Skipf("%s not installed", tool)
 		}
 	}
-	r := &wsRig{v2rig: newV2Rig(t, false, turns...)}
+	r := &wsRig{scriptedRig: newScriptedRig(t, false, turns...)}
 	r.backend.OnCreate = func(sb *sandboxtest.Sandbox) { sb.SetExec(sandboxtest.FindExec(sb, sandboxtest.ShellExec(sb))) }
 	r.ws = workspace.New(nil, r.st, r.st, r.arts, workspace.Options{})
 	h := &r.agent.Harness

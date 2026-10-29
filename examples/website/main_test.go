@@ -14,8 +14,8 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 )
 
 func newSite(t *testing.T, model *llmtest.Model, backend *sandboxtest.Backend) *httptest.Server {

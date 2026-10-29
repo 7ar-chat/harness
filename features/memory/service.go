@@ -17,7 +17,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/GhaziBenDahmane/harness/store"
+	"github.com/GhaziBenDahmane/harness/core/store"
 )
 
 // Limits. Work bounds top_k to 1..50 and a memory file to 200 000 bytes

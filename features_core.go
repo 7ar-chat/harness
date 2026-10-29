@@ -8,19 +8,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/coding/codecheck"
+	"github.com/GhaziBenDahmane/harness/coding/gitsafe"
+	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/engine/approvals"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/engine/tools/sandboxtools"
-	"github.com/GhaziBenDahmane/harness/features/codecheck"
 	"github.com/GhaziBenDahmane/harness/features/explore"
-	"github.com/GhaziBenDahmane/harness/features/gitsafe"
 	"github.com/GhaziBenDahmane/harness/features/mcp"
 	"github.com/GhaziBenDahmane/harness/features/permissions"
 	"github.com/GhaziBenDahmane/harness/features/plan"
 	"github.com/GhaziBenDahmane/harness/features/projectdocs"
-	"github.com/GhaziBenDahmane/harness/sandbox"
 )
 
 // Names of the built-in features (Feature.Name, Builder.Has, Builder.Require).

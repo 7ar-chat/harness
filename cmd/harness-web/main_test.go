@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/GhaziBenDahmane/harness/config"
 )
 
 // TestMain keeps the tests from downloading the model price table.
@@ -83,5 +85,34 @@ func TestServesTheUIUntilTheContextEnds(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("the server did not stop")
+	}
+}
+
+func TestTheLocalSandboxIsRefusedWhereTheAgentIsShared(t *testing.T) {
+	cases := []struct {
+		name    string
+		backend string
+		team    bool
+		addr    string
+		allow   string
+		refused bool
+	}{
+		{"single user on loopback", config.BackendLocal, false, "127.0.0.1:8080", "", false},
+		{"team mode", config.BackendLocal, true, "127.0.0.1:8080", "", true},
+		{"reachable address", config.BackendLocal, false, "0.0.0.0:8080", "", true},
+		{"accepted risk", config.BackendLocal, true, "0.0.0.0:8080", "1", false},
+		{"real sandbox in team mode", config.BackendOpenSandbox, true, "0.0.0.0:8080", "", false},
+	}
+	for _, c := range cases {
+		cfg := &config.Config{SandboxBackend: c.backend}
+		err := checkLocalSandbox(cfg, c.team, c.addr, func(k string) string {
+			if k == "HARNESS_ALLOW_LOCAL_SANDBOX" {
+				return c.allow
+			}
+			return ""
+		})
+		if (err != nil) != c.refused {
+			t.Errorf("%s: err = %v, want refused=%v", c.name, err, c.refused)
+		}
 	}
 }

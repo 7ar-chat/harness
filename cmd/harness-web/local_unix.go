@@ -3,9 +3,9 @@
 package main
 
 import (
+	"github.com/GhaziBenDahmane/harness/adapters/sandbox/local"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/sandbox/local"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
 )
 
 // teamLocalBackend is the local sandbox with a directory of its own per thread

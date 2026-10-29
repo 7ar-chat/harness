@@ -5,8 +5,8 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/approvals"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 func TestIsRiskyMirrorsWorksRule(t *testing.T) {

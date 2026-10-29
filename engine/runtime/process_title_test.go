@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/features/titles"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // untitled creates a thread titled automatically from its first message, like POST /threads/{id}/runs.

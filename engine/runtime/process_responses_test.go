@@ -7,10 +7,10 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/compaction"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/llm/responses"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // Stream R: models on the Responses API carry their encrypted reasoning items

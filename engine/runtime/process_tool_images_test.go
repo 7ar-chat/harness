@@ -6,8 +6,8 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 )
 
 // toolImageParts counts the image parts of a call's messages and returns the user message holding them.
@@ -28,7 +28,7 @@ func toolImageParts(msgs []*schema.Message) (int, *schema.Message) {
 func TestImagesShownByToolsReachTheNextCallOnly(t *testing.T) {
 	// A page rendered by view_file is sent as an image part with the next model call of a vision model, then replaced by a text stub naming it (§3).
 	// Arrange
-	r := newV2Rig(t, true,
+	r := newScriptedRig(t, true,
 		llmtest.Turn{Chunks: streamedCall("v1", "view_file", `{"path":"outputs/deck.pptx","pages":"1"}`)},
 		llmtest.Turn{Chunks: streamedCall("l1", "list_files", `{}`)},
 		llmtest.Turn{Chunks: llmtest.Text("The slide looks right.")},
@@ -74,7 +74,7 @@ func TestImagesShownByToolsReachTheNextCallOnly(t *testing.T) {
 func TestNonVisionModelsGetNoImageParts(t *testing.T) {
 	// A model outside LLM_VISION_MODELS never receives image parts: read_file of an image says it cannot view images.
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("r1", "read_file", `{"path":"chart.png"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("ok")},
 	)

@@ -3,7 +3,7 @@ package runtime_test
 import (
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/store"
+	"github.com/GhaziBenDahmane/harness/core/store"
 )
 
 func TestProcessPassesReasoningEffortToReasoningModels(t *testing.T) {

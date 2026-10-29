@@ -7,9 +7,9 @@ import (
 
 	goopenai "github.com/meguminnnnnnnnn/go-openai"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 func TestSteerAfterFinalDrainIsRefused(t *testing.T) {

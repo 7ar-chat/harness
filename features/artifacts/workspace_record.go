@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/store"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/store"
 )
 
 // RecordPath records the current state of one workspace file of the thread's

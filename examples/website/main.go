@@ -40,13 +40,13 @@ import (
 	"github.com/cloudwego/eino/components/tool/utils"
 
 	"github.com/GhaziBenDahmane/harness"
+	"github.com/GhaziBenDahmane/harness/adapters/store/filestore"
 	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
-	httpserver "github.com/GhaziBenDahmane/harness/hosts/web"
-	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/store"
-	"github.com/GhaziBenDahmane/harness/store/filestore"
+	"github.com/GhaziBenDahmane/harness/hosts/httpapi"
 )
 
 // Orders is the site's own data the agent may read: in a real site this is
@@ -120,7 +120,7 @@ func (s *site) handler() http.Handler {
 	// Everything hosts/web serves (threads, runs, SSE events, files...) under
 	// /agent/api/...; the site's session is the only way in. NoUI because the
 	// site has its own front end.
-	mux.Handle("/agent/", http.StripPrefix("/agent", httpserver.New(s.h, httpserver.Options{
+	mux.Handle("/agent/", http.StripPrefix("/agent", httpapi.New(s.h, httpapi.Options{
 		Authenticate: authenticate, DefaultModel: s.model, NoUI: true,
 	})))
 	mux.HandleFunc("GET /my/threads", s.requireUser(s.myThreads))

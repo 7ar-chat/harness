@@ -2,8 +2,8 @@
 
 The harness runs commands and touches files in a sandbox, always through one
 small contract (`sandbox.Backend`). OpenSandbox is the adapter that ships for
-remote isolation, `sandbox/local` runs on the developer's machine, and
-`sandbox/sandboxtest` fakes one for tests. This page is for whoever writes the
+remote isolation, `adapters/sandbox/local` runs on the developer's machine, and
+`core/sandbox/sandboxtest` fakes one for tests. This page is for whoever writes the
 next adapter (E2B, Firecracker, Kubernetes jobs, a REST exec service...): the
 contract, what the image must contain, how sandboxes live and die, the security
 rules, a worked example, and how to register it.
@@ -72,7 +72,7 @@ installed skills, `/tmp` for job records). Two things matter:
 
 * The file API is an implementation detail of your provider and may follow
   symlinks inside the sandbox: a container is the boundary. A **host-level**
-  adapter (like `sandbox/local`, no container) must confine the file API to its
+  adapter (like `adapters/sandbox/local`, no container) must confine the file API to its
   roots itself and refuse `..` and symlink escapes (`ConformanceOptions.Confined`
   checks it).
 * Anything that must be safe against a symlink planted by the agent does not use
@@ -83,7 +83,7 @@ installed skills, `/tmp` for job records). Two things matter:
 
 Besides plain user commands, the harness runs fixed scripts (first line
 `# work:<name>`) through `Exec`. They are the real requirement on the image.
-`sandbox/local` and `sandboxtest` recognise the markers and answer natively;
+`adapters/sandbox/local` and `sandboxtest` recognise the markers and answer natively;
 a remote adapter just executes them.
 
 | Script (marker) | Source | Used by | Needs |
@@ -91,12 +91,12 @@ a remote adapter just executes them.
 | `place` / `unstage` | `sandbox/place.go` | `write_file`, `edit_file`, uploads: move a staged upload onto the target unless the target or a parent is a symlink (exit 4) | bash, `realpath -m`, `dirname`, `mkdir -p`, `mv -f -T`, `rm` |
 | `realpath` | `sandbox/realpath.go` | the files API and the approval gate: resolve real paths | bash, `realpath -m -z`, `tr` |
 | `read-files` | `sandbox/readfiles.go` | read-before-edit cache, checkpoint diffs | bash, `realpath -e`, `stat -c '%s %Y'`, `head -c`, `base64 -w0` |
-| `job-start` / `job-wait` / `job-status` / `job-kill` | `engine/tools/sandboxtools/exec.go` | background jobs (`execute_command` past its timeout, `background:true`, `job_output`, `job_kill`) | bash, `setsid`, `base64 -d`/`-w0`, `tail -F -s`, `stat -c`, `head -c`/`tail -c`, `kill`, `sleep` with fractions; optional `pkill` |
-| `sweep` | `engine/tools/sandboxtools/sandboxtools.go` | removes stale staged uploads and job records | `find -mmin -delete`, `ls -1dt`, `tail -n +N` |
-| `search` | `engine/tools/sandboxtools/search.go` | `search_files` | `rg` (ripgrep) preferred, else `python3` |
+| `job-start` / `job-wait` / `job-status` / `job-kill` | `coding/sandboxtools/exec.go` | background jobs (`execute_command` past its timeout, `background:true`, `job_output`, `job_kill`) | bash, `setsid`, `base64 -d`/`-w0`, `tail -F -s`, `stat -c`, `head -c`/`tail -c`, `kill`, `sleep` with fractions; optional `pkill` |
+| `sweep` | `coding/sandboxtools/sandboxtools.go` | removes stale staged uploads and job records | `find -mmin -delete`, `ls -1dt`, `tail -n +N` |
+| `search` | `coding/sandboxtools/search.go` | `search_files` | `rg` (ripgrep) preferred, else `python3` |
 | `extract` / `render` | `read.go`, `view.go` | `read_file`/`view_file` on PDF and Office files | `python3` with `pypdf`, `markitdown`; `pdftotext`, `pdftoppm` (poppler); `soffice` (LibreOffice) for legacy formats and rendering |
-| workspace checkpoints | `features/workspace` | per-thread git history, archive and restore | `git`, `tar`, `gzip` |
-| code checks (coding profile) | `features/codecheck` | syntax check after `write_file` | `python3`, `node` as configured by `AGENT_CODE_CHECKS` |
+| workspace checkpoints | `features/artifacts/workspace` | per-thread git history, archive and restore | `git`, `tar`, `gzip` |
+| code checks (coding profile) | `coding/codecheck` | syntax check after `write_file` | `python3`, `node` as configured by `AGENT_CODE_CHECKS` |
 
 ## 3. Image requirements
 
@@ -234,18 +234,18 @@ It creates real sandboxes (a few), so gate it behind your provider's env var lik
   known-stamp and the byte budget.
 
 A second suite runs the real tools on your adapter:
-`engine/tools/sandboxtools/conformance.Run(t, newBackend, memstore.New())`
+`coding/sandboxtools/conformance.Run(t, newBackend, memstore.New())`
 (execute_command, write/read/edit/list, search_files, a background job to
 completion and `job_kill` of its process tree).
 
-Run both against `sandbox/local` (unix; protocol scripts answered natively), the
+Run both against `adapters/sandbox/local` (unix; protocol scripts answered natively), the
 in-memory fake (`TestFakeBackendConformance`: Exec subtests skipped, it has no
-shell) and `sandbox/example` (through a real HTTP service). The live OpenSandbox
+shell) and `examples/sandbox-adapter` (through a real HTTP service). The live OpenSandbox
 run is the reference for a remote adapter.
 
 ## 7. Worked example: a generic REST exec service
 
-`sandbox/example/rest.go` (about 265 lines with comments, 190 of code) adapts a service with
+`examples/sandbox-adapter/rest.go` (about 265 lines with comments, 190 of code) adapts a service with
 these endpoints (see the package comment for the exact JSON):
 
 ```
@@ -268,8 +268,8 @@ The parts worth copying:
   is an error (never a guessed exit code).
 * `ReadFile` returns the data and the size from a header; the service applies `max`.
 
-`sandbox/example/rest_test.go` starts a small in-process fake of that service
-(about 130 lines, backed by `sandbox/local` for the shell and files) and runs
+`examples/sandbox-adapter/rest_test.go` starts a small in-process fake of that service
+(about 130 lines, backed by `adapters/sandbox/local` for the shell and files) and runs
 `sandboxtest.RunConformanceWith` against the adapter, plus a test of the error
 mapping. It is also the template for your own test: replace the fake with your
 provider's test account behind an env var.
@@ -287,12 +287,13 @@ Two ways, both ending in `harness.Options.Backend`:
 package myadapter
 
 import (
+    "github.com/GhaziBenDahmane/harness/adapters/sandbox/backends"
     "github.com/GhaziBenDahmane/harness/config"
-    "github.com/GhaziBenDahmane/harness/sandbox"
+    "github.com/GhaziBenDahmane/harness/core/sandbox"
 )
 
 func init() {
-    sandbox.Register("rest", func(cfg *config.Config) (sandbox.Backend, error) {
+    backends.Register("rest", func(cfg *config.Config) (sandbox.Backend, error) {
         return &Backend{BaseURL: os.Getenv("REST_SANDBOX_URL")}, nil
     })
 }
@@ -303,7 +304,7 @@ then, in your own `main` (or the module's `cmd`), blank-import the package:
 Built-ins: `local` (unix only: registered from the facade behind a build tag),
 `opensandbox` (also selected when only `OPENSANDBOX_URL` is set) and `none`.
 An unknown name fails at start with the list of registered ones;
-`sandbox.Register` panics on a duplicate name. Names are case-insensitive.
+`backends.Register` panics on a duplicate name. Names are case-insensitive.
 
 A registered adapter should read its own settings from the environment (or
 extend `config.Config` in your fork); `cfg.SandboxEgressAllowlist`,

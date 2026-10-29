@@ -4,7 +4,7 @@ package main
 
 import (
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
 )
 
 func teamLocalBackend(*config.Config) (sandbox.Backend, error) { return nil, nil }

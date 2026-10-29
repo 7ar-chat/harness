@@ -10,11 +10,11 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/engine/agui"
+	"github.com/GhaziBenDahmane/harness/core/agui"
+	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/longtest"
-	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 type modeRun struct {

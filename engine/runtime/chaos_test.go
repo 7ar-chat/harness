@@ -9,11 +9,11 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/GhaziBenDahmane/harness/adapters/redisx"
+	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
-	"github.com/GhaziBenDahmane/harness/redisx"
-	"github.com/GhaziBenDahmane/harness/store"
-	"github.com/GhaziBenDahmane/harness/store/memstore"
 )
 
 // viaSlowRedis routes the rig's event log and queue through a proxy that can

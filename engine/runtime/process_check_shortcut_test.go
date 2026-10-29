@@ -18,7 +18,7 @@ import (
 
 // shortcutRig is verifyRig with the thread's artifacts wired into the
 // verifier: decks have a baseline, documents get the citation fixture.
-func shortcutRig(t *testing.T, turns ...llmtest.Turn) *v2rig {
+func shortcutRig(t *testing.T, turns ...llmtest.Turn) *scriptedRig {
 	t.Helper()
 	r := verifyRig(t, false, turns...)
 	t.Setenv("CHECK_LOG", filepath.Join(t.TempDir(), "check.log"))
@@ -60,7 +60,7 @@ func pptxBytes(t *testing.T) []byte {
 }
 
 // execCount counts the sandbox commands containing s.
-func execCount(r *v2rig, s string) int {
+func execCount(r *scriptedRig, s string) int {
 	n := 0
 	for _, e := range r.sandbox().Execs() {
 		n += strings.Count(e.Command, s)

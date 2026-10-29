@@ -7,8 +7,8 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // dumpCallUsing is dumpCall whose model call reports prompt tokens of its request.

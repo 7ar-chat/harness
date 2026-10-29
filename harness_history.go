@@ -12,9 +12,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/GhaziBenDahmane/harness/engine/agui"
-	"github.com/GhaziBenDahmane/harness/features/gitsafe"
-	"github.com/GhaziBenDahmane/harness/store"
+	"github.com/GhaziBenDahmane/harness/coding/gitsafe"
+	"github.com/GhaziBenDahmane/harness/core/agui"
+	"github.com/GhaziBenDahmane/harness/core/store"
 )
 
 // Errors of the history operations (Compact, Undo, Redo, Fork).

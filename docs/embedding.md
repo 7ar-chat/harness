@@ -10,7 +10,7 @@ an optional, per-run resource, behind an adapter ([sandbox-adapters.md](sandbox-
 
 ## 1. Pick a shape
 
-| | Library only | Library + `hosts/web` | Web + workers |
+| | Library only | Library + `hosts/httpapi` | Web + workers |
 |---|---|---|---|
 | You write | endpoints, SSE relay | auth + mount the handler | the same, split in two processes |
 | Runs execute in | your process (`h.Run`) | your process | `cmd/harness-worker` processes |
@@ -42,10 +42,10 @@ Every method takes the user id: it is the tenancy boundary (threads, runs,
 sandboxes, memory, artifacts are all scoped by it, and a foreign id is
 "not found", never "forbidden").
 
-### `hosts/web`: the ready-made API
+### `hosts/httpapi`: the ready-made API
 
 ```go
-mux.Handle("/agent/", http.StripPrefix("/agent", httpserver.New(h, httpserver.Options{
+mux.Handle("/agent/", http.StripPrefix("/agent", httpapi.New(h, httpapi.Options{
     Authenticate: func(r *http.Request) (string, error) { return userFromSession(r) }, // your auth
     DefaultModel: cfg.LLMDefaultModel,
     NoUI:         true,   // the embedded UI uses absolute /api URLs; mount it only at the root
@@ -78,7 +78,7 @@ SANDBOX_BACKEND / OPENSANDBOX_URL   RUNTIME_CONCURRENCY   RUNTIME_SHUTDOWN_GRACE
 ```
 
 In code, `harness.Options{Store: pgstore, Redis: rdb}` on both sides (migrations:
-`store/pgstore/migrate`). Custom tools and features must be compiled into the
+`adapters/store/pgstore/migrate`). Custom tools and features must be compiled into the
 **worker** too (the agent runs there): build your own worker `main` from
 `hosts/worker` with the same `Features` as the web tier, rather than the stock
 binary. Cancel/steer/approve work across processes through the shared bus. A
@@ -135,7 +135,7 @@ func ordersFeature(db Orders) harness.Feature {
 ## 4. Multi-tenancy checklist
 
 - [ ] **Identity**: one stable user id per account (not an email that can be changed or reused). The `Authenticator` is the only place that trusts a credential; verify signature/session there, never a bare header from the browser.
-- [ ] **Ownership**: use the harness calls with the user id: `Send`, `Resume`, `Cancel`, `Steer` and the store's `GetThread` / `GetUserRun` all check ownership. `Harness.Events` takes only a run id, so resolve the run with `Store.GetUserRun(ctx, user, runID)` first (hosts/client and hosts/web do). If you add endpoints, resolve ids through `h.Store.GetThread(ctx, user, id)` first; answer 404 for foreign ids (no existence oracle). Test it (see `TestUsersSeeOnlyTheirOwnThreadsAndOrders`).
+- [ ] **Ownership**: use the harness calls with the user id: `Send`, `Resume`, `Cancel`, `Steer` and the store's `GetThread` / `GetUserRun` all check ownership. `Harness.Events` takes only a run id, so resolve the run with `Store.GetUserRun(ctx, user, runID)` first (hosts/client and hosts/httpapi do). If you add endpoints, resolve ids through `h.Store.GetThread(ctx, user, id)` first; answer 404 for foreign ids (no existence oracle). Test it (see `TestUsersSeeOnlyTheirOwnThreadsAndOrders`).
 - [ ] **Sandbox quota**: `MAX_SANDBOXES_PER_USER` (default 5; one sandbox per thread, so it caps concurrent code-running conversations per user). Over it, tools return a message asking to delete an old conversation. Deleting a thread (`DELETE .../threads/{id}`) kills its sandbox: expose that in your UI. Also bound idle cost with `SANDBOX_TIMEOUT_SECONDS`.
 - [ ] **Egress**: set `SANDBOX_EGRESS_ALLOWLIST` (domains the agent may reach: package index, your API). Production refuses an empty list unless `SANDBOX_EGRESS_UNRESTRICTED=true`. Never let sandboxes reach your internal network, metadata or each other (`SANDBOX_EGRESS_DENY_CIDRS`).
 - [ ] **Secrets**: LLM keys, OpenSandbox keys and MCP tokens live in the process environment or your secret manager, never in a prompt, a thread, a sandbox env or a tool result. Per-user third-party tokens go into your tool providers (fetched per run), not into the conversation.

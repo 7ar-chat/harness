@@ -7,9 +7,9 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // lsCall is a list_files call of path.
@@ -101,7 +101,7 @@ func TestProcessEndsWithMaxStepsWhenTheBudgetRunsOutWithoutTheFileItWasAskedFor(
 			if got.Status != store.StatusFailed || fin["type"] != "RUN_ERROR" || fin["code"] != "max_steps" {
 				t.Fatalf("status %s last %v", got.Status, fin)
 			}
-			if a := lastAnswer(t, &v2rig{rig: r}, th.ID); a.Content != "I could not finish: here is what I found." {
+			if a := lastAnswer(t, &scriptedRig{rig: r}, th.ID); a.Content != "I could not finish: here is what I found." {
 				t.Fatalf("answer %q", a.Content)
 			}
 			if calls := r.model.Calls(); calls[1].Messages[len(calls[1].Messages)-1].Content != agent.StepLimitNudge {
@@ -130,7 +130,7 @@ func TestProcessCompletesAQuestionWhoseBudgetRanOutWithoutAFile(t *testing.T) {
 func TestProcessCompletesARunThatChangedAnUploadInPlaceBeforeItsBudgetRanOut(t *testing.T) {
 	// A run that edited a file the user uploaded where it is (outside /workspace/outputs/) produced its result: forced to answer on its last step, it completes (F3).
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w1", "write_file", `{"path":"/workspace/notes.md","content":"# Notes, fixed"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("Notes fixed in place.")})
 	r.agent.MaxSteps = 2
@@ -148,7 +148,7 @@ func TestProcessCompletesARunThatChangedAnUploadInPlaceBeforeItsBudgetRanOut(t *
 func TestProcessCompletesWhenTheLastStepAnswersAfterWritingADeliverable(t *testing.T) {
 	// A model that wrote a deliverable and answers on the last (tool-less) step completes the run.
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w1", "write_file", `{"path":"/workspace/outputs/notes.md","content":"# Notes"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("Notes written.")})
 	r.agent.MaxSteps = 2

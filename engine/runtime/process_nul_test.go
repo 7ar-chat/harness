@@ -7,10 +7,10 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 func TestProcessPersistsToolOutputContainingNUL(t *testing.T) {

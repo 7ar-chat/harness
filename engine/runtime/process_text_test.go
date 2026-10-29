@@ -7,9 +7,9 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/adapters/redisx"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/redisx"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 func TestProcessStreamsTextAnswerAndCompletes(t *testing.T) {

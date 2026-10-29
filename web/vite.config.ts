@@ -33,12 +33,12 @@ const noInlineStyles = (): Plugin => ({
   },
 });
 
-// The Go server embeds ../hosts/web/ui and serves it at / and /ui/.
+// The Go server embeds ../hosts/httpapi/ui and serves it at / and /ui/.
 export default defineConfig({
   base: "/ui/",
   plugins: [noInlineStyles(), react(), tailwindcss(), stripCssBanners()],
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "src") } },
-  build: { outDir: "../hosts/web/ui", emptyOutDir: true, chunkSizeWarningLimit: 2500 },
+  build: { outDir: "../hosts/httpapi/ui", emptyOutDir: false, chunkSizeWarningLimit: 2500 },
   server: {
     proxy: {
       "/api": { target: process.env.HARNESS_URL ?? "http://127.0.0.1:8080", changeOrigin: true },

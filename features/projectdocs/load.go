@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
 )
 
 // loaded is one instruction file, imports included.

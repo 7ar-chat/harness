@@ -296,7 +296,7 @@ const (
 
 // SandboxBackendName is the name of the selected sandbox backend (lower case):
 // SANDBOX_BACKEND when set (a built-in or one a host registered with
-// sandbox.Register), else "opensandbox" when OPENSANDBOX_URL is set, else
+// backends.Register), else "opensandbox" when OPENSANDBOX_URL is set, else
 // "none".
 func (c *Config) SandboxBackendName() string {
 	if n := strings.ToLower(strings.TrimSpace(c.SandboxBackend)); n != "" {

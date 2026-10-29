@@ -17,6 +17,7 @@ test:
 bench-offline:
 	go test ./bench ./longtest
 
-# The browser UI (web/) builds into hosts/web/ui, which the Go binary embeds.
+# The browser UI (web/) builds into hosts/httpapi/ui, which the Go binary embeds.
 web:
+	find hosts/httpapi/ui -mindepth 1 -not -name .gitkeep -delete
 	cd web && npm ci && npm run build

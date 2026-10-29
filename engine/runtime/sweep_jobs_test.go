@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/adapters/redisx"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 	"github.com/GhaziBenDahmane/harness/features/memory"
-	"github.com/GhaziBenDahmane/harness/redisx"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 func TestSweepRunsPeriodicJobsAtMostOncePerPeriodAcrossRuntimes(t *testing.T) {

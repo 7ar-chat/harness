@@ -9,18 +9,18 @@ import (
 
 	"github.com/cloudwego/eino/components/tool"
 
+	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/engine/llm"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/engine/tools/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/features/artifacts"
+	"github.com/GhaziBenDahmane/harness/features/artifacts/workspace"
 	"github.com/GhaziBenDahmane/harness/features/memory"
 	"github.com/GhaziBenDahmane/harness/features/skills"
 	"github.com/GhaziBenDahmane/harness/features/verify"
-	"github.com/GhaziBenDahmane/harness/features/workspace"
-	"github.com/GhaziBenDahmane/harness/sandbox"
 )
 
 // A Feature is an optional capability of the harness: a set of tools, prompt

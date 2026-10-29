@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/GhaziBenDahmane/harness/core/agui"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/agui"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // fileLinkRe matches the target of a workspace-file link (absolute path).

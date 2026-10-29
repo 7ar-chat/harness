@@ -8,19 +8,19 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/features/artifacts"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 var pngBytes = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRfake")
 
 // attachedRun queues a run whose user message attaches the given uploads.
-func (r *v2rig) attachedRun(files map[string][]byte) *store.Run {
+func (r *scriptedRig) attachedRun(files map[string][]byte) *store.Run {
 	return r.attachedRunWith("Look at this", files)
 }
 
-func (r *v2rig) attachedRunWith(content string, files map[string][]byte) *store.Run {
+func (r *scriptedRig) attachedRunWith(content string, files map[string][]byte) *store.Run {
 	r.t.Helper()
 	ctx := context.Background()
 	th, _ := r.st.CreateThread(ctx, "alice", "t")
@@ -43,7 +43,7 @@ func (r *v2rig) attachedRunWith(content string, files map[string][]byte) *store.
 func TestAttachedFilesAreListedAfterTheUserText(t *testing.T) {
 	// The model receives "[Attached files: …]" after the text; without vision no image part is sent.
 	// Arrange
-	r := newV2Rig(t, false, llmtest.Turn{Chunks: llmtest.Text("Seen")})
+	r := newScriptedRig(t, false, llmtest.Turn{Chunks: llmtest.Text("Seen")})
 	run := r.attachedRun(map[string][]byte{"data.csv": []byte("a,b")})
 
 	// Act
@@ -60,7 +60,7 @@ func TestAttachedFilesAreListedAfterTheUserText(t *testing.T) {
 func TestVisionModelsReceiveAttachedImagesAsImageParts(t *testing.T) {
 	// For LLM_VISION_MODELS an attached image is sent as a base64 image part next to the text.
 	// Arrange
-	r := newV2Rig(t, true, llmtest.Turn{Chunks: llmtest.Text("A chart")})
+	r := newScriptedRig(t, true, llmtest.Turn{Chunks: llmtest.Text("A chart")})
 	run := r.attachedRun(map[string][]byte{"chart.png": pngBytes})
 
 	// Act
@@ -82,7 +82,7 @@ func TestVisionModelsReceiveAttachedImagesAsImageParts(t *testing.T) {
 func TestAttachmentsWithoutTextSendOnlyTheAttachedFilesLine(t *testing.T) {
 	// A message made only of attachments reaches the model as the attached-files line.
 	// Arrange
-	r := newV2Rig(t, false, llmtest.Turn{Chunks: llmtest.Text("Seen")})
+	r := newScriptedRig(t, false, llmtest.Turn{Chunks: llmtest.Text("Seen")})
 	run := r.attachedRunWith("", map[string][]byte{"data.csv": []byte("a,b")})
 
 	// Act

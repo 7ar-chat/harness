@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
 )
 
 // oneSandbox hands out the same sandbox for every thread.

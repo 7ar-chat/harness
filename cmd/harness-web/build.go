@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 
 	"github.com/GhaziBenDahmane/harness"
+	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore"
+	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore/migrate"
+	"github.com/GhaziBenDahmane/harness/adapters/store/teamstore"
 	"github.com/GhaziBenDahmane/harness/config"
-	httpserver "github.com/GhaziBenDahmane/harness/hosts/web"
-	"github.com/GhaziBenDahmane/harness/store"
-	"github.com/GhaziBenDahmane/harness/store/pgstore"
-	"github.com/GhaziBenDahmane/harness/store/pgstore/migrate"
-	"github.com/GhaziBenDahmane/harness/store/teamstore"
+	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/GhaziBenDahmane/harness/product"
 )
 
 // buildHarness is the only place this command constructs the harness; the rest of
@@ -32,8 +32,8 @@ func buildHarness(cfg *config.Config, durable bool) (*harness.Harness, io.Closer
 type built struct {
 	h      *harness.Harness
 	team   store.TeamStore
-	sup    *httpserver.Supervisor
-	github *httpserver.GitHubApp
+	sup    *product.Supervisor
+	github *product.GitHubApp
 	closer io.Closer
 }
 
@@ -93,13 +93,13 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 			return nil, err
 		}
 		b.github = gh
-		o.MemoryKey = httpserver.MemoryKey(ts)
-		o.MemoryUserKey = httpserver.MemoryUserKey(ts, o.Store.ListMessages)
-		o.MemoryShared = httpserver.MemoryShared
-		b.sup = httpserver.NewSupervisor(ts)
+		o.MemoryKey = product.MemoryKey(ts)
+		o.MemoryUserKey = product.MemoryUserKey(ts, o.Store.ListMessages)
+		o.MemoryShared = product.MemoryShared
+		b.sup = product.NewSupervisor(ts)
 		o.Tools = append(o.Tools, b.sup.Tools())
 		o.Features = append(harness.ProfileNamed(cfg.AgentProfile), b.sup.Feature(),
-			(&httpserver.RepoCheckout{Team: ts, GitHub: gh}).Feature())
+			(&product.RepoCheckout{Team: ts, GitHub: gh}).Feature())
 	}
 	h, err := harness.New(o)
 	if err != nil {
@@ -112,7 +112,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 
 // githubFromEnv builds the GitHub App from GITHUB_APP_ID, GITHUB_APP_SLUG and
 // GITHUB_APP_PRIVATE_KEY (PEM) or GITHUB_APP_PRIVATE_KEY_FILE; nil when no App is set.
-func githubFromEnv(getenv func(string) string) (*httpserver.GitHubApp, error) {
+func githubFromEnv(getenv func(string) string) (*product.GitHubApp, error) {
 	id := getenv("GITHUB_APP_ID")
 	if id == "" {
 		return nil, nil
@@ -128,7 +128,7 @@ func githubFromEnv(getenv func(string) string) (*httpserver.GitHubApp, error) {
 	if len(key) == 0 {
 		return nil, fmt.Errorf("GITHUB_APP_ID needs GITHUB_APP_PRIVATE_KEY or GITHUB_APP_PRIVATE_KEY_FILE")
 	}
-	app, err := httpserver.NewGitHubApp(id, getenv("GITHUB_APP_SLUG"), key)
+	app, err := product.NewGitHubApp(id, getenv("GITHUB_APP_SLUG"), key)
 	if err != nil {
 		return nil, err
 	}

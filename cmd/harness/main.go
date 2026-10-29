@@ -37,13 +37,13 @@ import (
 	"strings"
 
 	"github.com/GhaziBenDahmane/harness"
+	"github.com/GhaziBenDahmane/harness/adapters/store/filestore"
+	"github.com/GhaziBenDahmane/harness/coding/gitsafe"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/features/gitsafe"
 	"github.com/GhaziBenDahmane/harness/features/permissions"
 	"github.com/GhaziBenDahmane/harness/hosts/client"
 	"github.com/GhaziBenDahmane/harness/hosts/tui"
 	"github.com/GhaziBenDahmane/harness/modelinfo"
-	"github.com/GhaziBenDahmane/harness/store/filestore"
 )
 
 func main() {

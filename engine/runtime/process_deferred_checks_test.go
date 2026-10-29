@@ -3,13 +3,13 @@ package runtime_test
 import (
 	"testing"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // toolMessage returns the stored result of a tool call.
-func toolMessage(t *testing.T, r *v2rig, threadID, callID string) *store.Message {
+func toolMessage(t *testing.T, r *scriptedRig, threadID, callID string) *store.Message {
 	t.Helper()
 	for _, m := range r.messages(threadID) {
 		if m.Role == store.RoleTool && m.ToolCallID == callID {

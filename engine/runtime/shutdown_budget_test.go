@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/adapters/redisx"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
-	"github.com/GhaziBenDahmane/harness/redisx"
 )
 
 func TestShutdownFinishesInFlightRunsWithinItsBudget(t *testing.T) {

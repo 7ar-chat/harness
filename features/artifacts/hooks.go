@@ -8,8 +8,8 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // FileReferencePrompt is the §2.3 instruction (workspace-file: links).

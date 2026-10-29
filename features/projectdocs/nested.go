@@ -5,8 +5,8 @@ import (
 	"path"
 	"strings"
 
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/sandbox"
 )
 
 // AfterPath is the hook for sandboxtools.Options.AfterPath: when a tool

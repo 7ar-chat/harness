@@ -14,9 +14,9 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/components/tool/utils"
 
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/skills"
-	"github.com/GhaziBenDahmane/harness/sandbox"
 )
 
 // Provider is the skills tool provider.

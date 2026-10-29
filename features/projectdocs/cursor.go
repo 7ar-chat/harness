@@ -9,7 +9,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/GhaziBenDahmane/harness/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
 )
 
 // cursorRule is a Cursor project rule (.cursor/rules/*.mdc): a markdown body

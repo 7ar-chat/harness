@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 func TestASilentStreamThatSendsKeepAlivesIsNotCut(t *testing.T) {
@@ -24,7 +24,7 @@ func TestASilentStreamThatSendsKeepAlivesIsNotCut(t *testing.T) {
 	// Assert
 	evs := r.events(run.ID)
 	checkStrictOrder(t, evs)
-	if got.Status != store.StatusCompleted || len(find(evs, "CUSTOM:work.retry")) != 0 || lastAnswer(t, &v2rig{rig: r}, th.ID).Content != "forty-two" {
+	if got.Status != store.StatusCompleted || len(find(evs, "CUSTOM:work.retry")) != 0 || lastAnswer(t, &scriptedRig{rig: r}, th.ID).Content != "forty-two" {
 		t.Fatalf("status %s types %v", got.Status, types(evs))
 	}
 }

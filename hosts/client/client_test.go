@@ -9,7 +9,7 @@ import (
 	"github.com/GhaziBenDahmane/harness"
 	"github.com/GhaziBenDahmane/harness/hosts/client"
 	"github.com/GhaziBenDahmane/harness/hosts/client/clienttest"
-	httpserver "github.com/GhaziBenDahmane/harness/hosts/web"
+	"github.com/GhaziBenDahmane/harness/hosts/httpapi"
 )
 
 func TestInProcessConformance(t *testing.T) {
@@ -22,7 +22,7 @@ func TestInProcessConformance(t *testing.T) {
 // engine; the bearer token is the login, so each client is a different user.
 func TestHTTPConformance(t *testing.T) {
 	clienttest.Run(t, func(t *testing.T, h *harness.Harness, user string) client.Client {
-		srv := httptest.NewServer(httpserver.New(h, httpserver.Options{
+		srv := httptest.NewServer(httpapi.New(h, httpapi.Options{
 			Authenticate: func(r *http.Request) (string, error) {
 				return strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), nil
 			},

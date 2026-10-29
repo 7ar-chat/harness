@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/features/memory"
-	"github.com/GhaziBenDahmane/harness/store"
-	"github.com/GhaziBenDahmane/harness/store/memstore"
 )
 
 func TestNormalizePathRejectsUnsafePaths(t *testing.T) {

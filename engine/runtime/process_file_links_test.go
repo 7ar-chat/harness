@@ -6,8 +6,8 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // knownTypes are the event types of an ordinary run with tool calls and artifacts.
@@ -31,7 +31,7 @@ func lastUserText(msgs []*schema.Message) string {
 func TestSystemPromptSendsDeliverablesToOutputsAndOnlyLinksSavedFiles(t *testing.T) {
 	// With a sandbox, the system prompt puts final deliverables in /workspace/outputs/ and forbids links to files that do not exist or live in /workspace/.work/.
 	// Arrange
-	r := newV2Rig(t, false, llmtest.Turn{Chunks: llmtest.Text("Hi")})
+	r := newScriptedRig(t, false, llmtest.Turn{Chunks: llmtest.Text("Hi")})
 	_, run := r.queued("hello")
 
 	// Act
@@ -48,7 +48,7 @@ func TestSystemPromptSendsDeliverablesToOutputsAndOnlyLinksSavedFiles(t *testing
 func TestAnswerLinkingUnsavedFilesGetsOneCorrectiveStep(t *testing.T) {
 	// A final answer linking files that are not saved artifacts (a /workspace/.work/ chart, a file never written) gets one corrective step with a user-side note, then the run finishes with the corrected answer and only the usual event types.
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "write_file", `{"path":"/workspace/.work/chart.png","content":"png"}`)},
 		llmtest.Turn{Chunks: streamedCall("call_2", "write_file", `{"path":"/workspace/outputs/report.md","content":"# R"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("See [chart](workspace-file:///workspace/.work/chart.png), [report](workspace-file:///workspace/outputs/report.md) and [data](workspace-file:///workspace/outputs/my%20data.csv).")},
@@ -89,7 +89,7 @@ func TestAnswerLinkingUnsavedFilesGetsOneCorrectiveStep(t *testing.T) {
 func TestAnswerLinksAreCorrectedAtMostOncePerRun(t *testing.T) {
 	// An answer that still links a missing file after the corrective step ends the run: there is never a second corrective step.
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: llmtest.Text("See [x](workspace-file:///workspace/outputs/x.pdf)")},
 		llmtest.Turn{Chunks: llmtest.Text("Still [x](workspace-file:///workspace/outputs/x.pdf)")},
 		llmtest.Turn{Chunks: llmtest.Text("unexpected third call")},
@@ -108,7 +108,7 @@ func TestAnswerLinksAreCorrectedAtMostOncePerRun(t *testing.T) {
 func TestAnswerLinkingSavedFilesOrOnTheLastStepIsNotCorrected(t *testing.T) {
 	// Links to saved artifacts need no correction, and an answer given on the last allowed step is never corrected (no steps left; the second run wrote no deliverable, so it ends with max_steps, round 3).
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "write_file", `{"path":"outputs/a.md","content":"a"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Saved [a](workspace-file:///workspace/outputs/a.md)")},
 		llmtest.Turn{Chunks: streamedCall("call_2", "list_files", `{}`)},
@@ -134,7 +134,7 @@ func TestAnswerLinkingSavedFilesOrOnTheLastStepIsNotCorrected(t *testing.T) {
 func TestAnswerMentioningSavedFilesWithoutLinksGetsOneCorrectiveStep(t *testing.T) {
 	// A final answer that names a saved file without a workspace-file link (by absolute path, or by the name of a file produced in this run) gets one corrective step asking to link it (4.6).
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "write_file", `{"path":"/workspace/outputs/q3-report.md","content":"# Q3"}`)},
 		llmtest.Turn{Chunks: streamedCall("call_2", "write_file", `{"path":"/workspace/outputs/data.csv","content":"a,b"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("I wrote q3-report.md and the table is at /workspace/outputs/data.csv. Notes: see report.md style.")},
@@ -160,7 +160,7 @@ func TestAnswerMentioningSavedFilesWithoutLinksGetsOneCorrectiveStep(t *testing.
 func TestAnswerLinkingEveryFileItMentionsGetsNoNote(t *testing.T) {
 	// An answer whose mentioned files are all linked (and mentions of unrelated names) ends the run without a corrective step.
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "write_file", `{"path":"/workspace/outputs/q3.md","content":"# Q3"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Done: [q3.md](workspace-file:///workspace/outputs/q3.md) — the q3.md file follows the template.md style.")},
 	)

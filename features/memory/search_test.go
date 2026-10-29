@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/features/memory"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 var now = time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)

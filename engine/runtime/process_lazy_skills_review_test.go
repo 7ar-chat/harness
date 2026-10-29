@@ -8,10 +8,10 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/features/skills"
-	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // Lazy skills, review fixes: explicit defaults, the /skills folder, implicit
@@ -27,7 +27,7 @@ func hasMarker(sb *sandboxtest.Sandbox, name string) bool {
 	return false
 }
 
-func countExecs(r *v2rig, sub string) int {
+func countExecs(r *scriptedRig, sub string) int {
 	n := 0
 	for _, c := range r.execCommands() {
 		if strings.Contains(c, sub) {

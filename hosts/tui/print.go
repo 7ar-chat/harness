@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/engine/agui"
+	"github.com/GhaziBenDahmane/harness/core/agui"
 )
 
 // Exit statuses of print mode.

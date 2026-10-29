@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
 	"github.com/GhaziBenDahmane/harness/engine/compaction"
@@ -16,16 +17,15 @@ import (
 	"github.com/GhaziBenDahmane/harness/features/memory"
 	"github.com/GhaziBenDahmane/harness/features/skills"
 	skillsfs "github.com/GhaziBenDahmane/harness/features/skills/skillsfs"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 var updatePrompts = flag.Bool("update-prompts", false, "rewrite testdata/prompts/*.golden")
 
 // promptRig wires the prompt sections like cmd/work/main.go (stream C2) with
 // a variant; the run has a goal and a recalled memory.
-func promptRig(t *testing.T, variant string, turns ...llmtest.Turn) (*v2rig, *store.Run) {
+func promptRig(t *testing.T, variant string, turns ...llmtest.Turn) (*scriptedRig, *store.Run) {
 	t.Helper()
-	r := newV2Rig(t, false, turns...)
+	r := newScriptedRig(t, false, turns...)
 	h := &r.agent.Harness
 	h.Sections = []agent.PromptSection{
 		r.reg.PromptSection,

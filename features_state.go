@@ -6,13 +6,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/engine/tools/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/features/artifacts"
+	"github.com/GhaziBenDahmane/harness/features/artifacts/workspace"
 	"github.com/GhaziBenDahmane/harness/features/goals"
 	"github.com/GhaziBenDahmane/harness/features/memory"
 	"github.com/GhaziBenDahmane/harness/features/memory/memorytools"
@@ -21,8 +23,6 @@ import (
 	"github.com/GhaziBenDahmane/harness/features/skills/skilltools"
 	"github.com/GhaziBenDahmane/harness/features/titles"
 	"github.com/GhaziBenDahmane/harness/features/verify"
-	"github.com/GhaziBenDahmane/harness/features/workspace"
-	"github.com/GhaziBenDahmane/harness/sandbox"
 )
 
 // Skills offers the skills (<name>/SKILL.md folders): the load_skill tool, the

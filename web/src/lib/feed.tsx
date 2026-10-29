@@ -84,7 +84,7 @@ export function FeedProvider({ children }: { children: ReactNode }) {
         const text = `${title} ${NEEDS_YOU[ev.status]}`;
         toast(text, { action: { label: "Open", onClick: () => void navigate({ to: "/t/$threadId", params: { threadId: id } }) } });
         if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
-          const n = new Notification("Harness", { body: text, tag: id });
+          const n = new Notification("har", { body: text, tag: id });
           n.onclick = () => {
             window.focus();
             void navigate({ to: "/t/$threadId", params: { threadId: id } });

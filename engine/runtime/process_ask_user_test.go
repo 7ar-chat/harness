@@ -6,8 +6,8 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 const askArgs = `{"question":"Which format do you want?","options":[{"label":"PDF","description":"For printing"},{"label":"Word"}],"allowFreeText":false}`

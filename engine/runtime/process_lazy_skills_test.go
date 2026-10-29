@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	skillsfs "github.com/GhaziBenDahmane/harness/features/skills/skillsfs"
 	"github.com/GhaziBenDahmane/harness/features/verify"
-	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // Lazy skills: skill text never needs a sandbox, and a sandbox only gets the
@@ -20,9 +20,9 @@ import (
 var builtinNames = []string{"charts", "docx", "pdf", "pptx", "xlsx"}
 
 // newLazyRig is the v2 rig with the real built-in skills.
-func newLazyRig(t *testing.T, turns ...llmtest.Turn) *v2rig {
+func newLazyRig(t *testing.T, turns ...llmtest.Turn) *scriptedRig {
 	t.Helper()
-	return newV2RigWith(t, skillsfs.Builtin(), false, turns...)
+	return newScriptedRigWith(t, skillsfs.Builtin(), false, turns...)
 }
 
 // installedSkills lists the built-ins installed in sb.
@@ -46,7 +46,7 @@ func execAt(sb *sandboxtest.Sandbox, sub string) int {
 	return -1
 }
 
-func toolResults(r *v2rig, runID string) []string {
+func toolResults(r *scriptedRig, runID string) []string {
 	var out []string
 	for _, e := range find(r.events(runID), "TOOL_CALL_RESULT") {
 		out = append(out, e["content"].(string))
@@ -303,7 +303,7 @@ func fakePython(sb *sandboxtest.Sandbox) sandboxtest.ExecFunc {
 }
 
 // withFakePython makes every new sandbox of the rig answer python3 with fakePython (put: files placed at creation).
-func withFakePython(r *v2rig, put map[string]string) {
+func withFakePython(r *scriptedRig, put map[string]string) {
 	r.backend.OnCreate = func(sb *sandboxtest.Sandbox) {
 		for p, c := range put {
 			sb.Put(p, c)

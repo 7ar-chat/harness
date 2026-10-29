@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 func indexOf(evs []event, typ string) int {
@@ -25,7 +25,7 @@ func indexOf(evs []event, typ string) int {
 func TestWriteFileEmitsAnArtifactEventRightAfterItsResult(t *testing.T) {
 	// A file written by the agent becomes an artifact; work.artifact follows the tool's TOOL_CALL_RESULT.
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "write_file", `{"path":"report.md","content":"# Q3"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Done")},
 	)
@@ -58,7 +58,7 @@ func TestEndOfRunSnapshotReportsChangesBeforeRunFinished(t *testing.T) {
 	// Files changed outside file tools (e.g. by a background process) are reported right before RUN_FINISHED.
 	// Arrange
 	var sb *sandboxtest.Sandbox
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "list_files", `{}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Done"), OnCall: func() { sb.Put("/workspace/late.csv", "a,b") }},
 	)
@@ -82,7 +82,7 @@ func TestEndOfRunSnapshotReportsChangesBeforeRunFinished(t *testing.T) {
 func TestCommandChangesAndDeletionsAreVersioned(t *testing.T) {
 	// execute_command edits create new versions and removals are reported as deleted.
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "write_file", `{"path":"a.txt","content":"one"}`)},
 		llmtest.Turn{Chunks: streamedCall("call_2", "execute_command", `{"command":"edit a.txt; rm b.txt"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Done")},
@@ -123,7 +123,7 @@ func TestCommandChangesAndDeletionsAreVersioned(t *testing.T) {
 func TestNewSandboxRestoresTheWorkspaceAndTellsTheModel(t *testing.T) {
 	// When a thread's sandbox is gone, the next sandbox gets the saved artifacts back and the tool result says so.
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "write_file", `{"path":"keep.txt","content":"saved"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Done")},
 		llmtest.Turn{Chunks: streamedCall("call_2", "read_file", `{"path":"keep.txt"}`)},
@@ -153,7 +153,7 @@ func TestArtifactChangesAreLinkedToTheirToolCallAndPersistedForReload(t *testing
 	// message of that call and, for end-of-run changes, on the run's last assistant message.
 	// Arrange
 	var sb *sandboxtest.Sandbox
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "write_file", `{"path":"a.txt","content":"one"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Done"), OnCall: func() { sb.Put("/workspace/late.csv", "x") }},
 	)
@@ -193,7 +193,7 @@ func TestArtifactChangesAreLinkedToTheirToolCallAndPersistedForReload(t *testing
 func TestEndOfRunChangesOfARunWithoutAnswerAreKeptOnAnEmptyAssistantMessage(t *testing.T) {
 	// When a run produced no assistant message (the model failed), its end-of-run artifact changes are stored on an empty assistant message of that run.
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "write_file", `{"path":"a.txt","content":"a"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Done")},
 		llmtest.Turn{Err: errors.New("bad request: invalid model input")},
@@ -222,7 +222,7 @@ func TestEndOfRunChangesOfARunWithoutAnswerAreKeptOnAnEmptyAssistantMessage(t *t
 func TestCompactRunsDoNotSnapshotTheWorkspace(t *testing.T) {
 	// A compact run only compacts: the end-of-run snapshot is skipped (no work.artifact events, no versions).
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "write_file", `{"path":"a.txt","content":"a"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Done")},
 		llmtest.Turn{Chunks: llmtest.Text("## Summary")},

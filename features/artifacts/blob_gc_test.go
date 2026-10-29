@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/features/artifacts"
-	"github.com/GhaziBenDahmane/harness/store"
-	"github.com/GhaziBenDahmane/harness/store/memstore"
 )
 
 // hookBlobs is an external (S3-like) blob backend whose Has and Delete can

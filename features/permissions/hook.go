@@ -8,9 +8,9 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/approvals"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // Hook is the agent's BeforeToolHook for the local/coding profile. Calls the

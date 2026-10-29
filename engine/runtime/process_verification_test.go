@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/features/verify"
-	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // fixtureChecker is the testdata checker (checker contract) for .docx files.
@@ -28,9 +28,9 @@ func fixtureChecker(t *testing.T) string {
 
 // verifyRig runs real bash (ShellExec) for commands and checks .docx and
 // .pptx deliverables with the fixture checker.
-func verifyRig(t *testing.T, vision bool, turns ...llmtest.Turn) *v2rig {
+func verifyRig(t *testing.T, vision bool, turns ...llmtest.Turn) *scriptedRig {
 	t.Helper()
-	r := newV2Rig(t, vision, turns...)
+	r := newScriptedRig(t, vision, turns...)
 	r.strictOrder()
 	check := "bash " + fixtureChecker(t) + " {file}"
 	r.backend.OnCreate = func(sb *sandboxtest.Sandbox) { sb.SetExec(sandboxtest.FindExec(sb, sandboxtest.ShellExec(sb))) }
@@ -43,7 +43,7 @@ func verifyRig(t *testing.T, vision bool, turns ...llmtest.Turn) *v2rig {
 	return r
 }
 
-func lastAnswer(t *testing.T, r *v2rig, threadID string) *store.Message {
+func lastAnswer(t *testing.T, r *scriptedRig, threadID string) *store.Message {
 	t.Helper()
 	msgs := r.messages(threadID)
 	for i := len(msgs) - 1; i >= 0; i-- {

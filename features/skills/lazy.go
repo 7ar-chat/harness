@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // Lazy skills: a sandbox gets only the skills its run needs (needed), each

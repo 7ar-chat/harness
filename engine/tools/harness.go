@@ -3,8 +3,8 @@ package tools
 import (
 	"context"
 
-	"github.com/GhaziBenDahmane/harness/engine/agui"
-	"github.com/GhaziBenDahmane/harness/store"
+	"github.com/GhaziBenDahmane/harness/core/agui"
+	"github.com/GhaziBenDahmane/harness/core/store"
 )
 
 // QuestionOption is an answer choice of an Interrupt.

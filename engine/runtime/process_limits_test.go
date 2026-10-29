@@ -6,9 +6,9 @@ import (
 	"github.com/cloudwego/eino/schema"
 	goopenai "github.com/meguminnnnnnnnn/go-openai"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 func TestProcessStopsAtStepLimit(t *testing.T) {

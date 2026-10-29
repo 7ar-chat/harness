@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/GhaziBenDahmane/harness/adapters/sandbox/backends"
 	"io/fs"
 	"os"
 	"time"
@@ -29,9 +30,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
 	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/core/agui"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/agui"
 	"github.com/GhaziBenDahmane/harness/engine/approvals"
 	"github.com/GhaziBenDahmane/harness/engine/eventlog"
 	"github.com/GhaziBenDahmane/harness/engine/llm"
@@ -39,19 +43,16 @@ import (
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/artifacts"
+	"github.com/GhaziBenDahmane/harness/features/artifacts/workspace"
 	"github.com/GhaziBenDahmane/harness/features/memory"
 	"github.com/GhaziBenDahmane/harness/features/skills"
-	"github.com/GhaziBenDahmane/harness/features/workspace"
-	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/store"
-	"github.com/GhaziBenDahmane/harness/store/memstore"
 )
 
 // Store is the persistence the harness needs: the core store plus the
 // sandbox, workspace and catalog extensions. store/memstore and store/pgstore
 // implement it.
 type Store interface {
-	store.Store
+	store.Full
 	sandbox.Store
 	store.WorkspaceGitStore
 }
@@ -68,7 +69,7 @@ type Options struct {
 	Models llm.Factory
 	// Backend provides the sandboxes. Default: the backend named by
 	// SANDBOX_BACKEND (local, opensandbox, none, or one registered with
-	// sandbox.Register), else OpenSandbox when OPENSANDBOX_URL is set, else
+	// backends.Register), else OpenSandbox when OPENSANDBOX_URL is set, else
 	// none: the agent then has no sandbox tools and a prompt that says so.
 	Backend sandbox.Backend
 	// Blobs stores artifact contents (default: in the Store).
@@ -148,7 +149,7 @@ func New(o Options) (*Harness, error) {
 	backend := o.Backend
 	if backend == nil {
 		var err error
-		backend, err = sandbox.NewBackend(cfg)
+		backend, err = backends.NewBackend(cfg)
 		if err != nil {
 			return nil, err
 		}
@@ -435,7 +436,7 @@ func autoTitle(text string) string {
 
 // agentOptions is the agent's configuration without features: compaction,
 // reasoning, vision and the interactive approvals gate.
-func agentOptions(cfg *config.Config, st store.Store, mgr sandbox.Manager) agent.Harness {
+func agentOptions(cfg *config.Config, st store.Full, mgr sandbox.Manager) agent.Harness {
 	return agent.Harness{
 		PromptVariant:         cfg.PromptVariant,
 		Summaries:             st,

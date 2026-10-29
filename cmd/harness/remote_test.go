@@ -10,9 +10,9 @@ import (
 
 	"github.com/GhaziBenDahmane/harness"
 	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	httpserver "github.com/GhaziBenDahmane/harness/hosts/web"
-	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
+	"github.com/GhaziBenDahmane/harness/hosts/httpapi"
 )
 
 // remoteServer serves a scripted harness over HTTP behind a bearer token, as harness-web does.
@@ -29,7 +29,7 @@ func remoteServer(t *testing.T, ctx context.Context, turns ...llmtest.Turn) *htt
 		t.Fatal(err)
 	}
 	go func() { _ = h.Run(ctx) }()
-	srv := httptest.NewServer(httpserver.New(h, httpserver.Options{Token: "s3cret", Models: cfg.LLMModels, DefaultModel: "gpt-test"}))
+	srv := httptest.NewServer(httpapi.New(h, httpapi.Options{Token: "s3cret", Models: cfg.LLMModels, DefaultModel: "gpt-test"}))
 	t.Cleanup(srv.Close)
 	return srv
 }

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/features/memory"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 func TestDedupeContentRemovesDuplicateItemsLikeWork(t *testing.T) {

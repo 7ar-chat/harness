@@ -9,10 +9,10 @@ import (
 
 	"github.com/cloudwego/eino/components/tool"
 
+	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/memory"
 	"github.com/GhaziBenDahmane/harness/features/memory/memorytools"
-	"github.com/GhaziBenDahmane/harness/store/memstore"
 )
 
 func provider(t *testing.T) (*memstore.Store, map[string]tool.InvokableTool) {

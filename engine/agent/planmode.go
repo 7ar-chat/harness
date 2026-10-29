@@ -3,8 +3,8 @@ package agent
 import (
 	"github.com/cloudwego/eino/components/tool"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // planModeTools are the tools a plan run keeps although they are not

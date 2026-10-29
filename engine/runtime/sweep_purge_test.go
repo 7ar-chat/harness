@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/features/artifacts"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 func shaOf(s string) string {
@@ -21,7 +21,7 @@ func shaOf(s string) string {
 func TestSweepPurgesThreadsDeletedLongAgoAndTheirUnreferencedBlobs(t *testing.T) {
 	// The sweeper hard-deletes threads soft-deleted more than 30 days ago with their runs and artifacts, then deletes blobs (and previews) nothing referenced for the GC grace period.
 	// Arrange
-	r := newV2Rig(t, false)
+	r := newScriptedRig(t, false)
 	r.opts.Purger = artifacts.PurgeJob{Svc: r.arts, After: 30 * 24 * time.Hour}
 	r.opts.PurgeEvery = 10 * time.Millisecond
 	var offset atomic.Int64 // fake clock of the store

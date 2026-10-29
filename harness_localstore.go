@@ -1,6 +1,6 @@
 package harness
 
-import "github.com/GhaziBenDahmane/harness/store/filestore"
+import "github.com/GhaziBenDahmane/harness/adapters/store/filestore"
 
 // OpenLocalStore opens the durable single-process store for local hosts (CLI,
 // TUI, desktop): threads, messages, runs, plans, summaries, approvals and

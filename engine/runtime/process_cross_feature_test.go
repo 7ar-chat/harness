@@ -7,17 +7,17 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/compaction"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // Cross-feature behaviour of the merged harness v2 (artifacts × goals, compaction, ask_user).
 
 // commandWrites makes execute_command create the given file in the sandbox.
-func commandWrites(r *v2rig, path, content string) {
+func commandWrites(r *scriptedRig, path, content string) {
 	r.backend.OnCreate = func(s *sandboxtest.Sandbox) {
 		s.SetExec(sandboxtest.FindExec(s, func(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
 			s.Put(path, content)
@@ -30,7 +30,7 @@ func TestGoalJudgeSeesTheArtifactsOfTheRun(t *testing.T) {
 	// Files produced by a command and found by the end-of-run snapshot are listed for the goal judge; their events precede work.goal.
 	// Arrange
 	var sb *sandboxtest.Sandbox
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "execute_command", `{"command":"python build.py"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("The report is ready."), OnCall: func() { sb.Put("/workspace/chart.png", "png") }},
 		llmtest.Turn{Chunks: llmtest.Text(`{"met": true, "reason": "report.pdf exists"}`)},
@@ -70,7 +70,7 @@ func TestGoalJudgeSeesTheArtifactsOfTheRun(t *testing.T) {
 func TestCompactionKeepsAttachmentsImagesAndArtifacts(t *testing.T) {
 	// A manual compaction summarizes the attachment line and image of a vision message, lists command-made artifacts, and leaves metadata.artifacts intact.
 	// Arrange
-	r := newV2Rig(t, true,
+	r := newScriptedRig(t, true,
 		llmtest.Turn{Chunks: streamedCall("call_1", "execute_command", `{"command":"python build.py"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Report ready")},
 		llmtest.Turn{Chunks: llmtest.Text("## Goal\nA report on the chart.")},
@@ -109,7 +109,7 @@ func TestCompactionKeepsAttachmentsImagesAndArtifacts(t *testing.T) {
 func TestAskUserResumeWithArtifactsOnBothSides(t *testing.T) {
 	// A file written before ask_user is reported before the interrupt; the resumed run replays the answer first and versions the file again.
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: []*schema.Message{
 			llmtest.ToolCall(0, "call_w", "write_file", `{"path":"report.md","content":"# Draft"}`),
 			llmtest.ToolCall(1, "call_ask", "ask_user", askArgs),

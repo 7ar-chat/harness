@@ -9,10 +9,10 @@ import (
 	"github.com/cloudwego/eino/schema"
 	goopenai "github.com/meguminnnnnnnnn/go-openai"
 
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // assertBalanced checks that every START has its END before the terminal event (strict AG-UI order).

@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/store"
+	"github.com/GhaziBenDahmane/harness/core/store"
 )
 
 // Embedder turns texts into vectors. With one, search and recall compare the

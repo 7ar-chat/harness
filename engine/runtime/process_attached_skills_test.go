@@ -6,10 +6,10 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
 	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/features/skills"
-	"github.com/GhaziBenDahmane/harness/store"
 )
 
 // Materialization of attached skills: the skills requested for a run are
@@ -26,7 +26,7 @@ func protectCount(execs []string, dir string) int {
 	return n
 }
 
-func (v *v2rig) execCommands() []string {
+func (v *scriptedRig) execCommands() []string {
 	var out []string
 	for _, sb := range v.backend.Created() {
 		for _, e := range sb.Execs() {
@@ -40,7 +40,7 @@ func TestDefaultSkillsAreListedButInstalledOnlyWhenACommandUsesThem(t *testing.T
 	// Built-ins are listed once in the skills index (no "Attached Skills" block, A-08) but not installed
 	// with every sandbox (lazy skills): the first command naming /skills/fixture-doc installs it, and later commands and runs reinstall nothing.
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "execute_command", `{"command":"ls /workspace"}`)},
 		llmtest.Turn{Chunks: streamedCall("call_2", "execute_command", `{"command":"ls /skills/fixture-doc"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Done")},
@@ -75,7 +75,7 @@ func TestDefaultSkillsAreListedButInstalledOnlyWhenACommandUsesThem(t *testing.T
 func TestRequestedUserDirectorySkillIsInstalledAndInjected(t *testing.T) {
 	// A skill found in a skills directory (here the user source) and requested by name for the run is installed before the first command and its SKILL.md is injected; it is not fenced (the user's own skill).
 	// Arrange
-	r := newV2Rig(t, false,
+	r := newScriptedRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("call_1", "execute_command", `{"command":"cat /skills/my-notes/SKILL.md"}`)},
 		llmtest.Turn{Chunks: llmtest.Text("Done")},
 	)
@@ -107,7 +107,7 @@ func TestRequestedUserDirectorySkillIsInstalledAndInjected(t *testing.T) {
 func TestUserDirectorySkillOverridesABuiltinOfTheSameName(t *testing.T) {
 	// Later sources win: a user skill named like a built-in replaces it in the index.
 	// Arrange
-	r := newV2Rig(t, false, llmtest.Turn{Chunks: llmtest.Text("Done")})
+	r := newScriptedRig(t, false, llmtest.Turn{Chunks: llmtest.Text("Done")})
 	r.reg.AddFS(skills.SourceUser, fstest.MapFS{
 		"fixture-doc/SKILL.md": {Data: []byte("---\nname: fixture-doc\ndescription: My own fixture doc.\n---\n\nMine.\n")},
 	})

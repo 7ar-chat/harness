@@ -3,14 +3,15 @@
 package harness
 
 import (
+	"github.com/GhaziBenDahmane/harness/adapters/sandbox/backends"
 	"os"
 
+	"github.com/GhaziBenDahmane/harness/adapters/sandbox/local"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/sandbox"
-	"github.com/GhaziBenDahmane/harness/sandbox/local"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
 )
 
-func init() { sandbox.Register(config.BackendLocal, localBackend) }
+func init() { backends.Register(config.BackendLocal, localBackend) }
 
 // localBackend is the SANDBOX_BACKEND=local backend: commands run on this machine.
 func localBackend(cfg *config.Config) (sandbox.Backend, error) {

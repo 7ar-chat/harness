@@ -39,4 +39,4 @@ export OPENSANDBOX_IMAGE=harness-sandbox:local
 
 The harness' own sandbox contract is the `sandbox.Sandbox` interface (Exec, ReadFile,
 WriteFile, MkdirAll, List, Stat) — implement `sandbox.Backend` to run the tools on anything
-else (a VM, Firecracker, a remote dev box). `sandbox/sandboxtest` is an in-memory fake.
+else (a VM, Firecracker, a remote dev box). `core/sandbox/sandboxtest` is an in-memory fake.

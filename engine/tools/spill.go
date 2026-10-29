@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/GhaziBenDahmane/harness/sandbox"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
 )
 
 // SpillDir is where large tool outputs are written in full (scratch space, never saved).

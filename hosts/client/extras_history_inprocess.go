@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/store"
+	"github.com/GhaziBenDahmane/harness/core/store"
 )
 
 // historyErr turns the errors of the history operations into the API errors.
