@@ -229,12 +229,13 @@ func TestEveryDocumentedScriptFlagIsAccepted(t *testing.T) {
 }
 
 func TestSharedScriptCopiesMatchTheirSource(t *testing.T) {
-	// The helper scripts several skills ship (cross_check.py, lo.py, blocks.py) have one source of truth, shared/<name>: every skill's copy is byte-identical to it (bash sync_shared.sh copies it), so a skill never depends on another one being loaded and a fix reaches all of them.
+	// The helper scripts several skills ship (cross_check.py, lo.py, blocks.py, opserr.py) have one source of truth, shared/<name>: every skill's copy is byte-identical to it (bash sync_shared.sh copies it), so a skill never depends on another one being loaded and a fix reaches all of them.
 	// Arrange
 	want := map[string][]string{ // the skills that must ship each helper
 		"cross_check.py": {"docx", "pptx", "xlsx", "pdf"},
 		"lo.py":          {"docx", "pptx", "pdf"},
 		"blocks.py":      {"docx", "pdf"},
+		"opserr.py":      {"docx", "xlsx"},
 	}
 	sources, _ := filepath.Glob(filepath.Join("shared", "*"))
 
