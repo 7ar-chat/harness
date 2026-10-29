@@ -32,6 +32,8 @@ type inProcess struct {
 	user   string
 	models []string
 	def    string
+	// projectDir is where Commands looks for the project's .har directory from.
+	projectDir string
 }
 
 // InProcess returns a Client for user over a harness running in this process.
@@ -186,12 +188,20 @@ func (c *inProcess) Send(ctx context.Context, threadID, text string, o SendOptio
 	}
 	run, err := c.h.Send(ctx, c.user, threadID, text, harness.RunOptions{
 		Model: c.modelOr(o.Model), ReasoningEffort: o.ReasoningEffort, Skills: o.Skills, Interactive: o.Interactive,
-		Sandbox: harness.SandboxMode(o.Sandbox),
+		Sandbox: harness.SandboxMode(o.Sandbox), Mode: harness.RunMode(o.Mode), Attachments: toAttachments(o.Attachments),
 	})
 	if err != nil {
 		return nil, mapErr(err)
 	}
 	return toRun(run), nil
+}
+
+func toAttachments(list []Attachment) []harness.Attachment {
+	var out []harness.Attachment
+	for _, a := range list {
+		out = append(out, harness.Attachment{Name: a.Name, MIME: a.MIME, Data: a.Data})
+	}
+	return out
 }
 
 func (c *inProcess) GetRun(ctx context.Context, runID string) (*Run, error) {
@@ -251,7 +261,7 @@ func (c *inProcess) Resume(ctx context.Context, threadID string, r ResumeRequest
 	}
 	run, err := c.h.Resume(ctx, c.user, threadID, harness.ResumeRequest{
 		InterruptID: r.InterruptID, Reason: r.Reason, Decision: r.Decision, Always: r.Always, Text: r.Text,
-		Model: c.modelOr(r.Model), Interactive: r.Interactive, ReasoningEffort: r.ReasoningEffort,
+		Model: c.modelOr(r.Model), Interactive: r.Interactive, ReasoningEffort: r.ReasoningEffort, Mode: harness.RunMode(r.Mode),
 	})
 	if err != nil {
 		return nil, mapErr(err)

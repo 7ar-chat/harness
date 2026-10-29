@@ -26,6 +26,8 @@ type ResumeRequest struct {
 	Model           string
 	Interactive     bool
 	ReasoningEffort string
+	// Mode is ModeBuild or ModePlan; empty keeps the mode of the thread's previous run.
+	Mode RunMode
 }
 
 // Resume answers a run's interrupt (a tool approval or an ask_user question) and
@@ -52,13 +54,20 @@ func (h *Harness) Resume(ctx context.Context, user, threadID string, r ResumeReq
 		}
 		res.Content = r.Text
 	}
+	runMd := ""
+	if r.Mode != "" {
+		var err error
+		if runMd, err = runMode(r.Mode); err != nil {
+			return nil, err
+		}
+	}
 	mode := ""
 	if r.Interactive {
 		mode = store.InteractionInteractive
 	}
 	run, _, err := h.Store.CreateRun(ctx, store.NewRun{
 		RunID: uuid.NewString(), ThreadID: threadID, UserLogin: user, Model: r.Model,
-		Resume: res, InteractionMode: mode, ReasoningEffort: r.ReasoningEffort,
+		Resume: res, InteractionMode: mode, ReasoningEffort: r.ReasoningEffort, Mode: runMd,
 	})
 	if err != nil {
 		return nil, err

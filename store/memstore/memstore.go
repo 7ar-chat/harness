@@ -260,7 +260,7 @@ func (s *Store) CreateRun(_ context.Context, in store.NewRun) (*store.Run, *stor
 	}
 	r := &store.Run{ID: in.RunID, ThreadID: in.ThreadID, UserLogin: in.UserLogin, Status: store.StatusQueued,
 		Model: in.Model, CreatedAt: now, Kind: runKind(in.Kind), ReasoningEffort: in.ReasoningEffort,
-		InteractionMode: mode, Sandbox: s.runSandboxLocked(in)}
+		InteractionMode: mode, Sandbox: s.runSandboxLocked(in), Mode: s.runModeLocked(in)}
 	s.runs[r.ID] = r
 	apply(r.ID)
 	s.recordRunSkills(r.ID, in.Skills)
@@ -590,6 +590,24 @@ func (s *Store) SetRunOutcome(_ context.Context, id, status, errCode, errMsg str
 		}
 	}
 	return nil
+}
+
+// runModeLocked is the mode of a new run: the requested one, else the mode of
+// the thread's latest run.
+func (s *Store) runModeLocked(in store.NewRun) string {
+	if in.Mode != "" {
+		return in.Mode
+	}
+	var last *store.Run
+	for _, r := range s.runs {
+		if r.ThreadID == in.ThreadID && (last == nil || r.CreatedAt.After(last.CreatedAt)) {
+			last = r
+		}
+	}
+	if last == nil {
+		return ""
+	}
+	return last.Mode
 }
 
 // runSandboxLocked is the sandbox mode of a new run: the requested one, else

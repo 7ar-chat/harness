@@ -238,6 +238,12 @@ type RunOptions struct {
 	// It is kept in the run record: a resumed run, a goal turn and a
 	// compaction keep the mode of the thread's latest run.
 	Sandbox SandboxMode
+	// Mode is ModeBuild (default) or ModePlan (read-only: no tool may change
+	// anything). It is kept in the run record, so a worker process honours it.
+	Mode RunMode
+	// Attachments are images sent with the message (at most MaxAttachments of
+	// MaxAttachmentBytes each); they are stored in the thread's workspace.
+	Attachments []Attachment
 }
 
 // SandboxMode is RunOptions.Sandbox.
@@ -285,13 +291,25 @@ func (h *Harness) Send(ctx context.Context, user, threadID, text string, o RunOp
 	if err != nil {
 		return nil, err
 	}
+	runMd, err := runMode(o.Mode)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkAttachments(o.Attachments); err != nil {
+		return nil, err
+	}
+	meta, err := h.storeAttachments(ctx, user, threadID, o.Attachments)
+	if err != nil {
+		return nil, err
+	}
 	mode := ""
 	if o.Interactive {
 		mode = "interactive"
 	}
 	run, _, err := h.Store.CreateRun(ctx, store.NewRun{
 		RunID: uuid.NewString(), ThreadID: threadID, UserLogin: user, Model: o.Model,
-		Message:         store.Message{ID: o.MessageID, Role: store.RoleUser, Content: text},
+		Message:         store.Message{ID: o.MessageID, Role: store.RoleUser, Content: text, Metadata: meta},
+		Mode:            runMd,
 		AutoTitle:       autoTitle(text),
 		Skills:          o.Skills,
 		ReasoningEffort: o.ReasoningEffort,

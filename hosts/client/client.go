@@ -201,6 +201,8 @@ type ResumeRequest struct {
 	Model           string `json:"model,omitempty"`
 	ReasoningEffort string `json:"reasoningEffort,omitempty"`
 	Interactive     bool   `json:"interactive,omitempty"`
+	// Mode is ModeBuild or ModePlan ("": the mode of the thread's previous run).
+	Mode string `json:"mode,omitempty"`
 }
 
 // File is an entry of a thread's workspace.

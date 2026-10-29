@@ -170,11 +170,21 @@ func (a *Agent) Run(ctx context.Context, in Input, w eventlog.Writer) (Result, e
 	}
 	defer cleanup()
 
+	plan := isPlanRun(in.Run)
+	hasExec := false
+	for _, t := range toolList {
+		if info, err := t.Info(ctx); err == nil && info != nil && info.Name == "execute_command" {
+			hasExec = true
+		}
+	}
 	toolMap := map[string]tool.BaseTool{}
 	var infos []*schema.ToolInfo
 	for _, t := range toolList {
 		info, err := t.Info(ctx)
 		if err != nil || info == nil {
+			continue
+		}
+		if plan && !planAllows(t, info.Name) {
 			continue
 		}
 		toolMap[info.Name] = t
@@ -198,7 +208,7 @@ func (a *Agent) Run(ctx context.Context, in Input, w eventlog.Writer) (Result, e
 	st.base = base
 	st.g.guards = stopGuards(toolMap)
 	st.observeTurn(toolMap)
-	st.in.Sandbox = toolMap["execute_command"] != nil
+	st.in.Sandbox = hasExec // a plan run keeps the sandbox prompt: it still reads the workspace
 	st.buildPrompt(ctx, now())
 	st.h.window = a.window(in.Run.Model)
 	st.h.reserved = compaction.EstimateText(st.h.systemBase) + compaction.EstimateTools(infos)
