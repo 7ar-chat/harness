@@ -252,3 +252,8 @@ func (s *Store) ExpireApprovals(ctx context.Context, ttl time.Duration, threadID
 func (s *Store) SetThreadInteractionMode(ctx context.Context, login, threadID, mode string) error {
 	return s.after(s.Store.SetThreadInteractionMode(ctx, login, threadID, mode), threadID)
 }
+
+// SupersedeFrom implements store.HistoryStore.
+func (s *Store) SupersedeFrom(ctx context.Context, login, threadID, messageID string) error {
+	return s.after(s.Store.SupersedeFrom(ctx, login, threadID, messageID), threadID)
+}

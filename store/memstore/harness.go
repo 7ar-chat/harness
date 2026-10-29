@@ -476,3 +476,45 @@ func (s *Store) ListCompactions(_ context.Context, threadID string) ([]store.Com
 	}
 	return out, nil
 }
+
+var _ store.HistoryStore = (*Store)(nil)
+
+// SupersedeFrom implements store.HistoryStore.
+func (s *Store) SupersedeFrom(_ context.Context, login, threadID, messageID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.h.init()
+	t, err := s.ownedLocked(login, threadID)
+	if err != nil {
+		return err
+	}
+	if s.activeRunLocked(t.ID) != nil {
+		return store.ErrRunActive
+	}
+	var from int64 = -1
+	for _, m := range s.messages {
+		if m.ThreadID == t.ID && m.ID == messageID && m.Role == store.RoleUser && !s.h.superseded[msgKey(m.ThreadID, m.ID)] {
+			from = m.Position
+		}
+	}
+	if from < 0 {
+		return store.ErrInvalidReplace
+	}
+	var visible []*store.Message
+	for _, m := range s.messages {
+		if m.ThreadID != t.ID {
+			continue
+		}
+		if m.Position >= from {
+			s.h.superseded[msgKey(m.ThreadID, m.ID)] = true
+		} else if !s.h.superseded[msgKey(m.ThreadID, m.ID)] {
+			visible = append(visible, m)
+		}
+	}
+	if sum, ok := s.h.summaries[t.ID]; ok && sum.ThroughPosition >= from {
+		delete(s.h.summaries, t.ID)
+	}
+	t.Plan = store.LatestPlan(visible)
+	t.PendingQuestion = nil
+	return nil
+}

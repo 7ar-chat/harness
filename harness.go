@@ -115,6 +115,7 @@ type Harness struct {
 	Agent     *agent.Agent
 
 	sandboxTools bool
+	redo         redoStacks
 }
 
 // New wires the harness: the core (store, models, sandboxes, infrastructure,

@@ -26,5 +26,8 @@ func (h Hook) BeforeRun(ctx context.Context, run *store.Run) {
 		slog.Warn("gitsafe: snapshot failed", "run_id", run.ID, "error", err)
 	default:
 		slog.Info("gitsafe: snapshot", "run_id", run.ID, "ref", s.Ref)
+		if err := RecordRun(ctx, h.Dir, run.ThreadID, run.ID, s); err != nil {
+			slog.Warn("gitsafe: recording the run failed", "run_id", run.ID, "error", err)
+		}
 	}
 }

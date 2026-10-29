@@ -484,3 +484,58 @@ func (s *PG) ListCompactions(ctx context.Context, threadID string) ([]store.Comp
 	}
 	return out, rows.Err()
 }
+
+var _ store.HistoryStore = (*PG)(nil)
+
+// SupersedeFrom implements store.HistoryStore.
+func (s *PG) SupersedeFrom(ctx context.Context, login, threadID, messageID string) error {
+	if !validUUID(threadID) {
+		return store.ErrNotFound
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var through *int64
+	err = tx.QueryRow(ctx, `SELECT summary_through_position FROM work_threads
+		WHERE id = $1 AND user_login = $2 AND deleted_at IS NULL FOR UPDATE`, threadID, login).Scan(&through)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return store.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	var active bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM work_runs WHERE thread_id = $1 AND status IN ('queued', 'running'))`, threadID).Scan(&active); err != nil {
+		return err
+	}
+	if active {
+		return store.ErrRunActive
+	}
+	var pos int64
+	err = tx.QueryRow(ctx, `SELECT position FROM work_messages
+		WHERE thread_id = $1 AND id = $2 AND role = 'user' AND superseded_at IS NULL`, threadID, messageID).Scan(&pos)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return store.ErrInvalidReplace
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE work_messages SET superseded_at = now()
+		WHERE thread_id = $1 AND position >= $2 AND superseded_at IS NULL`, threadID, pos); err != nil {
+		return err
+	}
+	if through != nil && *through >= pos {
+		if _, err := tx.Exec(ctx, `UPDATE work_threads SET summary = NULL, summary_through_position = NULL WHERE id = $1`, threadID); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE work_threads SET pending_question = NULL WHERE id = $1`, threadID); err != nil {
+		return err
+	}
+	if err := s.recomputePlan(ctx, tx, threadID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}

@@ -335,5 +335,11 @@ func Drop(ctx context.Context, dir, thread string) error {
 			}
 		}
 	}
+	runs, _ := git(ctx, top, nil, "for-each-ref", "--format=%(refname)", runNS+safeThread(thread)+"/")
+	for _, ref := range strings.Fields(runs) {
+		if _, err := git(ctx, top, nil, "update-ref", "-d", ref); err != nil {
+			return err
+		}
+	}
 	return nil
 }

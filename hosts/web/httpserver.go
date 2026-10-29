@@ -124,6 +124,7 @@ func New(h *harness.Harness, o Options) http.Handler {
 	s.route("GET /runs/{id}/events", s.events)
 	s.route("POST /runs/{id}/cancel", s.cancel)
 	s.route("POST /runs/{id}/steer", s.steer)
+	s.routeHistory()
 	if !o.NoUI {
 		mountUI(s.mux)
 	}

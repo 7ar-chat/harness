@@ -54,6 +54,7 @@ func Run(t *testing.T, mk Factory) {
 	t.Run("sessions need a durable store", func(t *testing.T) { testSessions(t, mk) })
 	t.Run("approval round trip", func(t *testing.T) { testApproval(t, mk) })
 	t.Run("files", func(t *testing.T) { testFiles(t, mk) })
+	runHistory(t, mk)
 }
 
 type rig struct {
@@ -66,6 +67,8 @@ type rig struct {
 type rigOpts struct {
 	model *llmtest.Model
 	local bool // the local sandbox backend instead of the fake one
+	// workspace is the local backend's workspace (default: an empty temporary directory).
+	workspace string
 }
 
 func newRig(t *testing.T, mk Factory, o rigOpts) *rig {
@@ -79,7 +82,10 @@ func newRig(t *testing.T, mk Factory, o rigOpts) *rig {
 	t.Setenv("AGENT_PERMISSIONS_DENY", "")
 	if o.local {
 		t.Setenv("SANDBOX_BACKEND", "local")
-		t.Setenv("LOCAL_WORKSPACE", t.TempDir())
+		if o.workspace == "" {
+			o.workspace = t.TempDir()
+		}
+		t.Setenv("LOCAL_WORKSPACE", o.workspace)
 		t.Setenv("LOCAL_STATE_DIR", t.TempDir())
 	}
 	cfg, err := config.Load()
