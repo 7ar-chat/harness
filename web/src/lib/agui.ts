@@ -46,7 +46,8 @@ export type LivePart =
       sub?: SubagentState;
     }
   | { kind: "steer"; id: string; text: string; delivered: boolean; author?: string; authorKind?: string; onBehalfOf?: string }
-  | { kind: "error"; id: string; code?: string; message: string };
+  | { kind: "error"; id: string; code?: string; message: string }
+  | { kind: "memory"; id: string; action: string; title: string; text: string; proposed: boolean };
 
 export interface Interrupt {
   id: string;
@@ -194,6 +195,11 @@ function reduceCustom(state: LiveState, name: string, v: Record<string, unknown>
       return s(v.title) ? { ...state, title: s(v.title) } : state;
     case "work.tool_output":
       return { ...state, parts: updateTool(state.parts, s(v.toolCallId), (t) => ({ ...t, output: t.output + s(v.text) })) };
+    case "work.memory":
+      return {
+        ...state,
+        parts: [...state.parts, { kind: "memory", id: `mem-${state.parts.length}`, action: s(v.action), title: s(v.title), text: s(v.text), proposed: s(v.action) === "proposed" || v.proposed === true }],
+      };
     case "work.steer":
       return {
         ...state,

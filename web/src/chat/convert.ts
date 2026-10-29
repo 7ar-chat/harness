@@ -28,6 +28,8 @@ export function toThreadMessage(m: ChatMessage): ThreadMessageLike {
           return { type: "reasoning" as const, text: p.text };
         case "error":
           return { type: "text" as const, text: `**Error${p.code ? ` (${p.code})` : ""}:** ${p.message}` };
+        case "memory":
+          return { type: "data-memory" as const, id: p.id, data: { action: p.action, title: p.title, text: p.text, proposed: p.proposed } };
         case "tool": {
           const artifact: ToolArtifact = { output: p.output, ended: p.ended, sub: p.sub };
           return {

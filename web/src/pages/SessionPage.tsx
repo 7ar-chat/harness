@@ -150,6 +150,7 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
       models={infoModels}
       suggestions={supervisor ? SUGGESTIONS : undefined}
       onStatus={setStatus}
+      projectId={t.projectId}
       emptyHint={supervisor ? "Ask your assistant about your running sessions. It can watch them, answer for you, and nudge stuck ones." : "Send a message to start. Everyone with access to this project can see this session."}
     />
   );

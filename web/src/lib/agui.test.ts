@@ -133,3 +133,13 @@ describe("reduceEvents", () => {
     expect(reduceEvents(after, { type: "SOMETHING_NEW" })).toBe(after);
   });
 });
+
+describe("work.memory", () => {
+  it("records memory notes and flags proposals", () => {
+    const st = run([
+      { type: "CUSTOM", name: "work.memory", value: { action: "created", title: "Use tabs", text: "x" } },
+      { type: "CUSTOM", name: "work.memory", value: { action: "proposed", title: "CI is slow", text: "y", proposal: "create" } },
+    ]);
+    expect(st.parts).toMatchObject([{ kind: "memory", action: "created", proposed: false }, { kind: "memory", action: "proposed", proposed: true, title: "CI is slow" }]);
+  });
+});

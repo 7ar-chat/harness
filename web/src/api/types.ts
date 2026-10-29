@@ -215,6 +215,22 @@ export interface WorkspaceFile {
   modifiedAt?: string;
 }
 
+export interface MemoryHistoryItem {
+  title?: string;
+  content: string;
+  replaced_at?: string;
+  thread?: string;
+}
+export interface MemoryMetadata {
+  pinned?: boolean;
+  auto?: boolean;
+  reason?: string;
+  run_id?: string;
+  source?: string;
+  file?: string;
+  history?: MemoryHistoryItem[];
+  [k: string]: unknown;
+}
 export interface MemoryEntry {
   id: string;
   path?: string;
@@ -223,9 +239,20 @@ export interface MemoryEntry {
   tags?: string[];
   status: "active" | "pending";
   proposal?: { title?: string; content?: string; tags?: string[] } | null;
+  importance?: number | null;
+  created_at?: string;
   updated_at?: string;
   source?: string;
-  metadata?: Record<string, unknown>;
+  sourceThreadId?: string;
+  metadata?: MemoryMetadata;
+}
+export interface MemoryStats {
+  active: number;
+  pending: number;
+  pinned: number;
+  byKind: Record<string, number>;
+  embeddings: { enabled: boolean; model?: string; vectors?: number };
+  service: Partial<Record<"recallRuns" | "recallItems" | "recallChars" | "recallPinned" | "searches" | "searchHits" | "extractRuns" | "extractProposed" | "extractSkipped" | "extractErrors" | "embedded" | "embedErrors", number>>;
 }
 export interface MemoryList {
   entries: MemoryEntry[];

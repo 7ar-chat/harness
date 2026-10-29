@@ -75,7 +75,7 @@ export function FeedProvider({ children }: { children: ReactNode }) {
         void qc.invalidateQueries({ queryKey: qk.me });
         if (ev.projectId) void qc.invalidateQueries({ queryKey: ["project", ev.projectId] });
       }
-      if (ev.type === "memory.changed") void qc.invalidateQueries({ queryKey: ["memory"] });
+      if (ev.type === "memory.changed" || ev.type === "run.finished") void qc.invalidateQueries({ queryKey: ["memory"] });
       const sound = soundFor(ev, { me: meRef.current, watching: document.hasFocus() && !document.hidden ? openThread.current : undefined });
       if (sound) cue(sound);
       if (ev.type === "run.finished" && ev.status && NEEDS_YOU[ev.status] && ev.threadId) {

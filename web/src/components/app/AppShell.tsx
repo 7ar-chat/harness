@@ -3,7 +3,7 @@ import { Bot, Brain, ChevronRight, LayoutDashboard, LogOut, Monitor, Moon, Plus,
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { getDevUser, setDevUser } from "@/api/client";
-import { supervisorQuery, useMe, useOverview } from "@/api/queries";
+import { supervisorQuery, useMe, useMemoryStats, useOverview } from "@/api/queries";
 import type { OverviewProject, ThreadSummary } from "@/api/types";
 import { useQuery } from "@tanstack/react-query";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -45,6 +45,7 @@ function ProjectGroup({ p, openId, openProject }: { p: OverviewProject; openId?:
   const threads = p.threads.filter((t) => t.kind !== "supervisor").sort(byRecent);
   const active = threads.filter((t) => needsYou(t.status)).length;
   const [open, setOpen] = useState(true);
+  const memPending = useMemoryStats({ project: p.id }).data?.pending ?? 0;
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <SidebarMenuItem>
@@ -56,7 +57,13 @@ function ProjectGroup({ p, openId, openProject }: { p: OverviewProject; openId?:
         <SidebarMenuButton asChild isActive={openProject === p.id} className="pl-7">
           <Link to="/p/$projectId" params={{ projectId: p.id }} search={{ tab: undefined }}>
             <span className="truncate font-medium">{p.name}</span>
-            {active ? <span className="ml-auto rounded-full bg-warning px-1.5 text-[10px] text-black">{active}</span> : null}
+            {memPending ? (
+              <span className="ml-auto inline-flex items-center gap-0.5 text-[10px] text-muted-foreground" title={`${memPending} memories to review`} aria-label={`${memPending} memories to review`}>
+                <Brain className="size-3" />
+                {memPending}
+              </span>
+            ) : null}
+            {active ? <span className={`${memPending ? "" : "ml-auto "}rounded-full bg-warning px-1.5 text-[10px] text-black`}>{active}</span> : null}
           </Link>
         </SidebarMenuButton>
         {p.role !== "viewer" ? (

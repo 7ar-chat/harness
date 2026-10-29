@@ -1,8 +1,9 @@
 // Renderers for message parts: markdown text, thinking, tool cards (with diffs and sub-agents).
 import type { ReasoningMessagePartComponent, TextMessagePartComponent, ToolCallMessagePartComponent } from "@assistant-ui/react";
 import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
+import { Link } from "@tanstack/react-router";
 import { Bot, Brain, Check, ChevronRight, Loader2, TriangleAlert, Wrench, X } from "lucide-react";
-import { lazy, Suspense, useState, type ReactNode } from "react";
+import { createContext, lazy, Suspense, useContext, useState, type ReactNode } from "react";
 import remarkGfm from "remark-gfm";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { editOf, parseArgs, summarizeArgs, type SubagentState } from "@/lib/agui";
@@ -100,3 +101,31 @@ export const ToolCard: ToolCallMessagePartComponent = ({ toolName, argsText, res
     </Collapsible>
   );
 };
+
+/** The project whose memory review queue a "proposed" note links to (undefined: the user's global memory). */
+export const MemoryLinkContext = createContext<string | undefined>(undefined);
+
+export function MemoryNote({ data }: { data: unknown }) {
+  const d = data as { action?: string; title?: string; text?: string; proposed?: boolean };
+  const project = useContext(MemoryLinkContext);
+  const verb = d.action === "proposed" ? "suggested a memory" : d.action === "deleted" ? "deleted a memory" : d.action === "updated" ? "updated a memory" : "saved a memory";
+  return (
+    <div className="my-1 flex flex-wrap items-center gap-1.5 rounded-md border border-dashed px-3 py-1.5 text-xs text-muted-foreground">
+      <Brain className="size-3" />
+      <span>
+        {verb}: <span className="text-foreground">{d.title}</span>
+      </span>
+      {d.proposed ? (
+        project ? (
+          <Link to="/p/$projectId" params={{ projectId: project }} search={{ tab: "memory" }} className="ml-auto text-primary underline">
+            Review
+          </Link>
+        ) : (
+          <Link to="/memory" className="ml-auto text-primary underline">
+            Review
+          </Link>
+        )
+      ) : null}
+    </div>
+  );
+}

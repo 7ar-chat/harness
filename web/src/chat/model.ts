@@ -6,7 +6,8 @@ export type ChatPart =
   | { kind: "text"; id: string; text: string }
   | { kind: "reasoning"; id: string; text: string }
   | { kind: "tool"; id: string; name: string; args: string; result?: string; isError?: boolean; output: string; ended: boolean; sub?: SubagentState }
-  | { kind: "error"; id: string; code?: string; message: string };
+  | { kind: "error"; id: string; code?: string; message: string }
+  | { kind: "memory"; id: string; action: string; title: string; text: string; proposed: boolean };
 
 export interface ChatMessage {
   id: string;

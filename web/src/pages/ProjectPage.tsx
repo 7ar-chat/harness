@@ -2,9 +2,9 @@ import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
 import { formatDistanceToNowStrict } from "date-fns";
 import { ExternalLink, GitBranch, Plus, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { isOwner, canWrite } from "@/api/client";
+import { isOwner, canWrite, downloadText, ApiError } from "@/api/client";
 import {
-  useAudit, useDeleteProject, useGithub, useInvite, useInvites, useMe, useMembers, useOverview, useProject, useRecheckGithub, useRemoveMember, useRevokeInvite, useSetMember, useUpdateProject,
+  useAudit, useDeleteProject, useGithub, useImportAgents, useMemoryStats, toastError, useInvite, useInvites, useMe, useMembers, useOverview, useProject, useRecheckGithub, useRemoveMember, useRevokeInvite, useSetMember, useUpdateProject,
 } from "@/api/queries";
 import type { Role } from "@/api/types";
 import { Empty, ErrorState, ListSkeleton, RoleBadge, StatusDot, UserAvatar } from "@/components/app/common";
@@ -18,6 +18,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { useGithubConnector } from "@/components/app/github-import";
+import { toast } from "sonner";
+import { Download, FileText } from "lucide-react";
 import { MemoryManager } from "./Memory";
 
 const ago = (iso: string) => `${formatDistanceToNowStrict(new Date(iso))} ago`;
@@ -239,6 +242,9 @@ export function ProjectPage() {
   const overview = useOverview().data;
   const self = useMe().data?.user.login ?? "";
   const { newSession } = useDialogs();
+  const stats = useMemoryStats({ project: projectId });
+  const importAgents = useImportAgents(projectId);
+  const { ready: ghReady } = useGithubConnector();
   if (project.isLoading) return <ListSkeleton />;
   if (project.error || !project.data) return <ErrorState error={project.error} retry={() => void project.refetch()} />;
   const p = project.data;
@@ -266,17 +272,40 @@ export function ProjectPage() {
               ) : null}
             </div>
           </div>
-          {canWrite(p.role) ? (
-            <Button onClick={() => newSession(projectId)}>
-              <Plus /> New session
+          <div className="flex flex-wrap gap-2">
+            {canWrite(p.role) ? (
+              <Button
+                variant="outline"
+                disabled={importAgents.isPending || !ghReady}
+                title={ghReady ? "Import AGENTS.md from the repository as a pinned memory" : "Connect GitHub (Profile) to import AGENTS.md"}
+                onClick={() =>
+                  importAgents.mutate(undefined, {
+                    onSuccess: (e) => toast.success(`Imported ${e.title || "AGENTS.md"} as a pinned memory`),
+                    onError: (e) => (e instanceof ApiError && e.status === 404 ? toast.info("No AGENTS.md found in the repository, or GitHub is not connected.") : toastError(e)),
+                  })
+                }
+              >
+                <FileText /> Import AGENTS.md
+              </Button>
+            ) : null}
+            <Button variant="outline" onClick={() => downloadText(`/projects/${projectId}/memory/export`, "MEMORY.md").catch(toastError)}>
+              <Download /> Export MEMORY.md
             </Button>
-          ) : null}
+            {canWrite(p.role) ? (
+              <Button onClick={() => newSession(projectId)}>
+                <Plus /> New session
+              </Button>
+            ) : null}
+          </div>
         </div>
         <Tabs value={tab ?? "overview"} onValueChange={(t) => void navigate({ to: "/p/$projectId", params: { projectId }, search: { tab: t as "overview" }, replace: true })}>
           <TabsList className="flex-wrap">
             <TabsTrigger value="overview">Sessions</TabsTrigger>
             <TabsTrigger value="members">Members</TabsTrigger>
-            <TabsTrigger value="memory">Memory</TabsTrigger>
+            <TabsTrigger value="memory" className="gap-1.5">
+              Memory
+              {stats.data?.pending ? <span className="rounded-full bg-warning px-1.5 text-[10px] text-black" aria-label={`${stats.data.pending} to review`}>{stats.data.pending}</span> : null}
+            </TabsTrigger>
             <TabsTrigger value="audit">Audit</TabsTrigger>
             {owner ? <TabsTrigger value="settings">Settings</TabsTrigger> : null}
           </TabsList>

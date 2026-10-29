@@ -55,6 +55,7 @@ const run1 = [
   ev("TOOL_CALL_START", { toolCallId: "x2", toolCallName: "task" }), ev("TOOL_CALL_ARGS", { toolCallId: "x2", delta: '{"prompt":"explore"}' }),
   ev("CUSTOM", { name: "work.subagent", value: { toolCallId: "x2", phase: "start", agent: "explore", model: "m" } }),
   ev("CUSTOM", { name: "work.subagent", value: { toolCallId: "x2", phase: "tool", tool: { name: "grep", args: { pattern: "Sleep" } } } }),
+  ev("CUSTOM", { name: "work.memory", value: { action: "proposed", title: "Refund test must not sleep", text: "…", proposal: "create" } }),
   ev("CUSTOM", { name: "work.usage", value: { inputTokens: 12400, outputTokens: 830, cachedInputTokens: 9000 } }),
   ev("STATE_SNAPSHOT", { snapshot: { plan: [{ id: "1", title: "Reproduce", status: "completed" }, { id: "2", title: "Replace sleep", status: "in_progress" }] } }),
 ];
@@ -64,10 +65,19 @@ const send = (res, status, body) => {
   res.writeHead(status, { "content-type": "application/json", "content-security-policy": CSP });
   res.end(body === undefined ? "" : JSON.stringify(body));
 };
-const mem = [
-  { id: "e1", title: "Use table-driven tests", content: "Prefer table-driven tests with t.Run.", tags: ["go", "testing"], status: "active", updated_at: iso(200), source: "alice" },
-  { id: "e2", title: "CI uses Go 1.24", content: "The CI image pins Go 1.24.", tags: ["ci"], status: "pending", updated_at: iso(10), source: "agent" },
+const E = (id, title, content, path, extra = {}) => ({ id, title, content, path, tags: [], status: "active", importance: null, updated_at: iso(120), source: "user", metadata: {}, ...extra });
+const memShared = [
+  E("e1", "AGENTS.md", "# Project rules\n\n- Run `go test ./...` before pushing.\n- Keep handlers small.\n- Never edit generated files.\n- Prefer table-driven tests.\n- Use `errors.Is`.\n- Log with slog.", "memories/core/agents-md.md", { tags: ["repo"], metadata: { pinned: true, source: "repo", file: "AGENTS.md" }, updated_at: iso(30) }),
+  E("e2", "Use idempotency keys for refunds", "Refund endpoints must accept an Idempotency-Key header and dedupe within 24h.", "memories/semantic/decisions/idempotency.md", { tags: ["api", "refunds"], importance: 0.9, metadata: { pinned: true, history: [{ title: "Idempotency keys", content: "Refunds should dedupe by key.", replaced_at: iso(900), thread: "t1" }, { content: "Maybe dedupe refunds.", replaced_at: iso(3000) }] } }),
+  E("e3", "CI uses Go 1.24", "The CI image pins Go 1.24; bump together with go.mod.", "memories/semantic/facts/ci.md", { tags: ["ci"], importance: 0.5, metadata: { auto: true } }),
+  E("e4", "No network in unit tests", "Unit tests must not call the network; use httptest.", "memories/semantic/constraints/tests.md", { importance: 0.7 }),
+  E("e5", "Flaky refund test uses time.Sleep", "The refund test slept 10ms instead of waiting on the worker. Fixed with a channel.", "memories/semantic/facts/flaky.md", { status: "pending", metadata: { auto: true, reason: "A root cause that took a whole session to find; likely to matter again.", run_id: "r0" }, sourceThreadId: "t1", importance: 0.8 }),
+  E("e6", "Prefer small PRs", "Reviewers asked for PRs under 400 lines.", "memories/semantic/preferences/prs.md", { status: "pending", metadata: { auto: true, reason: "Stated by two reviewers in this conversation." } }),
+  E("e7", "CI uses Go 1.24", "The CI image pins Go 1.24; bump together with go.mod.", "memories/semantic/facts/ci.md", { status: "active", proposal: { title: "CI uses Go 1.25", content: "The CI image now pins Go 1.25; bump together with go.mod." }, metadata: { auto: true, reason: "The Dockerfile in this run pins 1.25." }, id_: 1 }),
 ];
+const memMine = [E("m1", "I prefer terse answers", "Keep answers short; no recap.", "memories/semantic/preferences/terse.md", { tags: ["style"] })];
+const memGlobal = [E("g1", "Use table-driven tests", "Prefer table-driven tests with t.Run.", "memories/semantic/preferences/tdt.md", { tags: ["go"] })];
+let memPick = (u) => (u.searchParams.get("project") ? (u.searchParams.get("mine") === "1" ? memMine : memShared) : memGlobal);
 
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, "http://x");
@@ -104,7 +114,11 @@ const server = http.createServer((req, res) => {
     if (a === "/projects/p1/invites") return send(res, 200, [{ projectId: "p1", email: "dave@example.com", role: "viewer", invitedBy: "alice", createdAt: iso(60) }]);
     if (a.startsWith("/projects/p1/audit")) return send(res, 200, [{ id: 1, projectId: "p1", threadId: "t1", actor: "bob", action: "thread.steer", at: iso(40) }]);
     if (a === "/projects/p1/github") return send(res, 200, { configured: true, connected: false, installUrl: "https://github.com/apps/x/installations/new", message: "Install the app on acme/payments-api." });
-    if (a === "/memory") return send(res, 200, { entries: mem, enabled: true });
+    if (a === "/memory/stats") { const l = memPick(u); const kinds = {}; for (const e of l) { const k = /semantic\/([^/]+)/.exec(e.path)?.[1] ?? "core"; kinds[k] = (kinds[k] ?? 0) + 1; }
+      return send(res, 200, { active: l.filter((e) => e.status === "active").length, pending: l.filter((e) => e.status === "pending" || e.proposal).length, pinned: l.filter((e) => e.metadata.pinned).length, byKind: kinds, embeddings: { enabled: false }, service: { recallRuns: 42, recallItems: 180, recallPinned: 84, searches: 12, searchHits: 30, extractRuns: 40, extractProposed: 9, extractSkipped: 5 } }); }
+    if (a === "/memory") return send(res, 200, { entries: memPick(u), enabled: true });
+    if (a === "/projects/p1/memory/export") { res.writeHead(200, { "content-type": "text/markdown" }); return res.end("# MEMORY\n"); }
+    if (a === "/projects/p1/memory/import-agents") return send(res, 200, memShared[0]);
     let m = /^\/threads\/([^/]+)$/.exec(a);
     if (m) { const d = threadDoc(m[1]); return d ? send(res, 200, d) : send(res, 404, { error: { code: "not_found", message: "Not found." } }); }
     if ((m = /^\/threads\/([^/]+)\/files$/.exec(a))) return send(res, 200, u.searchParams.get("path") ? [{ name: "main.go", path: "/workspace/src/main.go", type: "file", size: 120 }] : [{ name: "src", path: "/workspace/src", type: "directory", size: 0 }, { name: "refund_test.go", path: "/workspace/refund_test.go", type: "file", size: 2048 }]);

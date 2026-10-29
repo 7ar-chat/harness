@@ -116,6 +116,9 @@ func (s *server) memoryKey(w http.ResponseWriter, r *http.Request, c Caller, wri
 func entryView(e *store.MemoryEntry) map[string]any {
 	m := memory.PublicEntry(e)
 	m["content"] = e.Content
+	if e.SourceThreadID != "" {
+		m["sourceThreadId"] = e.SourceThreadID
+	}
 	if e.Proposal != nil {
 		m["proposal"] = e.Proposal
 	}

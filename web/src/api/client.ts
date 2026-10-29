@@ -96,6 +96,20 @@ export async function downloadFile(threadId: string, path: string, name: string)
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
+/** Downloads a text endpoint as a file. */
+export async function downloadText(path: string, name: string) {
+  const r = await fetch("/api" + path, { headers: authHeaders(), credentials: "same-origin" });
+  if (!r.ok) throw new ApiError(r.status, "download", "Export failed.");
+  const url = URL.createObjectURL(await r.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
 export const canWrite = (r?: Role) => r === undefined || r === "owner" || r === "member";
 export const isOwner = (r?: Role) => r === "owner";
 

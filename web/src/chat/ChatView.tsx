@@ -13,7 +13,7 @@ import { UserAvatar } from "@/components/app/common";
 import { Button } from "@/components/ui/button";
 import { markSeen } from "@/lib/unread";
 import { toThreadMessage, type MessageCustom } from "./convert";
-import { MarkdownText, PlainText, Reasoning, ToolCard } from "./parts";
+import { MarkdownText, MemoryLinkContext, MemoryNote, PlainText, Reasoning, ToolCard } from "./parts";
 import { InterruptCard } from "./Prompts";
 import { useChat, type RunSettings } from "./useChat";
 import { formatUsage } from "./usage";
@@ -65,7 +65,7 @@ function AssistantMessage() {
         <span className="font-medium text-foreground">Agent</span>
       </div>
       <div className="min-w-0 pl-7">
-        <MessagePrimitive.Parts components={{ Text: MarkdownText, Reasoning, tools: { Fallback: ToolCard }, Empty: Thinking }} />
+        <MessagePrimitive.Parts components={{ Text: MarkdownText, Reasoning, tools: { Fallback: ToolCard }, Empty: Thinking, data: { by_name: { memory: ({ data }) => <MemoryNote data={data} /> } } }} />
       </div>
     </MessagePrimitive.Root>
   );
@@ -143,9 +143,10 @@ export interface ChatViewProps {
   models?: Record<string, ModelInfo>;
   onStatus?: (s: { running: boolean; cancel: () => void; title?: string; plan?: { id: string; title: string; status: string }[] }) => void;
   emptyHint?: ReactNode;
+  projectId?: string;
 }
 
-export function ChatView({ threadId, settings, readOnly, users, self, suggestions, models, onStatus, emptyHint }: ChatViewProps) {
+export function ChatView({ threadId, settings, readOnly, users, self, suggestions, models, onStatus, emptyHint, projectId }: ChatViewProps) {
   const chat = useChat(threadId, settings, users, self);
   const commands = useCommands().data ?? [];
   const { messages, running, send, resume, cancel, interrupt, live, busy, thread } = chat;
@@ -192,6 +193,7 @@ export function ChatView({ threadId, settings, readOnly, users, self, suggestion
   const asked = t?.createdBy && interrupt ? t.createdBy : undefined;
 
   return (
+    <MemoryLinkContext.Provider value={projectId}>
     <AssistantRuntimeProvider runtime={runtime}>
       <ThreadPrimitive.Root className="flex h-full min-h-0 flex-col">
         <ThreadPrimitive.Viewport className="min-h-0 flex-1 overflow-y-auto scroll-smooth py-2" aria-live="polite">
@@ -221,6 +223,7 @@ export function ChatView({ threadId, settings, readOnly, users, self, suggestion
         </div>
       </ThreadPrimitive.Root>
     </AssistantRuntimeProvider>
+    </MemoryLinkContext.Provider>
   );
 }
 

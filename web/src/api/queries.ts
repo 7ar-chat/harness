@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { toast } from "sonner";
 import { api, ApiError, isUnsupported, putBytes } from "./client";
 import type {
-  AuditEntry, Connector, GithubRepos, User, Command, GithubStatus, Invite, Me, Member, MemoryEntry, MemoryInput, MemoryList, Models, Overview,
+  AuditEntry, Connector, GithubRepos, User, Command, GithubStatus, Invite, Me, Member, MemoryEntry, MemoryInput, MemoryList, MemoryStats, Models, Overview,
   Project, ProjectWithRole, Role, Thread, WorkspaceFile,
 } from "./types";
 
@@ -19,7 +19,6 @@ export const qk = {
   invites: (id: string) => ["project", id, "invites"] as const,
   audit: (id: string) => ["project", id, "audit"] as const,
   github: (id: string) => ["project", id, "github"] as const,
-  memory: (project?: string) => ["memory", project ?? "user"] as const,
   files: (thread: string, path: string) => ["files", thread, path] as const,
 };
 
@@ -78,8 +77,30 @@ export const useGithub = (id: string) =>
 export const useFiles = (thread: string, path: string, enabled = true) =>
   useQuery({ queryKey: qk.files(thread, path), queryFn: () => api.get<WorkspaceFile[]>(`/threads/${thread}/files?path=${encodeURIComponent(path)}`), enabled, retry: false });
 
-const memPath = (project?: string, suffix = "") => `/memory${suffix}${project ? `?project=${encodeURIComponent(project)}` : ""}`;
-export const useMemory = (project?: string) => useQuery({ queryKey: qk.memory(project), queryFn: () => api.get<MemoryList>(memPath(project)) });
+export interface MemScope {
+  project?: string;
+  /** The user's private layer inside the project. */
+  mine?: boolean;
+}
+const memQuery = (sc: MemScope) => (sc.project ? `?project=${encodeURIComponent(sc.project)}${sc.mine ? "&mine=1" : ""}` : "");
+const memPath = (sc: MemScope, suffix = "") => `/memory${suffix}${memQuery(sc)}`;
+const memKey = (sc: MemScope, extra?: string) => ["memory", sc.project ?? "user", sc.mine ? "mine" : "shared", ...(extra ? [extra] : [])] as const;
+export const useMemory = (sc: MemScope) => useQuery({ queryKey: memKey(sc), queryFn: () => api.get<MemoryList>(memPath(sc)) });
+export const useMemoryStats = (sc: MemScope, enabled = true) =>
+  useQuery({
+    queryKey: memKey(sc, "stats"),
+    queryFn: async () => {
+      try {
+        return await api.get<MemoryStats>(memPath(sc, "/stats"));
+      } catch (e) {
+        if (isUnsupported(e)) return null;
+        throw e;
+      }
+    },
+    enabled,
+    retry: false,
+    staleTime: 30_000,
+  });
 
 export function errMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -118,11 +139,22 @@ export const useCreateThread = () => useAction((b: { title: string; projectId?: 
 export const useRenameThread = (id: string) => useAction((title: string) => api.patch<Thread>(`/threads/${id}`, { title }), () => [qk.thread(id), qk.overview]);
 export const useDeleteThread = () => useAction((id: string) => api.del(`/threads/${id}`), () => [qk.overview], "Session deleted");
 
-export const useSaveMemory = (project?: string) =>
-  useAction((v: { id?: string; input: MemoryInput }) => (v.id ? api.patch<MemoryEntry>(memPath(project, `/${v.id}`), v.input) : api.post<MemoryEntry>(memPath(project), v.input)), () => [qk.memory(project)]);
-export const useDeleteMemory = (project?: string) => useAction((id: string) => api.del(memPath(project, `/${id}`)), () => [qk.memory(project)]);
-export const useDecideMemory = (project?: string) =>
-  useAction((v: { id: string; action: "confirm" | "reject" }) => api.post(memPath(project, `/${v.id}/${v.action}`)), () => [qk.memory(project)]);
+const memInvalidate = () => [["memory"]] as const;
+export const useSaveMemory = (sc: MemScope) =>
+  useAction((v: { id?: string; input: Partial<MemoryInput> & { pinned?: boolean } }) => (v.id ? api.patch<MemoryEntry>(memPath(sc, `/${v.id}`), v.input) : api.post<MemoryEntry>(memPath(sc), v.input)), memInvalidate);
+export const useDeleteMemory = (sc: MemScope) => useAction((id: string) => api.del(memPath(sc, `/${id}`)), memInvalidate);
+export const useDecideMemory = (sc: MemScope) =>
+  useAction((v: { id: string; action: "confirm" | "reject" }) => api.post(memPath(sc, `/${v.id}/${v.action}`)), memInvalidate);
+/** Keeps or discards several entries; reports how many succeeded. */
+export const useBulkDecide = (sc: MemScope) =>
+  useAction(
+    async (v: { ids: string[]; action: "confirm" | "reject" }) => {
+      const rs = await Promise.allSettled(v.ids.map((id) => api.post(memPath(sc, `/${id}/${v.action}`))));
+      return rs.filter((r) => r.status === "fulfilled").length;
+    },
+    memInvalidate,
+  );
+export const useImportAgents = (pid: string) => useAction(() => api.post<MemoryEntry>(`/projects/${pid}/memory/import-agents`), memInvalidate);
 
 export const useSupervisorSettings = () =>
   useQuery({
