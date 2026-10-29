@@ -61,6 +61,48 @@ tools to look and to act on every session the user can see:
 or run silently for `stuckMinutes` are queued and, in batches (at most every two minutes), put to the supervisor
 as a `[watcher]` message that it answers once.
 
+## Memory
+
+Three layers, all with the same API (`/api/memory`): **project** (`?project=ID`, shared by members), **me in this
+project** (`?project=ID&mine=1`, private; used when that user is the one asking) and **global** (no parameter,
+personal sessions). In a shared session the agent sees the project layer and the asking user's private layer, never
+another member's.
+
+What an agent gets at the start of a run (`features/memory/recall.go`):
+
+1. the **pinned** entries (`metadata.pinned`, up to 2,500 characters) of every layer: the always-on block. The
+   repository's `AGENTS.md` (or `CLAUDE.md`) is imported as a pinned entry when a project is imported from GitHub
+   and on demand (`POST /api/projects/{id}/memory/import-agents`); `GET /api/projects/{id}/memory/export` renders the
+   memory as markdown to commit back;
+2. the entries that **match the user's last message**, by words (with light stemming and stop-word filtering) and, with
+   an embedder, by meaning; at most 6, within a character budget;
+3. with no match, the latest decisions, facts and constraints.
+
+Pending proposals are never recalled. The agent can also `memory_search` (both layers, results labelled) and
+`memory_create` with `audience: "me"` for personal preferences.
+
+**Learning.** After every completed run a model (`HARNESS_MEMORY_EXTRACT_MODEL`, default the run's own) reads the
+exchange and proposes durable knowledge: decisions and their reason, conventions, constraints, commands that worked,
+pitfalls, preferences. Each candidate is compared with the entries that look like it: a new fact is added, a changed
+one becomes a **proposed update** of its entry, a known one is skipped. Everything arrives as `pending` and is used
+only after a member keeps it in the review queue. On by default in team mode; `HARNESS_MEMORY_EXTRACT=false` turns it
+off. An entry that changes keeps its previous versions in `metadata.history` (10 kept, newest first) with the thread
+that changed it.
+
+**Embeddings.** `HARNESS_MEMORY_EMBEDDING_BACKEND=openai` (with `_URL`, `_KEY`, `_MODEL`; the URL and key default to the
+LLM's) gives entries and queries vectors from an OpenAI-compatible `/embeddings` endpoint; they are stored per entry
+(`work_memory_embeddings`), recomputed when the text changes, and compared in the application, which is fine for the
+few thousand entries a memory holds (move to pgvector beyond that). Without it the "simple" backend is word overlap.
+
+**Measuring.** `GET /api/memory/stats` shows counts and what the service did (runs with recall, items recalled,
+proposals made and skipped, embeddings). `go test ./features/memory -run Eval -v` prints recall@1, recall@3 and MRR on
+a small paraphrase benchmark, for words alone and with embeddings (set `HARNESS_EVAL_EMBEDDING_URL` to try a real
+model); regression floors fail the test if ranking gets worse. On that benchmark words alone find a paraphrased
+question's memory in the top three only a third of the time, which is why embeddings matter.
+
+**Storage.** Postgres, or with the local store the journal (`journal.jsonl`) now persists memory entries too (they were
+volatile before). Coding agents need `MEMORY_IN_CODING=true`; team mode sets it.
+
 ## Profile and connectors
 
 Each user has a **display name** (default: first and last name from the identity provider's `given_name` /
