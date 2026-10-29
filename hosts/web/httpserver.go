@@ -103,6 +103,8 @@ type Options struct {
 	OIDC *OIDCConfig
 	// Supervisor, with Team, adds the global agent (see supervisor.go).
 	Supervisor *Supervisor
+	// GitHub, with Team, connects projects to GitHub through a GitHub App (see github.go).
+	GitHub *GitHubApp
 }
 
 type server struct {

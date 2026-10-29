@@ -75,10 +75,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if !cfg.ModelAllowed(*model) {
 		return fail(stderr, fmt.Errorf("model %q is not allowed (LLM_MODELS)", *model))
 	}
-	h, teamStore, sup, closer, err := buildWith(ctx, cfg, *local, *team)
+	bt, err := buildWith(ctx, cfg, *local, *team)
 	if err != nil {
 		return fail(stderr, err)
 	}
+	h, teamStore, sup, closer := bt.h, bt.team, bt.sup, bt.closer
 	defer closer.Close()
 	hctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -87,7 +88,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	opts := httpserver.Options{
 		Token: token, LocalUser: *user, Models: cfg.LLMModels, DefaultModel: *model,
 		AllowedOrigins: splitList(getenv("HARNESS_WEB_ORIGINS")),
-		Team:           teamStore, OIDC: oidcCfg, Supervisor: sup,
+		Team:           teamStore, OIDC: oidcCfg, Supervisor: sup, GitHub: bt.github,
 	}
 	if *devUsers {
 		if !*team || oidcCfg != nil || !isLoopback(*addr) {

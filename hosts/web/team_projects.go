@@ -26,7 +26,7 @@ func (s *server) routeTeam() {
 	s.route("GET /projects/{pid}/audit", s.listAudit)
 	s.route("GET /overview", s.overview)
 	s.route("GET /events", s.feed)
-	s.routeProjectExtras()
+	s.routeGitHub()
 }
 
 type projectView struct {

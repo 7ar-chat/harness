@@ -8,8 +8,6 @@ import (
 	"github.com/GhaziBenDahmane/harness/store"
 )
 
-func (s *server) routeProjectExtras() {}
-
 func (s *server) createThreadTeam(w http.ResponseWriter, r *http.Request, c Caller) {
 	var body struct {
 		Title     string `json:"title"`

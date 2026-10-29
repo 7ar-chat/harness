@@ -3,8 +3,14 @@ package httpserver_test
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -213,5 +219,57 @@ func TestMemoryScopesAreSeparate(t *testing.T) {
 	}
 	if k := httpserver.MemoryKey(tm)(ctx, "alice", "unknown"); k != "alice" {
 		t.Fatalf("personal memory key = %q", k)
+	}
+}
+
+func TestGitHubConnectRoutes(t *testing.T) {
+	r := newTeamRig(t)
+	// Without a configured App the status says so and connecting changes nothing.
+	r.json("PATCH", "/api/projects/"+r.project, "alice", `{"repoUrl":"https://github.com/acme/api"}`, 200)
+	st := r.json("GET", "/api/projects/"+r.project+"/github", "bob", "", 200)
+	if st["configured"] != false || st["connected"] != false || st["repo"] != "acme/api" {
+		t.Fatalf("status = %v", st)
+	}
+	r.json("POST", "/api/projects/"+r.project+"/github/connect", "bob", `{}`, 403)
+	r.json("GET", "/api/projects/"+r.project+"/github", "carol", "", 404)
+}
+
+func TestGitHubConnectFindsTheInstallation(t *testing.T) {
+	installed := true
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path == "/repos/acme/api/installation" && installed {
+			json.NewEncoder(w).Encode(map[string]any{"id": 77})
+			return
+		}
+		http.NotFound(w, req)
+	}))
+	defer api.Close()
+	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+	app, err := httpserver.NewGitHubApp("1", "my-app", pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.API = api.URL
+	tm := teamstore.NewMem()
+	ctx := context.Background()
+	tm.UpsertUser(ctx, store.User{Login: "alice"})
+	r := newRig(t, rigOpts{team: true, web: httpserver.Options{Team: tm, GitHub: app}})
+	p := r.json("POST", "/api/projects", "alice", `{"name":"api","repoUrl":"https://github.com/acme/api"}`, 201)["id"].(string)
+
+	st := r.json("GET", "/api/projects/"+p+"/github", "alice", "", 200)
+	if st["configured"] != true || st["connected"] != false || st["installUrl"] != "https://github.com/apps/my-app/installations/new" {
+		t.Fatalf("before = %v", st)
+	}
+	st = r.json("POST", "/api/projects/"+p+"/github/connect", "alice", `{}`, 200)
+	if st["connected"] != true {
+		t.Fatalf("after connect = %v", st)
+	}
+	if proj, _ := tm.GetProject(ctx, p); proj.GitHubInstallation != 77 {
+		t.Fatalf("installation = %d", proj.GitHubInstallation)
+	}
+	// Uninstalling is noticed by the next check.
+	installed = false
+	if st = r.json("POST", "/api/projects/"+p+"/github/connect", "alice", `{}`, 200); st["connected"] != false {
+		t.Fatalf("after uninstall = %v", st)
 	}
 }
