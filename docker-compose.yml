@@ -1,0 +1,63 @@
+# The team web app and everything around it, for a local run:
+#   docker compose up --build        then open http://localhost:8080  (alice@example.com or bob@example.com, password "password")
+#
+# harness-web shares Dex's network namespace so that "localhost:5556" is the same issuer URL for the
+# browser and for the server (the OIDC issuer must match what the browser is redirected to).
+# Your model provider comes from ~/.har/config.yml and ~/.har/auth.json (override with HAR_CONFIG / HAR_AUTH).
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: harness
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD: harness
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harness -d harness"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  dex:
+    image: dexidp/dex:v2.41.1
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    volumes:
+      - ./examples/dev-oidc/dex.yaml:/etc/dex/config.yaml:ro
+    ports:
+      - "5556:5556"
+      - "8080:8080" # harness-web, published here because it shares this container's network
+
+  harness-web:
+    build: .
+    network_mode: "service:dex"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dex:
+        condition: service_started
+    restart: on-failure
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_SSLMODE: disable
+      POSTGRES_DB: harness
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD: harness
+      OIDC_ISSUER: http://localhost:5556/dex
+      OIDC_CLIENT_ID: harness
+      OIDC_CLIENT_SECRET: harness-dev-secret
+      OIDC_REDIRECT_URL: http://localhost:8080/auth/callback
+      OIDC_LOGIN_CLAIM: name
+      OIDC_SESSION_KEY: ${OIDC_SESSION_KEY:-dev-only-session-key-change-me-0123456789abcdef}
+      # optional GitHub App for private repositories
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
+      GITHUB_APP_PRIVATE_KEY_FILE: ${GITHUB_APP_PRIVATE_KEY_FILE:-}
+    volumes:
+      - state:/data
+      - ${HAR_CONFIG:-~/.har/config.yml}:/root/.har/config.yml:ro
+      - ${HAR_AUTH:-~/.har/auth.json}:/root/.har/auth.json:ro
+
+volumes:
+  pgdata:
+  state:

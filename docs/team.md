@@ -80,3 +80,13 @@ as a `[watcher]` message that it answers once.
 `password`) and `harness-web -local` on http://localhost:8080 with OIDC login (`OIDC_LOGIN_CLAIM=name`, so the
 logins are `alice` and `bob`). A user's first login registers them; projects can then be shared by invite or by
 login. With `-local` in team mode every session gets its own local sandbox directory.
+
+## Docker Compose
+
+`docker compose up --build` runs Postgres, Dex (OIDC; `alice@example.com` / `bob@example.com`, password `password`)
+and harness-web on http://localhost:8080. `harness-web` shares Dex's network namespace so `localhost:5556` is the
+same issuer URL for your browser and the server. Your model provider is read from `~/.har/config.yml` and
+`~/.har/auth.json` (override with `HAR_CONFIG` / `HAR_AUTH`); agents run in the container's local sandbox, one
+directory per session, kept in the `state` volume. Set `OIDC_SESSION_KEY` and the `GITHUB_APP_*` variables in your
+environment or a `.env` file. For anything beyond local use, replace Dex with your identity provider and the
+local sandbox with a remote one.
