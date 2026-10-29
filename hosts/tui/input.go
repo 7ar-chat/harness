@@ -21,8 +21,14 @@ type Attention struct {
 	Enabled bool
 	// Notifications sends an OSC 9 / OSC 777 desktop notification.
 	Notifications bool
-	// Sound rings the terminal bell.
+	// Sound rings the terminal bell (Bells times), or runs SoundCommand.
 	Sound bool
+	// Bells is how many times the bell rings (0: once); tui.json "volume" sets it.
+	Bells int
+	// SoundCommand is an argv, run without a shell instead of the bell (only from the user's tui.json).
+	SoundCommand []string
+	// Mute lists the kinds of event that stay silent (done, question, permission, error).
+	Mute map[string]bool
 }
 
 // inputState is the state of the features that live outside model.go.
@@ -65,6 +71,9 @@ func newInputState(o Options) inputState {
 // extraUpdate handles the messages of the features; handled=true ends Update.
 func (m *Model) extraUpdate(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		m.wheel(msg)
+		return nil, true
 	case tea.FocusMsg:
 		m.inp.blurred = false
 		return nil, true
@@ -116,6 +125,9 @@ func (m *Model) draftText() string {
 
 // extraKey handles the keys of the features before the generic ones.
 func (m *Model) extraKey(k tea.KeyMsg) (tea.Cmd, bool) {
+	if cmd, ok := m.prefKey(k); ok {
+		return cmd, true
+	}
 	s := k.String()
 	approval := m.pending != nil && m.pending.prompt.Reason == client.ReasonToolApproval
 	switch s {

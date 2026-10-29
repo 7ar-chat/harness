@@ -380,7 +380,7 @@ func (c *inProcess) Sessions(ctx context.Context, limit int) ([]Session, error) 
 	}
 	out := make([]Session, 0, len(list))
 	for _, i := range list {
-		out = append(out, Session{i.ID, i.Title, i.Preview, i.Messages, i.LastStatus, i.CreatedAt, i.UpdatedAt})
+		out = append(out, Session{ID: i.ID, Title: i.Title, Preview: i.Preview, Messages: i.Messages, LastStatus: i.LastStatus, Pinned: i.Pinned, CreatedAt: i.CreatedAt, UpdatedAt: i.UpdatedAt})
 	}
 	return out, nil
 }

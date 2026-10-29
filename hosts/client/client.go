@@ -235,6 +235,7 @@ type Session struct {
 	Preview    string    `json:"preview"`
 	Messages   int       `json:"messages"`
 	LastStatus string    `json:"lastStatus"`
+	Pinned     bool      `json:"pinned"`
 	CreatedAt  time.Time `json:"createdAt"`
 	UpdatedAt  time.Time `json:"updatedAt"`
 }

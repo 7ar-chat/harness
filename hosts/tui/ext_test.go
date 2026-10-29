@@ -76,6 +76,11 @@ func (e *extBackend) RenameSession(_ context.Context, id, t string) error {
 }
 func (e *extBackend) PinSession(_ context.Context, id string, p bool) error {
 	e.log("pin:" + id + ":" + map[bool]string{true: "on", false: "off"}[p])
+	for i := range e.sessions {
+		if e.sessions[i].ID == id && e.err == nil {
+			e.sessions[i].Pinned = p
+		}
+	}
 	return e.err
 }
 func (e *extBackend) DeleteSession(_ context.Context, id string) error {
@@ -345,7 +350,7 @@ func TestSessionPickerPinsAndUnpins(t *testing.T) {
 	submitSlash(m, "/sessions")
 
 	press(m, tea.KeyCtrlO)
-	if v := m.View(); !strings.Contains(v, "▲ Fix the build") {
+	if v := m.View(); !strings.Contains(v, "★ Fix the build") {
 		t.Fatalf("not marked pinned:\n%s", v)
 	}
 	press(m, tea.KeyCtrlO)

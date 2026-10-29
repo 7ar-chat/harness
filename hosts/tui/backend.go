@@ -60,6 +60,10 @@ type ClientBackend struct {
 	Discover func(ctx context.Context) ([]string, error)
 	// RunMode is client.ModeBuild (default) or client.ModePlan.
 	RunMode string
+	// RemoteURL is the address of the server when C talks to one ("" for an in-process engine); /status shows its host.
+	RemoteURL string
+	// StatusFunc (optional) describes the configuration in effect for /status and /mcp; no secrets.
+	StatusFunc func(ctx context.Context) ([]StatusItem, error)
 
 	attach []client.Attachment // for the next Send
 }

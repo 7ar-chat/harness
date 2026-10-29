@@ -1,0 +1,6 @@
+    @@ a.go @@
+     1   keep                                               │  1   keep
+     2 - old word word word word word word word word word   │  2 + new word word word word word word word word word
+         word word word word word word word word word word  │      word word word word word word word word word word
+         word word word word word word word word word word  │      word word word word word word word word word word
+         word                                               │      word

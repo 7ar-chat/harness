@@ -74,8 +74,9 @@ type options struct {
 	list, undo          bool
 	remote              string
 	configDump          bool
-	discover            func(context.Context) ([]string, error) // model discovery of /model (in-process only)
-	connector           tui.Connector                           // /connect (in-process only)
+	discover            func(context.Context) ([]string, error)         // model discovery of /model (in-process only)
+	connector           tui.Connector                                   // /connect (in-process only)
+	status              func(context.Context) ([]tui.StatusItem, error) // /status and /mcp (in-process only)
 }
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, isTTY bool, mk factory) int {
@@ -172,6 +173,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 
 	o.discover = discoverer(cfg)
 	o.connector = newAuthConnector(cfg)
+	o.status = statusFunc(cfg)
 	c := client.InProcess(h, o.user, client.WithModels(cfg.LLMModels, o.model))
 	if !cfg.SandboxEnabled() && !o.json {
 		fmt.Fprintln(stderr, "(no sandbox: set SANDBOX_BACKEND=local or OPENSANDBOX_URL; the agent has no tools)")
@@ -212,7 +214,7 @@ func attach(ctx context.Context, c client.Client, o options, prompt string, prin
 	if err != nil {
 		return fail(stderr, err)
 	}
-	be := &tui.ClientBackend{C: c, ThreadID: th.ID, ModelID: o.model, Interactive: !printMode && !o.auto, Discover: o.discover}
+	be := &tui.ClientBackend{C: c, ThreadID: th.ID, ModelID: o.model, Interactive: !printMode && !o.auto, Discover: o.discover, RemoteURL: o.remote, StatusFunc: o.status}
 	if printMode {
 		return tui.RunPrint(ctx, be, prompt, tui.PrintOptions{Stdout: stdout, Stderr: stderr, JSON: o.json})
 	}
@@ -281,7 +283,7 @@ func listSessions(ctx context.Context, sessions filestore.Sessions, user string,
 	}
 	out := make([]client.Session, 0, len(list))
 	for _, s := range list {
-		out = append(out, client.Session{ID: s.ID, Title: s.Title, Preview: s.Preview, Messages: s.Messages, UpdatedAt: s.UpdatedAt})
+		out = append(out, client.Session{ID: s.ID, Title: s.Title, Preview: s.Preview, Messages: s.Messages, Pinned: s.Pinned, UpdatedAt: s.UpdatedAt})
 	}
 	printSessions(out, stdout)
 	return 0

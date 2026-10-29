@@ -93,6 +93,10 @@ func suggest(input string) []command {
 // (it is sent to the model). A leading space sends a "/…" message literally.
 func (m *Model) slash(raw string) (cmd tea.Cmd, handled bool) {
 	text := strings.TrimSpace(raw)
+	if text == "?" { // a lone question mark is help, as in opencode
+		m.in.Reset()
+		return m.cmdHelp(""), true
+	}
 	sm := reSlash.FindStringSubmatch(text)
 	if !strings.HasPrefix(raw, "/") || sm == nil {
 		return nil, false

@@ -20,7 +20,6 @@ type extState struct {
 	favorites []string
 	recents   []string // most recent first
 	connector Connector
-	pinned    map[string]bool // sessions pinned from the picker (the session list does not say which are)
 }
 
 // selfMsg is a message that knows how to fold itself into the model, so a
@@ -31,7 +30,6 @@ func (m *Model) initExt(o Options) {
 	x := &m.ext
 	x.state = newStateFile(o.StateDir)
 	x.connector = o.Connector
-	x.pinned = map[string]bool{}
 	_ = x.state.get("favorites", &x.favorites)
 	_ = x.state.get("recents", &x.recents)
 	m.syncPrompt()

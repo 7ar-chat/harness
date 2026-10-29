@@ -12,7 +12,8 @@ import (
 const (
 	DefaultLeader        = "ctrl+x"
 	DefaultLeaderTimeout = 2000 // milliseconds
-	DefaultScrollSpeed   = 3    // lines per mouse wheel tick
+	DefaultScrollSpeed   = 3    // lines per mouse wheel notch
+	MinScrollSpeed       = 0.001
 )
 
 // TUIConfig is the parsed tui.json (~/.har/tui.json; a project file is never
@@ -22,12 +23,15 @@ type TUIConfig struct {
 	Theme         string
 	Keybinds      map[string][]string // action -> keys; see Keymap
 	Leader        string
-	LeaderTimeout int // milliseconds
-	ScrollSpeed   int
-	DiffStyle     string // auto | stacked
-	CursorStyle   string // block | underline
+	LeaderTimeout int     // milliseconds
+	ScrollSpeed   float64 // lines per wheel notch (at least MinScrollSpeed)
+	ScrollAccel   bool    // scroll_acceleration.enabled: the speed grows with the rate of wheel events
+	DiffStyle     string  // auto | stacked
+	CursorStyle   string  // block | underline
 	CursorBlink   bool
 	Mouse         bool
+	// Attention is the "attention" object (nil: not configured, Options.Attention stands).
+	Attention *Attention
 	// Notices are the problems found while parsing: unknown fields, invalid values (which fall back to the default).
 	Notices []string
 }
@@ -79,12 +83,16 @@ func ParseTUIConfig(data []byte) TUIConfig {
 				c.LeaderTimeout = n
 			}
 		case "scroll_speed":
-			var n int
-			if json.Unmarshal(v, &n) != nil || n < 1 || n > 100 {
-				bad("scroll_speed", "must be a number of lines from 1 to 100")
+			var n float64
+			if json.Unmarshal(v, &n) != nil || n < MinScrollSpeed || n > 100 {
+				bad("scroll_speed", "must be a number of lines per wheel notch from 0.001 to 100")
 			} else {
 				c.ScrollSpeed = n
 			}
+		case "scroll_acceleration":
+			parseScrollAccel(&c, v, bad)
+		case "attention":
+			parseAttention(&c, v, bad)
 		case "diff_style":
 			var s string
 			if json.Unmarshal(v, &s) != nil || (s != "auto" && s != "stacked") {
@@ -108,6 +116,17 @@ func ParseTUIConfig(data []byte) TUIConfig {
 		}
 	}
 	return c
+}
+
+func parseScrollAccel(c *TUIConfig, v json.RawMessage, bad func(field, why string)) {
+	var raw struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if json.Unmarshal(v, &raw) != nil || raw.Enabled == nil {
+		bad("scroll_acceleration", "must be an object {enabled: true|false}")
+		return
+	}
+	c.ScrollAccel = *raw.Enabled
 }
 
 func parseCursor(c *TUIConfig, v json.RawMessage, bad func(field, why string)) {

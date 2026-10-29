@@ -129,6 +129,11 @@ const (
 // RenderToolCall renders a tool call: header (name and key argument), the
 // clipped result, and for a successful edit_file the diff of oldText/newText.
 func RenderToolCall(t ToolView, width int, expanded bool) string {
+	return renderToolCall(t, width, expanded, false)
+}
+
+// renderToolCall is RenderToolCall with the choice of the split (side by side) diff.
+func renderToolCall(t ToolView, width int, expanded, split bool) string {
 	if t.Sub != nil {
 		return renderSubagent(t, width, expanded)
 	}
@@ -165,6 +170,12 @@ func RenderToolCall(t ToolView, width int, expanded bool) string {
 	case t.Name == "edit_file" && editDiff(t) != "":
 		summary := editSummary(t.Result)
 		lines = append(lines, bodyLines("", []string{summary}, width, 1, lipgloss.NewStyle())...)
+		if split {
+			if sp := renderSplitDiff(editDiff(t), width, limit*2); sp != nil {
+				lines = append(lines, sp...)
+				break
+			}
+		}
 		d := strings.Split(editDiff(t), "\n")
 		lines = append(lines, diffLines(d, width, limit*2)...)
 	default:
