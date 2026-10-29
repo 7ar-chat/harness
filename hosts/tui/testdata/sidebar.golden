@@ -1,0 +1,24 @@
+> plan it                                                                                                           │ Fix the bug                     
+                                                                                                                    │                                 
+✓ edit_file a/b.go                                                                                                  │ Model                           
+  ⎿ 1 replacement in a/b.go                                                                                         │ gpt-test · build                
+    @@ a/b.go @@                                                                                                    │                                 
+    -x                                                                                                              │ Context                         
+    +y                                                                                                              │ in 1.2k out 300                 
+                                                                                                                    │ window 12.0k / 100.0k (12%)     
+                                                                                                                    │                                 
+                                                                                                                    │ Plan                            
+                                                                                                                    │ ☑ read code                     
+                                                                                                                    │ ◐ write fix                     
+                                                                                                                    │ ☐ run tests                     
+                                                                                                                    │                                 
+                                                                                                                    │ Modified files                  
+                                                                                                                    │ a/b.go                          
+                                                                                                                    │                                 
+                                                                                                                    │ MCP                             
+                                                                                                                    │ fs                              
+                                                                                                                    │ …                               
+ gpt-test · running · in 1.2k out 300 · 0:00  enter steers · esc cancels                                                                              
+│ Message (enter sends, alt+enter or ctrl+j adds a line)                                                                                              
+│                                                                                                                                                     
+│                                                                                                                                                     
