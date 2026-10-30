@@ -172,6 +172,7 @@ func TestSearchFilesFallbackWorksWithoutRipgrep(t *testing.T) {
 	// In a real shell without ripgrep (Python fallback), search_files finds the same matches with line numbers and skips .git.
 	// Arrange
 	requirePython3(t)
+	requireGNUTools(t) // write_file places the file with realpath -m and mv -T
 	f, hb := newHostFixture(t, map[string]string{"HARNESS_SEARCH_ENGINE": "python"})
 	if _, err := f.call(context.Background(), "write_file", `{"path":"data/q3.csv","content":"region,amount\nNorth,120\nSouth,80\n"}`); err != nil {
 		t.Fatal(err)

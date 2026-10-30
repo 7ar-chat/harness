@@ -48,6 +48,27 @@ func under(p, root string) bool { return p == root || strings.HasPrefix(p, root+
 // features/skills/skilltools, are one unit, and a shared type belongs in core).
 var featureEdges = map[string][]string{}
 
+// mayImportConfig lists the packages of engine/, adapters/ and features/ that still read the whole
+// *config.Config. They are migrated to their own option structs after the MCP trust work; until then this list
+// is the one place that names them. Every other package under those roots takes its own options (the
+// composition roots - the facade, hosts and cmd - map config.Config onto them).
+var mayImportConfig = map[string]bool{
+	"features/mcp":         true,
+	"features/permissions": true,
+}
+
+// configRoots are the trees whose packages must not import config (except mayImportConfig).
+var configRoots = []string{"engine", "adapters", "features"}
+
+func mustNotImportConfig(rel string) bool {
+	for _, r := range configRoots {
+		if under(rel, r) {
+			return !mayImportConfig[rel]
+		}
+	}
+	return false
+}
+
 func TestPackagesOnlyImportTheSameOrLowerLayers(t *testing.T) {
 	// Arrange
 	out, err := exec.Command("go", "list", "-f", "{{.ImportPath}} {{join .Imports \" \"}}", "./...").Output()
@@ -79,6 +100,11 @@ func TestTheLayeringCheckCatchesBadImports(t *testing.T) {
 		m + "adapters/redisx " + m + "coding/sandboxtools " + m + "adapters/store/memstore",
 		m + "coding/sandboxtools " + m + "adapters/redisx " + m + "core/sandbox " + m + "engine/tools",
 		m + "bench " + m + " " + m + "hosts/tui",
+		m + "features/skills " + m + "config " + m + "core/layout",
+		m + "adapters/redisx " + m + "config",
+		m + "engine/llm " + m + "config",
+		m + "features/mcp " + m + "config " + m + "engine/tools",
+		m + "features/permissions " + m + "config",
 	}
 
 	// Act
@@ -91,6 +117,9 @@ func TestTheLayeringCheckCatchesBadImports(t *testing.T) {
 		"features/goals imports the feature features/artifacts",
 		"core/sandbox (layer 0) imports engine/agent (layer 2)",
 		"core/sandbox imports config (the core imports only core)",
+		"features/skills imports config (take your own options",
+		"adapters/redisx imports config (take your own options",
+		"engine/llm imports config (take your own options",
 		"adapters/redisx imports coding/sandboxtools (adapters and coding do not import each other)",
 		"coding/sandboxtools imports adapters/redisx (adapters and coding do not import each other)",
 	} {
@@ -98,7 +127,7 @@ func TestTheLayeringCheckCatchesBadImports(t *testing.T) {
 			t.Errorf("missing violation %q in:\n%s", want, got)
 		}
 	}
-	for _, bad := range []string{"features/goals imports coding", "workspace imports", "memorytools imports", "adapters/store/memstore", "bench "} {
+	for _, bad := range []string{"features/goals imports coding", "workspace imports", "memorytools imports", "adapters/store/memstore", "bench ", "features/mcp imports config", "features/permissions imports config"} {
 		if strings.Contains(got, bad) {
 			t.Errorf("a legal edge was reported (%q):\n%s", bad, got)
 		}
@@ -187,6 +216,9 @@ func findViolations(lines []string) []string {
 			}
 			if layer(pkg) == 4 && layer(imp) == 4 && !sameFeature(rel, irel) && !allowed(rel, irel) {
 				violations = append(violations, rel+" imports the feature "+irel+" (not an allowed edge)")
+			}
+			if irel == "config" && mustNotImportConfig(rel) {
+				violations = append(violations, rel+" imports config (take your own options; the composition root maps the configuration)")
 			}
 			if under(rel, "core") && !under(irel, "core") {
 				violations = append(violations, rel+" imports "+irel+" (the core imports only core)")

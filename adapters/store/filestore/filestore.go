@@ -54,7 +54,6 @@ import (
 	"time"
 
 	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
-	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/eventlog"
@@ -105,34 +104,15 @@ type Store struct {
 	Truncated bool
 }
 
-// DefaultDir is the state directory used when none is given:
-// $LOCAL_STATE_DIR, else <user dir>/sessions ($HAR_HOME or ~/.har), else (user
-// directory disabled or unknown) $XDG_STATE_HOME/harness, else ~/.local/state/harness.
-func DefaultDir() string {
-	if d := os.Getenv("LOCAL_STATE_DIR"); d != "" {
-		return d
-	}
-	if u := config.UserDir(); u != "" {
-		return filepath.Join(u, config.SessionsFolder)
-	}
-	if d := os.Getenv("XDG_STATE_HOME"); d != "" {
-		return filepath.Join(d, "harness")
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return filepath.Join(os.TempDir(), "harness-state")
-	}
-	return filepath.Join(home, ".local", "state", "harness")
-}
-
 const journalName = "journal.jsonl"
 
-// Open opens (creating it if needed) the state directory dir ("" is
-// DefaultDir), replays the journal, recovers interrupted runs and returns the
-// store. Close it to flush.
+// Open opens (creating it if needed) the state directory dir, replays the
+// journal, recovers interrupted runs and returns the store. Close it to flush.
+// dir is required: choosing a default location is the caller's business
+// (harness.OpenLocalStore does it).
 func Open(dir string, opts ...Options) (*Store, error) {
 	if dir == "" {
-		dir = DefaultDir()
+		return nil, errors.New("filestore: a state directory is required")
 	}
 	var o Options
 	if len(opts) > 0 {

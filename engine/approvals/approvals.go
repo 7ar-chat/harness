@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"path"
@@ -140,9 +141,22 @@ func PreviewMatches(expected, current string) bool {
 // MatchesCall reports whether an approval still describes a tool call (same
 // tool, same arguments): an approve decision only runs a matching call.
 func MatchesCall(a *store.Approval, tc schema.ToolCall) bool {
-	return a.ToolCallID == tc.ID && normalize(a.ToolName) == normalize(tc.Function.Name) &&
-		PreviewMatches(a.ToolInputPreview, Preview(tc.Function.Arguments))
+	if a.ToolCallID != tc.ID || normalize(a.ToolName) != normalize(tc.Function.Name) {
+		return false
+	}
+	if IsTrustMCPTool(tc.Function.Name) {
+		// The tool takes no arguments: its preview describes the server being approved, not a call to compare.
+		return true
+	}
+	return PreviewMatches(a.ToolInputPreview, Preview(tc.Function.Arguments))
 }
+
+// TrustMCPToolPrefix starts the name of the tool that asks the user to approve a project's stdio MCP server
+// (features/mcp); its approval preview describes the server instead of echoing the call's arguments.
+const TrustMCPToolPrefix = "mcp_approve__"
+
+// IsTrustMCPTool reports a tool name of that kind.
+func IsTrustMCPTool(toolName string) bool { return strings.HasPrefix(toolName, TrustMCPToolPrefix) }
 
 // MismatchResult is the tool result of an approved call whose arguments changed.
 const MismatchResult = "Error: the approved action no longer matches this tool call (its tool or arguments changed), so it was not run. Ask the user again if it is still needed."
@@ -172,6 +186,9 @@ type Gate struct {
 	RiskyToolPattern *regexp.Regexp
 	// Resolver resolves symlinks before the work-area check (nil: lexical only).
 	Resolver PathResolver
+	// Describe is the approval preview of an MCP-server approval tool (TrustMCPToolPrefix; "" when it knows
+	// no such tool: the call is then refused, never asked without saying what is approved).
+	Describe func(toolName string) string
 }
 
 // NeedsApproval implements agent.BeforeToolHook. In interactive mode it gates
@@ -182,10 +199,32 @@ type Gate struct {
 // is the run's current one (switched mid-run by the user), not the one it
 // started with; NeedsApproval has no side effects.
 func (g *Gate) NeedsApproval(ctx context.Context, run *store.Run, toolName, arguments string) bool {
+	if IsTrustMCPTool(toolName) {
+		return g.Interactive(ctx, run) // always asked while the user can answer, whatever was approved for the run
+	}
 	if g.mode(ctx, run) != store.InteractionInteractive || slices.Contains(run.ApprovedTools, Kind(toolName)) {
 		return false
 	}
 	return g.risky(ctx, run, toolName, arguments)
+}
+
+// Interactive reports whether the run is interactive now, i.e. its host answers approvals (a failed read
+// of the mode counts as interactive, like NeedsApproval).
+func (g *Gate) Interactive(ctx context.Context, run *store.Run) bool {
+	return g.mode(ctx, run) == store.InteractionInteractive
+}
+
+// TrustMCPDeniedResult is the result of the MCP-server approval tool where nobody can be asked.
+const TrustMCPDeniedResult = "Error: the project's MCP server was not approved and this run cannot ask the user (automatic mode), so it was not started. " +
+	"Tell the user to run `harness trust mcp` for it."
+
+// Denial implements agent.ToolDenier: the approval tool of a project's MCP server is refused unless the run is
+// interactive (fail closed: an automatic or headless run never approves a program to run).
+func (g *Gate) Denial(ctx context.Context, run *store.Run, toolName, _ string) string {
+	if IsTrustMCPTool(toolName) && !g.Interactive(ctx, run) {
+		return TrustMCPDeniedResult
+	}
+	return ""
 }
 
 // Risky implements agent.RiskJudge: NeedsApproval's rules as if the run were
@@ -193,6 +232,9 @@ func (g *Gate) NeedsApproval(ctx context.Context, run *store.Run, toolName, argu
 // no mode, so calls after a pending approval of the step keep waiting behind it
 // after a switch to automatic.
 func (g *Gate) Risky(ctx context.Context, run *store.Run, toolName, arguments string) bool {
+	if IsTrustMCPTool(toolName) {
+		return true
+	}
 	if slices.Contains(run.ApprovedTools, Kind(toolName)) {
 		return false
 	}
@@ -444,8 +486,17 @@ func underWorkArea(p string) bool {
 
 // Pause records the pending approval of a call and returns the interrupt that ends the run.
 func (g *Gate) Pause(ctx context.Context, run *store.Run, tc schema.ToolCall) (*tools.Interrupt, error) {
+	preview := Preview(tc.Function.Arguments)
+	if IsTrustMCPTool(tc.Function.Name) {
+		if g.Describe != nil {
+			preview = g.Describe(tc.Function.Name)
+		}
+		if preview == "" {
+			return nil, fmt.Errorf("approvals: no description of %s", tc.Function.Name)
+		}
+	}
 	a := &store.Approval{Kind: store.ApprovalKindRiskyTool, ThreadID: run.ThreadID, RunID: run.ID, ToolCallID: tc.ID,
-		ToolName: tc.Function.Name, ToolInputPreview: Preview(tc.Function.Arguments)}
+		ToolName: tc.Function.Name, ToolInputPreview: preview}
 	if err := g.Store.CreateApproval(ctx, a); err != nil {
 		return nil, err
 	}

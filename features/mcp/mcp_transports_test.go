@@ -107,3 +107,63 @@ func TestStdioServerIsAChildProcessWithAReducedEnvironment(t *testing.T) {
 		t.Fatalf("the child inherited the harness secrets: %s", out)
 	}
 }
+
+func projectStdio() config.MCPServer {
+	return config.MCPServer{Name: "local", Command: os.Args[0], Args: []string{"-test.run=^$"}, ProjectRoot: "/repo",
+		Env: map[string]string{"HARNESS_FAKE_MCP": "1", "FAKE_MCP_FLAG": "flag-ok"}}
+}
+
+func TestAProjectStdioServerIsOnlySpawnedWithTheApprovalOfItsExactCommand(t *testing.T) {
+	// Arrange
+	trust := t.TempDir()
+	s := projectStdio()
+	newProvider := func(s config.MCPServer) *mcptools.Provider {
+		p := mcptools.New([]config.MCPServer{s}, "test", 10000)
+		p.TrustDir = trust
+		return p
+	}
+
+	// Act: denied (no approval), granted, then the command changed after the approval.
+	denied, cleanDenied, err1 := newProvider(s).Tools(context.Background(), tools.RunContext{RunID: "r"})
+	defer cleanDenied()
+	if _, err := config.ApproveMCP(trust, "/repo", s); err != nil {
+		t.Fatal(err)
+	}
+	granted, cleanGranted, err2 := newProvider(s).Tools(context.Background(), tools.RunContext{RunID: "r"})
+	defer cleanGranted()
+	changed := s
+	changed.Args = []string{"-test.run=^$", "-test.v"}
+	moved, cleanMoved, err3 := newProvider(changed).Tools(context.Background(), tools.RunContext{RunID: "r"})
+	defer cleanMoved()
+
+	// Assert
+	if err1 != nil || err2 != nil || err3 != nil {
+		t.Fatal(err1, err2, err3)
+	}
+	if len(denied) != 0 {
+		t.Fatalf("an unapproved project server was spawned: %v", names(t, denied))
+	}
+	if out := callEcho(t, granted); !strings.Contains(out, "echo: hi flag-ok") {
+		t.Fatalf("approved server: %s", out)
+	}
+	if len(moved) != 0 {
+		t.Fatalf("a changed command kept its approval: %v", names(t, moved))
+	}
+}
+
+func TestAUserStdioServerNeedsNoProjectApproval(t *testing.T) {
+	// Arrange: the same server without a ProjectRoot (the user's own mcp.json) and no trust file at all.
+	s := projectStdio()
+	s.ProjectRoot = ""
+	p := mcptools.New([]config.MCPServer{s}, "test", 10000)
+	p.TrustDir = t.TempDir()
+
+	// Act
+	list, cleanup, err := p.Tools(context.Background(), tools.RunContext{RunID: "r"})
+	defer cleanup()
+
+	// Assert
+	if err != nil || len(list) != 1 {
+		t.Fatalf("%v %v", err, list)
+	}
+}

@@ -600,8 +600,10 @@ func (s *server) projectNames(ctx context.Context, actor string) map[string]stri
 // ---- the watcher ----
 
 // watch turns feed events (and silence) into attention for the users who turned the watcher on.
+// It sees the events of this process only: with a FeedBus every replica runs a watcher and each
+// event is produced on exactly one replica, so each is handled once.
 func (sv *Supervisor) watch(ctx context.Context) {
-	sub, done := sv.s.hub.subscribe(nil)
+	sub, done := sv.s.hub.subscribe(localOnly)
 	defer done()
 	tick := time.NewTicker(15 * time.Second)
 	defer tick.Stop()
@@ -707,7 +709,8 @@ func (sv *Supervisor) scanStuck(ctx context.Context) {
 			already := sv.stuck[t.ID] == t.RunID
 			sv.stuck[t.ID] = t.RunID
 			sv.mu.Unlock()
-			if already {
+			// Every replica scans; the bus lets one of them report a stuck run.
+			if already || !sv.s.hub.claim("stuck:"+t.RunID, 24*time.Hour) {
 				continue
 			}
 			sv.queue(ctx, t.ProjectID, t.CreatedBy, t.ID, fmt.Sprintf("has been running without activity for over %d minutes", int(after/time.Minute)))

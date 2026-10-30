@@ -25,7 +25,8 @@ acts as the user named by the `X-Harness-User` header.
 | message author | `store.Message.AuthorLogin / AuthorKind / OnBehalfOf`: the user who typed a message or steer, or the supervisor acting for a user. The UI shows it; in a session with several speakers the model also sees `[alice] …` before each user message. Single-author sessions keep their old prompts. |
 | audit | `GET /api/projects/{id}/audit`: who sent, steered, approved (with the tool), cancelled, changed members or memory. |
 | memory | `GET/POST /api/memory[?project=ID]`. Agents in a project session read and write the **project** memory (so no member's personal memory leaks into a shared session); in personal sessions and in the supervisor, the user's own. |
-| live feed | `GET /api/events` (SSE): `thread.created`, `run.started`, `run.finished` (with status `waiting_approval`, …), `member.changed`… filtered by what the subscriber may see. `GET /api/overview` is the matching snapshot. |
+| live feed | `GET /api/events` (SSE): `thread.created`, `run.started`, `run.finished` (with status `waiting_approval`, …), `member.changed`… filtered by what the subscriber may see. `GET /api/overview` is the matching snapshot. Shared between replicas when `REDIS_HOST` is set (see *Several replicas*). |
+| seen / unread | `GET /api/seen` → `{threadId: lastSeen}`, `POST /api/seen {threadId, at?}`: the caller's last visit to each thread, stored per user (Postgres table `work_thread_seen`, or `team.json`). A thread is unread when its `updatedAt` is later; one never visited counts as seen. `at` defaults to now and never moves backwards, so several devices converge on the latest visit. The bundled web UI reads the map from `GET /api/seen` and records a visit when a thread is opened (updating the dots at once, then `POST /api/seen`); only against a server without the endpoint (404/501, single-user mode) does it keep the map in the browser's local storage. |
 
 Invitations: `POST /api/projects/{id}/invites {email, role}`. A user with that email already known is added at
 once; otherwise the invite is claimed when the email logs in (only a **verified** email claims invites).
@@ -130,11 +131,26 @@ GIF up to 512 KB, type checked from the bytes; no SVG), shown on every message, 
 `httpapi.RepoCheckout`; `httpapi.Options` gains `Team`, `OIDC`, `Supervisor` and `GitHub`.
 `cmd/harness-web/build.go` is the reference composition.
 
+## Several replicas
+
+Run `harness-web -team` behind a load balancer as several replicas with Postgres (`POSTGRES_HOST`, shared team
+tables and sessions) and Redis (`REDIS_HOST`, plus the usual `REDIS_PORT`, `REDIS_PASSWORD`, `USE_SENTINEL`…).
+With `REDIS_HOST` set, each replica publishes the feed events it produces on the Redis channel `work:feed` and
+delivers those of the others, so a browser connected to replica B sees a run started through replica A, filtered
+by what its user may see like any other event. Without `REDIS_HOST` the feed stays in the process (a single
+replica, or the local file store), exactly as before.
+
+* Delivery is best effort, like the feed itself (pub/sub, no replay): a client that was disconnected refetches
+  `/api/overview` on reconnect.
+* The **watcher** runs in every replica and reacts to the events its own replica produced, so an attention note
+  is queued once. Stuck-run reports are claimed in Redis (`work:feed:claim:stuck:<run>`, 24 h) so only one
+  replica reports a run that went quiet.
+* The Telegram bridge long-polls, so run it in one replica only; it still hears the events of the others.
+* In code: `product.Options.Bus` takes any `product.FeedBus` (`redisx.NewFeedBus(rdb)` for Redis,
+  `product.NewMemBus()` for tests and servers in one process).
+
 ## Known limits
 
-* Unread state is not stored per user on the server (the UI keeps last-seen locally).
-* The watcher and the live feed are per process: with several `harness-web` replicas, events for runs
-  started on another replica reach this one only through the run's own stream (not the feed).
 * A thread stays stored under its creator's login; deleting that user's data would need a transfer step.
 
 ## Trying it locally with OIDC

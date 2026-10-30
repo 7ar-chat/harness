@@ -4,12 +4,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/GhaziBenDahmane/harness/core/layout"
 )
 
 // DirName is the name of the configuration directory of a project
 // (<repo>/.har/) and of the user (~/.har/). It is the only place the name is
-// defined: every path below it derives from it.
-const DirName = ".har"
+// defined (in core/layout, for packages that must not import config): every
+// path below it derives from it.
+const DirName = layout.DirName
 
 // Files and folders inside a configuration directory.
 const (
@@ -17,8 +20,8 @@ const (
 	PermissionsFile  = "permissions.yml"
 	InstructionsFile = "instructions.md"
 	MCPFile          = "mcp.json"
-	SkillsFolder     = "skills"
-	MemoryFolder     = "memory"
+	SkillsFolder     = layout.SkillsFolder
+	MemoryFolder     = layout.MemoryFolder
 	AuthFile         = "auth.json"
 	AgentsFile       = "AGENTS.md"
 	SessionsFolder   = "sessions"

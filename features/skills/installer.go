@@ -58,6 +58,14 @@ type Installer struct {
 	// Messages reads the thread's history: the skills loaded or used in its
 	// earlier runs are installed again (nil: this run's only).
 	Messages History
+	// SandboxProject reads the project skills of each run's sandbox (/workspace/.har/skills and the .agents and
+	// .claude folders, see LoadSandbox) and merges them over Registry for that run: for a remote backend,
+	// whose workspace is per thread. Off with the local backend, where Registry reads the host's project
+	// directories at start-up (Discover).
+	SandboxProject bool
+	// Sandboxes finds the thread's running sandbox for the prompt's skills index (PromptSection); nil: the
+	// index is the global registry's until a command or tool acquires the sandbox.
+	Sandboxes sandbox.Manager
 
 	// done remembers recent verified installations (sandboxID|name|revision),
 	// bounded (syncx.DefaultLRUSize).

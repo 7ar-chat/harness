@@ -64,6 +64,8 @@ type Layers struct {
 	MCPSources []string
 	// MCPSkipped are the MCP servers that were not started and why.
 	MCPSkipped []string
+	// MCPPending are the stdio servers of the (trusted) project that wait for the user's approval of their command.
+	MCPPending []MCPServer
 	// Trusted says the project is trusted (see TrustFile); TrustedBy says how ("trust.json" or the environment).
 	Trusted   bool
 	TrustedBy string

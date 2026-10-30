@@ -28,6 +28,8 @@ func (s *server) routeTeam() {
 	s.Route("GET /projects/{pid}/audit", s.listAudit)
 	s.Route("GET /overview", s.overview)
 	s.Route("GET /events", s.feed)
+	s.Route("GET /seen", s.listSeen)
+	s.Route("POST /seen", s.markSeen)
 	s.routeGitHub()
 }
 

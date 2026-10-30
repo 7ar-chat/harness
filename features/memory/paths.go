@@ -7,11 +7,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/core/layout"
 )
 
 // pathPrefix is the memory root of Work's file layout; paths given with it are accepted.
-const pathPrefix = config.DirName + "/" + config.MemoryFolder + "/"
+const pathPrefix = layout.DirName + "/" + layout.MemoryFolder + "/"
 
 // SemanticKinds are the folders of memories/semantic/ (and shared/memories/semantic/).
 var SemanticKinds = []string{"decisions", "facts", "constraints", "preferences", "procedures", "notes"}

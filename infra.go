@@ -7,6 +7,7 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/adapters/redisx"
 	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
+	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/engine/eventlog"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
@@ -52,6 +53,15 @@ type Infra struct {
 	// Installs shares which skill revisions each sandbox holds, and the install
 	// locks (default: in-process).
 	Installs skills.InstallState
+}
+
+// NewRedisClient builds the Redis client of the configuration (REDIS_*,
+// USE_SENTINEL): a Sentinel failover client or a standalone one.
+func NewRedisClient(cfg *config.Config) redis.UniversalClient {
+	return redisx.New(redisx.Options{
+		Sentinel: cfg.UseSentinel, SentinelHosts: cfg.RedisSentinelHosts, MasterName: cfg.RedisMasterName,
+		Host: cfg.RedisHost, Port: cfg.RedisPort, Password: cfg.RedisPassword, DB: cfg.RedisDB, PoolSize: cfg.RedisPoolSize,
+	})
 }
 
 // RedisInfra builds the Infra of a deployment that shares Redis: event log

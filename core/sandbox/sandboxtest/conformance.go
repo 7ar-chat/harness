@@ -329,7 +329,7 @@ func (c *conformance) execGroup(t *testing.T) {
 		if err != nil || res.ExitCode != 0 {
 			t.Fatalf("exit %d, err %v", res.ExitCode, err)
 		}
-		if want := "hello world|" + `a'b"c$d` + "`e`"; k.stdout() != want {
+		if want, got := "hello world|"+`a'b"c$d`+"`e`", strings.TrimSuffix(k.stdout(), "\n"); got != want { // transports may add a trailing newline
 			t.Errorf("env round trip = %q, want %q (values are data: never re-parsed by a shell)", k.stdout(), want)
 		}
 	})
@@ -388,7 +388,7 @@ func (c *conformance) execGroup(t *testing.T) {
 		if err := sb.WriteFile(ctxT(t), d+"/g.txt", []byte("from-api")); err != nil {
 			t.Fatal(err)
 		}
-		if out := mustSh(t, sb, "cat "+d+"/g.txt"); out != "from-api" {
+		if out := strings.TrimSuffix(mustSh(t, sb, "cat "+d+"/g.txt"), "\n"); out != "from-api" { // transports may add a trailing newline
 			t.Fatalf("cat = %q", out)
 		}
 	})

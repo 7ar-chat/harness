@@ -28,7 +28,8 @@ import (
 // Skills offers the skills (<name>/SKILL.md folders): the load_skill tool, the
 // skills index in the prompt, and their installation into sandboxes. The
 // built-in skills, Options.ExtraSkills and the user directory (SKILLS_DIR) are
-// read. It publishes Builder.Skills and Builder.Installer.
+// read; the project skills come from the host with the local backend and from each
+// thread's own /workspace with a remote one (skills.LoadSandbox). It publishes Builder.Skills and Builder.Installer.
 func Skills() Feature {
 	return builtin{FeatureSkills, func(b *Builder) error {
 		builtinFS := b.Options.BuiltinSkills
@@ -38,7 +39,8 @@ func Skills() Feature {
 		reg := skills.NewRegistry(builtinFS, b.Store)
 		reg.AddFS(skills.SourceExtra, b.Options.ExtraSkills)
 		reg.Discover(skillDiscovery(b.Config))
-		installer := &skills.Installer{Registry: reg, Shared: b.Infra.Installs, Messages: b.Store}
+		installer := &skills.Installer{Registry: reg, Shared: b.Infra.Installs, Messages: b.Store,
+			SandboxProject: !b.Config.LocalSandbox(), Sandboxes: b.Sandboxes}
 		b.Skills, b.Installer = reg, installer
 		b.prof.reg = reg
 
@@ -55,7 +57,8 @@ func Skills() Feature {
 			o.AfterFailedCommand = installer.AfterFailedCommand
 		})
 		b.AddTools(&skilltools.Provider{Registry: reg, Installer: installer, Sandbox: b.Sandboxes})
-		b.Section(b.prof.skillsSection(reg.PromptSection))
+		b.Section(b.prof.skillsSection(installer.PromptSection))
+		b.StepNote(agent.StepNote(b.prof.skillsSection(installer.StepNote)))
 		return nil
 	}}
 }
@@ -65,7 +68,7 @@ func Skills() Feature {
 // other agent tools are read with the local backend only, where the host
 // directories are the user's own; a remote sandbox keeps its files to itself.
 func skillDiscovery(cfg *config.Config) skills.DiscoverOptions {
-	o := skills.DiscoverOptions{SkillsDir: strings.TrimSpace(cfg.SkillsDir)}
+	o := skills.DiscoverOptions{SkillsDir: strings.TrimSpace(cfg.SkillsDir), UserDir: config.UserDir(), NoUserDir: config.NoUserDir()}
 	if cfg.LocalSandbox() {
 		o.ForeignUserDirs = true
 		o.ProjectRoot = cfg.LocalWorkspace
@@ -200,7 +203,7 @@ func Goals() Feature {
 func Memory() Feature {
 	return builtin{FeatureMemory, func(b *Builder) error {
 		cfg := b.Config
-		svc := memory.New(b.Store, memory.OptionsFromConfig(cfg))
+		svc := memory.New(b.Store, memoryOptions(cfg))
 		svc.KeyFor, svc.UserKeyFor, svc.Shared = b.Options.MemoryKey, b.Options.MemoryUserKey, b.Options.MemoryShared
 		svc.Messages = b.Store.ListMessages
 		b.Memory = svc
@@ -210,8 +213,32 @@ func Memory() Feature {
 		b.AddTools(memorytools.New(svc))
 		b.Section(b.prof.memorySection(memory.PromptSection(svc)))
 		b.ContextSection(b.prof.memorySection(memory.RecallSection(svc)))
-		b.Job(runtime.Job{Name: "memory-consolidation", Every: memory.ConsolidationEvery(cfg),
-			Run: memory.Consolidator{Store: b.Store, Retention: memory.DeletedRetention(cfg)}.Run})
+		b.Job(runtime.Job{Name: "memory-consolidation", Every: time.Duration(max(cfg.MemoryConsolidationHours, 0)) * time.Hour,
+			Run: memory.Consolidator{Store: b.Store, Retention: time.Duration(max(cfg.MemoryDeletedRetentionDays, 0)) * 24 * time.Hour}.Run})
 		return nil
 	}}
+}
+
+// memoryOptions maps the HARNESS_MEMORY_* settings to the memory service's options.
+func memoryOptions(cfg *config.Config) memory.Options {
+	o := memory.Options{
+		WriteMode: cfg.MemoryWriteMode, DeleteMode: cfg.MemoryDeleteMode, DefaultScope: cfg.MemoryDefaultScope,
+		EmbeddingBackend: cfg.MemoryEmbeddingBackend, RecallInjection: cfg.MemoryRecallInjection,
+		MaxEntries: cfg.MemoryMaxEntries, MaxContentBytes: cfg.MemoryMaxContentBytes,
+		Extract: cfg.MemoryExtract, ExtractModel: cfg.MemoryExtractModel,
+	}
+	if o.MaxEntries <= 0 {
+		o.MaxEntries = -1 // "≤ 0: no limit" is the service's negative value (0 is its default)
+	}
+	if strings.EqualFold(strings.TrimSpace(cfg.MemoryEmbeddingBackend), "openai") {
+		url, key := cfg.MemoryEmbeddingURL, cfg.MemoryEmbeddingKey
+		if url == "" {
+			url = cfg.LLMBaseURL
+		}
+		if key == "" {
+			key = cfg.LLMAPIKey
+		}
+		o.Embedder = &memory.OpenAIEmbedder{BaseURL: url, APIKey: key, ModelName: cfg.MemoryEmbeddingModel}
+	}
+	return o
 }

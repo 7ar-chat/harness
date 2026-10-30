@@ -69,7 +69,7 @@ func (p *Provider) load(ctx context.Context, rc tools.RunContext, name string) (
 	var pkg *skills.Package
 	if att != nil {
 		pkg = att.Package
-	} else if s, pkg, err = p.Registry.ByName(ctx, name); err != nil {
+	} else if s, pkg, err = p.Installer.ByName(ctx, rc, name); err != nil {
 		return "", fmt.Errorf("loading skill %s: %w", name, err)
 	}
 	if p.Sandbox == nil || !p.Sandbox.Enabled() || rc.Sandbox == tools.SandboxOff {

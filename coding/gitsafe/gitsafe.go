@@ -176,6 +176,12 @@ func copyFile(src string) (name string, cleanup func(), err error) {
 		cleanup()
 		return "", nil, err
 	}
+	// Git detects an edit that left the stat data unchanged ("racy git") by comparing the entries' mtimes
+	// with the index file's. A copy stamped with the current time would hide a same-size edit made within
+	// the filesystem's timestamp granularity of the index update, so the copy keeps the original's mtime.
+	if st, err := os.Stat(src); err == nil {
+		_ = os.Chtimes(name, st.ModTime(), st.ModTime())
+	}
 	return name, cleanup, nil
 }
 

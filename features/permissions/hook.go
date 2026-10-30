@@ -25,6 +25,9 @@ type Hook struct {
 
 // NeedsApproval implements agent.BeforeToolHook.
 func (h *Hook) NeedsApproval(ctx context.Context, run *store.Run, toolName, arguments string) bool {
+	if approvals.IsTrustMCPTool(toolName) { // no rule or mode approves running a program for the user
+		return h.Inner != nil && h.Inner.NeedsApproval(ctx, run, toolName, arguments)
+	}
 	d, judged := h.Policy.Decide(toolName, arguments)
 	if !judged {
 		return h.Inner != nil && h.Inner.NeedsApproval(ctx, run, toolName, arguments)
@@ -46,6 +49,9 @@ func (h *Hook) NeedsApproval(ctx context.Context, run *store.Run, toolName, argu
 // Risky implements agent.RiskJudge: whether the call would be asked, whatever
 // the run's mode, so calls behind a pending approval keep waiting.
 func (h *Hook) Risky(ctx context.Context, run *store.Run, toolName, arguments string) bool {
+	if approvals.IsTrustMCPTool(toolName) {
+		return h.Inner != nil && h.Inner.Risky(ctx, run, toolName, arguments)
+	}
 	d, judged := h.Policy.Decide(toolName, arguments)
 	if !judged {
 		return h.Inner != nil && h.Inner.Risky(ctx, run, toolName, arguments)
@@ -60,7 +66,13 @@ func (h *Hook) Pause(ctx context.Context, run *store.Run, tc schema.ToolCall) (*
 }
 
 // Denial implements agent.ToolDenier: a non-empty text refuses the call.
-func (h *Hook) Denial(_ context.Context, run *store.Run, toolName, arguments string) string {
+func (h *Hook) Denial(ctx context.Context, run *store.Run, toolName, arguments string) string {
+	if approvals.IsTrustMCPTool(toolName) { // the gate refuses it where nobody can answer
+		if h.Inner == nil {
+			return approvals.TrustMCPDeniedResult
+		}
+		return h.Inner.Denial(ctx, run, toolName, arguments)
+	}
 	d, judged := h.Policy.Decide(toolName, arguments)
 	if !judged || d.Action != Deny {
 		return ""

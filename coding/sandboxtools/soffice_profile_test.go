@@ -12,10 +12,11 @@ import (
 
 // fakeSoffice puts a soffice on PATH that logs its arguments (one line per
 // conversion) and writes a (non-empty, invalid) <outdir>/<name>.<format> like LibreOffice.
-// The conversions run from python3 scripts: the test is skipped without it.
+// The conversions run from python3 scripts and the sandbox's GNU tools: the test is skipped without them.
 func fakeSoffice(t *testing.T) (env map[string]string, log string) {
 	t.Helper()
 	requirePython3(t)
+	requireGNUTools(t)
 	bin := t.TempDir()
 	log = filepath.Join(bin, "soffice.log")
 	script := `#!/usr/bin/env bash

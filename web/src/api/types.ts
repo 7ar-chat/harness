@@ -1,33 +1,18 @@
-// Wire types of the harness web API (see hosts/web and hosts/client in the Go repo).
+// Wire types of the harness web API. The ones the Go servers define (hosts/client, core/store, product,
+// features/memory) are generated into ./generated.ts by `make gen` (see cmd/gen-ts) and re-exported here, so
+// the app imports every API type from this module. What is declared below is web-only: the shape of GET
+// /threads/{id} the app relies on, and the bodies the app sends that the servers decode from unnamed structs.
 
-export type Role = "owner" | "member" | "viewer";
-export type ThreadStatus = "idle" | "queued" | "running" | "waiting_approval" | "waiting_input" | "failed";
-export type ThreadKind = "chat" | "supervisor";
+import type { GithubRepo, Message, PlanItem, ProjectWithRole, Thread as ServerThread, User } from "./generated";
 
-export interface User {
-  login: string;
-  name?: string;
-  email?: string;
-  avatarUrl?: string;
-  /** The user's own display name override ("" when using the default). */
-  displayName?: string;
-  defaultName?: string;
-  hasCustomAvatar?: boolean;
-}
+export * from "./generated";
 
-export interface Project {
-  id: string;
-  name: string;
-  description?: string;
-  repoUrl?: string;
-  defaultBranch?: string;
-  githubInstallation?: number;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-}
-export interface ProjectWithRole extends Project {
-  role: Role;
+/** A thread as GET /threads/{id} answers: its messages are present, and a server may add the workspace's branch and plan. */
+export interface Thread extends ServerThread {
+  messages: Message[];
+  branch?: string;
+  workspace?: Record<string, unknown>;
+  plan?: PlanItem[];
 }
 
 export interface Me {
@@ -35,288 +20,17 @@ export interface Me {
   projects: ProjectWithRole[];
 }
 
-export interface Member {
-  projectId: string;
-  login: string;
-  role: Role;
-  name?: string;
-  avatarUrl?: string;
-  email?: string;
-  addedAt: string;
-}
-export interface Invite {
-  projectId: string;
-  email: string;
-  role: Role;
-  invitedBy: string;
-  createdAt: string;
-}
-export interface AuditEntry {
-  id: number;
-  projectId?: string;
-  threadId?: string;
-  actor: string;
-  onBehalfOf?: string;
-  action: string;
-  detail?: Record<string, unknown>;
-  at: string;
+/** A user the app knows only in part (a project member carries no display name or avatar flag). */
+export type KnownUser = Pick<User, "login"> & Partial<User>;
+
+export interface GithubRepos {
+  repos: GithubRepo[];
+  installUrl?: string;
 }
 
-export interface ThreadSummary {
-  id: string;
-  title: string;
-  projectId?: string;
-  createdBy?: string;
-  kind?: ThreadKind;
-  status: ThreadStatus;
-  runId?: string;
-  pendingTool?: string;
-  pendingQuestion?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-export interface OverviewProject extends ProjectWithRole {
-  threads: ThreadSummary[];
-}
-export interface Overview {
-  personal: ThreadSummary[];
-  projects: OverviewProject[];
-}
-
-export interface Author {
-  login: string;
-  kind?: "user" | "supervisor" | "system";
-  onBehalfOf?: string;
-  name?: string;
-  avatarUrl?: string;
-}
-export interface ToolCall {
-  id: string;
-  type: string;
-  function: { name: string; arguments: string };
-}
-export interface Message {
-  id: string;
-  runId?: string;
-  role: "user" | "assistant" | "tool" | "system";
-  content: string;
-  toolCalls?: ToolCall[];
-  toolCallId?: string;
-  error?: string;
-  metadata?: Record<string, unknown>;
-  createdAt: string;
-  author?: Author;
-}
-export interface ActiveRun {
-  id: string;
-  status: string;
-}
-export interface PendingApproval {
-  id: string;
-  toolName?: string;
-  toolInputPreview?: string;
-  runId?: string;
-  toolCallId?: string;
-  [k: string]: unknown;
-}
-export interface QuestionOption {
-  label: string;
-  description?: string;
-}
-export interface PendingQuestion {
-  interruptId: string;
-  runId?: string;
-  toolCallId?: string;
-  question: string;
-  options?: QuestionOption[];
-  allowFreeText?: boolean;
-}
-export interface PlanItem {
-  id: string;
-  title: string;
-  status: string;
-}
-export interface Thread {
-  id: string;
-  title: string;
-  pinned?: boolean;
-  messages: Message[];
-  activeRun: ActiveRun | null;
-  pendingApproval: PendingApproval | null;
-  pendingQuestion: PendingQuestion | null;
-  projectId?: string;
-  createdBy?: string;
-  kind?: ThreadKind;
-  role?: Role;
-  status: ThreadStatus;
-  branch?: string;
-  workspace?: Record<string, unknown>;
-  plan?: PlanItem[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface Run {
-  id: string;
-  threadId: string;
-  status: string;
-}
-
-export interface Attachment {
-  name: string;
-  mime: string;
-  data: string;
-}
-export interface SendOptions {
-  message: string;
-  model?: string;
-  reasoningEffort?: string;
-  interactive?: boolean;
-  mode?: "build" | "plan";
-  sandbox?: "auto" | "on" | "off";
-  attachments?: Attachment[];
-}
-export interface ResumeBody {
-  interruptId: string;
-  reason?: string;
-  decision?: "approve" | "deny";
-  always?: boolean;
-  text?: string;
-  model?: string;
-  interactive?: boolean;
-  mode?: "build" | "plan";
-}
-
-export interface ModelInfo {
-  provider?: string;
-  contextWindow?: number;
-  inputPerToken?: number;
-  outputPerToken?: number;
-  priced?: boolean;
-  vision?: boolean;
-  reasoning?: boolean;
-}
-export interface Models {
-  models: string[];
-  default: string;
-  info?: Record<string, ModelInfo>;
-}
-export interface Command {
-  name: string;
-  description?: string;
-  source?: string;
-  argHint?: string;
-}
-export interface WorkspaceFile {
-  name: string;
-  path: string;
-  type: "file" | "directory";
-  size: number;
-  modifiedAt?: string;
-}
-
-export interface MemoryHistoryItem {
-  title?: string;
-  content: string;
-  replaced_at?: string;
-  thread?: string;
-}
-export interface MemoryMetadata {
-  pinned?: boolean;
-  auto?: boolean;
-  reason?: string;
-  run_id?: string;
-  source?: string;
-  file?: string;
-  history?: MemoryHistoryItem[];
-  [k: string]: unknown;
-}
-export interface MemoryEntry {
-  id: string;
-  path?: string;
-  title: string;
-  content: string;
-  tags?: string[];
-  status: "active" | "pending";
-  proposal?: { title?: string; content?: string; tags?: string[] } | null;
-  importance?: number | null;
-  created_at?: string;
-  updated_at?: string;
-  source?: string;
-  sourceThreadId?: string;
-  metadata?: MemoryMetadata;
-}
-export interface MemoryStats {
-  active: number;
-  pending: number;
-  pinned: number;
-  byKind: Record<string, number>;
-  embeddings: { enabled: boolean; model?: string; vectors?: number };
-  service: Partial<Record<"recallRuns" | "recallItems" | "recallChars" | "recallPinned" | "searches" | "searchHits" | "extractRuns" | "extractProposed" | "extractSkipped" | "extractErrors" | "embedded" | "embedErrors", number>>;
-}
-export interface MemoryList {
-  entries: MemoryEntry[];
-  enabled: boolean;
-}
+/** The body the memory dialog sends to create or patch an entry (the handlers decode it from unnamed structs, so it has no generated type). */
 export interface MemoryInput {
   title: string;
   content: string;
   tags: string[];
-}
-
-export interface GithubStatus {
-  configured: boolean;
-  connected: boolean;
-  installUrl?: string;
-  repo?: string;
-  message?: string;
-}
-
-export type FeedType =
-  | "thread.created"
-  | "thread.updated"
-  | "thread.deleted"
-  | "run.started"
-  | "run.finished"
-  | "message.sent"
-  | "member.changed"
-  | "project.changed"
-  | "memory.changed";
-export interface FeedEvent {
-  type: FeedType;
-  projectId?: string;
-  threadId?: string;
-  runId?: string;
-  actor?: string;
-  status?: string;
-  title?: string;
-  at: string;
-}
-
-export interface SupervisorSettings {
-  watch: boolean;
-  stuckMinutes: number;
-}
-
-export interface Connector {
-  kind: "github" | "telegram";
-  configured: boolean;
-  connected: boolean;
-  account?: string;
-  label?: string;
-  message?: string;
-  connectUrl?: string;
-  pending?: { code: string; url: string; expiresAt: string };
-}
-export interface GithubRepo {
-  fullName: string;
-  private: boolean;
-  description?: string;
-  defaultBranch?: string;
-  installationId?: number;
-  imported?: string;
-}
-export interface GithubRepos {
-  repos: GithubRepo[];
-  installUrl?: string;
 }

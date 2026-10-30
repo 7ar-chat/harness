@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"os"
 	"regexp"
 	"sort"
@@ -105,18 +106,38 @@ func (r *Registry) AddFS(source string, fsys fs.FS) int {
 			slog.Error("skills: invalid skill skipped", "source", source, "dir", e.Name(), "error", err)
 			continue
 		}
-		if pkg.Name != e.Name() && Slug(pkg.Name) != e.Name() {
-			slog.Error("skills: skill name does not match its directory", "source", source, "dir", e.Name(), "name", pkg.Name)
-			continue
+		if r.put(source, e.Name(), pkg) {
+			n++
 		}
-		if prev, ok := r.byName[e.Name()]; ok {
-			slog.Info("skills: skill replaced by a later source", "name", e.Name(), "was", prev.skill.Source, "now", source)
-		}
-		r.byName[e.Name()] = &entry{pkg: pkg, skill: Skill{Name: e.Name(), Description: pkg.Description, Source: source,
-			Revision: pkg.Revision, Files: len(pkg.Files), SizeBytes: pkg.Size}}
-		n++
 	}
 	return n
+}
+
+// put registers a validated package under dir (its folder name) if the name matches, replacing a skill of
+// the same name from an earlier source; it reports whether it was added.
+func (r *Registry) put(source, dir string, pkg *Package) bool {
+	if pkg.Name != dir && Slug(pkg.Name) != dir {
+		slog.Error("skills: skill name does not match its directory", "source", source, "dir", dir, "name", pkg.Name)
+		return false
+	}
+	if prev, ok := r.byName[dir]; ok {
+		slog.Info("skills: skill replaced by a later source", "name", dir, "was", prev.skill.Source, "now", source)
+	}
+	r.byName[dir] = &entry{pkg: pkg, skill: Skill{Name: dir, Description: pkg.Description, Source: source,
+		Revision: pkg.Revision, Files: len(pkg.Files), SizeBytes: pkg.Size}}
+	return true
+}
+
+// merged returns a view of r with the skills of overlay replacing those of the same name (r itself when
+// overlay has none). The view shares r's store; neither registry is modified.
+func (r *Registry) merged(overlay *Registry) *Registry {
+	if overlay == nil || len(overlay.byName) == 0 {
+		return r
+	}
+	m := &Registry{byName: make(map[string]*entry, len(r.byName)+len(overlay.byName)), store: r.store}
+	maps.Copy(m.byName, r.byName)
+	maps.Copy(m.byName, overlay.byName)
+	return m
 }
 
 // AddDir adds the skills found in the host directory dir (see AddFS). A

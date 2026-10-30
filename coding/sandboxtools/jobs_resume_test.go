@@ -125,7 +125,10 @@ func TestARestartedRuntimeKeepsAJobAliveOnlyForWhatIsLeftOfItsBudget(t *testing.
 		t.Fatal(err)
 	}
 	time.Sleep(450 * time.Millisecond)
-	_ = dead.Close()          // the first process died...
+	_ = dead.Close() // the first process died...
+	// ...a renewal it had already sent may still reach the server: let it land before the lease expires,
+	// or it would take the lease back after the fast-forward and the restart would find it held.
+	time.Sleep(30 * time.Millisecond)
 	mr.FastForward(time.Hour) // ...and its lease expired
 	restarted := newJobRuntime(t, backend, st, rdb, th.ID, 700*time.Millisecond)
 

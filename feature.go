@@ -98,6 +98,7 @@ type Builder struct {
 	before    []agent.BeforeToolHook
 	toolHooks []agent.ToolHook
 	runStart  []agent.RunStartHook
+	stepNotes []agent.StepNote
 	answers   agent.AnswerChecker
 	images    agent.ImageAttacher
 	checker   agent.Checker
@@ -156,6 +157,10 @@ func (b *Builder) ToolHook(h agent.ToolHook) { b.toolHooks = append(b.toolHooks,
 
 // RunStart adds a hook run before the first step of every run.
 func (b *Builder) RunStart(h agent.RunStartHook) { b.runStart = append(b.runStart, h) }
+
+// StepNote adds a note source asked before every model call of a run (news that appears mid-run, such as the
+// project skills of a sandbox the run started).
+func (b *Builder) StepNote(n agent.StepNote) { b.stepNotes = append(b.stepNotes, n) }
 
 // SetAnswers sets the reviewer of final answers; only one feature may.
 func (b *Builder) SetAnswers(a agent.AnswerChecker) error {
@@ -362,7 +367,7 @@ func isNilValue(v any) bool {
 // applyTo adds what the features contributed to the agent's configuration.
 func (b *Builder) applyTo(hs *agent.Harness) {
 	hs.Sections, hs.Context, hs.Tail = b.sections, b.context, b.tail
-	hs.ToolHooks, hs.RunStart = b.toolHooks, b.runStart
+	hs.ToolHooks, hs.RunStart, hs.StepNotes = b.toolHooks, b.runStart, b.stepNotes
 	hs.Images, hs.Answers = b.images, b.answers
 	hs.Checker, hs.Deliverables = b.checker, b.deliver
 	hs.BeforeTool = append(hs.BeforeTool, b.before...)

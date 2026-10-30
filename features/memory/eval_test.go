@@ -67,7 +67,7 @@ func runEval(t *testing.T, emb memory.Embedder) evalResult {
 		if r.IsError {
 			t.Fatal(r.Data)
 		}
-		ids[r.Data["memory"].(map[string]any)["path"].(string)] = e.label
+		ids[r.Data["memory"].(memory.Entry).Path] = e.label
 	}
 	var res evalResult
 	var para, paraHit float64

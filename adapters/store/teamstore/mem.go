@@ -43,6 +43,7 @@ type data struct {
 	NextAud  int64                                 `json:"nextAudit"`
 	Avatars  map[string]avatar                     `json:"avatars"`
 	Conns    map[string]map[string]store.Connector `json:"connectors"`
+	Seen     map[string]map[string]time.Time       `json:"seen"` // login → thread id → last seen
 }
 
 // NewMem returns an empty in-memory store that is never persisted.
@@ -81,6 +82,9 @@ func (m *Mem) fill() {
 	}
 	if m.d.Avatars == nil {
 		m.d.Avatars = map[string]avatar{}
+	}
+	if m.d.Seen == nil {
+		m.d.Seen = map[string]map[string]time.Time{}
 	}
 	if m.d.Conns == nil {
 		m.d.Conns = map[string]map[string]store.Connector{}
@@ -282,6 +286,30 @@ func (m *Mem) SetUserPrefs(_ context.Context, login string, prefs map[string]any
 	return m.save()
 }
 
+func (m *Mem) SeenThreads(_ context.Context, login string) (map[string]time.Time, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make(map[string]time.Time, len(m.d.Seen[login]))
+	for id, at := range m.d.Seen[login] {
+		out[id] = at
+	}
+	return out, nil
+}
+
+func (m *Mem) SetThreadSeen(_ context.Context, login, threadID string, at time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	at = at.UTC()
+	if cur, ok := m.d.Seen[login][threadID]; ok && !at.After(cur) {
+		return nil
+	}
+	if m.d.Seen[login] == nil {
+		m.d.Seen[login] = map[string]time.Time{}
+	}
+	m.d.Seen[login][threadID] = at
+	return m.save()
+}
+
 func (m *Mem) GetUser(_ context.Context, login string) (*store.User, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -386,6 +414,9 @@ func (m *Mem) DeleteProject(_ context.Context, id string) error {
 	for tid, t := range m.d.Threads {
 		if t.ProjectID == id {
 			delete(m.d.Threads, tid)
+			for _, seen := range m.d.Seen {
+				delete(seen, tid)
+			}
 		}
 	}
 	return m.save()
@@ -581,6 +612,9 @@ func (m *Mem) DeleteThreadMeta(_ context.Context, threadID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.d.Threads, threadID)
+	for _, seen := range m.d.Seen {
+		delete(seen, threadID)
+	}
 	return m.save()
 }
 

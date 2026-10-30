@@ -128,10 +128,32 @@ func Explore() Feature {
 // MCP offers the tools of the MCP servers of the configuration (MCP_SERVERS).
 func MCP() Feature {
 	return builtin{FeatureMCP, func(b *Builder) error {
-		p := mcptools.New(b.Config.MCPServers, b.Options.Version, mcptools.MaxResultChars)
+		var pending []config.MCPServer
+		if b.Config.Layers != nil {
+			pending = b.Config.Layers.MCPPending
+		}
+		p := mcptools.NewWithPending(b.Config.MCPServers, pending, b.Options.Version, mcptools.MaxResultChars)
 		if p != nil {
 			p.CallTimeout = b.Config.MCPCallTimeout()
+			if b.Config.Layers != nil {
+				p.TrustDir = b.Config.Layers.UserDir
+			}
+			if b.Store != nil {
+				p.History = b.Store.ListMessages
+			}
 			b.AddTools(p)
+			// A pending project server is only offered for approval where the approval gate asks the user.
+			b.Configure(func(hs *agent.Harness) {
+				for _, h := range hs.BeforeTool {
+					if hk, ok := h.(*permissions.Hook); ok && hk.Inner != nil {
+						h = hk.Inner
+					}
+					if g, ok := h.(*approvals.Gate); ok {
+						g.Describe = p.Describe
+						p.Ask = true
+					}
+				}
+			})
 		}
 		return nil
 	}}

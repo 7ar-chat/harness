@@ -113,16 +113,60 @@ func (s *server) memoryKey(w http.ResponseWriter, r *http.Request, c Caller, wri
 	return ProjectMemoryPrefix + pid, true
 }
 
-func entryView(e *store.MemoryEntry) map[string]any {
-	m := memory.PublicEntry(e)
-	m["content"] = e.Content
-	if e.SourceThreadID != "" {
-		m["sourceThreadId"] = e.SourceThreadID
+// memoryEntryView is a memory entry as the memory pages read it: the tool result's entry (memory.Entry) plus its
+// content, the conversation that wrote it and the change the agent proposed to it. The fields are declared in the
+// alphabetical order of their JSON names, the order the map this type replaced was encoded in; memory.Entry's
+// fields are repeated rather than embedded to keep it (a test compares the bytes with memory.PublicEntry).
+type memoryEntryView struct {
+	Content            string                `json:"content"`
+	CreatedAt          *string               `json:"created_at"`
+	EmbeddingUpdatedAt *string               `json:"embedding_updated_at"`
+	ID                 string                `json:"id"`
+	Importance         *float64              `json:"importance"`
+	Metadata           map[string]any        `json:"metadata"`
+	Path               string                `json:"path"`
+	Proposal           *store.MemoryProposal `json:"proposal,omitempty"`
+	Repository         string                `json:"repository"`
+	Scope              string                `json:"scope"`
+	Source             string                `json:"source"`
+	SourceThreadID     string                `json:"sourceThreadId,omitempty"`
+	Status             string                `json:"status"`
+	Tags               []string              `json:"tags"`
+	Title              string                `json:"title"`
+	UpdatedAt          *string               `json:"updated_at"`
+}
+
+// memoryList is the answer of GET /api/memory.
+type memoryList struct {
+	Enabled bool              `json:"enabled"`
+	Entries []memoryEntryView `json:"entries"`
+}
+
+// memoryStats is the answer of GET /api/memory/stats: what a memory holds and what the memory service did in
+// this process.
+type memoryStats struct {
+	Active     int              `json:"active"`
+	ByKind     map[string]int   `json:"byKind"`
+	Embeddings memoryEmbeddings `json:"embeddings"`
+	Pending    int              `json:"pending"`
+	Pinned     int              `json:"pinned"`
+	Service    memory.Stats     `json:"service"`
+}
+
+// memoryEmbeddings says whether the semantic index is on, with which model and how many entries it holds.
+type memoryEmbeddings struct {
+	Enabled bool    `json:"enabled"`
+	Model   *string `json:"model,omitempty"`
+	Vectors *int    `json:"vectors,omitempty"`
+}
+
+func entryView(e *store.MemoryEntry) memoryEntryView {
+	p := memory.PublicEntry(e)
+	return memoryEntryView{
+		Content: e.Content, CreatedAt: p.CreatedAt, EmbeddingUpdatedAt: p.EmbeddingUpdatedAt, ID: p.ID, Importance: p.Importance,
+		Metadata: p.Metadata, Path: p.Path, Proposal: e.Proposal, Repository: p.Repository, Scope: p.Scope, Source: p.Source,
+		SourceThreadID: e.SourceThreadID, Status: p.Status, Tags: p.Tags, Title: p.Title, UpdatedAt: p.UpdatedAt,
 	}
-	if e.Proposal != nil {
-		m["proposal"] = e.Proposal
-	}
-	return m
 }
 
 func memoryFail(w http.ResponseWriter, e *memory.Error) {
@@ -149,11 +193,11 @@ func (s *server) listMemory(w http.ResponseWriter, r *http.Request, c Caller) {
 		return
 	}
 	enabled, _ := s.H.Store.MemoryEnabled(r.Context(), key)
-	out := make([]map[string]any, 0, len(entries))
+	out := make([]memoryEntryView, 0, len(entries))
 	for _, e := range entries {
 		out = append(out, entryView(e))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"entries": out, "enabled": enabled})
+	writeJSON(w, http.StatusOK, memoryList{Entries: out, Enabled: enabled})
 }
 
 func (s *server) createMemory(w http.ResponseWriter, r *http.Request, c Caller) {
@@ -303,36 +347,35 @@ func (s *server) memoryStats(w http.ResponseWriter, r *http.Request, c Caller) {
 		fail(w, err)
 		return
 	}
-	out := map[string]any{"active": 0, "pending": 0, "pinned": 0}
 	kinds := map[string]int{}
-	active, pending, pinned := 0, 0, 0
+	out := memoryStats{ByKind: kinds}
 	for _, e := range entries {
 		if e.Status == store.MemoryPending || e.Proposal != nil {
-			pending++
+			out.Pending++
 		}
 		if e.Status != store.MemoryActive {
 			continue
 		}
-		active++
+		out.Active++
 		if memory.IsPinned(e) {
-			pinned++
+			out.Pinned++
 		}
 		parts := strings.Split(e.Path, "/")
 		if len(parts) >= 3 && parts[0] == "memories" {
 			kinds[parts[len(parts)-2]]++
 		}
 	}
-	out["active"], out["pending"], out["pinned"], out["byKind"] = active, pending, pinned, kinds
-	emb := map[string]any{"enabled": false}
 	if o := s.H.Memory.Options(); o.Embedder != nil {
-		emb["enabled"], emb["model"] = true, o.Embedder.Model()
+		model := o.Embedder.Model()
+		out.Embeddings.Enabled, out.Embeddings.Model = true, &model
 		if vs, ok := s.H.Store.(store.MemoryEmbeddingStore); ok {
 			if v, err := vs.GetMemoryEmbeddings(r.Context(), key); err == nil {
-				emb["vectors"] = len(v)
+				n := len(v)
+				out.Embeddings.Vectors = &n
 			}
 		}
 	}
-	out["embeddings"], out["service"] = emb, s.H.Memory.Stats()
+	out.Service = s.H.Memory.Stats()
 	writeJSON(w, http.StatusOK, out)
 }
 

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/core/layout"
 )
 
 // Folder names other agent tools keep their skills in (the Agent Skills
@@ -19,8 +19,15 @@ const (
 type DiscoverOptions struct {
 	// SkillsDir is the explicit user directory (SKILLS_DIR), read before the others.
 	SkillsDir string
-	// Home is the user's home directory ("" = os.UserHomeDir).
+	// Home is the user's home directory ("" = os.UserHomeDir). When set, the user
+	// directory is <Home>/.har and UserDir and NoUserDir are ignored.
 	Home string
+	// UserDir is the user's configuration directory (~/.har or $HAR_HOME), read
+	// when Home is empty ("" = none).
+	UserDir string
+	// NoUserDir reads nothing from the user's home (a hermetic server or CI):
+	// neither UserDir nor the foreign directories. Ignored when Home is set.
+	NoUserDir bool
 	// ForeignUserDirs also reads ~/.agents/skills and ~/.claude/skills (the
 	// skills the user's other agent tools use). Off for a server that serves
 	// other people: the host's home is not theirs.
@@ -45,9 +52,9 @@ func Dirs(o DiscoverOptions) []Dir {
 	home := o.Home
 	userDir := ""
 	if home != "" {
-		userDir = filepath.Join(home, config.DirName)
-	} else if !config.NoUserDir() {
-		userDir = config.UserDir()
+		userDir = filepath.Join(home, layout.DirName)
+	} else if !o.NoUserDir {
+		userDir = o.UserDir
 		home, _ = os.UserHomeDir()
 	}
 	var out []Dir
@@ -58,17 +65,17 @@ func Dirs(o DiscoverOptions) []Dir {
 	}
 	add(o.SkillsDir, SourceUser)
 	if userDir != "" {
-		add(filepath.Join(userDir, config.SkillsFolder), SourceUser)
+		add(filepath.Join(userDir, layout.SkillsFolder), SourceUser)
 	}
 	if home != "" {
 		if o.ForeignUserDirs {
-			add(filepath.Join(home, agentsDir, config.SkillsFolder), SourceUser)
-			add(filepath.Join(home, claudeDir, config.SkillsFolder), SourceUser)
+			add(filepath.Join(home, agentsDir, layout.SkillsFolder), SourceUser)
+			add(filepath.Join(home, claudeDir, layout.SkillsFolder), SourceUser)
 		}
 	}
 	if o.ProjectRoot != "" {
-		for _, d := range []string{config.DirName, agentsDir, claudeDir} {
-			add(filepath.Join(o.ProjectRoot, d, config.SkillsFolder), SourceProject)
+		for _, d := range []string{layout.DirName, agentsDir, claudeDir} {
+			add(filepath.Join(o.ProjectRoot, d, layout.SkillsFolder), SourceProject)
 		}
 	}
 	return dedupe(out)

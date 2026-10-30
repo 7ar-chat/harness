@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/GhaziBenDahmane/harness/core/store"
 )
@@ -135,5 +136,32 @@ func TestProfileAvatarAndConnectors(t *testing.T) {
 	}
 	if _, err := m.FindConnector(ctx, store.ConnectorTelegram, "111"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("still found: %v", err)
+	}
+}
+
+func TestSeenThreadsKeepTheLatestVisitPerUserAndSurviveReload(t *testing.T) {
+	// Arrange
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "team.json")
+	m, _ := Open(path)
+	t1, t2 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+
+	// Act
+	m.SetThreadSeen(ctx, "alice", "t1", t2)
+	m.SetThreadSeen(ctx, "alice", "t1", t1) // an older visit does not move it back
+	m.SetThreadSeen(ctx, "bob", "t1", t1)
+	m2, _ := Open(path)
+
+	// Assert
+	alice, _ := m2.SeenThreads(ctx, "alice")
+	bob, _ := m2.SeenThreads(ctx, "bob")
+	if !alice["t1"].Equal(t2) || !bob["t1"].Equal(t1) {
+		t.Fatalf("alice %v, bob %v", alice, bob)
+	}
+	if err := m2.DeleteThreadMeta(ctx, "t1"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := m2.SeenThreads(ctx, "alice"); len(got) != 0 {
+		t.Fatalf("seen state of a deleted thread kept: %v", got)
 	}
 }

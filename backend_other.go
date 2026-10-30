@@ -12,6 +12,6 @@ import (
 
 func init() { backends.Register(config.BackendLocal, localBackend) }
 
-func localBackend(*config.Config) (sandbox.Backend, error) {
+func localBackend(backends.Settings) (sandbox.Backend, error) {
 	return nil, errors.New("SANDBOX_BACKEND=local is not supported on this platform")
 }

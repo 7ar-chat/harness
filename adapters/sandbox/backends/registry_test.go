@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/GhaziBenDahmane/harness/adapters/sandbox/backends"
-	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 )
@@ -14,10 +13,10 @@ import (
 func TestRegisteredBackendsAreSelectedBySandboxBackend(t *testing.T) {
 	// Arrange
 	fake := sandboxtest.NewBackend()
-	backends.Register("registry-test", func(*config.Config) (sandbox.Backend, error) { return fake, nil })
+	backends.Register("registry-test", func(backends.Settings) (sandbox.Backend, error) { return fake, nil })
 
 	// Act
-	got, err := backends.NewBackend(&config.Config{SandboxBackend: " Registry-Test "})
+	got, err := backends.NewBackend(backends.Settings{Name: " Registry-Test "})
 
 	// Assert
 	if err != nil || got != sandbox.Backend(fake) {
@@ -31,14 +30,14 @@ func TestRegisteredBackendsAreSelectedBySandboxBackend(t *testing.T) {
 func TestBuiltinSelection(t *testing.T) {
 	for _, c := range []struct {
 		name string
-		cfg  config.Config
+		cfg  backends.Settings
 		nil_ bool
 		err  bool
 	}{
-		{"default is none", config.Config{}, true, false},
-		{"none", config.Config{SandboxBackend: "none", OpenSandboxURL: "http://x"}, true, false},
+		{"default is none", backends.Settings{}, true, false},
+		{"none", backends.Settings{Name: "none", OpenSandbox: backends.OpenSandboxSettings{URL: "http://x"}}, true, false},
 	} {
-		b, err := backends.NewBackend(&c.cfg)
+		b, err := backends.NewBackend(c.cfg)
 		if (err != nil) != c.err || (b == nil) != c.nil_ {
 			t.Errorf("%s: backend %v, err %v", c.name, b, err)
 		}
@@ -46,7 +45,7 @@ func TestBuiltinSelection(t *testing.T) {
 }
 
 func TestAnUnknownBackendNamesTheRegisteredOnes(t *testing.T) {
-	_, err := backends.NewBackend(&config.Config{SandboxBackend: "no-such-backend"})
+	_, err := backends.NewBackend(backends.Settings{Name: "no-such-backend"})
 	if !errors.Is(err, backends.ErrUnknownBackend) {
 		t.Fatalf("err = %v", err)
 	}
@@ -58,5 +57,5 @@ func TestRegisteringANameTwiceIsAProgrammingError(t *testing.T) {
 			t.Fatal("no panic")
 		}
 	}()
-	backends.Register("none", func(*config.Config) (sandbox.Backend, error) { return nil, nil })
+	backends.Register("none", func(backends.Settings) (sandbox.Backend, error) { return nil, nil })
 }

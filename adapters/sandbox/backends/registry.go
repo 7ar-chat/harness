@@ -8,13 +8,53 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 )
 
-// A Factory builds the Backend of a configuration. A nil sandbox.Backend with a nil
+// None is the name of the backend that provides no sandbox.
+const None = "none"
+
+// Settings are what the built-in backends need to be built; the composition root
+// fills them from its configuration. A backend you register yourself reads the
+// settings it needs from here or from its own sources (for example the environment).
+type Settings struct {
+	// Name selects the backend (SANDBOX_BACKEND, case-insensitive); empty means None.
+	Name string
+	// OpenSandbox configures the "opensandbox" backend.
+	OpenSandbox OpenSandboxSettings
+	// Local configures the "local" backend.
+	Local LocalSettings
+}
+
+// OpenSandboxSettings configures the "opensandbox" backend.
+type OpenSandboxSettings struct {
+	URL            string
+	APIKey         string
+	UseServerProxy bool
+	Image          string
+	CPU            string
+	Memory         string
+	// TimeoutSeconds is the idle lifetime of a sandbox.
+	TimeoutSeconds int
+	// EgressAllowlist, when set, makes egress deny-by-default with these domains allowed.
+	EgressAllowlist []string
+	// EgressDenyCIDRs are denied in unrestricted mode (no allowlist); empty: the package default.
+	EgressDenyCIDRs []string
+	// CredentialProxy creates every sandbox with the egress sidecar's Credential Vault enabled.
+	CredentialProxy bool
+}
+
+// LocalSettings configures the "local" backend.
+type LocalSettings struct {
+	// Workspace is the host directory mapped to /workspace ("": the working directory).
+	Workspace string
+	// StateDir is where the backend keeps its state ("": its default).
+	StateDir string
+}
+
+// A Factory builds the Backend of the settings. A nil sandbox.Backend with a nil
 // error means "no sandbox".
-type Factory func(cfg *config.Config) (sandbox.Backend, error)
+type Factory func(s Settings) (sandbox.Backend, error)
 
 var (
 	regMu    sync.RWMutex
@@ -56,20 +96,22 @@ func Registered() []string {
 // ErrUnknownBackend means SANDBOX_BACKEND names no registered backend.
 var ErrUnknownBackend = errors.New("unknown sandbox backend")
 
-// NewBackend builds the backend selected by the configuration
-// (Config.SandboxBackendName): the registered factory of SANDBOX_BACKEND, or
-// of "opensandbox" when only OPENSANDBOX_URL is set, or none (a nil sandbox.Backend).
-func NewBackend(cfg *config.Config) (sandbox.Backend, error) {
-	name := cfg.SandboxBackendName()
+// NewBackend builds the backend named by s.Name with its registered factory
+// (None: a nil sandbox.Backend).
+func NewBackend(s Settings) (sandbox.Backend, error) {
+	name := strings.ToLower(strings.TrimSpace(s.Name))
+	if name == "" {
+		name = None
+	}
 	regMu.RLock()
 	f, ok := registry[name]
 	regMu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("%w %q (SANDBOX_BACKEND); registered: %s", ErrUnknownBackend, name, strings.Join(Registered(), ", "))
 	}
-	return f(cfg)
+	return f(s)
 }
 
 func init() {
-	Register(config.BackendNone, func(*config.Config) (sandbox.Backend, error) { return nil, nil })
+	Register(None, func(Settings) (sandbox.Backend, error) { return nil, nil })
 }

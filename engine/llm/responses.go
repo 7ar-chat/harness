@@ -11,15 +11,15 @@ import (
 	"github.com/GhaziBenDahmane/harness/engine/llm/responses"
 )
 
-// responsesModel is the Responses API client of a model in LLM_RESPONSES_MODELS:
-// {LLM_BASE_URL}/responses over the provider's HTTP client (timeouts, CallInfo).
+// responsesModel is the Responses API client of a model in Options.ResponsesModels:
+// {BaseURL}/responses over the provider's HTTP client (timeouts, CallInfo).
 func (p *Provider) responsesModel(name string) (model.ToolCallingChatModel, error) {
-	base := p.cfg.LLMBaseURL
+	base := p.cfg.BaseURL
 	if base == "" {
 		base = "https://api.openai.com/v1"
 	}
 	header := http.Header{}
-	header.Set("Authorization", "Bearer "+p.cfg.LLMAPIKey)
+	header.Set("Authorization", "Bearer "+p.cfg.APIKey)
 	return responses.New(responses.Config{
 		URL: strings.TrimRight(base, "/") + "/responses", Model: name, Name: name, HTTPClient: p.client, Header: header,
 		OnRefusal: RecordRefusal, ReasoningSummary: "auto",

@@ -7,11 +7,10 @@ import { Bot, Paperclip, Send, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, type ReactNode } from "react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
-import { useCommands } from "@/api/queries";
+import { useCommands, useMarkSeen } from "@/api/queries";
 import type { Attachment, Author, Command } from "@/api/types";
 import { UserAvatar } from "@/components/app/common";
 import { Button } from "@/components/ui/button";
-import { markSeen } from "@/lib/unread";
 import { toThreadMessage, type MessageCustom } from "./convert";
 import { MarkdownText, MemoryLinkContext, MemoryNote, PlainText, Reasoning, ToolCard } from "./parts";
 import { InterruptCard } from "./Prompts";
@@ -149,6 +148,7 @@ export interface ChatViewProps {
 export function ChatView({ threadId, settings, readOnly, users, self, suggestions, models, onStatus, emptyHint, projectId }: ChatViewProps) {
   const chat = useChat(threadId, settings, users, self);
   const commands = useCommands().data ?? [];
+  const markSeen = useMarkSeen();
   const { messages, running, send, resume, cancel, interrupt, live, busy, thread } = chat;
 
   const onNew = useCallback(
@@ -186,8 +186,8 @@ export function ChatView({ threadId, settings, readOnly, users, self, suggestion
 
   const t = thread.data;
   useEffect(() => {
-    if (t) markSeen(threadId, t.updatedAt);
-  }, [threadId, t, messages.length]);
+    if (t) void markSeen(threadId, t.updatedAt);
+  }, [markSeen, threadId, t, messages.length]);
 
   const usage = useMemo(() => formatUsage(live.usage, settings.model ? models?.[settings.model] : undefined), [live.usage, settings.model, models]);
   const asked = t?.createdBy && interrupt ? t.createdBy : undefined;

@@ -101,7 +101,7 @@ a remote adapter just executes them.
 ## 3. Image requirements
 
 What an image (`OPENSANDBOX_IMAGE`, or whatever your provider boots) must
-provide. `sandbox-image/Dockerfile` satisfies all three tiers.
+provide. `sandbox-image/Dockerfile` satisfies all three tiers (built and smoke-tested on linux/arm64 and linux/amd64, 2026-10-30; the image runs as root, so `/workspace` is owned by the command user).
 
 **Required** (every adapter; without these file writes, jobs or path checks break):
 
@@ -181,7 +181,7 @@ The agent runs untrusted, model-written code, and reads untrusted files.
   least private, link-local, CGNAT and metadata ranges
   (`SANDBOX_EGRESS_DENY_CIDRS`, default in `sandbox.DefaultEgressDenyCIDRs`), so a
   sandbox cannot reach other sandboxes, the host, the orchestrator or the cloud
-  metadata service. `config.EgressMode()` refuses unrestricted egress in
+  metadata service. `config.EgressMode()` (checked by `harness.NewSandboxBackend`) refuses unrestricted egress in
   production unless `SANDBOX_EGRESS_UNRESTRICTED=true`. Your adapter must apply
   it or document why the provider already does.
 * **No credentials in the sandbox.** Pass none via `Env`/`Metadata` beyond what a
@@ -304,12 +304,11 @@ package myadapter
 
 import (
     "github.com/GhaziBenDahmane/harness/adapters/sandbox/backends"
-    "github.com/GhaziBenDahmane/harness/config"
     "github.com/GhaziBenDahmane/harness/core/sandbox"
 )
 
 func init() {
-    backends.Register("rest", func(cfg *config.Config) (sandbox.Backend, error) {
+    backends.Register("rest", func(s backends.Settings) (sandbox.Backend, error) {
         return &Backend{BaseURL: os.Getenv("REST_SANDBOX_URL")}, nil
     })
 }
@@ -322,10 +321,11 @@ Built-ins: `local` (unix only: registered from the facade behind a build tag),
 An unknown name fails at start with the list of registered ones;
 `backends.Register` panics on a duplicate name. Names are case-insensitive.
 
-A registered adapter should read its own settings from the environment (or
-extend `config.Config` in your fork); `cfg.SandboxEgressAllowlist`,
-`cfg.SandboxEgressDenyCIDRs`, `cfg.SandboxCPU`, `cfg.SandboxMemory` and
-`cfg.SandboxTimeoutSeconds` are there for you to honour.
+A registered adapter receives `backends.Settings`: `OpenSandbox.EgressAllowlist`,
+`OpenSandbox.EgressDenyCIDRs`, `OpenSandbox.CPU`, `OpenSandbox.Memory` and
+`OpenSandbox.TimeoutSeconds` (from `SANDBOX_EGRESS_ALLOWLIST`, `SANDBOX_EGRESS_DENY_CIDRS`,
+`SANDBOX_CPU`, `SANDBOX_MEMORY`, `SANDBOX_TIMEOUT_SECONDS`) are there for you to honour; any
+other setting of your own it reads from the environment.
 
 ## 9. Checklist before you ship an adapter
 

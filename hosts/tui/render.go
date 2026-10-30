@@ -431,7 +431,10 @@ type Prompt struct {
 func RenderPrompt(p Prompt, width int) string {
 	if p.Reason == "tool_approval" {
 		lines := []string{styleWarn.Render("Approval needed: ") + styleBold.Render(p.Title)}
-		if p.Detail != "" {
+		switch {
+		case strings.HasPrefix(p.Title, "mcp_approve__"): // approving a program to run: show all of it
+			lines = append(lines, styleDim.Render(wrap(p.Detail, width-4)))
+		case p.Detail != "":
 			lines = append(lines, "  "+styleDim.Render(clip(oneLine(p.Detail), width-4)))
 		}
 		lines = append(lines, "  [y] approve once   [a] always (this run)   [n/esc] deny")

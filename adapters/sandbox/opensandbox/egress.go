@@ -2,47 +2,42 @@ package opensandbox
 
 import (
 	"errors"
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/backends"
 
-	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/adapters/sandbox/backends"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 )
 
-// BackendFromConfig builds the sandbox backend of a process (api, runtime or
-// all) from the configuration: every process that can create a sandbox (agent
-// tools, Office previews, restores) gets the same options and egress policy,
-// and every one of them applies the production refusal of unrestricted egress
-// (C-02: the api used to skip it). It returns a nil sandbox.Backend when OPENSANDBOX_URL
-// is empty.
-func BackendFromConfig(cfg *config.Config) (sandbox.Backend, error) {
-	if !cfg.SandboxEnabled() {
-		return nil, nil
+// Name is the name this backend registers under (SANDBOX_BACKEND=opensandbox).
+const Name = "opensandbox"
+
+// BackendFromSettings builds the OpenSandbox backend from the registry settings:
+// every process that can create a sandbox (agent tools, Office previews,
+// restores) gets the same options and egress policy. It fails when the
+// server URL is empty. Refusing unrestricted egress in production is the
+// composition root's check, made before the backend is built.
+func BackendFromSettings(s backends.OpenSandboxSettings) (sandbox.Backend, error) {
+	if s.URL == "" {
+		return nil, errors.New("SANDBOX_BACKEND=opensandbox needs OPENSANDBOX_URL")
 	}
-	if _, err := cfg.EgressMode(); err != nil {
-		return nil, err
-	}
-	b, err := NewOpenSandbox(OptionsFromConfig(cfg))
+	b, err := NewOpenSandbox(OptionsFromSettings(s))
 	if err != nil {
 		return nil, err
 	}
 	return b, nil
 }
 
-// OptionsFromConfig maps the configuration to the OpenSandbox options.
-func OptionsFromConfig(cfg *config.Config) OpenSandboxOptions {
+// OptionsFromSettings maps the registry settings to the OpenSandbox options.
+func OptionsFromSettings(s backends.OpenSandboxSettings) OpenSandboxOptions {
 	return OpenSandboxOptions{
-		URL: cfg.OpenSandboxURL, APIKey: cfg.OpenSandboxAPIKey, UseServerProxy: cfg.OpenSandboxUseServerProxy,
-		Image: cfg.OpenSandboxImage, CPU: cfg.SandboxCPU, Memory: cfg.SandboxMemory,
-		TimeoutSeconds: cfg.SandboxTimeoutSeconds, EgressAllowlist: cfg.SandboxEgressAllowlist,
-		EgressDenyCIDRs: cfg.SandboxEgressDenyCIDRs, CredentialProxy: cfg.OpenSandboxCredentialProxy,
+		URL: s.URL, APIKey: s.APIKey, UseServerProxy: s.UseServerProxy,
+		Image: s.Image, CPU: s.CPU, Memory: s.Memory,
+		TimeoutSeconds: s.TimeoutSeconds, EgressAllowlist: s.EgressAllowlist,
+		EgressDenyCIDRs: s.EgressDenyCIDRs, CredentialProxy: s.CredentialProxy,
 	}
 }
 
 func init() {
-	backends.Register(config.BackendOpenSandbox, func(cfg *config.Config) (sandbox.Backend, error) {
-		if cfg.OpenSandboxURL == "" {
-			return nil, errors.New("SANDBOX_BACKEND=opensandbox needs OPENSANDBOX_URL")
-		}
-		return BackendFromConfig(cfg)
+	backends.Register(Name, func(s backends.Settings) (sandbox.Backend, error) {
+		return BackendFromSettings(s.OpenSandbox)
 	})
 }

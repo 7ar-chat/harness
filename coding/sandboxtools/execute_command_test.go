@@ -231,6 +231,7 @@ func TestExecuteCommandRequiresCommand(t *testing.T) {
 func TestBackgroundJobsRunForRealInAShell(t *testing.T) {
 	// With real bash: a command outliving its timeout keeps running detached, job_output waits for its exit code and output, job_kill ends a job's whole process group.
 	// Arrange
+	requireGNUTools(t)
 	f, _ := newHostFixture(t, nil)
 
 	// Act
@@ -264,6 +265,7 @@ func TestBackgroundJobsRunForRealInAShell(t *testing.T) {
 func TestLargeOutputIsPagedFromItsFileForReal(t *testing.T) {
 	// With real bash: a 300 KB output is cut in the result and its outputPath can be paged with read_file.
 	// Arrange
+	requireGNUTools(t)
 	f, _ := newHostFixture(t, nil)
 
 	// Act
@@ -320,6 +322,7 @@ func TestFirstCommandCanWriteToTheAdvertisedScratchAndOutputFolders(t *testing.T
 	// With real bash: on a brand-new sandbox the very first command can write to /workspace/outputs/ and
 	// /workspace/.work/ (the baseline's `cat > /workspace/.work/x.py` failed), and the spill and render folders exist.
 	// Arrange
+	requireGNUTools(t)
 	f, _ := newHostFixture(t, nil)
 	// Relative paths: the command runs in /workspace (the host sandbox maps only the working directory).
 	cmd := `cat > .work/probe.py <<'PY'

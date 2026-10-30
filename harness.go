@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/backends"
 	"io/fs"
 	"os"
 	"time"
@@ -64,7 +63,7 @@ type Options struct {
 	// Store persists threads, runs, messages, artifacts, memory… (default: in memory;
 	// store/pgstore for Postgres).
 	Store Store
-	// Models builds the chat models (default: llm.New(Config), the OpenAI-compatible
+	// Models builds the chat models (default: llm.New over llmOptions(Config), the OpenAI-compatible
 	// provider, or Anthropic with LLM_PROVIDER=anthropic).
 	Models llm.Factory
 	// Backend provides the sandboxes. Default: the backend named by
@@ -144,12 +143,12 @@ func New(o Options) (*Harness, error) {
 	}
 	models := o.Models
 	if models == nil {
-		models = llm.New(cfg)
+		models = llm.New(llmOptions(cfg))
 	}
 	backend := o.Backend
 	if backend == nil {
 		var err error
-		backend, err = backends.NewBackend(cfg)
+		backend, err = NewSandboxBackend(cfg)
 		if err != nil {
 			return nil, err
 		}

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/core/layout"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 )
 
@@ -57,8 +57,8 @@ func (e *GitError) Error() string { return "workspace checkpoint failed: " + e.D
 // excludePatterns are kept out of checkpoints (.git/info/exclude): Work's list
 // plus the harness's scratch directory and the artifact snapshot's exclusions.
 var excludePatterns = []string{
-	config.DirName + "/tmp/",
-	config.DirName + "/runtime/",
+	layout.DirName + "/tmp/",
+	layout.DirName + "/runtime/",
 	".codex/.tmp/",
 	".codex/log/",
 	".claude/log/",

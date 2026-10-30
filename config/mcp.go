@@ -30,6 +30,9 @@ type MCPServer struct {
 	Env     map[string]string `json:"env,omitempty"`
 	// Origin says where the definition was read from (for messages and -config-dump).
 	Origin string `json:"-"`
+	// ProjectRoot is set on a server a project file defines (.mcp.json, .har/mcp.json, the project config.yml):
+	// a stdio one needs the user's approval for this exact command before it is started (MCPApproved).
+	ProjectRoot string `json:"-"`
 }
 
 // IsStdio reports a server started as a local child process.
@@ -186,7 +189,8 @@ func readMCPJSON(file string, lookup func(string) (string, bool)) ([]MCPServer, 
 // later source replaces one of the same name. The three project sources only
 // count when the project is trusted (see TrustFile); otherwise they are listed in
 // Layers.MCPSkipped. Stdio servers are dropped unless the local backend and
-// MCPAllowStdio are on.
+// MCPAllowStdio are on, and a stdio server a project defines also needs the user's approval of its exact
+// command (MCPApproved, `harness trust mcp`); until then it is listed in Layers.MCPPending.
 func (c *Config) loadMCPFiles(yamlDocs []mcpDoc) error {
 	ly := c.Layers
 	lookup := func(name string) (string, bool) { return os.LookupEnv(name) }
@@ -205,6 +209,11 @@ func (c *Config) loadMCPFiles(yamlDocs []mcpDoc) error {
 				ly.MCPSkipped = append(ly.MCPSkipped, fmt.Sprintf("%s (%s): %s: the project is not trusted, run `harness trust` to enable", s.Name, file, s.Describe()))
 			}
 			return nil
+		}
+		if project {
+			for i := range list {
+				list[i].ProjectRoot = ly.ProjectRoot
+			}
 		}
 		if len(list) > 0 {
 			sources = append(sources, list)
@@ -282,6 +291,18 @@ func (c *Config) loadMCPFiles(yamlDocs []mcpDoc) error {
 			slog.Warn("mcp: stdio server skipped", "server", s.Name, "origin", s.Origin, "how_to_enable", why)
 			ly.MCPSkipped = append(ly.MCPSkipped, fmt.Sprintf("%s (%s): stdio servers need the local backend and an opt-in", s.Name, s.Origin))
 			continue
+		}
+		if s.IsStdio() && s.ProjectRoot != "" {
+			ok, err := MCPApproved(ly.UserDir, s.ProjectRoot, s)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				slog.Warn("mcp: project stdio server not approved", "server", s.Name, "origin", s.Origin, "how_to_enable", "harness trust mcp "+s.Name)
+				ly.MCPSkipped = append(ly.MCPSkipped, fmt.Sprintf("%s (%s): %s: a project's stdio server needs your approval of this exact command, run `harness trust mcp %s`", s.Name, s.Origin, s.Describe(), s.Name))
+				ly.MCPPending = append(ly.MCPPending, s)
+				continue
+			}
 		}
 		merged = append(merged, s)
 	}

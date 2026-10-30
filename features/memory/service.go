@@ -256,10 +256,19 @@ func (s *Service) limitError(status string) *Error {
 }
 
 func ts(t time.Time) any {
+	if p := tsPtr(t); p != nil {
+		return *p
+	}
+	return nil
+}
+
+// tsPtr is ts for a typed field: nil for the zero time, else the UTC RFC 3339 form.
+func tsPtr(t time.Time) *string {
 	if t.IsZero() {
 		return nil
 	}
-	return t.UTC().Format(time.RFC3339Nano)
+	s := t.UTC().Format(time.RFC3339Nano)
+	return &s
 }
 
 func newID() string {
@@ -323,17 +332,36 @@ func metaImportance(m map[string]any) *float64 {
 	return &f
 }
 
-// PublicEntry is the "memory" object of the tool results (Work's
-// _entry_public_payload plus title, status and importance).
-func PublicEntry(e *store.MemoryEntry) map[string]any {
-	var importance any
+// Entry is the "memory" object of the tool results and the base of the memory pages' entries (Work's
+// _entry_public_payload plus title, status and importance). The fields are declared in the alphabetical order of
+// their JSON names: that is the order the map this type replaced was encoded in, so the bytes are unchanged.
+type Entry struct {
+	CreatedAt          *string        `json:"created_at"`
+	EmbeddingUpdatedAt *string        `json:"embedding_updated_at"`
+	ID                 string         `json:"id"`
+	Importance         *float64       `json:"importance"`
+	Metadata           map[string]any `json:"metadata"`
+	Path               string         `json:"path"`
+	Repository         string         `json:"repository"`
+	Scope              string         `json:"scope"`
+	Source             string         `json:"source"`
+	Status             string         `json:"status"`
+	Tags               []string       `json:"tags"`
+	Title              string         `json:"title"`
+	UpdatedAt          *string        `json:"updated_at"`
+}
+
+// PublicEntry is e as its "memory" object.
+func PublicEntry(e *store.MemoryEntry) Entry {
+	var importance *float64
 	if e.Importance != nil {
-		importance = *e.Importance
+		v := *e.Importance
+		importance = &v
 	}
-	return map[string]any{
-		"id": e.ID, "path": e.Path, "scope": e.Scope, "repository": e.Repository, "tags": nonNil(e.Tags),
-		"metadata": cloneMeta(e.Metadata), "created_at": ts(e.CreatedAt), "updated_at": ts(e.UpdatedAt), "source": e.Source,
-		"embedding_updated_at": ts(e.ContentUpdatedAt), "title": e.Title, "status": e.Status, "importance": importance,
+	return Entry{
+		ID: e.ID, Path: e.Path, Scope: e.Scope, Repository: e.Repository, Tags: nonNil(e.Tags),
+		Metadata: cloneMeta(e.Metadata), CreatedAt: tsPtr(e.CreatedAt), UpdatedAt: tsPtr(e.UpdatedAt), Source: e.Source,
+		EmbeddingUpdatedAt: tsPtr(e.ContentUpdatedAt), Title: e.Title, Status: e.Status, Importance: importance,
 	}
 }
 
@@ -942,7 +970,7 @@ func errorItem(index int, data map[string]any) map[string]any {
 
 // CreateBatch creates several entries (Work's create_batch): per-entry errors with their index.
 func (s *Service) CreateBatch(ctx context.Context, w Writer, entries []CreateInput) Result {
-	created, errs := []map[string]any{}, []map[string]any{}
+	created, errs := []Entry{}, []map[string]any{}
 	var changes []Change
 	for i, in := range entries {
 		r := s.Create(ctx, w, in)
@@ -950,7 +978,7 @@ func (s *Service) CreateBatch(ctx context.Context, w Writer, entries []CreateInp
 			errs = append(errs, errorItem(i, r.Data))
 			continue
 		}
-		created = append(created, r.Data["memory"].(map[string]any))
+		created = append(created, r.Data["memory"].(Entry))
 		changes = append(changes, r.Changes...)
 	}
 	data := map[string]any{"created": created, "errors": errs, "created_count": len(created), "error_count": len(errs)}

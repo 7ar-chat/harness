@@ -34,6 +34,10 @@ type Options struct {
 	GitHub *GitHubApp
 	// Telegram, with Team, lets users talk to their assistant from Telegram (see telegram.go).
 	Telegram *Telegram
+	// Bus, with Team, shares the live feed between replicas (see feedbus.go): events produced by one
+	// replica reach the subscribers connected to the others. Nil keeps the feed in the process.
+	// harness-web uses redisx.NewFeedBus when REDIS_HOST is set.
+	Bus FeedBus
 	// SecretKey encrypts the connector tokens kept in the store (HARNESS_SECRET_KEY, else the OIDC
 	// session key). Without it, connectors are unavailable.
 	SecretKey []byte
@@ -88,6 +92,9 @@ func (s *server) Install(hs *httpapi.Server) error {
 		if s.box, err = newSecretBox(s.opt.SecretKey); err != nil {
 			return err
 		}
+	}
+	if s.opt.Bus != nil {
+		s.hub.attach(context.Background(), s.opt.Bus)
 	}
 	s.routeTeam()
 	if s.opt.Supervisor != nil {

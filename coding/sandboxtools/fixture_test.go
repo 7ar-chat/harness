@@ -77,6 +77,18 @@ func requirePython3(t *testing.T) {
 	}
 }
 
+// requireGNUTools skips the test unless the host has the GNU tools the real
+// sandbox scripts run (the sandbox image is Linux): setsid, realpath -m,
+// mv -T, stat -c and base64 -w0. A macOS host has BSD versions of them; the
+// local backend, which answers these scripts natively, is covered by its own tests.
+func requireGNUTools(t *testing.T) {
+	t.Helper()
+	probe := `command -v setsid >/dev/null && realpath -m / >/dev/null && stat -c %s / >/dev/null && echo x | base64 -w0 >/dev/null && d=$(mktemp -d) && : > "$d/a" && mv -f -T "$d/a" "$d/b"; r=$?; rm -rf "$d"; exit $r`
+	if err := exec.Command("sh", "-c", probe).Run(); err != nil {
+		t.Skip("GNU setsid, realpath -m, mv -T, stat -c and base64 -w0 are required (the sandbox image has them; macOS does not)")
+	}
+}
+
 // newHostFixtureAt is newHostFixture with the sandboxes under base (the first one is base/host-1).
 func newHostFixtureAt(t *testing.T, base string, env map[string]string) (*fixture, *sandboxtest.HostBackend) {
 	t.Helper()

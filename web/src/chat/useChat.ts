@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { toast } from "sonner";
 import { api } from "@/api/client";
 import { qk, threadQuery, toastError } from "@/api/queries";
-import type { Attachment, Author, ResumeBody, Run, SendOptions, Thread } from "@/api/types";
+import type { Attachment, Author, ResumeRequest, Run, RunRequest, Thread } from "@/api/types";
 import { initialLive, reduceEvents, type AguiEvent, type Interrupt, type LiveState } from "@/lib/agui";
 import { openSse } from "@/lib/sse";
 import { messagesFromLive, messagesFromThread, type ChatMessage } from "./model";
@@ -125,7 +125,7 @@ export function useChat(threadId: string, settings: RunSettings, users: (login: 
         }
         setPending({ id: "pending", role: "user", parts: [{ kind: "text", id: "p", text }], author: self });
         dispatch({ type: "clearInterrupt" });
-        const body: SendOptions = {
+        const body: RunRequest = {
           message: text,
           model: settings.model || undefined,
           reasoningEffort: settings.reasoningEffort || undefined,
@@ -150,7 +150,7 @@ export function useChat(threadId: string, settings: RunSettings, users: (login: 
   );
 
   const resume = useCallback(
-    async (body: Omit<ResumeBody, "model" | "interactive" | "mode">) => {
+    async (body: Omit<ResumeRequest, "model" | "interactive" | "mode">) => {
       setBusy(true);
       try {
         const run = await api.post<Run>(`/threads/${threadId}/resume`, { ...body, model: settings.model || undefined, interactive: settings.interactive, mode: settings.mode });

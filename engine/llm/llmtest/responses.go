@@ -18,7 +18,6 @@ import (
 	"github.com/cloudwego/eino/schema"
 	goopenai "github.com/meguminnnnnnnnn/go-openai"
 
-	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/engine/llm"
 	"github.com/GhaziBenDahmane/harness/engine/llm/responses"
 )
@@ -118,8 +117,8 @@ func (m *Model) responsesClient(ctx context.Context, name string) (model.ToolCal
 		return c, nil
 	}
 	f := fake()
-	cfg := &config.Config{LLMProvider: "openai", LLMBaseURL: f.srv.URL + "/v1", LLMAPIKey: "test-key",
-		LLMModels: []string{name}, Responses: config.Responses{LLMResponsesModels: []string{name}}}
+	cfg := llm.Options{Provider: "openai", BaseURL: f.srv.URL + "/v1", APIKey: "test-key",
+		Models: []string{name}, ResponsesModels: []string{name}}
 	inner, err := llm.NewWithTransport(cfg, f.transport).Model(ctx, name)
 	if err != nil {
 		return nil, err

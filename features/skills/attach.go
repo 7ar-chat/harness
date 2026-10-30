@@ -119,18 +119,22 @@ func (r *Registry) Plan(ctx context.Context, run *store.Run) (RunPlan, error) {
 // of skills the user explicitly requested still follows. Injecting an
 // untrusted (user or global) SKILL.md marks the run's context untrusted.
 func (r *Registry) PromptSection(ctx context.Context, in agent.Input) string {
-	run, sandbox := in.Run, in.Sandbox
-	plan, err := r.Plan(ctx, run)
+	plan, err := r.Plan(ctx, in.Run)
 	if err != nil {
-		slog.Warn("skills: resolving run skills failed", "run_id", run.ID, "error", err)
+		slog.Warn("skills: resolving run skills failed", "run_id", in.Run.ID, "error", err)
 		return ""
 	}
+	return promptOf(ctx, plan, in)
+}
+
+// promptOf renders the skills section of a run's plan.
+func promptOf(ctx context.Context, plan RunPlan, in agent.Input) string {
 	for _, a := range plan.Attached {
 		if a.Explicit && a.Skill.Untrusted() {
 			agent.ReportUntrusted(ctx)
 		}
 	}
-	return indexOf(plan, sandbox)
+	return indexOf(plan, in.Sandbox)
 }
 
 // indexOf is the skills section: the index, then the
@@ -149,10 +153,8 @@ func indexOf(plan RunPlan, sandbox bool) string {
 	}
 	untrusted := false
 	for _, s := range entries {
-		line := prompts.SkillLine(s.Name, s.Description)
-		if s.Untrusted() {
-			line, untrusted = "- "+s.Name+": "+Fence(s.Name, strings.TrimPrefix(line, "- "+s.Name+": ")), true
-		}
+		line, fenced := indexLine(s)
+		untrusted = untrusted || fenced
 		b.WriteString(line + "\n")
 	}
 	if untrusted {
@@ -161,6 +163,15 @@ func indexOf(plan RunPlan, sandbox bool) string {
 	b.WriteString("</skills>")
 	writeRequested(&b, plan, sandbox)
 	return b.String()
+}
+
+// indexLine is one skill's line of the index; a project skill's description is fenced as data (fenced is true).
+func indexLine(s Skill) (line string, fenced bool) {
+	line = prompts.SkillLine(s.Name, s.Description)
+	if s.Untrusted() {
+		return "- " + s.Name + ": " + Fence(s.Name, strings.TrimPrefix(line, "- "+s.Name+": ")), true
+	}
+	return line, false
 }
 
 // listed is the catalog, then the attached skills missing from it, each once.

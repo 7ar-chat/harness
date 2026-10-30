@@ -34,7 +34,7 @@ func TestPGMigrateUpgradesDatabaseAtTheSecondMigration(t *testing.T) {
 	stmts := []string{"CREATE SCHEMA " + schema,
 		"CREATE TABLE work_migrations (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL UNIQUE, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"}
 	for _, name := range []string{"0001_initial.sql", "0002_run_error_code.sql"} {
-		sql, err := os.ReadFile("../migrate/migrations/" + name)
+		sql, err := os.ReadFile("migrate/migrations/" + name)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -166,7 +166,7 @@ func TestPGMigrate0005GivesUntitledThreadsAutoTitlesAndTracksLiveArtifacts(t *te
 	stmts := []string{"CREATE SCHEMA " + schema,
 		"CREATE TABLE work_migrations (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL UNIQUE, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"}
 	for _, name := range []string{"0001_initial.sql", "0002_run_error_code.sql", "0003_artifacts_skills.sql"} {
-		sql, err := os.ReadFile("../migrate/migrations/" + name)
+		sql, err := os.ReadFile("migrate/migrations/" + name)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -175,7 +175,7 @@ func TestPGMigrate0005GivesUntitledThreadsAutoTitlesAndTracksLiveArtifacts(t *te
 	stmts = append(stmts,
 		"INSERT INTO work_threads (id, user_login, title, sandbox_id) VALUES ('"+untitled+"', 'alice', '', 'sb-1'), ('"+titled+"', 'alice', 'Budget', NULL)",
 		"INSERT INTO work_artifacts (id, thread_id, user_login, path, name, mime_type, kind, size_bytes, sha256, version) VALUES ('"+artifact+"', '"+untitled+"', 'alice', '/workspace/a', 'a', 'text/plain', 'output', 1, 'x', 1)")
-	sql4, _ := os.ReadFile("../migrate/migrations/0004_harness.sql")
+	sql4, _ := os.ReadFile("migrate/migrations/0004_harness.sql")
 	stmts = append(stmts, string(sql4), "INSERT INTO work_migrations (name) VALUES ('0004_harness.sql')")
 	for _, q := range stmts {
 		if _, err := pool.Exec(ctx, q); err != nil {

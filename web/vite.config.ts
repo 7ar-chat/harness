@@ -45,5 +45,5 @@ export default defineConfig({
       "/auth": { target: process.env.HARNESS_URL ?? "http://127.0.0.1:8080", changeOrigin: true },
     },
   },
-  test: { environment: "jsdom", include: ["src/**/*.test.ts", "src/**/*.test.tsx"] },
+  test: { environment: "jsdom", setupFiles: ["src/test/setup.ts"], include: ["src/**/*.test.ts", "src/**/*.test.tsx"] },
 });

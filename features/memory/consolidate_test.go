@@ -57,11 +57,11 @@ func TestConsolidateDedupesEntriesAndPurgesOldDeletedOnes(t *testing.T) {
 	notes := f.create(t, memory.CreateInput{Content: "- Standup at 9\n- Standup at 9", Path: "shared/memories/semantic/notes/team.md"})
 	outside := f.create(t, memory.CreateInput{Content: "- x\n- x", Path: "memories/episodic/2026-10.md"})
 	old := f.create(t, memory.CreateInput{Content: "Old", Path: "memories/semantic/notes/old.md"})
-	f.svc.Delete(ctx, f.w, old["id"].(string), "", map[string]any{"reason": "x"}, "")
+	f.svc.Delete(ctx, f.w, old.ID, "", map[string]any{"reason": "x"}, "")
 	longAgo := now.Add(-40 * 24 * time.Hour)
-	f.st.SetMemoryEntryTimes(old["id"].(string), longAgo, &longAgo)
+	f.st.SetMemoryEntryTimes(old.ID, longAgo, &longAgo)
 	recent := f.create(t, memory.CreateInput{Content: "Recent", Path: "memories/semantic/notes/recent.md"})
-	f.svc.Delete(ctx, f.w, recent["id"].(string), "", map[string]any{"reason": "x"}, "")
+	f.svc.Delete(ctx, f.w, recent.ID, "", map[string]any{"reason": "x"}, "")
 	job := memory.Consolidator{Store: f.st, Retention: 30 * 24 * time.Hour, Now: func() time.Time { return now }}
 
 	// Act
@@ -71,21 +71,21 @@ func TestConsolidateDedupesEntriesAndPurgesOldDeletedOnes(t *testing.T) {
 	if err != nil || report.Duplicates != 1 || report.ItemsRemoved != 1 || report.Purged != 1 || report.Users != 1 {
 		t.Fatalf("report %+v %v", report, err)
 	}
-	get := func(id any) *store.MemoryEntry {
-		e, _ := f.st.GetMemoryEntry(ctx, "alice", id.(string))
+	get := func(id string) *store.MemoryEntry {
+		e, _ := f.st.GetMemoryEntry(ctx, "alice", id)
 		return e
 	}
-	if d := get(dup["id"]); d.Status != store.MemoryDeleted || d.Metadata["consolidation"].(map[string]any)["duplicate_of"] != first["id"] {
+	if d := get(dup.ID); d.Status != store.MemoryDeleted || d.Metadata["consolidation"].(map[string]any)["duplicate_of"] != first.ID {
 		t.Fatalf("duplicate %+v", d)
 	}
-	if get(first["id"]).Status != store.MemoryActive || get(other["id"]).Status != store.MemoryActive || get(near["id"]).Status != store.MemoryActive {
+	if get(first.ID).Status != store.MemoryActive || get(other.ID).Status != store.MemoryActive || get(near.ID).Status != store.MemoryActive {
 		t.Fatal("kept entries changed (another folder is another file in Work; a near copy is not a copy)")
 	}
-	if strings.Count(get(facts["id"]).Content, "Standup") != 1 || get(notes["id"]).Content != "- Standup at 9\n- Standup at 9" ||
-		get(outside["id"]).Content != "- x\n- x" {
-		t.Fatalf("facts %q notes %q outside %q", get(facts["id"]).Content, get(notes["id"]).Content, get(outside["id"]).Content)
+	if strings.Count(get(facts.ID).Content, "Standup") != 1 || get(notes.ID).Content != "- Standup at 9\n- Standup at 9" ||
+		get(outside.ID).Content != "- x\n- x" {
+		t.Fatalf("facts %q notes %q outside %q", get(facts.ID).Content, get(notes.ID).Content, get(outside.ID).Content)
 	}
-	if get(old["id"]) != nil || get(recent["id"]) == nil {
+	if get(old.ID) != nil || get(recent.ID) == nil {
 		t.Fatal("retention purge wrong")
 	}
 }
@@ -134,9 +134,9 @@ func TestConsolidateSkipsEntriesChangedMeanwhile(t *testing.T) {
 	copyOf := f.create(t, memory.CreateInput{Content: "Same", Path: "memories/semantic/notes/2.md"})
 	newer := "- b\n- b\n- c"
 	race := func() {
-		f.svc.Delete(ctx, f.w, gone["id"].(string), "", map[string]any{"reason": "user"}, "")
-		f.svc.Update(ctx, f.w, memory.UpdateInput{ID: edited["id"].(string), Content: &newer})
-		f.svc.Delete(ctx, f.w, copyOf["id"].(string), "", map[string]any{"reason": "user"}, "hard")
+		f.svc.Delete(ctx, f.w, gone.ID, "", map[string]any{"reason": "user"}, "")
+		f.svc.Update(ctx, f.w, memory.UpdateInput{ID: edited.ID, Content: &newer})
+		f.svc.Delete(ctx, f.w, copyOf.ID, "", map[string]any{"reason": "user"}, "hard")
 	}
 	job := memory.Consolidator{Store: racingStore{MemoryStore: f.st, race: race}, Now: func() time.Time { return now }}
 
@@ -144,20 +144,20 @@ func TestConsolidateSkipsEntriesChangedMeanwhile(t *testing.T) {
 	report, err := job.Consolidate(ctx)
 
 	// Assert
-	get := func(id any) *store.MemoryEntry {
-		e, _ := f.st.GetMemoryEntry(ctx, "alice", id.(string))
+	get := func(id string) *store.MemoryEntry {
+		e, _ := f.st.GetMemoryEntry(ctx, "alice", id)
 		return e
 	}
 	if err != nil || report.Skipped != 3 || report.ItemsRemoved != 0 || report.Duplicates != 0 {
 		t.Fatalf("report %+v %v", report, err)
 	}
-	if g := get(gone["id"]); g.Status != store.MemoryDeleted || g.DeletedAt == nil || g.Content != "- a\n- a" {
+	if g := get(gone.ID); g.Status != store.MemoryDeleted || g.DeletedAt == nil || g.Content != "- a\n- a" {
 		t.Fatalf("deleted entry rewritten: %+v", g)
 	}
-	if e := get(edited["id"]); e.Content != newer {
+	if e := get(edited.ID); e.Content != newer {
 		t.Fatalf("edit lost: %q", e.Content)
 	}
-	if k := get(keep["id"]); k.Status != store.MemoryActive {
+	if k := get(keep.ID); k.Status != store.MemoryActive {
 		t.Fatalf("kept %+v", k)
 	}
 }

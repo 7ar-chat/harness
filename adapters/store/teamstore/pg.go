@@ -212,6 +212,31 @@ func (s *PG) SetUserPrefs(ctx context.Context, login string, prefs map[string]an
 	return err
 }
 
+func (s *PG) SeenThreads(ctx context.Context, login string) (map[string]time.Time, error) {
+	rows, err := s.pool.Query(ctx, `SELECT thread_id, seen_at FROM work_thread_seen WHERE login = $1`, login)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]time.Time{}
+	for rows.Next() {
+		var id string
+		var at time.Time
+		if err := rows.Scan(&id, &at); err != nil {
+			return nil, err
+		}
+		out[id] = at
+	}
+	return out, rows.Err()
+}
+
+func (s *PG) SetThreadSeen(ctx context.Context, login, threadID string, at time.Time) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO work_thread_seen (login, thread_id, seen_at) VALUES ($1, $2, $3)
+		ON CONFLICT (login, thread_id) DO UPDATE SET seen_at = GREATEST(work_thread_seen.seen_at, EXCLUDED.seen_at)`,
+		login, threadID, at.UTC())
+	return err
+}
+
 func (s *PG) GetUserByEmail(ctx context.Context, email string) (*store.User, error) {
 	return scanUser(s.pool.QueryRow(ctx, `SELECT `+userCols+` FROM work_users WHERE email = $1 AND email <> '' LIMIT 1`, norm(email)))
 }
@@ -280,14 +305,22 @@ func (s *PG) UpdateProject(ctx context.Context, id string, patch store.ProjectPa
 }
 
 func (s *PG) DeleteProject(ctx context.Context, id string) error {
-	tag, err := s.pool.Exec(ctx, `DELETE FROM work_projects WHERE id = $1`, id)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `DELETE FROM work_thread_seen WHERE thread_id IN (SELECT thread_id FROM work_thread_meta WHERE project_id = $1)`, id); err != nil {
+		return err
+	}
+	tag, err := tx.Exec(ctx, `DELETE FROM work_projects WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
 		return store.ErrNotFound
 	}
-	return nil
+	return tx.Commit(ctx)
 }
 
 func (s *PG) ListProjects(ctx context.Context, login string) ([]store.ProjectRole, error) {
@@ -518,8 +551,18 @@ func (s *PG) SupervisorThread(ctx context.Context, login string) (*store.ThreadM
 }
 
 func (s *PG) DeleteThreadMeta(ctx context.Context, threadID string) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM work_thread_meta WHERE thread_id = $1`, threadID)
-	return err
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `DELETE FROM work_thread_seen WHERE thread_id = $1`, threadID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM work_thread_meta WHERE thread_id = $1`, threadID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *PG) Audit(ctx context.Context, e store.AuditEntry) error {

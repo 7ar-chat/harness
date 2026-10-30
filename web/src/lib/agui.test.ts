@@ -143,3 +143,126 @@ describe("work.memory", () => {
     expect(st.parts).toMatchObject([{ kind: "memory", action: "created", proposed: false }, { kind: "memory", action: "proposed", proposed: true, title: "CI is slow" }]);
   });
 });
+
+describe("reduceEvents edge cases", () => {
+  it("does not duplicate a text part on a repeated start, and keeps interleaved messages apart", () => {
+    const st = run([
+      { type: "TEXT_MESSAGE_START", messageId: "m1" },
+      { type: "TEXT_MESSAGE_START", messageId: "m1" },
+      { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "a" },
+      { type: "TEXT_MESSAGE_START", messageId: "m2" },
+      { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "b" },
+      { type: "TEXT_MESSAGE_CONTENT", messageId: "m2", delta: "c" },
+    ]);
+    expect(st.parts).toEqual([{ kind: "text", id: "m1", text: "ab" }, { kind: "text", id: "m2", text: "c" }]);
+  });
+
+  it("appends id-less content to the latest text part", () => {
+    const st = run([{ type: "TEXT_MESSAGE_START", messageId: "m1" }, { type: "TEXT_MESSAGE_CONTENT", delta: "x" }, { type: "TEXT_MESSAGE_CONTENT", delta: "y" }]);
+    expect(st.parts).toEqual([{ kind: "text", id: "m1", text: "xy" }]);
+  });
+
+  it("ignores tool events without an id, duplicate starts and events for unknown calls", () => {
+    const st = run([
+      { type: "TOOL_CALL_START", toolCallName: "bash" },
+      { type: "TOOL_CALL_START", toolCallId: "c1", toolCallName: "bash" },
+      { type: "TOOL_CALL_ARGS", toolCallId: "c1", delta: "{}" },
+      { type: "TOOL_CALL_START", toolCallId: "c1", toolCallName: "bash" },
+      { type: "TOOL_CALL_ARGS", toolCallId: "ghost", delta: "zzz" },
+      { type: "TOOL_CALL_RESULT", toolCallId: "ghost", content: "zzz" },
+      { type: "CUSTOM", name: "work.tool_output", value: { toolCallId: "ghost", text: "zzz" } },
+    ]);
+    expect(st.parts).toEqual([{ kind: "tool", id: "c1", name: "bash", args: "{}", output: "", ended: false }]);
+  });
+
+  it("a tool result without error metadata is not an error and marks the call ended", () => {
+    const st = run([{ type: "TOOL_CALL_START", toolCallId: "c1", toolCallName: "x" }, { type: "TOOL_CALL_RESULT", toolCallId: "c1", content: "ok" }]);
+    expect(st.parts[0]).toMatchObject({ ended: true, result: "ok", isError: false });
+  });
+
+  it("keeps a run id already known when RUN_STARTED carries none", () => {
+    const st = run([{ type: "RUN_STARTED" }], { ...initialLive, runId: "r9" });
+    expect(st).toMatchObject({ runId: "r9", phase: "running" });
+  });
+
+  it("keeps the usage reported mid-run over the one on RUN_FINISHED", () => {
+    const st = run([
+      { type: "CUSTOM", name: "work.usage", value: { inputTokens: 10 } },
+      { type: "RUN_FINISHED", outcome: { type: "completed" }, usage: [{ inputTokens: 99 }] },
+    ]);
+    expect(st.usage?.inputTokens).toBe(10);
+  });
+
+  it("takes usage from RUN_FINISHED when none was reported and ignores an empty usage event", () => {
+    const st = run([{ type: "CUSTOM", name: "work.usage", value: {} }, { type: "RUN_FINISHED", outcome: { type: "completed" }, usage: [{ inputTokens: 99 }] }]);
+    expect(st.usage?.inputTokens).toBe(99);
+  });
+
+  it("treats an interrupt outcome with no interrupts as completed", () => {
+    expect(run([{ type: "RUN_FINISHED", outcome: { type: "interrupt", interrupts: [] } }]).phase).toBe("completed");
+  });
+
+  it("leaves the plan alone for a snapshot without one, and replaces it for a new one", () => {
+    const withPlan = run([{ type: "STATE_SNAPSHOT", snapshot: { plan: [{ id: "1", title: "a", status: "pending" }] } }]);
+    expect(run([{ type: "STATE_SNAPSHOT", snapshot: { other: 1 } }], withPlan).plan).toEqual(withPlan.plan);
+    expect(run([{ type: "STATE_SNAPSHOT", snapshot: { plan: [] } }], withPlan).plan).toEqual([]);
+  });
+
+  it("ignores an empty title and keeps the old one", () => {
+    const st = run([{ type: "CUSTOM", name: "work.title", value: { title: "A" } }, { type: "CUSTOM", name: "work.title", value: { title: "" } }]);
+    expect(st.title).toBe("A");
+  });
+
+  it("flags a steer as undelivered only when delivered is explicitly false", () => {
+    const st = run([
+      { type: "CUSTOM", name: "work.steer", value: { id: "a", text: "1", delivered: false } },
+      { type: "CUSTOM", name: "work.steer", value: { text: "2" } },
+    ]);
+    expect(st.parts).toMatchObject([{ id: "a", delivered: false }, { id: "steer-1", delivered: true }]);
+  });
+
+  it("a memory event with proposed:true is a proposal even when the action is something else", () => {
+    const st = run([{ type: "CUSTOM", name: "work.memory", value: { action: "updated", title: "t", text: "x", proposed: true } }]);
+    expect(st.parts[0]).toMatchObject({ kind: "memory", proposed: true });
+  });
+
+  it("a RUN_ERROR without a message still explains itself and appends after streamed text", () => {
+    const st = run([{ type: "TEXT_MESSAGE_CONTENT", messageId: "m", delta: "a" }, { type: "RUN_ERROR" }]);
+    expect(st.parts[1]).toMatchObject({ kind: "error", message: "The run failed.", code: undefined });
+  });
+
+  it("an untouched sub-agent tool pairs a result with the earlier call of the same name", () => {
+    const sub = (value: Record<string, unknown>): AguiEvent => ({ type: "CUSTOM", name: "work.subagent", value: { toolCallId: "c1", ...value } });
+    const st = run([
+      { type: "TOOL_CALL_START", toolCallId: "c1", toolCallName: "task" },
+      sub({ phase: "tool", tool: { name: "read", args: { path: "a" } } }),
+      sub({ phase: "tool", tool: { name: "grep", args: {} } }),
+      sub({ phase: "tool", tool: { name: "read", result: "body", isError: true } }),
+      sub({ phase: "step" }),
+      sub({ phase: "step" }),
+    ]);
+    const t = st.parts[0];
+    const s = t && t.kind === "tool" ? t.sub : undefined;
+    expect(s?.tools).toEqual([{ name: "read", args: undefined, result: "body", isError: true }, { name: "grep", args: {}, result: undefined, isError: false }]);
+    expect(s?.step).toBe(2);
+  });
+});
+
+describe("parseArgs and summarizeArgs", () => {
+  it("returns an empty object for partial JSON, arrays, scalars and null", () => {
+    for (const bad of ['{"a":', "[1]", "3", "null", ""]) expect(parseArgs(bad)).toEqual({});
+  });
+  it("summarises with the first known key, collapsing whitespace and clipping to 120 chars", () => {
+    expect(summarizeArgs({ command: "ls   -la\n/tmp", path: "ignored?" })).toBe("ignored?");
+    expect(summarizeArgs({ command: "ls   -la\n/tmp" })).toBe("ls -la /tmp");
+    expect(summarizeArgs({ query: "x".repeat(300) })).toHaveLength(120);
+  });
+  it("skips empty and non-string values and returns an empty string when nothing matches", () => {
+    expect(summarizeArgs({ path: "", command: 5, url: "u" })).toBe("u");
+    expect(summarizeArgs({ other: "x" })).toBe("");
+  });
+  it("editOf needs both texts and tolerates a missing path", () => {
+    expect(editOf("edit_file", { oldText: "a" })).toBeNull();
+    expect(editOf("edit_file", { oldText: "a", newText: "" })).toEqual({ path: "", oldText: "a", newText: "" });
+  });
+});

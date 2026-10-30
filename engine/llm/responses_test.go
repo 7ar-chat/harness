@@ -16,7 +16,6 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/eino-contrib/jsonschema"
 
-	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/engine/llm"
 	"github.com/GhaziBenDahmane/harness/engine/llm/responses"
 )
@@ -51,9 +50,9 @@ func responsesServer(t *testing.T, fixture string, handler http.HandlerFunc) (*h
 	return ts, &got
 }
 
-func responsesConfig(url string, models ...string) *config.Config {
+func responsesConfig(url string, models ...string) llm.Options {
 	cfg := openaiConfig(url, 10, models...)
-	cfg.LLMResponsesModels = models
+	cfg.ResponsesModels = models
 	return cfg
 }
 
@@ -289,7 +288,7 @@ func TestOtherModelsStayOnChatCompletions(t *testing.T) {
 	}))
 	t.Cleanup(ts.Close)
 	cfg := openaiConfig(ts.URL, 10, "gpt-test")
-	cfg.LLMResponsesModels = []string{"gpt-5.6-terra"}
+	cfg.ResponsesModels = []string{"gpt-5.6-terra"}
 	f := llm.New(cfg)
 
 	// Act

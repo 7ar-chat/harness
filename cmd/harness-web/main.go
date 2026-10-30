@@ -98,7 +98,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		AllowedOrigins: splitList(getenv("HARNESS_WEB_ORIGINS")),
 	}
 	prod := product.Options{
-		Team: teamStore, OIDC: oidcCfg, Supervisor: sup, GitHub: bt.github,
+		Team: teamStore, OIDC: oidcCfg, Supervisor: sup, GitHub: bt.github, Bus: bt.bus,
 		PublicURL: getenv("HARNESS_PUBLIC_URL"), SecretKey: secretKey(getenv, oidcCfg),
 	}
 	if tok := getenv("TELEGRAM_BOT_TOKEN"); tok != "" && *team {

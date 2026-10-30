@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/adapters/redisx"
 	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
 	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore"
 	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore/migrate"
@@ -52,7 +51,7 @@ func buildHarness(ctx context.Context, cfg *config.Config, o Options, m *metrics
 
 	if !o.Standalone {
 		if ho.Redis == nil {
-			rdb := redisx.New(cfg)
+			rdb := harness.NewRedisClient(cfg)
 			cleanups = append(cleanups, func() { _ = rdb.Close() })
 			if cfg.PingDBAtStartup {
 				if err := rdb.Ping(ctx).Err(); err != nil {

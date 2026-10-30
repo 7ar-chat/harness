@@ -1,9 +1,10 @@
 import { queryOptions, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { api, ApiError, isUnsupported, putBytes } from "./client";
+import { isNewerVisit, loadLocalSeen, saveLocalSeen } from "@/lib/unread";
 import type {
-  AuditEntry, Connector, GithubRepos, User, Command, GithubStatus, Invite, Me, Member, MemoryEntry, MemoryInput, MemoryList, MemoryStats, Models, Overview,
+  AuditEntry, Connector, GithubRepos, KnownUser, User, Command, GithubStatus, Invite, Me, Member, MemoryEntry, MemoryInput, MemoryList, MemoryStats, ModelList, Overview,
   Project, ProjectWithRole, Role, Thread, WorkspaceFile,
 } from "./types";
 
@@ -20,11 +21,12 @@ export const qk = {
   audit: (id: string) => ["project", id, "audit"] as const,
   github: (id: string) => ["project", id, "github"] as const,
   files: (thread: string, path: string) => ["files", thread, path] as const,
+  seen: ["seen"] as const,
 };
 
 export const meQuery = queryOptions({ queryKey: qk.me, queryFn: () => api.get<Me>("/me"), staleTime: 60_000, retry: (n, e) => !(e instanceof ApiError && e.status < 500) && n < 2 });
 export const overviewQuery = queryOptions({ queryKey: qk.overview, queryFn: () => api.get<Overview>("/overview"), staleTime: 30_000 });
-export const modelsQuery = queryOptions({ queryKey: qk.models, queryFn: () => api.get<Models>("/models"), staleTime: 300_000, retry: 1 });
+export const modelsQuery = queryOptions({ queryKey: qk.models, queryFn: () => api.get<ModelList>("/models"), staleTime: 300_000, retry: 1 });
 export const threadQuery = (id: string) => queryOptions({ queryKey: qk.thread(id), queryFn: () => api.get<Thread>(`/threads/${id}`), retry: (n, e) => !(e instanceof ApiError && e.status < 500) && n < 2 });
 export const supervisorQuery = queryOptions({
   queryKey: qk.supervisor,
@@ -39,6 +41,57 @@ export const supervisorQuery = queryOptions({
   retry: false,
   staleTime: 60_000,
 });
+
+/** Last visit per thread. `server` is false when the server has no /api/seen: the map then lives in local storage. */
+export interface SeenState {
+  server: boolean;
+  seen: Record<string, string>;
+}
+export const seenQuery = queryOptions({
+  queryKey: qk.seen,
+  queryFn: async (): Promise<SeenState> => {
+    try {
+      return { server: true, seen: await api.get<Record<string, string>>("/seen") };
+    } catch (e) {
+      if (isUnsupported(e)) return { server: false, seen: loadLocalSeen() };
+      throw e;
+    }
+  },
+  retry: false,
+  staleTime: 60_000,
+});
+const NO_SEEN: Record<string, string> = {};
+/** The caller's last visit per thread; empty until loaded. */
+export const useSeen = () => useQuery(seenQuery).data?.seen ?? NO_SEEN;
+
+/**
+ * Records a visit to a thread: the cached map updates at once (never backwards), then the server learns
+ * about it. A failed save (e.g. a thread we cannot see) is undone by refetching the server's answer.
+ */
+export function useMarkSeen() {
+  const qc = useQueryClient();
+  const { mutate } = useMutation({
+    mutationFn: (v: { threadId: string; at: string }) => api.post("/seen", v),
+    onError: () => void qc.invalidateQueries({ queryKey: qk.seen }),
+  });
+  return useCallback(
+    async (threadId: string, at: string = new Date().toISOString()) => {
+      let s: SeenState;
+      try {
+        s = await qc.ensureQueryData(seenQuery);
+      } catch {
+        return; // the map could not be loaded; the next visit tries again
+      }
+      if (!isNewerVisit(s.seen, threadId, at)) return;
+      const seen = { ...s.seen, [threadId]: at };
+      void qc.cancelQueries({ queryKey: qk.seen }); // a refetch that started before this visit must not overwrite it
+      qc.setQueryData<SeenState>(qk.seen, { ...s, seen });
+      if (s.server) mutate({ threadId, at });
+      else saveLocalSeen(seen);
+    },
+    [qc, mutate],
+  );
+}
 
 export const useMe = () => useQuery(meQuery);
 export const useOverview = () => useQuery(overviewQuery);
@@ -201,7 +254,7 @@ export const useGithubRepos = (q: string, enabled: boolean) =>
 export const useImportProject = () => useAction((repo: string) => api.post<Project>("/projects/import", { repo }), () => [qk.me, qk.overview, ["github-repos"]], "Project imported");
 
 /** Every user we know of (me and the members of my projects) by login: name and avatar. */
-export function useUserDirectory(): Map<string, User> {
+export function useUserDirectory(): Map<string, KnownUser> {
   const me = useMe().data;
   const projects = me?.projects ?? [];
   const members = useQueries({
@@ -209,7 +262,7 @@ export function useUserDirectory(): Map<string, User> {
     combine: (rs) => rs.flatMap((r) => r.data ?? []),
   });
   return useMemo(() => {
-    const m = new Map<string, User>();
+    const m = new Map<string, KnownUser>();
     for (const x of members) m.set(x.login, { login: x.login, name: x.name, avatarUrl: x.avatarUrl, email: x.email });
     if (me) m.set(me.user.login, me.user);
     return m;

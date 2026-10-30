@@ -236,17 +236,21 @@ func isPathChar(c byte) bool {
 // confine fails when the real location of host path p (symlinks resolved, the
 // missing tail allowed) leaves the workspace and system directories.
 func (in *Instance) confine(p string) error {
-	if strings.HasPrefix(p, "/tmp/") || p == "/tmp" {
-		return nil
-	}
 	real := realpathM(p)
 	for _, root := range []string{in.ws, resolveDir(in.sys)} {
 		if real == root || strings.HasPrefix(real, root+"/") {
 			return nil
 		}
 	}
+	// /tmp is the sandbox's own scratch directory — unless the workspace lives under it, where
+	// a symlink in the workspace must not turn the exemption into an escape.
+	if (p == "/tmp" || strings.HasPrefix(p, "/tmp/")) && !within(p, in.ws) && !within(p, in.sys) {
+		return nil
+	}
 	return fmt.Errorf("%s resolves outside the sandbox", in.virtual(p))
 }
+
+func within(p, root string) bool { return p == root || strings.HasPrefix(p, root+"/") }
 
 // realpathM is `realpath -m`: symlinks of the existing components resolved, the rest kept.
 func realpathM(p string) string {

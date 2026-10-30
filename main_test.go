@@ -14,6 +14,7 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	os.Setenv("HOME", home)
+	os.Unsetenv("HAR_HOME")
 	code := m.Run()
 	os.RemoveAll(home)
 	os.Exit(code)

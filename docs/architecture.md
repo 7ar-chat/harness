@@ -21,7 +21,7 @@ describes what the test enforces.
 
 | Layer | Packages | May import | Role |
 |---|---|---|---|
-| 0 foundation | `core/{agui,store,sandbox,blobs}`, `config`, `modelinfo`, `engine/syncx`, `engine/agent/prompts` | `core/` only (`core` never imports `config`) | Events, domain types and the ports: what the rest of the system agrees on |
+| 0 foundation | `core/{agui,store,sandbox,blobs,layout}`, `config`, `modelinfo`, `engine/syncx`, `engine/agent/prompts` | `core/` only (`core` never imports `config`) | Events, domain types and the ports: what the rest of the system agrees on |
 | 2 engine | `engine/*` | layers 0, 2 | The agent loop, LLM clients, tool registry, run runtime, approvals, compaction, in-memory queue and event log |
 | 3 plug-ins | `adapters/*`, `coding/*` | layers 0, 2; **not each other's group** | Implementations of the ports (Postgres, Redis, S3, OpenSandbox, local) and the coding toolset |
 | 4 features | `features/*` | layers 0, 2, 3 (`coding`) | Optional capabilities (memory, skills, goals, permissions…). A feature never imports another feature |
@@ -35,6 +35,10 @@ Host rules on top of the layers:
   remote server.
 * `hosts/httpapi` imports only the facade, `hosts/client` and `core/`. It is a transport over the client contract.
 * `hosts/*` do not import each other; the facade imports no host.
+
+Configuration rule: `engine/*`, `adapters/*` and `features/*` do not import `config`, except the two packages named in
+"Known gaps". The facade (`NewSandboxBackend`, `SandboxSettings`, `NewRedisClient`, `OpenLocalStore`) and the hosts
+translate `*config.Config` into each package's options.
 
 ## The seams
 
@@ -70,15 +74,26 @@ the same conformance suite (`clienttest`). Operations a server may lack are `cli
 `web/` is a React app built by `make web` into `hosts/httpapi/ui`, which the Go binary embeds. The build output is
 not committed (a `.gitkeep` keeps `go:embed` compiling); a binary built without it serves a notice at `/`.
 
+Its API types come from the Go types: `cmd/gen-ts` (a tooling-layer command, so it may import `hosts/client`,
+`core/store`, `features/memory` and `product`) reflects over an explicit list (`cmd/gen-ts/types.go`, plus
+`product.WireTypes()` for the unexported views of `product`, among them the memory pages' entry, list and stats) and writes `web/src/api/generated.ts`, which is
+committed. It honours json tags, `omitempty`, embedded structs (`extends`), pointers (`| null`), `time.Time` (string),
+`json.RawMessage` and `any` (`unknown`) and `[]byte` (base64 string); the string unions (roles, statuses, modes...) come
+from the Go constants through a per-field override table. `make gen` rewrites the file, and `go test ./cmd/gen-ts` (so
+CI's Go job) fails while it differs from a fresh generation. `web/src/api/types.ts` re-exports the generated types and
+keeps only the web-only shapes. Add a DTO by listing it in `types.go` and running `make gen`.
+
 ## Known gaps
 
-* `config` is imported by the engine, features and adapters (it is a leaf, so nothing cycles), but they read the whole
-  `*config.Config`. They should take their own small option structs.
+* `features/mcp` and `features/permissions` still read the whole `*config.Config`. They are the only packages of
+  `engine/`, `adapters/` and `features/` that import `config`, listed in `mayImportConfig` in `layers_test.go` (to be
+  migrated after the MCP trust work). Every other package takes its own option struct (`llm.Options`,
+  `redisx.Options`, `backends.Settings`, `skills.DiscoverOptions`, `memory.Options`...) and the composition roots
+  (the facade, `hosts/*`, `cmd/*`) map `config.Config` onto them. The names of the `.har` folders live in
+  `core/layout` for packages that need a path but not the configuration.
 * `store/Full` still holds the types of every capability. Moving a capability's port out of core would make adapters
   import features, so the types stay in core; a feature cannot yet bring its own tables without a `core/store` change.
-* `engine/runtime` (about 12k lines) and `engine/agent/verify.go` mix several concerns and should be split.
-* The web app's TypeScript types are written by hand next to the Go DTOs of `hosts/client`; there is no generated
-  schema. The memory and profile pages are served by `product` only, not exposed through `client.Client`, so the TUI
-  does not have them.
+* The memory and profile pages are served by `product` only, not exposed through `client.Client`, so the TUI does not
+  have them.
 * Comments and config files still mention "harness v2/v3" and review rounds; the code and file names no longer do
   (the SQL migration `0102_approvals_v3.sql` keeps its name because renaming an applied migration breaks tracking).

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/GhaziBenDahmane/harness"
+	"github.com/GhaziBenDahmane/harness/adapters/redisx"
 	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore"
 	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore/migrate"
 	"github.com/GhaziBenDahmane/harness/adapters/store/teamstore"
@@ -34,6 +35,8 @@ type built struct {
 	team   store.TeamStore
 	sup    *product.Supervisor
 	github *product.GitHubApp
+	// bus shares the live feed between replicas: set in team mode when REDIS_HOST is.
+	bus    product.FeedBus
 	closer io.Closer
 }
 
@@ -76,6 +79,18 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		}
 	}
 	b := &built{team: ts, closer: closers}
+	if _, ok := os.LookupEnv("REDIS_HOST"); ok && ts != nil {
+		rdb := harness.NewRedisClient(cfg)
+		closers = append(closers, rdb)
+		b.closer = closers
+		if cfg.PingDBAtStartup {
+			if err := rdb.Ping(ctx).Err(); err != nil {
+				_ = closers.Close()
+				return nil, fmt.Errorf("connect to Redis: %w", err)
+			}
+		}
+		b.bus = redisx.NewFeedBus(rdb)
+	}
 	if ts != nil && cfg.LocalSandbox() {
 		be, err := teamLocalBackend(cfg)
 		if err != nil {

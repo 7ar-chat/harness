@@ -434,7 +434,7 @@ Skills are discovered from, lowest to highest precedence (a later source replace
 | `builtin` | embedded in the binary (`features/skills/skillsfs/builtin`) | `docx`, `pptx`, `xlsx`, `pdf`, `charts`; `Options.BuiltinSkills` replaces them |
 | `extra` | `Options.ExtraSkills` (an `fs.FS`) | the embedding product's own skills |
 | `user` | `SKILLS_DIR`, `~/.har/skills`, `~/.agents/skills`, `~/.claude/skills` (in that order) | one folder per skill; the last two only with the local backend |
-| `project` | `<repo>/.har/skills`, `<repo>/.agents/skills`, `<repo>/.claude/skills` (in that order) | local backend only; fenced as untrusted text; symbolic links are not followed |
+| `project` | `<repo>/.har/skills`, `<repo>/.agents/skills`, `<repo>/.claude/skills` (in that order) | the host's repository with the local backend; with a remote backend the sandbox's own `/workspace/.har/skills`, `.agents/skills`, `.claude/skills`, read through the sandbox API per thread and merged over the global skills for that thread's runs. Fenced as untrusted text; symbolic links are not followed; at most 64 skills of 500 files / 8 MiB each |
 
 ```
 ~/.har/skills/
@@ -492,7 +492,7 @@ contributes:
 |---|---|
 | `AddTools(providers...)`, `WrapTools(f)` | tool providers; a wrapper over the whole registry (filters, auditing) |
 | `Section(f)`, `ContextSection(f)`, `TailSection(f)` | static prompt section; dynamic section in the final context block; per-run reminder at the end of each request |
-| `BeforeTool(h)`, `ToolHook(h)`, `RunStart(h)` | gate tool calls; observe tool results; run before a run's first step |
+| `BeforeTool(h)`, `ToolHook(h)`, `RunStart(h)`, `StepNote(f)` | gate tool calls; observe tool results; run before a run's first step; add a `<system-reminder>` note to the next model call when news appears mid-run (not persisted) |
 | `SetAnswers`, `SetImages`, `SetChecker`, `Configure(f)` | final-answer review, image attachment, deliverable checker (one each); a free-form mutator of `agent.Harness` |
 | `EndOfRun(h)`, `Job(j)`, `SetPurger(p)`, `Background(f)` | end-of-run `runtime.Hook`; periodic job (run by one runtime at a time); retention job; goroutine started once `New` succeeded |
 | `SandboxTools(f)`, `PrepareSandbox(f)`, `OnSandboxCreate(f)` | chain onto the sandbox tools' options (`OnAcquire`, `BeforeCommand`, `CheckWrite`...); run when a sandbox is created |
@@ -570,8 +570,9 @@ hosts/                         ways to drive the engine, and the contract front 
   client/ (the Client contract: in-process + HTTP; client/clienttest = its conformance suite)
   tui/ (terminal)   httpapi/ (HTTP + SSE + embedded UI; a Policy/Extension seam)   worker/ (headless queue consumer)
 product/                       the team product on top of hosts/httpapi: OIDC, projects, audit, feed, assistant, connectors, memory review
-cmd/harness  cmd/harness-web  cmd/harness-worker  cmd/bench   binaries;  bench/ longtest/ = benchmark and long-session tests
-web/                           the React app; `make web` builds it into hosts/httpapi/ui (not committed)
+cmd/harness  cmd/harness-web  cmd/harness-worker  cmd/bench   binaries;  cmd/gen-ts = the TypeScript type generator;  bench/ longtest/ = benchmark and long-session tests
+web/                           the React app; `make web` builds it into hosts/httpapi/ui (not committed); its API types
+                               (web/src/api/generated.ts) are generated from the Go DTOs: `make gen`
 ```
 
 ## Worker
@@ -696,6 +697,19 @@ harness trust list       # the trusted projects
 harness untrust          # stop trusting (a path may be given)
 HARNESS_TRUST_PROJECT=1 harness -p "..."   # trust the current project for this process only (CI)
 ```
+
+A project's **stdio** MCP server (a program to run) needs one more step: after `harness trust`, approve its exact command with
+`harness trust mcp [name]` (all pending servers without a name; `harness untrust mcp <name>` withdraws it). The approval is
+recorded in `trust.json` for (project root, server name, SHA-256 of command, arguments and `env`); changing any of them, or
+`harness untrust` of the project, drops it and the server is listed as not started until approved again. The check runs when
+the config is loaded and again right before the process is spawned. In an **interactive** run (the TUI by default; `-auto`,
+`-p` and headless hosts are not) a pending server is also offered for approval in the run itself: the model gets the tool
+`mcp_approve__<server>_<hash>`, and calling it pauses the run with a normal approval card naming the project, the server, the
+exact command, the arguments and the names (never the values) of its `env`. Approving records the same `trust.json` entry as
+`harness trust mcp` and the server's tools are available from the **next** run (the current run's tools were built before the
+decision; the tool's result says so). Denying leaves it pending and it is not asked again on that thread; a changed
+command is a new tool and asks again. Where nobody can answer approvals (automatic mode, hosts without an approval gate) the
+tool is refused and the server stays unstarted; `harness trust mcp` remains the way to approve it. Your own servers (`~/.har/mcp.json`, `MCP_SERVERS`) need no approval.
 
 Trust is by project root; `HARNESS_NO_USER_DIR=1` ignores `trust.json` (only the environment variable can trust then).
 
@@ -898,6 +912,7 @@ when the project is **trusted** (`harness trust`, see above); otherwise they are
 Stdio servers (`command`) start a child process, so they are the dangerous kind (a cloned repository can bring a `.mcp.json`).
 The rules:
 
+0. A stdio server that a project file defines also needs your approval of its exact command: `harness trust mcp <name>`, or the in-run prompt of an interactive run (see Trust).
 1. They run only with `SANDBOX_BACKEND=local` and an explicit opt-in: `mcp.allow_stdio: true` in **`~/.har/config.yml`** or
    `HARNESS_MCP_STDIO=1`. A project `config.yml` that sets it is an error, so a repository cannot enable them for itself
    (`HARNESS_MCP_STDIO=0` in the environment turns the user file's setting off).
@@ -951,13 +966,17 @@ the `.har/memory/` prefix, which is stripped. The workspace checkpoints leave `.
 because it keeps the symbol table and DWARF). Idle resident memory is about 20 MB. go-redis remains linked
 (the facade offers `Options.Redis`); the engine, sandbox, features and store packages do not import it.
 
+CI (`.github/workflows/ci.yml`, every push and pull request) runs `gofmt`, `go vet` and `go test ./...` against a
+Postgres service, the web checks (`typecheck`, `test`, `build`) and a Docker build plus a `docker-compose.prod.yml`
+validation. `make ci` runs the Go and web steps locally. After changing a DTO of `hosts/client` or a view of `product`, run
+`make gen`: `go test ./cmd/gen-ts` fails while `web/src/api/generated.ts` is stale.
+
 ## Status / known gaps
 
 * Requires Go 1.26 (`go test ./...`). `adapters/store/pgstore` tests need a Postgres (`HARNESS_TEST_DATABASE_URL`) and skip otherwise.
-* Project skills are read from the host directories of the local backend. A remote sandbox's own
-  `/workspace/.har/skills` is not discovered (the registry is global and read at start-up, a remote
-  workspace is per thread). Follow-up.
-* MCP stdio servers run only with the local backend and an opt-in; there is no per-project trust prompt
-  beyond the permission layer's ask-once rule.
+* A remote sandbox's project skills are read once per run, when the run first uses its sandbox (or at prompt time if
+  one is already running), so a skill added to `/workspace` mid-run is seen by the next run. When the run itself
+  starts the sandbox, the project skills it holds (fenced as untrusted, like the prompt's) are announced to the model
+  in a note before its next model call, once per run, because the prompt never starts a sandbox just to list them.
 * Web search is not built in: configure any web-search MCP server in `MCP_SERVERS`.
-* The sandbox image was adapted for public base images and not built here.
+* The sandbox image (`sandbox-image/Dockerfile`) was built and smoke-tested on 2026-10-30 for linux/arm64 and linux/amd64 (see `sandbox-image/README.md`); it has not yet been run under a live OpenSandbox lifecycle server.

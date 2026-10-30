@@ -12,13 +12,13 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/google/uuid"
 
-	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
 	"github.com/GhaziBenDahmane/harness/engine/compaction"
 	"github.com/GhaziBenDahmane/harness/engine/llm"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/GhaziBenDahmane/harness/modelinfo"
 )
 
 // SummaryStore persists the thread's compaction summary.
@@ -45,6 +45,9 @@ type Harness struct {
 	// request, after the history, so the system prompt and the history before
 	// it stay a cacheable prefix across runs (review round 1).
 	Tail []PromptSection
+	// StepNotes add mid-run notes before a step's model call (see StepNote): news the prompt, rendered at
+	// the start of the run, could not carry.
+	StepNotes []StepNote
 	// PromptVariant is the prompt variant of a model (LLM_PROMPT_VARIANTS;
 	// nil: prompts.Default).
 	PromptVariant func(model string) string
@@ -125,7 +128,7 @@ func (a *Agent) window(m string) int {
 			return n
 		}
 	}
-	return config.DefaultContextWindow
+	return modelinfo.DefaultContextWindow
 }
 
 // harnessState is the per-run state of the harness features.

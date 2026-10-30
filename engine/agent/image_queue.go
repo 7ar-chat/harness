@@ -15,6 +15,8 @@ type imageQueue struct {
 	images []tools.Image
 }
 
+var _ tools.ImageSink = (*toolEmitter)(nil)
+
 // CanViewImages implements tools.ImageSink.
 func (e *toolEmitter) CanViewImages() bool {
 	v := e.st.a.Harness.Vision

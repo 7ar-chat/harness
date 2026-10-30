@@ -4,7 +4,7 @@ import { Bot, Brain, ChevronRight, LayoutDashboard, LogOut, Monitor, Moon, Plus,
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { getDevUser, setDevUser } from "@/api/client";
-import { supervisorQuery, useMe, useMemoryStats, useOverview } from "@/api/queries";
+import { supervisorQuery, useMe, useMemoryStats, useOverview, useSeen } from "@/api/queries";
 import type { OverviewProject, ThreadSummary } from "@/api/types";
 import { useQuery } from "@tanstack/react-query";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useFeed } from "@/lib/feed";
 import { useTheme } from "@/lib/theme";
-import { isUnread, useSeen } from "@/lib/unread";
+import { isUnread } from "@/lib/unread";
 import { StatusDot, UserAvatar, needsYou } from "./common";
 import { DialogsProvider, useDialogs } from "./dialogs";
 import { ErrorBoundary } from "./ErrorBoundary";

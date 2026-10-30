@@ -9,7 +9,7 @@
 #   - Node 22 + global pptxgenjs, docx, sharp (resolved through NODE_PATH)
 #   - LibreOffice (soffice headless convert / recalc), poppler (pdftoppm),
 #     pandoc, qpdf, ffmpeg, ripgrep (search_files), common fonts (+ Calibri/Cambria
-#     metric clones), git, curl, file, unzip, column
+#     metric clones), git, curl, file, unzip, column, pkill
 #
 # Build (from this directory):
 #   docker build -t harness-sandbox:local .
@@ -20,7 +20,7 @@
 #   - --build-arg NODE_IMAGE=… --build-arg PYTHON_IMAGE=… for mirrored base images
 # =============================================================================
 ARG NODE_IMAGE=node:22-bookworm
-ARG PYTHON_IMAGE=python:3.11-bookworm
+ARG PYTHON_IMAGE=python:3.11-slim-bookworm
 FROM ${NODE_IMAGE} AS node
 
 FROM ${PYTHON_IMAGE}
@@ -40,7 +40,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 COPY certs/ /usr/local/share/ca-certificates/extra/
 
 # Document tooling: LibreOffice (headless), PDF tools, pandoc, ffmpeg, fonts, and the shell tools
-# the agent reaches for: file (type / encoding checks), unzip, column (bsdextrautils).
+# the agent reaches for: file (type / encoding checks), unzip, column (bsdextrautils), pkill (procps).
 # Carlito / Caladea are metric-compatible with Calibri / Cambria (the Office defaults): without
 # them uploaded documents and python-pptx's default theme render with different line breaks.
 RUN apt-get update \
@@ -50,7 +50,7 @@ RUN apt-get update \
         fonts-dejavu fonts-liberation fonts-liberation2 fonts-noto-core fonts-noto-color-emoji \
         fonts-crosextra-carlito fonts-crosextra-caladea \
         git curl ca-certificates \
-        file unzip bsdextrautils \
+        file unzip bsdextrautils procps \
     && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -81,7 +81,7 @@ RUN python3 -c "import pptx, openpyxl, xlsxwriter, docx, pandas, numpy, matplotl
     && node -e "require('pptxgenjs'); require('docx'); require('sharp')" \
     && soffice --version && pdftoppm -v && pandoc --version >/dev/null && qpdf --version >/dev/null \
     && ffmpeg -version >/dev/null && git --version && curl --version >/dev/null && rg --version >/dev/null \
-    && file --version >/dev/null && unzip -v >/dev/null && echo a | column -t >/dev/null \
+    && file --version >/dev/null && pkill --version >/dev/null && unzip -v >/dev/null && echo a | column -t >/dev/null \
     && fc-list : family | grep -q "Liberation Sans" && fc-list : family | grep -q Carlito \
     && fc-list : family | grep -q Caladea
 

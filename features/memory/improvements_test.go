@@ -64,7 +64,7 @@ func newEntry(t *testing.T, f *fixture, w memory.Writer, in memory.CreateInput) 
 	if r.IsError {
 		t.Fatalf("create: %v", r.Data)
 	}
-	return r.Data["memory"].(map[string]any)["id"].(string)
+	return r.Data["memory"].(memory.Entry).ID
 }
 
 func TestRecallPutsPinnedEntriesFirstThenWhatMatchesTheQuestion(t *testing.T) {

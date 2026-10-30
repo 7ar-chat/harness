@@ -60,6 +60,38 @@ type RunStartHook interface {
 	BeforeRun(ctx context.Context, run *store.Run)
 }
 
+// StepNote adds a note to the model's next request when it has news for the model mid-run (a sandbox started
+// by the run holds project skills the prompt could not list): "" adds nothing. The notes of a step are
+// appended to the in-run history as one <system-reminder> user message, before the step's model call (not
+// persisted: the next run's prompt sections see the same facts). A hook returns each note once.
+type StepNote func(ctx context.Context, in Input) string
+
+// stepNotes runs the step-note hooks (a panic counts as no note) and appends their notes to the history.
+func (st *runState) stepNotes(ctx context.Context) {
+	var notes []string
+	for _, n := range st.a.Harness.StepNotes {
+		if n == nil {
+			continue
+		}
+		if text := strings.TrimSpace(st.safeStepNote(ctx, n)); text != "" {
+			notes = append(notes, text)
+		}
+	}
+	if len(notes) > 0 {
+		st.history = append(st.history, schema.UserMessage("<system-reminder>\n"+strings.Join(notes, "\n\n")+"\n</system-reminder>"))
+	}
+}
+
+func (st *runState) safeStepNote(ctx context.Context, n StepNote) (out string) {
+	defer func() {
+		if p := recover(); p != nil {
+			slog.Error("agent: step note panicked", "run_id", st.in.Run.ID, "panic", p)
+			out = ""
+		}
+	}()
+	return n(ctx, st.in)
+}
+
 // beforeRun runs the run-start hooks (a panic is logged and ignored).
 func (st *runState) beforeRun(ctx context.Context) {
 	for _, h := range st.a.Harness.RunStart {

@@ -1,9 +1,8 @@
-package opensandbox_test
+package harness_test
 
 import (
 	"context"
 	"encoding/json"
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/opensandbox"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +11,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/GhaziBenDahmane/harness"
+	"github.com/GhaziBenDahmane/harness/adapters/sandbox/opensandbox"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 )
@@ -63,11 +64,11 @@ func TestEveryProcessRefusesUnrestrictedEgressInProduction(t *testing.T) {
 	}
 
 	// Act
-	backend, err := opensandbox.BackendFromConfig(cfg)
+	backend, err := harness.NewSandboxBackend(cfg)
 
 	// Assert
 	if err == nil || backend != nil || !strings.Contains(err.Error(), "SANDBOX_EGRESS_ALLOWLIST") {
-		t.Fatalf("backend %v err %v", backend, err)
+		t.Fatalf("backend created: %t, err %v (want an error naming SANDBOX_EGRESS_ALLOWLIST)", backend != nil, err)
 	}
 }
 
@@ -83,7 +84,7 @@ func TestSandboxCreatedFromConfigCarriesTheAllowlist(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	backend, err := opensandbox.BackendFromConfig(cfg)
+	backend, err := harness.NewSandboxBackend(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +112,7 @@ func TestDefaultDenyListCoversIPv6CGNATAndThisNetwork(t *testing.T) {
 	}
 
 	// Act
-	policy := opensandbox.EgressPolicy(opensandbox.OptionsFromConfig(cfg))
+	policy := opensandbox.EgressPolicy(opensandbox.OptionsFromSettings(harness.SandboxSettings(cfg).OpenSandbox))
 	fallback := opensandbox.EgressPolicy(opensandbox.OpenSandboxOptions{})
 
 	// Assert
@@ -141,7 +142,7 @@ func TestDefaultDenyListCoversIPv4MappedIPv6(t *testing.T) {
 	}
 
 	// Act
-	policy := opensandbox.EgressPolicy(opensandbox.OptionsFromConfig(cfg))
+	policy := opensandbox.EgressPolicy(opensandbox.OptionsFromSettings(harness.SandboxSettings(cfg).OpenSandbox))
 	fallback := opensandbox.EgressPolicy(opensandbox.OpenSandboxOptions{})
 
 	// Assert

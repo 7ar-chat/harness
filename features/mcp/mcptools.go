@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"time"
 
 	"github.com/cloudwego/eino-ext/components/tool/mcp/officialmcp"
@@ -18,6 +19,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 )
 
@@ -31,7 +33,21 @@ type Provider struct {
 	MaxResultChars int
 	// CallTimeout bounds one tool call (0: DefaultCallTimeout).
 	CallTimeout time.Duration
+	// TrustDir is the user directory holding trust.json. A stdio server a project defines
+	// (config.MCPServer.ProjectRoot) is only spawned when the user approved its exact command there
+	// (config.MCPApproved); config.Load already withholds the others, this is the check at the spawn.
+	TrustDir string
+	// Pending are the project stdio servers that wait for the user's approval (config.Layers.MCPPending).
+	// Ask offers the model a tool that asks for it (approve.go); set it only when the run's approval gate
+	// pauses such a call and refuses it where nobody can answer (approvals.Gate). History reads a thread's
+	// messages so a refused question is not asked again on the thread.
+	Pending []config.MCPServer
+	Ask     bool
+	History func(ctx context.Context, threadID string) ([]*store.Message, error)
 }
+
+// ErrNotApproved means a project's stdio server was not spawned: its command has no approval (or a changed one).
+var ErrNotApproved = errors.New("the project's stdio MCP server is not approved: approve it when asked, or run `harness trust mcp <name>`")
 
 // DefaultCallTimeout bounds one MCP tool call (MCP_CALL_TIMEOUT_SECONDS).
 const DefaultCallTimeout = 120 * time.Second
@@ -42,10 +58,16 @@ const MaxResultChars = 1 << 20
 
 // New returns nil when no servers are configured.
 func New(servers []config.MCPServer, version string, maxResultChars int) *Provider {
-	if len(servers) == 0 {
+	return NewWithPending(servers, nil, version, maxResultChars)
+}
+
+// NewWithPending is New for a configuration that also has project stdio servers waiting for approval; it returns
+// nil when there is neither.
+func NewWithPending(servers, pending []config.MCPServer, version string, maxResultChars int) *Provider {
+	if len(servers) == 0 && len(pending) == 0 {
 		return nil
 	}
-	return &Provider{servers: servers, version: version, ConnectTimeout: 15 * time.Second, MaxResultChars: maxResultChars}
+	return &Provider{servers: servers, Pending: pending, version: version, ConnectTimeout: 15 * time.Second, MaxResultChars: maxResultChars}
 }
 
 func (p *Provider) Name() string { return "mcp" }
@@ -96,7 +118,9 @@ func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]tool.BaseT
 	var all []tool.BaseTool
 	var sessions []*mcp.ClientSession
 	taken := map[string]bool{} // exposed names are unique across the servers
-	for _, s := range p.servers {
+	offer, approved := p.pendingTools(ctx, rc)
+	all = append(all, offer...)
+	for _, s := range append(slices.Clone(p.servers), approved...) {
 		ts, sess, err := p.connect(ctx, s, rc, taken)
 		if err != nil {
 			slog.Warn("mcp server unavailable, skipping", "server", s.Name, "run_id", rc.RunID, "error", err)
@@ -114,6 +138,15 @@ func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]tool.BaseT
 
 func (p *Provider) connect(ctx context.Context, s config.MCPServer, rc tools.RunContext, taken map[string]bool) ([]tool.BaseTool, *mcp.ClientSession, error) {
 	tr := &headerTransport{base: http.DefaultTransport, headers: s.Headers}
+	if s.IsStdio() && s.ProjectRoot != "" {
+		ok, err := config.MCPApproved(p.TrustDir, s.ProjectRoot, s)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !ok {
+			return nil, nil, ErrNotApproved
+		}
+	}
 	srv := Server{Name: s.Name, URL: s.URL, Tools: s.Tools, Transport: tr, CallTimeout: p.CallTimeout, SSE: s.Type == "sse", taken: taken}
 	if s.IsStdio() {
 		srv.ClientTransport = &mcp.CommandTransport{Command: StdioCommand(s)}

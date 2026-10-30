@@ -6,10 +6,12 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/GhaziBenDahmane/harness/modelinfo"
 )
 
 // DefaultContextWindow is the context window of models missing from LLM_CONTEXT_WINDOWS.
-const DefaultContextWindow = 128000
+const DefaultContextWindow = modelinfo.DefaultContextWindow
 
 // Harness is the harness v2 configuration (context management, model metadata).
 type Harness struct {

@@ -329,3 +329,114 @@ func TestTrustFileIsPrivateAtomicAndManagedByAddRemove(t *testing.T) {
 		t.Fatalf("temp file left behind: %v", entries)
 	}
 }
+
+// writeProjectStdio puts a stdio server in the repository's .mcp.json and returns the project root.
+func writeProjectStdio(t *testing.T, dir, command string) string {
+	t.Helper()
+	root := filepath.Join(dir, "..", "..")
+	body := `{"mcpServers":{"fs":{"command":"` + command + `","args":["--root","."],"env":{"A":"1"}}}}`
+	if err := os.WriteFile(filepath.Join(root, ".mcp.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func TestAProjectStdioServerNeedsAnApprovalOfItsExactCommand(t *testing.T) {
+	// Arrange: a trusted project with a stdio server, the user opted in to stdio on the local backend.
+	dir, user := repo(t, "", "mcp:\n  allow_stdio: true\n")
+	root := writeProjectStdio(t, dir, "echo")
+	env := []string{"SANDBOX_BACKEND=local", "HARNESS_TRUST_PROJECT=1"}
+	names := func(c *config.Config) int { return len(c.MCPServers) }
+
+	// Act
+	before, err1 := load(t, dir, user, env...)
+	pending := before.Layers.MCPPending
+	approved, err2 := config.ApproveMCP(user, root, pending[0])
+	granted, err3 := load(t, dir, user, env...)
+
+	// Assert
+	if err1 != nil || err2 != nil || err3 != nil {
+		t.Fatal(err1, err2, err3)
+	}
+	if names(before) != 0 || len(pending) != 1 || pending[0].Name != "fs" || !strings.Contains(strings.Join(before.Layers.MCPSkipped, "\n"), "harness trust mcp fs") {
+		t.Fatalf("unapproved: servers %d pending %v skipped %v", names(before), pending, before.Layers.MCPSkipped)
+	}
+	if !approved || names(granted) != 1 || len(granted.Layers.MCPPending) != 0 || granted.MCPServers[0].ProjectRoot == "" {
+		t.Fatalf("approved %v: servers %+v pending %v", approved, granted.MCPServers, granted.Layers.MCPPending)
+	}
+}
+
+func TestChangingAProjectStdioCommandInvalidatesItsApproval(t *testing.T) {
+	// Arrange: an approved server, then its command, then its arguments and its environment change.
+	dir, user := repo(t, "", "mcp:\n  allow_stdio: true\n")
+	root := writeProjectStdio(t, dir, "echo")
+	env := []string{"SANDBOX_BACKEND=local", "HARNESS_TRUST_PROJECT=1"}
+	first, _ := load(t, dir, user, env...)
+	if _, err := config.ApproveMCP(user, root, first.Layers.MCPPending[0]); err != nil {
+		t.Fatal(err)
+	}
+	base := config.MCPServer{Name: "fs", Command: "echo", Args: []string{"--root", "."}, Env: map[string]string{"A": "1"}}
+
+	// Act
+	same, err1 := config.MCPApproved(user, root, base)
+	command := base
+	command.Command = "curl"
+	args := base
+	args.Args = []string{"--root", "/"}
+	env2 := base
+	env2.Env = map[string]string{"A": "2"}
+	renamed := base
+	renamed.Name = "other"
+	otherRoot, err2 := config.MCPApproved(user, t.TempDir(), base)
+
+	// Assert
+	if err1 != nil || err2 != nil || !same || otherRoot {
+		t.Fatalf("same %v (%v) other project %v (%v)", same, err1, otherRoot, err2)
+	}
+	for what, s := range map[string]config.MCPServer{"command": command, "args": args, "env": env2, "name": renamed} {
+		if ok, _ := config.MCPApproved(user, root, s); ok {
+			t.Errorf("a changed %s must not keep the approval", what)
+		}
+	}
+	after := writeProjectStdio(t, dir, "curl")
+	changed, err := load(t, dir, user, env...)
+	if err != nil || after != root || len(changed.MCPServers) != 0 || len(changed.Layers.MCPPending) != 1 {
+		t.Fatalf("a changed file must wait for approval again: %v %+v %v", err, changed.MCPServers, changed.Layers.MCPPending)
+	}
+}
+
+func TestMCPApprovalsAreDeniedWithoutAnyAndRevokedAndDroppedWithTheProject(t *testing.T) {
+	// Arrange
+	user := filepath.Join(t.TempDir(), "home")
+	proj := t.TempDir()
+	s := config.MCPServer{Name: "fs", Command: "echo"}
+
+	// Act
+	none, err0 := config.MCPApproved(user, proj, s)
+	if _, err := config.AddTrust(user, proj); err != nil {
+		t.Fatal(err)
+	}
+	added, err1 := config.ApproveMCP(user, proj, s)
+	again, err2 := config.ApproveMCP(user, proj, s)
+	ok, err3 := config.MCPApproved(user, proj, s)
+	listed, err4 := config.IsTrusted(user, proj)
+	revoked, err5 := config.RevokeMCP(user, proj, "fs")
+	gone, err6 := config.RevokeMCP(user, proj, "fs")
+	if _, err := config.ApproveMCP(user, proj, s); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.RemoveTrust(user, proj); err != nil {
+		t.Fatal(err)
+	}
+	afterUntrust, err7 := config.MCPApproved(user, proj, s)
+
+	// Assert
+	for _, e := range []error{err0, err1, err2, err3, err4, err5, err6, err7} {
+		if e != nil {
+			t.Fatal(e)
+		}
+	}
+	if none || !added || again || !ok || !listed || !revoked || gone || afterUntrust {
+		t.Fatalf("none %v added %v again %v ok %v listed %v revoked %v gone %v afterUntrust %v", none, added, again, ok, listed, revoked, gone, afterUntrust)
+	}
+}

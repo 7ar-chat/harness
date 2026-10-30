@@ -38,6 +38,9 @@ services:
         condition: service_started
     restart: on-failure
     environment:
+      # -local runs the agent's commands inside this container, not on your machine; the server refuses that on a
+      # non-loopback address unless accepted explicitly
+      HARNESS_ALLOW_LOCAL_SANDBOX: "1"
       POSTGRES_HOST: postgres
       POSTGRES_SSLMODE: disable
       POSTGRES_DB: harness

@@ -18,6 +18,10 @@ import (
 	"sync/atomic"
 )
 
+// DefaultContextWindow is the context window assumed for a model whose window
+// is not known (not in the configured windows nor in the price table).
+const DefaultContextWindow = 128000
+
 // Info is what is known about one model. A zero field is unknown.
 type Info struct {
 	ID       string

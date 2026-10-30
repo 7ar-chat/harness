@@ -188,6 +188,12 @@ type TeamStore interface {
 	// SetUserPrefs replaces the user's preferences.
 	SetUserPrefs(ctx context.Context, login string, prefs map[string]any) error
 
+	// SeenThreads returns when login last saw each thread (by thread id); threads never seen are absent.
+	SeenThreads(ctx context.Context, login string) (map[string]time.Time, error)
+	// SetThreadSeen records that login has seen the thread up to at. The time never moves backwards, so
+	// replays and several devices converge on the latest.
+	SetThreadSeen(ctx context.Context, login, threadID string, at time.Time) error
+
 	// CreateProject stores p (a fresh id when empty) and makes owner its owner.
 	CreateProject(ctx context.Context, p Project, owner string) (*Project, error)
 	GetProject(ctx context.Context, id string) (*Project, error)

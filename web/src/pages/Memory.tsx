@@ -25,7 +25,7 @@ export const isPending = (e: MemoryEntry) => e.status === "pending" || !!e.propo
 const isPinned = (e: MemoryEntry) => e.metadata?.pinned === true;
 const isRepo = (e: MemoryEntry) => e.metadata?.source === "repo";
 const isAuto = (e: MemoryEntry) => e.metadata?.auto === true;
-const ago = (iso?: string) => (iso ? `${formatDistanceToNowStrict(new Date(iso))} ago` : "");
+const ago = (iso?: string | null) => (iso ? `${formatDistanceToNowStrict(new Date(iso))} ago` : "");
 const threadOf = (e: MemoryEntry) => e.sourceThreadId || e.metadata?.history?.find((h) => h.thread)?.thread;
 
 const LAYERS = {

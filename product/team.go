@@ -34,6 +34,8 @@ import (
 //	GET    /api/projects/{id}/audit?limit=          (member)
 //	GET    /api/overview                            → every thread the user can see, with its status
 //	GET    /api/events                              → text/event-stream of FeedEvent
+//	GET    /api/seen                                → {threadId: lastSeen}: the caller's last visit to each thread (unread state)
+//	POST   /api/seen {"threadId","at"}              records a visit (viewer); the time never moves backwards
 //	POST   /api/threads {"title","projectId"}       a project thread (member)
 //	GET    /api/threads?project=ID                  the project's threads; without it, the user's personal ones
 

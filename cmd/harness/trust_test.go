@@ -128,3 +128,42 @@ func TestConfigInitStarterShowsTheUserFileLayout(t *testing.T) {
 		}
 	}
 }
+
+func TestTrustMCPApprovesTheExactCommandOfAProjectStdioServer(t *testing.T) {
+	// Arrange: a trusted project with a stdio server, stdio allowed on the local backend.
+	home := harHome(t)
+	t.Setenv("SANDBOX_BACKEND", "local")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "config.yml"), []byte("mcp:\n  allow_stdio: true\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root := project(t, map[string]string{".mcp.json": `{"mcpServers":{"fs":{"command":"echo","args":["a"]}}}`})
+
+	// Act
+	codeUntrusted, _, errUntrusted := cli(t, "", "trust", "mcp")
+	cli(t, "", "trust")
+	code, out, errOut := cli(t, "", "trust", "mcp", "fs")
+	codeAgain, _, _ := cli(t, "", "trust", "mcp")
+	cfg, err := config.LoadWith(config.LoadOptions{})
+	if err := os.WriteFile(filepath.Join(root, ".mcp.json"), []byte(`{"mcpServers":{"fs":{"command":"echo","args":["b"]}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	changed, err2 := config.LoadWith(config.LoadOptions{})
+	codeRevoke, _, _ := cli(t, "", "untrust", "mcp", "fs")
+
+	// Assert
+	if codeUntrusted == 0 || !strings.Contains(errUntrusted, "not trusted") {
+		t.Fatalf("an untrusted project must not get approvals: %d %q", codeUntrusted, errUntrusted)
+	}
+	if code != 0 || !strings.Contains(out, "approved MCP server fs") || codeAgain == 0 {
+		t.Fatalf("approve: %d %q %q (again %d)", code, out, errOut, codeAgain)
+	}
+	if err != nil || len(cfg.MCPServers) != 1 || err2 != nil || len(changed.MCPServers) != 0 || len(changed.Layers.MCPPending) != 1 {
+		t.Fatalf("approved %v/%v, after the command changed %v/%v", err, cfg.MCPServers, err2, changed.MCPServers)
+	}
+	if codeRevoke != 0 {
+		t.Fatal("the stale approval of the server name must still be withdrawable")
+	}
+}

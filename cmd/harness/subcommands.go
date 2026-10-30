@@ -151,6 +151,8 @@ func readKey(fromStdin bool, provider string, stdin io.Reader, stderr io.Writer,
 const trustUsage = `usage:
   harness trust [path]      trust a project (default: the current one): it may add permission allow rules and MCP servers
   harness trust list        list the trusted projects
+  harness trust mcp [name]  approve the exact command of the project's stdio MCP server(s) (all pending ones without a name)
+  harness untrust mcp name  withdraw that approval
   harness untrust [path]    stop trusting a project (default: the current one)`
 
 // projectRootArg is the project a trust command is about: the path given, else the project of the working directory.
@@ -202,6 +204,9 @@ func runTrust(cmd string, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, trustUsage)
 		return 0
 	}
+	if len(args) >= 1 && args[0] == "mcp" {
+		return runTrustMCP(cmd, dir, args[1:], stdout, stderr)
+	}
 	root, err := projectRootArg(args)
 	if err != nil {
 		fmt.Fprintln(stderr, "harness:", err)
@@ -228,6 +233,53 @@ func runTrust(cmd string, args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	fmt.Fprintf(stdout, "trusting %s (listed in %s): its permission allow rules and its MCP servers (.mcp.json, .har/mcp.json, mcp.servers) now apply\n", root, config.TrustPath(dir))
+	return 0
+}
+
+// runTrustMCP approves (trust mcp) or withdraws (untrust mcp) a stdio MCP server of the current project. The
+// approval is bound to the server's command, arguments and environment as the project defines them now.
+func runTrustMCP(cmd, dir string, args []string, stdout, stderr io.Writer) int {
+	if len(args) > 1 || (cmd == "untrust" && len(args) != 1) {
+		fmt.Fprintln(stderr, trustUsage)
+		return 2
+	}
+	// The project's servers are only read when it is trusted: trust it first (`harness trust`).
+	cfg, err := config.LoadWith(config.LoadOptions{})
+	if err != nil {
+		return fail(stderr, err)
+	}
+	ly := cfg.Layers
+	if ly == nil || ly.ProjectRoot == "" {
+		return fail(stderr, errors.New("no project here"))
+	}
+	if cmd == "untrust" {
+		removed, err := config.RevokeMCP(dir, ly.ProjectRoot, args[0])
+		if err != nil {
+			return fail(stderr, err)
+		}
+		if !removed {
+			return fail(stderr, fmt.Errorf("no approved MCP server %q for %s", args[0], ly.ProjectRoot))
+		}
+		fmt.Fprintf(stdout, "withdrew the approval of MCP server %s\n", args[0])
+		return 0
+	}
+	if !ly.Trusted {
+		return fail(stderr, fmt.Errorf("%s is not trusted: run `harness trust` first", ly.ProjectRoot))
+	}
+	n := 0
+	for _, s := range ly.MCPPending {
+		if len(args) == 1 && s.Name != args[0] {
+			continue
+		}
+		if _, err := config.ApproveMCP(dir, ly.ProjectRoot, s); err != nil {
+			return fail(stderr, err)
+		}
+		fmt.Fprintf(stdout, "approved MCP server %s (%s)\n", s.Name, s.Describe())
+		n++
+	}
+	if n == 0 {
+		return fail(stderr, errors.New("no project stdio MCP server is waiting for approval (it may already be approved, or not allowed: stdio needs the local backend and mcp.allow_stdio)"))
+	}
 	return 0
 }
 

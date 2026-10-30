@@ -353,6 +353,7 @@ func (st *runState) step(ctx context.Context, step int, last bool,
 	if err := st.checkPending(ctx); err != nil {
 		return false, err
 	}
+	st.stepNotes(ctx)
 	st.budgetReminder(step)
 	msgs, opts := request()
 	callAt := len(st.history)

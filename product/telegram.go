@@ -293,7 +293,7 @@ func (b *telegramBridge) run(ctx context.Context) {
 			}
 		}
 	}
-	sub, done := b.s.hub.subscribe(nil)
+	sub, done := b.s.hub.subscribe(nil) // the bridge runs in one replica and hears every replica's events
 	defer done()
 	go b.deliver(ctx, sub)
 	var offset int64

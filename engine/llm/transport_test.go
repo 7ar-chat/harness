@@ -11,12 +11,11 @@ import (
 
 	"github.com/cloudwego/eino/schema"
 
-	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/engine/llm"
 )
 
-func openaiConfig(url string, timeout int, models ...string) *config.Config {
-	return &config.Config{LLMProvider: "openai", LLMBaseURL: url + "/v1", LLMAPIKey: "test-key", LLMModels: models, LLMTimeout: timeout}
+func openaiConfig(url string, timeout int, models ...string) llm.Options {
+	return llm.Options{Provider: "openai", BaseURL: url + "/v1", APIKey: "test-key", Models: models, TimeoutSeconds: timeout}
 }
 
 func TestModelCallTimesOutWhenTheGatewayNeverAnswers(t *testing.T) {

@@ -196,6 +196,13 @@ func TestStdioCannotBeEnabledByTheProjectButByTheUserFile(t *testing.T) {
 	}
 
 	// Act
+	pendingLocal, errP := load(t, dir, user, "SANDBOX_BACKEND=local", "HARNESS_TRUST_PROJECT=1") // a project's stdio server also needs its approval
+	if errP != nil || len(pendingLocal.MCPServers) != 0 || len(pendingLocal.Layers.MCPPending) != 1 {
+		t.Fatalf("unapproved project stdio server: %v %+v %v", errP, pendingLocal.MCPServers, pendingLocal.Layers.MCPPending)
+	}
+	if _, err := config.ApproveMCP(user, pendingLocal.Layers.ProjectRoot, pendingLocal.Layers.MCPPending[0]); err != nil {
+		t.Fatal(err)
+	}
 	local, err1 := load(t, dir, user, "SANDBOX_BACKEND=local", "HARNESS_TRUST_PROJECT=1")
 	remote, err2 := load(t, dir, user, "SANDBOX_BACKEND=opensandbox", "OPENSANDBOX_URL=http://x", "HARNESS_TRUST_PROJECT=1")
 	noOptIn, err3 := load(t, dir, user, "SANDBOX_BACKEND=local", "HARNESS_MCP_STDIO=0", "HARNESS_TRUST_PROJECT=1")

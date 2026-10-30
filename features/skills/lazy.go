@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
@@ -45,6 +46,15 @@ const (
 // it resolved, the skills it needs, the ones of the thread's history (read
 // once per run) and the scripts it scanned.
 type runState struct {
+	// merged is the registry with the project skills of the run's sandbox (nil: none discovered, Installer.Registry);
+	// discovered says they were read (once per run, see discoverProject); disc serializes that read.
+	merged     *Registry
+	discovered bool
+	// announced maps the skills the prompt (PromptSection) or a step note (StepNote) told the model about to
+	// their revision.
+	announced map[string]string
+	disc      sync.Mutex
+
 	plan     *RunPlan
 	resolved map[string]installItem
 	needed   []string
@@ -92,7 +102,7 @@ func (i *Installer) Plan(ctx context.Context, rc tools.RunContext) (RunPlan, err
 		return plan, nil
 	}
 	i.mu.Unlock()
-	plan, err := i.Registry.Plan(ctx, &store.Run{ID: rc.RunID, ThreadID: rc.ThreadID, UserLogin: rc.Login})
+	plan, err := i.registry(rc).Plan(ctx, &store.Run{ID: rc.RunID, ThreadID: rc.ThreadID, UserLogin: rc.Login})
 	if err != nil {
 		return RunPlan{}, err
 	}
@@ -430,7 +440,7 @@ func (i *Installer) planLookup(plan RunPlan) lookupFunc {
 			if att != nil {
 				return installItem{s, att.Package}, true
 			}
-			s, pkg, err := i.Registry.ByName(ctx, name)
+			s, pkg, err := i.ByName(ctx, rc, name)
 			if err != nil {
 				slog.Warn("skills: skill unavailable", "run_id", rc.RunID, "skill", name, "error", err)
 				return installItem{}, false
@@ -444,7 +454,7 @@ func (i *Installer) planLookup(plan RunPlan) lookupFunc {
 // included (the runtime's checkers).
 func (i *Installer) registryLookup(ctx context.Context, rc tools.RunContext, name string) (installItem, bool) {
 	return i.cached(rc, "\x00registry\x00"+name, func() (installItem, bool) {
-		s, pkg, err := i.Registry.ByName(ctx, name)
+		s, pkg, err := i.ByName(ctx, rc, name)
 		if err != nil {
 			return installItem{}, false
 		}
@@ -456,6 +466,9 @@ func (i *Installer) registryLookup(ctx context.Context, rc tools.RunContext, nam
 // command): the sandbox tools' OnAcquire hook, so a sandbox created after a
 // load_skill holds that skill before its first command.
 func (i *Installer) EnsureRunSkills(ctx context.Context, rc tools.RunContext, sb sandbox.Sandbox) {
+	if err := i.discoverProject(ctx, rc, sb); err != nil {
+		slog.Warn("skills: reading the sandbox's project skills failed", "run_id", rc.RunID, "error", err)
+	}
 	items, err := i.needed(ctx, rc, "", nil)
 	if err != nil {
 		slog.Warn("skills: resolving run skills failed", "run_id", rc.RunID, "error", err)
@@ -472,6 +485,9 @@ func (i *Installer) EnsureRunSkills(ctx context.Context, rc tools.RunContext, sb
 // (ScriptPaths): a script of a skill that was never loaded still finds its
 // files. The sandbox tools' BeforeCommand hook.
 func (i *Installer) EnsureCommandSkills(ctx context.Context, rc tools.RunContext, sb sandbox.Sandbox, command string) error {
+	if err := i.discoverProject(ctx, rc, sb); err != nil {
+		return err
+	}
 	extra, err := i.scriptRefs(ctx, rc, sb, ScriptPaths(command))
 	if err != nil {
 		return err
