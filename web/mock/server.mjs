@@ -1,11 +1,11 @@
 // A tiny stand-in for the harness API with canned data, for looking at the UI without an LLM.
-// Serves the built UI (../hosts/web/ui) with the same CSP as the Go server.  node mock/server.mjs [port]
+// Serves the built UI (../hosts/httpapi/ui) with the same CSP as the Go server.  node mock/server.mjs [port]
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 
 const port = Number(process.argv[2] ?? 8099);
-const root = path.resolve(import.meta.dirname, "../../hosts/web/ui");
+const root = path.resolve(import.meta.dirname, "../../hosts/httpapi/ui");
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'";
 const now = Date.now();
 const iso = (m) => new Date(now - m * 60000).toISOString();
