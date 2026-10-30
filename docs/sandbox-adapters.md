@@ -187,6 +187,22 @@ The agent runs untrusted, model-written code, and reads untrusted files.
 * **No credentials in the sandbox.** Pass none via `Env`/`Metadata` beyond what a
   command needs; the harness never puts model keys there. The tools' `Env` is
   for `HARNESS_*` protocol variables.
+* **Credential brokering (optional).** A backend whose egress layer can add
+  authentication to outbound HTTPS requests implements `sandbox.CredentialBroker`
+  (`SetCredentials`: the complete set of credentials and host/path bindings,
+  idempotent, called again to renew). A project's GitHub installation token is
+  then handed to the broker, limited to that repository's paths on `github.com`
+  and `api.github.com`, and never enters the sandbox: plain `git clone`, `git push`
+  and `curl https://api.github.com/repos/OWNER/REPO/pulls` just work. Without a
+  broker the token is written to `/workspace/.work/git-credentials`, where
+  anything running in the sandbox can read it. If a broker refuses the token, the
+  checkout does **not** fall back to the file: a private repository then fails
+  to clone. The OpenSandbox adapter implements it with the egress sidecar's
+  Credential Vault (`OPENSANDBOX_CREDENTIAL_PROXY=true`; needs
+  `opensandbox-server` >= 0.2.0, egress >= 1.1.1 in `dns+nft` mode, and a
+  default-deny `SANDBOX_EGRESS_ALLOWLIST` that includes the bound hosts). The
+  sidecar decrypts HTTPS for the bound hosts with its own CA, which the sandbox
+  image trusts at start.
 * **File contents are data.** An adapter never interprets, executes, renders or
   logs file contents; it does not follow a `ReadFile` result into another path.
   Sizes are capped by the caller (`maxBytes`); enforce your provider's own caps

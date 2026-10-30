@@ -87,15 +87,19 @@ type Config struct {
 	// sandbox backend (the local backend always reads it). Off for servers: the host's home is not the tenants'.
 	UserInstructions bool `env:"HARNESS_USER_INSTRUCTIONS"`
 
-	OpenSandboxURL            string   `env:"OPENSANDBOX_URL"`
-	OpenSandboxAPIKey         string   `env:"OPENSANDBOX_API_KEY"`
-	OpenSandboxImage          string   `env:"OPENSANDBOX_IMAGE" envDefault:"python:3.11-slim"`
-	OpenSandboxUseServerProxy bool     `env:"OPENSANDBOX_USE_SERVER_PROXY" envDefault:"false"`
-	SandboxTimeoutSeconds     int      `env:"SANDBOX_TIMEOUT_SECONDS" envDefault:"1800"`
-	SandboxCommandTimeout     int      `env:"SANDBOX_COMMAND_TIMEOUT_SECONDS" envDefault:"120"`
-	SandboxCPU                string   `env:"SANDBOX_CPU" envDefault:"1"`
-	SandboxMemory             string   `env:"SANDBOX_MEMORY" envDefault:"2Gi"`
-	SandboxEgressAllowlist    []string `env:"SANDBOX_EGRESS_ALLOWLIST" envSeparator:","`
+	OpenSandboxURL            string `env:"OPENSANDBOX_URL"`
+	OpenSandboxAPIKey         string `env:"OPENSANDBOX_API_KEY"`
+	OpenSandboxImage          string `env:"OPENSANDBOX_IMAGE" envDefault:"python:3.11-slim"`
+	OpenSandboxUseServerProxy bool   `env:"OPENSANDBOX_USE_SERVER_PROXY" envDefault:"false"`
+	// OpenSandboxCredentialProxy creates sandboxes with the egress sidecar's Credential Vault, so GitHub
+	// authentication is added to outbound requests outside the sandbox and no token enters it. Needs
+	// opensandbox-server >= 0.2.0 and egress >= 1.1.1 in dns+nft mode.
+	OpenSandboxCredentialProxy bool     `env:"OPENSANDBOX_CREDENTIAL_PROXY" envDefault:"false"`
+	SandboxTimeoutSeconds      int      `env:"SANDBOX_TIMEOUT_SECONDS" envDefault:"1800"`
+	SandboxCommandTimeout      int      `env:"SANDBOX_COMMAND_TIMEOUT_SECONDS" envDefault:"120"`
+	SandboxCPU                 string   `env:"SANDBOX_CPU" envDefault:"1"`
+	SandboxMemory              string   `env:"SANDBOX_MEMORY" envDefault:"2Gi"`
+	SandboxEgressAllowlist     []string `env:"SANDBOX_EGRESS_ALLOWLIST" envSeparator:","`
 	// SandboxEgressUnrestricted explicitly accepts unrestricted sandbox egress in production.
 	SandboxEgressUnrestricted bool `env:"SANDBOX_EGRESS_UNRESTRICTED" envDefault:"false"`
 	// SandboxEgressDenyCIDRs are blocked in unrestricted mode (other sandboxes, host, proxy, metadata;

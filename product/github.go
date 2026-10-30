@@ -46,7 +46,7 @@ type GitHubApp struct {
 	key   *rsa.PrivateKey
 
 	mu     sync.Mutex
-	tokens map[int64]cachedToken
+	tokens map[string]cachedToken
 }
 
 type cachedToken struct {
@@ -72,7 +72,7 @@ func NewGitHubApp(appID, slug string, privateKeyPEM []byte) (*GitHubApp, error) 
 	} else {
 		return nil, fmt.Errorf("github app: parsing the private key: %w", err)
 	}
-	return &GitHubApp{Slug: slug, appID: appID, key: key, tokens: map[int64]cachedToken{}}, nil
+	return &GitHubApp{Slug: slug, appID: appID, key: key, tokens: map[string]cachedToken{}}, nil
 }
 
 func (g *GitHubApp) api() string {
@@ -162,10 +162,13 @@ func (g *GitHubApp) RepoInstallation(ctx context.Context, owner, repo string) (i
 	return out.ID, err
 }
 
-// InstallationToken returns a token for the installation (cached until shortly before it expires).
-func (g *GitHubApp) InstallationToken(ctx context.Context, installation int64) (string, error) {
+// InstallationToken returns a token for the installation (cached until shortly before it expires). With repos
+// (repository names, without the owner) the token is limited to those repositories of the installation; without,
+// it covers every repository the App is installed on.
+func (g *GitHubApp) InstallationToken(ctx context.Context, installation int64, repos ...string) (string, error) {
+	key := strconv.FormatInt(installation, 10) + "/" + strings.Join(repos, ",")
 	g.mu.Lock()
-	if c, ok := g.tokens[installation]; ok && time.Until(c.expires) > 2*time.Minute {
+	if c, ok := g.tokens[key]; ok && time.Until(c.expires) > 2*time.Minute {
 		g.mu.Unlock()
 		return c.token, nil
 	}
@@ -178,11 +181,15 @@ func (g *GitHubApp) InstallationToken(ctx context.Context, installation int64) (
 		Token     string    `json:"token"`
 		ExpiresAt time.Time `json:"expires_at"`
 	}
-	if _, err := g.do(ctx, http.MethodPost, "/app/installations/"+strconv.FormatInt(installation, 10)+"/access_tokens", jwt, struct{}{}, &out); err != nil {
+	body := map[string]any{}
+	if len(repos) > 0 {
+		body["repositories"] = repos
+	}
+	if _, err := g.do(ctx, http.MethodPost, "/app/installations/"+strconv.FormatInt(installation, 10)+"/access_tokens", jwt, body, &out); err != nil {
 		return "", err
 	}
 	g.mu.Lock()
-	g.tokens[installation] = cachedToken{out.Token, out.ExpiresAt}
+	g.tokens[key] = cachedToken{out.Token, out.ExpiresAt}
 	g.mu.Unlock()
 	return out.Token, nil
 }

@@ -193,3 +193,127 @@ func TestCheckoutRefusesUnsafeInputsAndRedactsFailures(t *testing.T) {
 		t.Fatalf("redact = %q", got)
 	}
 }
+
+// brokerSandbox is a fakeSandbox with a credential broker.
+type brokerSandbox struct {
+	fakeSandbox
+	sets []sandbox.CredentialSet
+	err  error
+}
+
+func (b *brokerSandbox) SetCredentials(_ context.Context, set sandbox.CredentialSet) error {
+	b.sets = append(b.sets, set)
+	return b.err
+}
+
+func TestInstallationTokenIsLimitedToTheProjectsRepository(t *testing.T) {
+	var bodies []map[string]any
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		bodies = append(bodies, body)
+		json.NewEncoder(w).Encode(map[string]any{"token": "ghs_t" + string(rune('0'+len(bodies))), "expires_at": time.Now().Add(time.Hour)})
+	}))
+	defer api.Close()
+	app, _ := testApp(t, api.URL)
+	ctx := context.Background()
+
+	scoped, _ := app.InstallationToken(ctx, 42, "api")
+	other, _ := app.InstallationToken(ctx, 42, "web")
+	all, _ := app.InstallationToken(ctx, 42)
+	again, _ := app.InstallationToken(ctx, 42, "api")
+
+	if repos, _ := bodies[0]["repositories"].([]any); len(repos) != 1 || repos[0] != "api" {
+		t.Fatalf("scoped request body = %v", bodies[0])
+	}
+	if _, has := bodies[2]["repositories"]; has {
+		t.Fatalf("an unscoped request must not name repositories: %v", bodies[2])
+	}
+	// Tokens of different scopes are different tokens; the same scope is served from the cache.
+	if len(bodies) != 3 || scoped == other || scoped == all || again != scoped {
+		t.Fatalf("tokens %q %q %q %q after %d requests", scoped, other, all, again, len(bodies))
+	}
+}
+
+func TestBrokeredCheckoutKeepsTheTokenOutOfTheSandbox(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"token": "ghs_supersecret", "expires_at": time.Now().Add(time.Hour)})
+	}))
+	defer api.Close()
+	rc, thread := repoRig(t, "https://github.com/acme/api", 42)
+	rc.GitHub, _ = testApp(t, api.URL)
+	sb := &brokerSandbox{}
+
+	note := rc.setup(context.Background(), thread, sb)
+
+	if len(sb.reqs) != 1 {
+		t.Fatalf("expected only the clone, got %d commands (no credential file write)", len(sb.reqs))
+	}
+	for _, r := range sb.reqs {
+		if strings.Contains(r.Command, "ghs_supersecret") || r.Env["GH_TOKEN"] != "" {
+			t.Fatalf("the token reached the sandbox: %+v", r)
+		}
+	}
+	if len(sb.sets) != 1 || !strings.Contains(note, "har/11111111") {
+		t.Fatalf("broker calls %d, note %q", len(sb.sets), note)
+	}
+	set := sb.sets[0]
+	basic := base64.StdEncoding.EncodeToString([]byte("x-access-token:ghs_supersecret"))
+	if len(set.Credentials) != 2 || set.Credentials[0].Value != basic || set.Credentials[1].Value != "ghs_supersecret" {
+		t.Fatalf("credentials = %+v", set.Credentials)
+	}
+	// Each binding is limited to this repository's paths on its host, so the token is useless anywhere else.
+	for _, b := range set.Bindings {
+		for _, p := range b.Paths {
+			if !strings.Contains(p, "/acme/api") {
+				t.Errorf("binding %s path %q is not limited to acme/api", b.Name, p)
+			}
+		}
+	}
+	if set.Bindings[0].Host != "github.com" || set.Bindings[0].Auth != sandbox.AuthBasic ||
+		set.Bindings[1].Host != "api.github.com" || set.Bindings[1].Auth != sandbox.AuthBearer {
+		t.Fatalf("bindings = %+v", set.Bindings)
+	}
+}
+
+func TestBrokeredRefreshRenewsTheVaultAndNeverWritesAFile(t *testing.T) {
+	n := 0
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n++
+		json.NewEncoder(w).Encode(map[string]any{"token": "ghs_" + string(rune('a'+n)), "expires_at": time.Now().Add(time.Hour)})
+	}))
+	defer api.Close()
+	rc, _ := repoRig(t, "https://github.com/acme/api", 42)
+	rc.GitHub, _ = testApp(t, api.URL)
+	p := &store.Project{ID: "p", RepoURL: "https://github.com/acme/api", GitHubInstallation: 42}
+	sb := &brokerSandbox{}
+
+	ok := rc.writeCredentials(context.Background(), sb, p, "ghs_new")
+
+	if !ok || len(sb.sets) != 1 || len(sb.reqs) != 0 {
+		t.Fatalf("ok=%v broker calls=%d commands=%d", ok, len(sb.sets), len(sb.reqs))
+	}
+}
+
+func TestCheckoutNeverFallsBackToPuttingTheTokenInTheSandboxWhenTheBrokerFails(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"token": "ghs_supersecret", "expires_at": time.Now().Add(time.Hour)})
+	}))
+	defer api.Close()
+	rc, thread := repoRig(t, "https://github.com/acme/api", 42)
+	rc.GitHub, _ = testApp(t, api.URL)
+	sb := &brokerSandbox{err: context.DeadlineExceeded}
+
+	rc.setup(context.Background(), thread, sb)
+
+	// A broker that cannot take the token must not turn into a credential file or an environment variable: the
+	// clone runs unauthenticated (and fails for a private repository) instead of exposing the secret.
+	for _, r := range sb.reqs {
+		if r.Env["GH_TOKEN"] != "" || strings.Contains(r.Command, "ghs_supersecret") || strings.Contains(r.Command, "git-credentials") {
+			t.Fatalf("the token reached the sandbox after a broker failure: %+v", r)
+		}
+	}
+	if len(sb.reqs) != 1 {
+		t.Fatalf("commands = %d, want just the clone", len(sb.reqs))
+	}
+}

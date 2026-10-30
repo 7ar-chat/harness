@@ -30,6 +30,9 @@ type OpenSandboxOptions struct {
 	EgressAllowlist []string
 	// EgressDenyCIDRs are denied in unrestricted mode (no allowlist).
 	EgressDenyCIDRs []string
+	// CredentialProxy creates every sandbox with the egress sidecar's Credential Vault enabled, so the harness can
+	// add authentication to outbound requests without the secret entering the sandbox (see SetCredentials).
+	CredentialProxy bool
 }
 
 // OpenSandbox is the sandbox.Backend for the official OpenSandbox server.
@@ -138,11 +141,14 @@ func (b *OpenSandbox) Create(ctx context.Context, co sandbox.CreateOptions) (san
 		ReadyTimeout:   2 * time.Minute,
 	}
 	opts.NetworkPolicy = EgressPolicy(b.opts)
+	if b.opts.CredentialProxy {
+		opts.CredentialProxy = &sdk.CredentialProxyConfig{Enabled: true}
+	}
 	sb, err := sdk.CreateSandbox(ctx, b.conn, opts)
 	if err != nil {
 		return nil, err
 	}
-	return &osbInstance{sb: sb, conn: b.conn}, nil
+	return b.instance(sb), nil
 }
 
 func (b *OpenSandbox) Connect(ctx context.Context, id string) (sandbox.Instance, error) {
@@ -157,7 +163,16 @@ func (b *OpenSandbox) Connect(ctx context.Context, id string) (sandbox.Instance,
 		}
 		return nil, err
 	}
-	return &osbInstance{sb: sb, conn: b.conn}, nil
+	return b.instance(sb), nil
+}
+
+// instance wraps a connected sandbox; with the credential proxy on, it also exposes the credential broker.
+func (b *OpenSandbox) instance(sb *sdk.Sandbox) sandbox.Instance {
+	inst := &osbInstance{sb: sb, conn: b.conn}
+	if b.opts.CredentialProxy {
+		return brokerInstance{inst}
+	}
+	return inst
 }
 
 // gone asks the lifecycle API whether the sandbox is definitively dead.

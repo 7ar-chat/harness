@@ -754,7 +754,7 @@ This table is the schema of the **user file**; a project file accepts the subset
 | `limits.compaction_threshold`, `limits.compaction_model`, `limits.keep_recent_tool_calls` | `COMPACTION_THRESHOLD`, `COMPACTION_MODEL`, `COMPACTION_KEEP_RECENT_TOOL_RESULTS` | |
 | `sandbox.backend` | `SANDBOX_BACKEND` | `local`, `opensandbox` or `none` (`none` ignores `sandbox.url`) |
 | `sandbox.url`, `sandbox.image`, `sandbox.api_key_env` | `OPENSANDBOX_URL`, `OPENSANDBOX_IMAGE`, `OPENSANDBOX_API_KEY` | `api_key_env` is a variable name |
-| `sandbox.use_server_proxy`, `sandbox.timeout_seconds`, `sandbox.command_timeout`, `sandbox.cpu`, `sandbox.memory` | `OPENSANDBOX_USE_SERVER_PROXY`, `SANDBOX_TIMEOUT_SECONDS`, `SANDBOX_COMMAND_TIMEOUT_SECONDS`, `SANDBOX_CPU`, `SANDBOX_MEMORY` | |
+| `sandbox.use_server_proxy`, `sandbox.credential_proxy`, `sandbox.timeout_seconds`, `sandbox.command_timeout`, `sandbox.cpu`, `sandbox.memory` | `OPENSANDBOX_USE_SERVER_PROXY`, `OPENSANDBOX_CREDENTIAL_PROXY`, `SANDBOX_TIMEOUT_SECONDS`, `SANDBOX_COMMAND_TIMEOUT_SECONDS`, `SANDBOX_CPU`, `SANDBOX_MEMORY` | `credential_proxy` keeps the project's GitHub token outside the sandbox, see [docs/sandbox-adapters.md](docs/sandbox-adapters.md) |
 | `sandbox.egress_allowlist`, `sandbox.egress_unrestricted`, `sandbox.max_sandboxes_per_user` | `SANDBOX_EGRESS_ALLOWLIST`, `SANDBOX_EGRESS_UNRESTRICTED`, `MAX_SANDBOXES_PER_USER` | |
 | `sandbox.workspace`, `sandbox.state_dir` | `LOCAL_WORKSPACE`, `LOCAL_STATE_DIR` | local backend |
 | `permissions.mode` | `AGENT_PERMISSIONS` | `ask`, `auto-edit`, `yolo`, `yolo-unsafe`, `readonly` |

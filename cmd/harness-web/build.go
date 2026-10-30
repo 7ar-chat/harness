@@ -99,7 +99,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		b.sup = product.NewSupervisor(ts)
 		o.Tools = append(o.Tools, b.sup.Tools())
 		o.Features = append(harness.ProfileNamed(cfg.AgentProfile), b.sup.Feature(),
-			(&product.RepoCheckout{Team: ts, GitHub: gh}).Feature())
+			(&product.RepoCheckout{Team: ts, GitHub: gh, Brokered: cfg.OpenSandboxCredentialProxy && cfg.SandboxBackendName() == config.BackendOpenSandbox}).Feature())
 	}
 	h, err := harness.New(o)
 	if err != nil {

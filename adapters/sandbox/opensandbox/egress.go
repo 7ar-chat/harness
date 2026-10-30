@@ -34,7 +34,7 @@ func OptionsFromConfig(cfg *config.Config) OpenSandboxOptions {
 		URL: cfg.OpenSandboxURL, APIKey: cfg.OpenSandboxAPIKey, UseServerProxy: cfg.OpenSandboxUseServerProxy,
 		Image: cfg.OpenSandboxImage, CPU: cfg.SandboxCPU, Memory: cfg.SandboxMemory,
 		TimeoutSeconds: cfg.SandboxTimeoutSeconds, EgressAllowlist: cfg.SandboxEgressAllowlist,
-		EgressDenyCIDRs: cfg.SandboxEgressDenyCIDRs,
+		EgressDenyCIDRs: cfg.SandboxEgressDenyCIDRs, CredentialProxy: cfg.OpenSandboxCredentialProxy,
 	}
 }
 

@@ -301,6 +301,7 @@ var schema = map[string]any{
 		"url":                    f("OPENSANDBOX_URL", kStr),
 		"image":                  f("OPENSANDBOX_IMAGE", kStr),
 		"use_server_proxy":       f("OPENSANDBOX_USE_SERVER_PROXY", kBool),
+		"credential_proxy":       f("OPENSANDBOX_CREDENTIAL_PROXY", kBool),
 		"workspace":              f("LOCAL_WORKSPACE", kStr),
 		"state_dir":              f("LOCAL_STATE_DIR", kStr),
 		"timeout_seconds":        f("SANDBOX_TIMEOUT_SECONDS", kInt),

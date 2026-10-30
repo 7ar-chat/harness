@@ -45,8 +45,11 @@ services:
       OPENSANDBOX_IMAGE: ${OPENSANDBOX_IMAGE}
       # all execd traffic goes through the OpenSandbox server: this container is not on the Docker host's network
       OPENSANDBOX_USE_SERVER_PROXY: "true"
-      # the agents need the internet (git, package managers); the deny list of private ranges still applies
-      SANDBOX_EGRESS_UNRESTRICTED: "true"
+      # GitHub authentication is added to the sandbox's requests by the egress sidecar: no token enters the sandbox
+      OPENSANDBOX_CREDENTIAL_PROXY: "true"
+      # deny by default (the Credential Vault needs it): only these hosts resolve and connect from a sandbox.
+      # Set SANDBOX_EGRESS_ALLOWLIST in the Dokploy environment to add package mirrors, your API, ...
+      SANDBOX_EGRESS_ALLOWLIST: ${SANDBOX_EGRESS_ALLOWLIST:-github.com,api.github.com,codeload.github.com,objects.githubusercontent.com,raw.githubusercontent.com,pypi.org,files.pythonhosted.org,registry.npmjs.org,proxy.golang.org,sum.golang.org,index.crates.io,static.crates.io,crates.io}
 
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}

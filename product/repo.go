@@ -2,6 +2,7 @@ package product
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -19,12 +20,21 @@ import (
 // sandbox is created, the repository is cloned into /workspace/repo on a
 // branch of its own (har/<thread>), so parallel agents of the same project
 // never share a working tree. With the project connected to a GitHub App, the
-// clone and later pushes use a short-lived installation token (refreshed at
-// the start of every run); public repositories clone without one. It works on
-// any sandbox backend since it only runs commands in the sandbox.
+// clone and later pushes use a short-lived installation token limited to the
+// project's repository (refreshed at the start of every run); public
+// repositories clone without one.
+//
+// Where the sandbox has a credential broker (sandbox.CredentialBroker: the
+// OpenSandbox egress sidecar), the token is handed to the broker and added to
+// the sandbox's HTTPS requests to github.com and api.github.com on the way
+// out: it never exists inside the sandbox. Otherwise it is written to a
+// credential file in the sandbox.
 type RepoCheckout struct {
 	Team   store.TeamStore
 	GitHub *GitHubApp
+	// Brokered tells the agent that GitHub requests are authenticated outside the sandbox (set when the
+	// sandbox backend has a credential broker), so it uses plain git and curl without a token.
+	Brokered bool
 }
 
 // RepoDir is where the repository is checked out in the sandbox.
@@ -44,11 +54,17 @@ func (rc *RepoCheckout) Feature() harness.Feature {
 			b.RunStart(repoRefresh{rc: rc, mgr: b.Sandboxes})
 		}
 		b.Section(func(ctx context.Context, in agent.Input) string {
-			if p := rc.project(ctx, in.Run.ThreadID); p != nil && p.RepoURL != "" {
-				return fmt.Sprintf("# Project repository\n\nThe project's repository (%s) is checked out in %s on your own branch %s. Work there; commit your changes. "+
-					"Other agents of the project work in their own copies, so do not assume they share your files.", p.RepoURL, RepoDir, branchFor(in.Run.ThreadID))
+			p := rc.project(ctx, in.Run.ThreadID)
+			if p == nil || p.RepoURL == "" {
+				return ""
 			}
-			return ""
+			s := fmt.Sprintf("# Project repository\n\nThe project's repository (%s) is checked out in %s on your own branch %s. Work there; commit your changes. "+
+				"Other agents of the project work in their own copies, so do not assume they share your files.", p.RepoURL, RepoDir, branchFor(in.Run.ThreadID))
+			if _, _, ok := ParseRepo(p.RepoURL); ok && rc.Brokered && p.GitHubInstallation != 0 {
+				s += "\n\ngit push and the GitHub API (api.github.com, for example `curl -X POST https://api.github.com/repos/OWNER/REPO/pulls` to open a pull request) " +
+					"are already authenticated for this repository: send no token and look for none; there is none in the sandbox."
+			}
+			return s
 		})
 		return nil
 	})
@@ -79,7 +95,12 @@ func (rc *RepoCheckout) token(ctx context.Context, p *store.Project) string {
 	if rc.GitHub == nil || p.GitHubInstallation == 0 {
 		return ""
 	}
-	t, err := rc.GitHub.InstallationToken(ctx, p.GitHubInstallation)
+	// Limited to the project's repository: the installation may cover many others.
+	var repos []string
+	if _, repo, ok := ParseRepo(p.RepoURL); ok {
+		repos = []string{repo}
+	}
+	t, err := rc.GitHub.InstallationToken(ctx, p.GitHubInstallation, repos...)
 	if err != nil {
 		slog.Warn("project repo: GitHub token failed", "project", p.ID, "error", err)
 		return ""
@@ -137,8 +158,16 @@ func (rc *RepoCheckout) setup(ctx context.Context, threadID string, sb sandbox.S
 		return "Project repository not checked out: the default branch name is not valid."
 	}
 	token := rc.token(ctx, p)
+	_, _, github := ParseRepo(p.RepoURL)
+	broker := github && sandbox.BrokerOf(sb) != nil
 	env := map[string]string{"REPO_URL": repoURL, "REPO_DIR": RepoDir, "REPO_BRANCH": branch, "THREAD_BRANCH": branchFor(threadID)}
-	if token != "" {
+	switch {
+	case token != "" && broker:
+		// The credentials are in place before the clone, which runs without any token. If the broker refuses them
+		// the sandbox still gets none: a private repository then fails to clone with a clear message, rather than
+		// the secret silently entering the workload.
+		rc.writeCredentials(ctx, sb, p, token)
+	case token != "":
 		env["GH_TOKEN"] = token
 	}
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
@@ -154,15 +183,49 @@ func (rc *RepoCheckout) setup(ctx context.Context, threadID string, sb sandbox.S
 		}
 		return "Cloning the project repository into " + RepoDir + " failed: " + msg
 	}
-	if token != "" {
-		rc.writeCredentials(ctx, sb, token)
+	if token != "" && !broker {
+		rc.writeCredentials(ctx, sb, p, token)
 	}
 	return fmt.Sprintf("The project repository %s is checked out in %s on branch %s.", p.RepoURL, RepoDir, branchFor(threadID))
 }
 
-func (rc *RepoCheckout) writeCredentials(ctx context.Context, sb sandbox.Sandbox, token string) {
-	_, _ = sb.Exec(ctx, sandbox.ExecRequest{Command: credScript, Timeout: time.Minute,
+// writeCredentials gives the sandbox the token. With a credential broker the token goes to the broker: requests to
+// github.com for the project's repository, and to the GitHub API for it, are authenticated on their way out and the
+// secret never enters the sandbox. Without one, it is written to a credential file the sandbox's git reads.
+// It reports whether the credentials are in place.
+func (rc *RepoCheckout) writeCredentials(ctx context.Context, sb sandbox.Sandbox, p *store.Project, token string) bool {
+	if broker := sandbox.BrokerOf(sb); broker != nil {
+		owner, repo, ok := ParseRepo(p.RepoURL)
+		if !ok {
+			return false
+		}
+		if err := broker.SetCredentials(ctx, brokeredGitHub(owner, repo, token)); err != nil {
+			slog.Warn("project repo: handing the token to the credential broker failed", "project", p.ID, "error", redact(err.Error(), token))
+			return false
+		}
+		return true
+	}
+	res, err := sb.Exec(ctx, sandbox.ExecRequest{Command: credScript, Timeout: time.Minute,
 		Env: map[string]string{"GH_TOKEN": token, "REPO_DIR": RepoDir}})
+	return err == nil && res.ExitCode == 0
+}
+
+// brokeredGitHub is what the broker needs to authenticate git (smart HTTP on github.com) and the REST API for one
+// repository, and nothing else: the token itself is limited to that repository too.
+func brokeredGitHub(owner, repo, token string) sandbox.CredentialSet {
+	basic := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + token))
+	return sandbox.CredentialSet{
+		Credentials: []sandbox.Credential{
+			{Name: "github-git", Value: basic},
+			{Name: "github-api", Value: token},
+		},
+		Bindings: []sandbox.CredentialBinding{
+			{Name: "github-git", Host: "github.com", Paths: []string{"/" + owner + "/" + repo + ".git*", "/" + owner + "/" + repo + "/*"},
+				Auth: sandbox.AuthBasic, Credential: "github-git"},
+			{Name: "github-api", Host: "api.github.com", Paths: []string{"/repos/" + owner + "/" + repo, "/repos/" + owner + "/" + repo + "/*"},
+				Auth: sandbox.AuthBearer, Credential: "github-api"},
+		},
+	}
 }
 
 func redact(s, token string) string {
@@ -172,7 +235,7 @@ func redact(s, token string) string {
 	return strings.ReplaceAll(s, token, "***")
 }
 
-// repoRefresh renews the sandbox's push credentials at the start of a run.
+// repoRefresh renews the sandbox's GitHub credentials at the start of a run.
 type repoRefresh struct {
 	rc  *RepoCheckout
 	mgr sandbox.Manager
@@ -188,6 +251,6 @@ func (r repoRefresh) BeforeRun(ctx context.Context, run *store.Run) {
 		return // no sandbox yet: its creation sets the credentials up
 	}
 	if token := r.rc.token(ctx, p); token != "" {
-		r.rc.writeCredentials(ctx, sb, token)
+		r.rc.writeCredentials(ctx, sb, p, token)
 	}
 }
