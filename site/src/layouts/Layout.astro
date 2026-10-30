@@ -1,0 +1,65 @@
+---
+import '../styles/global.css';
+
+interface Props { title: string; description: string; path: string; }
+const { title, description, path } = Astro.props;
+const url = new URL(path, Astro.site).href;
+const nav = [
+  { href: '/showcase/', label: 'Showcase' },
+  { href: '/product/', label: 'Product' },
+  { href: '/compare/', label: 'Compare' },
+  { href: '/get-started/', label: 'Get started' },
+];
+const github = 'https://github.com/7ar-chat/harness';
+const app = 'https://app.7ar.chat';
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<meta name="description" content={description}>
+<meta property="og:title" content={title}>
+<meta property="og:description" content={description}>
+<meta property="og:type" content="website">
+<meta property="og:url" content={url}>
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href={url}>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="theme-color" content="#08090a">
+<script is:inline src="/js-flag.js"></script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/favicon.svg" alt="" width="28" height="28">7ar</a>
+    <ul>
+      {nav.map((n) => <li><a href={n.href} aria-current={path === n.href ? 'page' : undefined}>{n.label}</a></li>)}
+    </ul>
+    <div class="nav-actions">
+      <a class="btn" href={github}>GitHub</a>
+      <a class="btn primary" href={app}>Open the app</a>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+  <slot />
+</main>
+
+<footer>
+  <div class="wrap">
+    <div><strong>7ar.chat</strong><br>Open agent harness. Self-hosted. Multi-user.</div>
+    <div>
+      {nav.map((n) => <><a href={n.href}>{n.label}</a> · </>)}<a href={github}>GitHub</a> · <a href={app}>App</a>
+    </div>
+  </div>
+</footer>
+<script>
+  import '../scripts/portal.js';
+  import '../scripts/scroll.js';
+</script>
+</body>
+</html>

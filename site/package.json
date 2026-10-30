@@ -1,8 +1,18 @@
 {
   "name": "7ar-site",
   "private": true,
-  "description": "Build of the home page's optional telemetry (error reporting and Umami); the page itself is static HTML.",
-  "scripts": { "build": "esbuild portal.src.js --bundle --splitting --format=esm --minify --target=es2022 --outdir=dist --entry-names=portal --chunk-names=chunks/[name]-[hash]" },
-  "dependencies": { "@sentry/browser": "11.10.0" },
-  "devDependencies": { "esbuild": "0.25.12" }
+  "type": "module",
+  "description": "The 7ar.chat home page: a static Astro site, with optional error reporting and Umami loaded at runtime.",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "5.3.0",
+    "@sentry/browser": "11.10.0"
+  },
+  "devDependencies": {
+    "astro": "7.4.4"
+  }
 }

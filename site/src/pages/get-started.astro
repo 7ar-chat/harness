@@ -1,0 +1,41 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Get started | 7ar.chat" description="Run 7ar on your machine, then on your server, or embed the harness in your own Go app." path="/get-started/">
+<section id="start">
+  <div class="wrap">
+    <p class="eyebrow">Get started</p>
+    <h1 class="h2">Run it on your machine, then on your server</h1>
+    <div class="start-grid">
+      <div>
+        <h3>1. Locally, on a repository</h3>
+        <p>Needs Go and a model key. <code>harness auth login</code> stores the key in <code>~/.har/auth.json</code>, never in the repo.</p>
+<pre><code>git clone https://github.com/7ar-chat/harness
+cd harness &amp;&amp; make build
+bin/harness auth login &lt;provider&gt;
+bin/harness-web -local        # UI on http://127.0.0.1:8080</code></pre>
+      </div>
+      <div>
+        <h3>2. For a team, with Docker</h3>
+        <p>Postgres, an OIDC provider (Dex for trying it) and the web host, with agents in local sandboxes.</p>
+<pre><code>docker compose up --build
+# http://localhost:8080
+# alice@example.com / bob@example.com, password: password</code></pre>
+      </div>
+      <div>
+        <h3>3. In production</h3>
+        <p><code>docker-compose.prod.yml</code> runs team mode with your OIDC provider and a remote OpenSandbox. A Dokploy compose service works as is.</p>
+      </div>
+      <div>
+        <h3>4. Inside your own app</h3>
+<pre><code>h, _ := harness.New(harness.Options&#123;Config: cfg&#125;)
+go h.Run(ctx)
+run, _ := h.Send(ctx, "alice", th.ID, "Make a chart of …", opts)
+for ev := range h.Events(ctx, run.ID, 0) &#123; … &#125;</code></pre>
+      </div>
+    </div>
+    <p class="note" style="margin-top:32px">Known gaps today: web search is not built in (add any search MCP server); the sandbox image is built and smoke-tested on arm64 and amd64 but has not yet run under a live OpenSandbox lifecycle server; the repository has no license file yet.</p>
+    <div class="cta"><a class="btn primary" href="https://github.com/7ar-chat/harness">View on GitHub</a><a class="btn" href="https://app.7ar.chat">Open the app</a><a class="btn" href="https://github.com/7ar-chat/harness#readme">Read the docs</a></div>
+  </div>
+</section>
+</Layout>
