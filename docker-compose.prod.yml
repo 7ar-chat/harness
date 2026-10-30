@@ -7,8 +7,10 @@
 #   OIDC_SESSION_KEY        openssl rand -hex 32   (signs the login cookie)
 #   HARNESS_SECRET_KEY      openssl rand -hex 32   (encrypts connector tokens)
 #   LLM_BASE_URL / LLM_API_KEY / LLM_MODELS / LLM_DEFAULT_MODEL
-#   OPENSANDBOX_URL / OPENSANDBOX_API_KEY / OPENSANDBOX_IMAGE
 #   TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_USERNAME   (optional; run one replica only: the bot long-polls)
+#   GITHUB_APP_ID / GITHUB_APP_SLUG / GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET / GITHUB_APP_PRIVATE_KEY
+#                           (optional GitHub App: private repositories and project import. The PEM goes on one
+#                           line in double quotes with \n for the line breaks.)
 #
 # Sessions and the team data live on the harness-data volume (file store). Agents run in OpenSandbox
 # containers, not in this one, so the sandbox server and the model router must be reachable on dokploy-network.
@@ -48,6 +50,12 @@ services:
 
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:-}
+      GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
     volumes:
       - harness-data:/data
     healthcheck:
