@@ -116,9 +116,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if mo, ok := config.ModelPriceOptions(); ok { // loaded in the background: the list gains its info once it arrives
 		opts.ModelInfo = client.TableLookup(modelinfo.LoadAsync(hctx, mo), cfg.LLMProviderName, cfg.LLMProvider)
 	}
-	if token == "" { // DNS-rebinding guard for the token-less loopback server
-		opts.AllowedHosts = []string{"localhost", "127.0.0.1", "::1"}
-	}
+	opts.AllowedHosts = allowedHosts(token, oidcCfg)
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {
 		return fail(stderr, err)
@@ -142,6 +140,16 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		return fail(stderr, err)
 	}
 	return 0
+}
+
+// allowedHosts is the Host-header allow-list of the DNS-rebinding guard. Only the server with no credential at all
+// (no token, no OIDC) needs it, and it is then reachable only on loopback; a server behind a token or a login is
+// served under its public name, so the guard must not apply.
+func allowedHosts(token string, oidc *product.OIDCConfig) []string {
+	if token == "" && oidc == nil {
+		return []string{"localhost", "127.0.0.1", "::1"}
+	}
+	return nil
 }
 
 // secretKey is the key that encrypts connector tokens: HARNESS_SECRET_KEY, else the OIDC session key.

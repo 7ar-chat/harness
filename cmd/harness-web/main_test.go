@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/GhaziBenDahmane/harness/product"
 )
 
 // TestMain keeps the tests from downloading the model price table.
@@ -85,6 +86,25 @@ func TestServesTheUIUntilTheContextEnds(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("the server did not stop")
+	}
+}
+
+func TestTheHostGuardOnlyProtectsTheServerWithoutACredential(t *testing.T) {
+	oidc := &product.OIDCConfig{Issuer: "https://id.example.com"}
+	for _, c := range []struct {
+		name  string
+		token string
+		oidc  *product.OIDCConfig
+		guard bool
+	}{
+		{"nothing configured", "", nil, true},
+		{"token", "secret", nil, false},
+		{"login (OIDC)", "", oidc, false},
+		{"both", "secret", oidc, false},
+	} {
+		if got := allowedHosts(c.token, c.oidc); (len(got) > 0) != c.guard {
+			t.Errorf("%s: allowedHosts = %v, want guard=%v", c.name, got, c.guard)
+		}
 	}
 }
 

@@ -153,3 +153,13 @@ same issuer URL for your browser and the server. Your model provider is read fro
 directory per session, kept in the `state` volume. Set `OIDC_SESSION_KEY` and the `GITHUB_APP_*` variables in your
 environment or a `.env` file. For anything beyond local use, replace Dex with your identity provider and the
 local sandbox with a remote one.
+
+## Deploying on Dokploy
+
+`docker-compose.prod.yml` is the production composition: harness-web in team mode (`-team`) with OIDC login, the
+file store on the `harness-data` volume, agents in a remote OpenSandbox (`OPENSANDBOX_URL`, reached through the
+server proxy) and the model from any OpenAI-compatible endpoint. Create a Dokploy *Compose* service from the GitHub
+repository (compose path `./docker-compose.prod.yml`, auto deploy on push), put the variables listed at the top of
+the file in its environment and point a domain at the `harness-web` service, port 8080. The identity provider must
+have a client whose redirect URI is `https://<HARNESS_HOST>/auth/callback`. A public host name is fine behind OIDC
+or a `HARNESS_WEB_TOKEN`; only the server with neither is limited to loopback host names.

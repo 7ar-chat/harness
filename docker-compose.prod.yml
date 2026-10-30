@@ -1,0 +1,67 @@
+# Production deployment on Dokploy (compose from the GitHub repository, auto deploy on push).
+# Secrets and per-install values come from the Dokploy environment of the service, never from this file:
+#
+#   HARNESS_HOST            public host name, e.g. harness.tusko.ai
+#   OIDC_ISSUER             e.g. https://id.tusko.ai
+#   OIDC_CLIENT_ID / OIDC_CLIENT_SECRET
+#   OIDC_SESSION_KEY        openssl rand -hex 32   (signs the login cookie)
+#   HARNESS_SECRET_KEY      openssl rand -hex 32   (encrypts connector tokens)
+#   LLM_BASE_URL / LLM_API_KEY / LLM_MODELS / LLM_DEFAULT_MODEL
+#   OPENSANDBOX_URL / OPENSANDBOX_API_KEY / OPENSANDBOX_IMAGE
+#   TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_USERNAME   (optional; run one replica only: the bot long-polls)
+#
+# Sessions and the team data live on the harness-data volume (file store). Agents run in OpenSandbox
+# containers, not in this one, so the sandbox server and the model router must be reachable on dokploy-network.
+services:
+  harness-web:
+    build: .
+    command: ["-team", "-addr", "0.0.0.0:8080"]
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      HARNESS_PRODUCTION: "1"
+      HARNESS_PUBLIC_URL: https://${HARNESS_HOST}
+      HARNESS_SECRET_KEY: ${HARNESS_SECRET_KEY}
+      AGENT_PROFILE: coding
+
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      OIDC_REDIRECT_URL: https://${HARNESS_HOST}/auth/callback
+      OIDC_SESSION_KEY: ${OIDC_SESSION_KEY}
+
+      LLM_PROVIDER: openai
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODELS: ${LLM_MODELS}
+      LLM_DEFAULT_MODEL: ${LLM_DEFAULT_MODEL}
+
+      SANDBOX_BACKEND: opensandbox
+      OPENSANDBOX_URL: ${OPENSANDBOX_URL}
+      OPENSANDBOX_API_KEY: ${OPENSANDBOX_API_KEY}
+      OPENSANDBOX_IMAGE: ${OPENSANDBOX_IMAGE}
+      # all execd traffic goes through the OpenSandbox server: this container is not on the Docker host's network
+      OPENSANDBOX_USE_SERVER_PROXY: "true"
+      # the agents need the internet (git, package managers); the deny list of private ranges still applies
+      SANDBOX_EGRESS_UNRESTRICTED: "true"
+
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+    volumes:
+      - harness-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - dokploy-network
+
+volumes:
+  harness-data:
+
+networks:
+  dokploy-network:
+    external: true
