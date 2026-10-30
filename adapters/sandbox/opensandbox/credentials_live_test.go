@@ -57,31 +57,42 @@ func TestCredentialVaultLive(t *testing.T) {
 		return out.String()
 	}
 
+	// httpbin.org/headers reflects the Authorization header it receives, so a command that printed the response
+	// would itself put the secret into the sandbox (the sandbox keeps each command's output in a file). The checks
+	// below therefore only count matches, and spell the secret so that its literal text is not in any command line.
+	spelled := func(secret string) string { return "'" + secret[:8] + "''" + secret[8:] + "'" }
+	reflected := func(secret string) string {
+		return strings.TrimSpace(run(`curl -sS -m 30 https://httpbin.org/headers | grep -c "Bearer "` + spelled(secret) + ` || true`))
+	}
+
 	if err := broker.SetCredentials(ctx, set("live-secret-one")); err != nil {
 		t.Fatal(err)
 	}
-	if got := run("curl -sS -m 30 https://httpbin.org/headers"); !strings.Contains(got, "Bearer live-secret-one") {
-		t.Fatalf("the sidecar did not authenticate the request: %s", got)
+	if got := reflected("live-secret-one"); got != "1" {
+		t.Fatalf("the sidecar did not authenticate the request (matches: %s)", got)
 	}
 
 	// Renewing replaces the credential in place: the very next request carries the new one.
 	if err := broker.SetCredentials(ctx, set("live-secret-two")); err != nil {
 		t.Fatal(err)
 	}
-	if got := run("curl -sS -m 30 https://httpbin.org/headers"); !strings.Contains(got, "Bearer live-secret-two") || strings.Contains(got, "live-secret-one") {
-		t.Fatalf("the renewed credential was not applied: %s", got)
+	if got := reflected("live-secret-two"); got != "1" {
+		t.Fatalf("the renewed credential was not applied (matches: %s)", got)
+	}
+	if got := reflected("live-secret-one"); got != "0" {
+		t.Fatalf("the replaced credential is still being sent (matches: %s)", got)
 	}
 
 	// The secret exists nowhere in the sandbox: not in the environment, not in any file.
-	if got := strings.TrimSpace(run(`env | grep -c live-secret || true`)); got != "0" {
+	if got := strings.TrimSpace(run(`env | grep -c ` + spelled("live-secret") + ` || true`)); got != "0" {
 		t.Fatalf("the secret is in the sandbox environment (%s matches)", got)
 	}
-	if got := strings.TrimSpace(run(`grep -rIl live-secret /workspace /tmp /home /root /etc 2>/dev/null | wc -l`)); got != "0" {
-		t.Fatalf("the secret is in %s sandbox files", got)
+	if got := strings.TrimSpace(run(`grep -rIl ` + spelled("live-secret") + ` /workspace /tmp /home /root /etc 2>/dev/null | head -5`)); got != "" {
+		t.Fatalf("the secret is in sandbox files:\n%s", got)
 	}
 
 	// A path outside the binding is not authenticated.
-	if got := run("curl -sS -m 30 https://httpbin.org/get"); strings.Contains(got, "live-secret") {
-		t.Fatalf("a request outside the binding was authenticated: %s", got)
+	if got := strings.TrimSpace(run(`curl -sS -m 30 https://httpbin.org/get | grep -c ` + spelled("live-secret") + ` || true`)); got != "0" {
+		t.Fatalf("a request outside the binding was authenticated (matches: %s)", got)
 	}
 }
