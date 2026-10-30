@@ -955,6 +955,8 @@ names are read); the model, sandbox and storage settings keep their descriptive 
 | `HARNESS_TRUST_PROJECT` | unset | `1` trusts the current project for this process (its `allow` permission rules and MCP servers apply); see `harness trust` |
 | `HARNESS_TEST_DATABASE_URL` | unset | Postgres used by the `adapters/store/pgstore` tests (skipped when unset) |
 | `HARNESS_TEST_S3_ENDPOINT`, `_ACCESS_KEY`, `_SECRET_KEY` | unset | S3-compatible endpoint for the artifact blob tests (skipped when unset) |
+| `SENTRY_DSN` | unset | `harness-web` only. Reports every error the process logs (failed runs, agent panics, storage and sweeper failures, HTTP 500s, handler panics) to a Sentry-protocol tracker such as Rustrak, Sentry or GlitchTip. Events are grouped by log message, carry the run and thread id, and contain no request bodies, headers or user identity. Warnings and cancellations are not sent; an unreachable tracker never blocks a request |
+| `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | `production` under `HARNESS_PRODUCTION`, else `development`; unset | Tags on every event |
 
 Memory entries live in the store; their logical paths (`memories/semantic/facts.md`, ...) may be written with
 the `.har/memory/` prefix, which is stripped. The workspace checkpoints leave `.har/tmp/` and

@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GhaziBenDahmane/harness/adapters/errtrack"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/hosts/client"
@@ -61,7 +62,17 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if !isLoopback(*addr) && token == "" && oidcCfg == nil {
 		return fail(stderr, fmt.Errorf("refusing to listen on %s without HARNESS_WEB_TOKEN: set a token, configure OIDC (OIDC_ISSUER), or bind a loopback address", *addr))
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	logger := slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: slog.LevelWarn})
+	tracker, err := errorTracker(getenv)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	if tracker != nil {
+		defer tracker.Flush(2 * time.Second)
+		slog.SetDefault(slog.New(tracker.Handler(logger)))
+	} else {
+		slog.SetDefault(slog.New(logger))
+	}
 	if *local {
 		setDefault("SANDBOX_BACKEND", "local")
 		setDefault("AGENT_PROFILE", "coding")
@@ -125,7 +136,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if err != nil {
 		return fail(stderr, err)
 	}
-	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+	// net/http logs a panicking handler through ErrorLog; slog.NewLogLogger sends it to the default slog handler at
+	// Error level, so it reaches the tracker as well.
+	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second,
+		ErrorLog: slog.NewLogLogger(slog.Default().Handler(), slog.LevelError)}
 	fmt.Fprintf(stdout, "harness-web: http://%s/  (model %s)\n", ln.Addr(), *model)
 	if !cfg.SandboxEnabled() {
 		fmt.Fprintln(stderr, "(no sandbox: use -local, SANDBOX_BACKEND=local or OPENSANDBOX_URL; the agent has no tools)")
@@ -213,6 +227,24 @@ func envOr(getenv func(string) string, k, def string) string {
 		return v
 	}
 	return def
+}
+
+// errorTracker connects the error tracker named by SENTRY_DSN (Sentry, Rustrak, GlitchTip…): every slog.Error of the
+// process is then reported to it. SENTRY_ENVIRONMENT defaults to "production" under HARNESS_PRODUCTION, else
+// "development"; SENTRY_RELEASE is optional. nil without a DSN.
+func errorTracker(getenv func(string) string) (*errtrack.Tracker, error) {
+	dsn := getenv("SENTRY_DSN")
+	if dsn == "" {
+		return nil, nil
+	}
+	env := getenv("SENTRY_ENVIRONMENT")
+	if env == "" {
+		env = "development"
+		if getenv("HARNESS_PRODUCTION") != "" {
+			env = "production"
+		}
+	}
+	return errtrack.New(errtrack.Options{DSN: dsn, Environment: env, Release: getenv("SENTRY_RELEASE")})
 }
 
 func setDefault(k, v string) {

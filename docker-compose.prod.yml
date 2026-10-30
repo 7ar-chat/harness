@@ -11,6 +11,8 @@
 #   GITHUB_APP_ID / GITHUB_APP_SLUG / GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET / GITHUB_APP_PRIVATE_KEY
 #                           (optional GitHub App: private repositories and project import. The PEM goes on one
 #                           line in double quotes with \n for the line breaks.)
+#   SENTRY_DSN              (optional) error tracking: every slog.Error of the process is reported to any Sentry-protocol
+#                           tracker (Rustrak, Sentry, GlitchTip). Unset: logs only.
 #
 # Sessions and the team data live on the harness-data volume (file store). Agents run in OpenSandbox
 # containers, not in this one, so the sandbox server and the model router must be reachable on dokploy-network.
@@ -59,6 +61,9 @@ services:
       GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:-}
       GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:-}
       GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
     volumes:
       - harness-data:/data
     healthcheck:
