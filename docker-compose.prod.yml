@@ -13,6 +13,8 @@
 #                           line in double quotes with \n for the line breaks.)
 #   SENTRY_DSN              (optional) error tracking: every slog.Error of the process is reported to any Sentry-protocol
 #                           tracker (Rustrak, Sentry, GlitchTip). Unset: logs only.
+#   SENTRY_BROWSER_DSN      (optional) errors raised in the browser UI, in a Sentry project of their own.
+#   UMAMI_URL / UMAMI_WEBSITE_ID   (optional) usage statistics with Umami; both or neither. The CSP allows only these.
 #
 # Sessions and the team data live on the harness-data volume (file store). Agents run in OpenSandbox
 # containers, not in this one, so the sandbox server and the model router must be reachable on dokploy-network.
@@ -64,6 +66,9 @@ services:
 
       SENTRY_DSN: ${SENTRY_DSN:-}
       SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_BROWSER_DSN: ${SENTRY_BROWSER_DSN:-}
+      UMAMI_URL: ${UMAMI_URL:-}
+      UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
     volumes:
       - harness-data:/data
     healthcheck:

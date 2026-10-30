@@ -1,4 +1,5 @@
 import { createHashHistory, createRootRoute, createRoute, createRouter, Link } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { AppShell } from "@/components/app/AppShell";
 import { Empty, ErrorState } from "@/components/app/common";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { ProfilePage } from "@/pages/Profile";
 import { ProjectPage } from "@/pages/ProjectPage";
 import { SessionPage, SupervisorPage } from "@/pages/SessionPage";
 import { FeedProvider } from "@/lib/feed";
+import { reportError } from "@/lib/telemetry";
 
 function Root() {
   return (
@@ -17,9 +19,15 @@ function Root() {
   );
 }
 
+/** The router's own error screen: a route that throws while loading or rendering ends up here, not in the boundary. */
+function RouteError({ error }: { error: unknown }) {
+  useEffect(() => reportError(error), [error]);
+  return <ErrorState error={error} />;
+}
+
 const root = createRootRoute({
   component: Root,
-  errorComponent: ({ error }) => <ErrorState error={error} />,
+  errorComponent: ({ error }) => <RouteError error={error} />,
   notFoundComponent: () => (
     <Empty title="Page not found">
       <Button asChild variant="outline" className="mt-2">

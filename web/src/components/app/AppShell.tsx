@@ -1,4 +1,5 @@
 import { Logo } from "@/components/app/Logo";
+import { identifyUser } from "@/lib/telemetry";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import { Bot, Brain, ChevronRight, LayoutDashboard, LogOut, Monitor, Moon, Plus, Search, Sun, UserCog, WifiOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -300,6 +301,9 @@ export function AppShell() {
   const [palette, setPalette] = useState(false);
   const params = useParams({ strict: false }) as { threadId?: string; projectId?: string };
   const loc = useLocation();
+  const login = useMe().data?.user.login;
+  // Usage statistics know a person by their login and nothing else; a no-op when statistics are off.
+  useEffect(() => identifyUser(login), [login]);
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {

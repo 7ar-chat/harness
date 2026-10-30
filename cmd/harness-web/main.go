@@ -107,6 +107,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	opts := httpapi.Options{
 		Token: token, LocalUser: *user, Models: cfg.LLMModels, DefaultModel: *model,
 		AllowedOrigins: splitList(getenv("HARNESS_WEB_ORIGINS")),
+		Client: httpapi.ClientConfig{
+			SentryDSN: getenv("SENTRY_BROWSER_DSN"), SentryEnv: sentryEnvironment(getenv), SentryRel: getenv("SENTRY_RELEASE"),
+			UmamiURL: getenv("UMAMI_URL"), UmamiID: getenv("UMAMI_WEBSITE_ID"),
+		},
 	}
 	prod := product.Options{
 		Team: teamStore, OIDC: oidcCfg, Supervisor: sup, GitHub: bt.github, Bus: bt.bus,
@@ -230,21 +234,26 @@ func envOr(getenv func(string) string, k, def string) string {
 }
 
 // errorTracker connects the error tracker named by SENTRY_DSN (Sentry, Rustrak, GlitchTip…): every slog.Error of the
-// process is then reported to it. SENTRY_ENVIRONMENT defaults to "production" under HARNESS_PRODUCTION, else
-// "development"; SENTRY_RELEASE is optional. nil without a DSN.
+// process is then reported to it. SENTRY_ENVIRONMENT and SENTRY_RELEASE tag every event (see sentryEnvironment).
+// nil without a DSN. The browser reports to its own project through SENTRY_BROWSER_DSN, so server and UI errors
+// land in separate projects.
 func errorTracker(getenv func(string) string) (*errtrack.Tracker, error) {
 	dsn := getenv("SENTRY_DSN")
 	if dsn == "" {
 		return nil, nil
 	}
-	env := getenv("SENTRY_ENVIRONMENT")
-	if env == "" {
-		env = "development"
-		if getenv("HARNESS_PRODUCTION") != "" {
-			env = "production"
-		}
+	return errtrack.New(errtrack.Options{DSN: dsn, Environment: sentryEnvironment(getenv), Release: getenv("SENTRY_RELEASE")})
+}
+
+// sentryEnvironment is SENTRY_ENVIRONMENT, else "production" under HARNESS_PRODUCTION, else "development".
+func sentryEnvironment(getenv func(string) string) string {
+	if env := getenv("SENTRY_ENVIRONMENT"); env != "" {
+		return env
 	}
-	return errtrack.New(errtrack.Options{DSN: dsn, Environment: env, Release: getenv("SENTRY_RELEASE")})
+	if getenv("HARNESS_PRODUCTION") != "" {
+		return "production"
+	}
+	return "development"
 }
 
 func setDefault(k, v string) {

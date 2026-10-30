@@ -96,6 +96,9 @@ type Options struct {
 	// connectors... (package product). Without it the server is the plain
 	// single-user API.
 	Extension Extension
+	// Client is what the browser UI needs to report its own errors and usage (see ClientConfig). The zero value
+	// reports nothing and leaves the Content-Security-Policy at 'self'.
+	Client ClientConfig
 }
 
 // Server is the HTTP API. An Extension receives it in Install to add routes:
@@ -107,6 +110,7 @@ type Server struct {
 	Auth   Authenticator
 	Mux    *http.ServeMux
 	policy Policy
+	csp    string
 }
 
 // New returns the HTTP handler. It panics when Options are inconsistent (OIDC
@@ -124,7 +128,12 @@ func NewServer(h *harness.Harness, o Options) (http.Handler, error) {
 	if o.PingEvery <= 0 {
 		o.PingEvery = 15 * time.Second
 	}
-	s := &Server{H: h, O: o, Mux: http.NewServeMux(), policy: soloPolicy{}}
+	client, err := o.Client.normalise()
+	if err != nil {
+		return nil, err
+	}
+	o.Client = client
+	s := &Server{H: h, O: o, Mux: http.NewServeMux(), policy: soloPolicy{}, csp: contentSecurityPolicy(client)}
 	if o.Extension != nil {
 		s.policy = o.Extension
 		if err := o.Extension.Setup(&s.O, s.Mux); err != nil {
@@ -146,6 +155,10 @@ func NewServer(h *harness.Harness, o Options) (http.Handler, error) {
 	s.Mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+	// Public, like /healthz: the UI reads it before anyone has logged in (the login redirect itself needs no UI,
+	// but an error on the first screen should still be reported). It holds a DSN, which is a write-only key.
+	s.Mux.HandleFunc("GET /api/client-config", s.clientConfig)
+	s.Mux.HandleFunc("GET /client-config", s.clientConfig)
 	s.Route("GET /models", s.models)
 	s.Route("GET /sessions", s.sessions)
 	s.Route("POST /threads", s.createThread)

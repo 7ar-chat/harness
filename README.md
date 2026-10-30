@@ -957,6 +957,10 @@ names are read); the model, sandbox and storage settings keep their descriptive 
 | `HARNESS_TEST_S3_ENDPOINT`, `_ACCESS_KEY`, `_SECRET_KEY` | unset | S3-compatible endpoint for the artifact blob tests (skipped when unset) |
 | `SENTRY_DSN` | unset | `harness-web` only. Reports every error the process logs (failed runs, agent panics, storage and sweeper failures, HTTP 500s, handler panics) to a Sentry-protocol tracker such as Rustrak, Sentry or GlitchTip. Events are grouped by log message, carry the run and thread id, and contain no request bodies, headers or user identity. Warnings and cancellations are not sent; an unreachable tracker never blocks a request |
 | `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | `production` under `HARNESS_PRODUCTION`, else `development`; unset | Tags on every event |
+| `SENTRY_BROWSER_DSN` | unset | `harness-web` only. Errors raised in the browser UI (uncaught errors, unhandled rejections, a crashed screen) go to this Sentry-protocol project. Use a project of its own, so UI and server errors do not mix. The UI reads it from `GET /api/client-config` at startup and loads the error SDK only then. Nothing the user typed is collected: no cookies, headers, request bodies, query strings, local variables or identity |
+| `UMAMI_URL`, `UMAMI_WEBSITE_ID` | unset | `harness-web` only. Usage statistics with a self-hosted [Umami](https://umami.is): `UMAMI_URL` is its origin (`https://umami.example.com`), `UMAMI_WEBSITE_ID` the website's id. Both are needed. Page views follow the UI's hash routes; a signed-in person is identified by their login and nothing else (no name or email). The browser's do-not-track setting is honoured |
+
+With either browser setting, the UI's Content-Security-Policy widens to exactly those origins (`script-src` for Umami, `connect-src` for both) and no further; with neither it stays `'self'`. A malformed value stops `harness-web` at startup.
 
 Memory entries live in the store; their logical paths (`memories/semantic/facts.md`, ...) may be written with
 the `.har/memory/` prefix, which is stripped. The workspace checkpoints leave `.har/tmp/` and
