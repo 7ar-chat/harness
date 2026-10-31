@@ -3,6 +3,7 @@ package harness
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -18,7 +19,6 @@ import (
 	"github.com/7ar-chat/harness/engine/approvals"
 	"github.com/7ar-chat/harness/engine/tools"
 	"github.com/7ar-chat/harness/features/explore"
-	"github.com/7ar-chat/harness/features/mcp"
 	"github.com/7ar-chat/harness/features/permissions"
 	"github.com/7ar-chat/harness/features/plan"
 	"github.com/7ar-chat/harness/features/projectdocs"
@@ -129,35 +129,24 @@ func Explore() Feature {
 	}}
 }
 
-// MCP offers the tools of the MCP servers of the configuration (MCP_SERVERS).
+// mcpInstall is the MCP feature's implementation. Package mcpfeature registers it when imported: the facade does not
+// import the MCP SDK itself, so a program that has no MCP servers does not link it.
+var mcpInstall func(*Builder) error
+
+// RegisterMCP sets the implementation of the MCP feature; package mcpfeature calls it from an init function.
+func RegisterMCP(install func(*Builder) error) { mcpInstall = install }
+
+// MCP offers the tools of the MCP servers of the configuration (MCP_SERVERS). It needs the implementation in package
+// mcpfeature, imported for its side effect (a blank import). Without it, a configuration that names MCP servers is an
+// error, not silently ignored; one that names none installs nothing.
 func MCP() Feature {
 	return builtin{FeatureMCP, func(b *Builder) error {
-		var pending []config.MCPServer
-		if b.Config.Layers != nil {
-			pending = b.Config.Layers.MCPPending
+		if mcpInstall != nil {
+			return mcpInstall(b)
 		}
-		p := mcptools.NewWithPending(b.Config.MCPServers, pending, b.Options.Version, mcptools.MaxResultChars)
-		if p != nil {
-			p.CallTimeout = b.Config.MCPCallTimeout()
-			if b.Config.Layers != nil {
-				p.TrustDir = b.Config.Layers.UserDir
-			}
-			if b.Store != nil {
-				p.History = b.Store.ListMessages
-			}
-			b.AddTools(p)
-			// A pending project server is only offered for approval where the approval gate asks the user.
-			b.Configure(func(hs *agent.Harness) {
-				for _, h := range hs.BeforeTool {
-					if hk, ok := h.(*permissions.Hook); ok && hk.Inner != nil {
-						h = hk.Inner
-					}
-					if g, ok := h.(*approvals.Gate); ok {
-						g.Describe = p.Describe
-						p.Ask = true
-					}
-				}
-			})
+		pending := b.Config.Layers != nil && len(b.Config.Layers.MCPPending) > 0
+		if len(b.Config.MCPServers) > 0 || pending {
+			return errors.New(`harness: MCP servers are configured but MCP support is not linked: import _ "github.com/7ar-chat/harness/mcpfeature"`)
 		}
 		return nil
 	}}
@@ -168,7 +157,7 @@ func stdioToolGlobs(cfg *config.Config) []string {
 	var out []string
 	for _, s := range cfg.MCPServers {
 		if s.IsStdio() {
-			out = append(out, strings.TrimSuffix(mcptools.ToolName(s.Name, "x"), "x")+"*")
+			out = append(out, strings.TrimSuffix(config.MCPToolName(s.Name, "x"), "x")+"*")
 		}
 	}
 	return out

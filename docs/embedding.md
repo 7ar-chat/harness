@@ -7,18 +7,26 @@ runnable ~250-line example is in [`examples/website`](../examples/website)
 ## 0. Add it to your application
 
 ```sh
-go get github.com/7ar-chat/harness@v0.1.0
+go get github.com/7ar-chat/harness@latest
 ```
 
 The root module is the engine: `harness.New`, the HTTP API, the features and the stores. It requires the smaller modules
 (`ai`, `core`, `modelinfo`, `hosts/client`, `hosts/tui`, `adapters/sandbox`), all of which are released with it; you can also
 use those on their own. `make check-embed` (and the `embed` CI job on every release tag) builds a small application in an
 empty directory against the published versions and runs a conversation through it, so what is documented here is
-what a stranger gets. What a build links depends on what you import. Measured on the minimal embedding in that check, against `v0.2.0`: the module
-graph holds 65 modules (59 third-party), code from 28 of them is linked, and the binary is 22 MB. The linked set includes
-the OpenSandbox SDK, the MCP SDK and go-redis, because the engine's own packages import them; Postgres, S3 and OIDC code is
-linked only when you import the packages that use it. The product and the commands are in the separate `app` module, so
-their dependencies (OIDC, JOSE, the terminal UI libraries) are not part of an embedding at all.
+what a stranger gets.
+
+What a build links depends on what you import. Three parts that carry heavy SDKs are opt-in:
+
+| You use | Import | Without it |
+|---|---|---|
+| Redis (several processes) | `github.com/7ar-chat/harness/redisinfra`: `redisinfra.Infra(rdb, store)` for `Options.Infra` | not linked |
+| MCP servers (`MCP_SERVERS`, `.mcp.json`) | `_ "github.com/7ar-chat/harness/mcpfeature"` | `harness.New` fails and names the package, rather than ignoring the servers |
+| `SANDBOX_BACKEND=opensandbox` | `_ "github.com/7ar-chat/harness/adapters/sandbox/opensandbox"` | the unknown-backend error says to import it |
+
+`TestTheFacadeLinksNoOptionalSDKs` keeps package `harness` free of go-redis, the MCP SDK and the OpenSandbox SDK. The product
+and the commands are in the separate `app` module, so their dependencies (OIDC, JOSE, the terminal UI libraries) are not
+part of an embedding either. Measured on the minimal embedding in `make check-embed`: __MEASURED__
 
 ## 1. Pick a shape
 
@@ -89,7 +97,7 @@ POSTGRES_*   REDIS_*   LLM_*
 SANDBOX_BACKEND / OPENSANDBOX_URL   RUNTIME_CONCURRENCY   RUNTIME_SHUTDOWN_GRACE_SECONDS
 ```
 
-In code, `harness.Options{Store: pgstore, Redis: rdb}` on both sides (migrations:
+In code, `harness.Options{Store: pgstore, Infra: &infra}` on both sides, with `infra := redisinfra.Infra(rdb, store)` (migrations:
 `adapters/store/pgstore/migrate`). Custom tools and features must be compiled into the
 **worker** too (the agent runs there): build your own worker `main` from
 `hosts/worker` with the same `Features` as the web tier, rather than the stock

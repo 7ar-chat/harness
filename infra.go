@@ -1,13 +1,7 @@
 package harness
 
 import (
-	"errors"
-
-	"github.com/redis/go-redis/v9"
-
-	"github.com/7ar-chat/harness/adapters/redisx"
 	"github.com/7ar-chat/harness/coding/sandboxtools"
-	"github.com/7ar-chat/harness/config"
 	"github.com/7ar-chat/harness/core/sandbox"
 	"github.com/7ar-chat/harness/engine/eventlog"
 	"github.com/7ar-chat/harness/engine/queue"
@@ -16,7 +10,7 @@ import (
 )
 
 // Broker is the run queue and the per-run control bus (cancel, steers). The
-// in-process one is queue.NewMemory; redisx.NewQueue shares it between
+// in-process one is queue.NewMemory; the Redis one (redisinfra) shares it between
 // processes. Any other transport (NATS, SQS...) implements the same three
 // interfaces.
 type Broker interface {
@@ -39,7 +33,7 @@ type Coordinator interface {
 // optional: a missing one falls back to its in-process implementation, so a
 // zero Infra is a self-contained single-process harness. A host that runs
 // several processes injects implementations built on the infrastructure it
-// has (RedisInfra for Redis).
+// has (package redisinfra for Redis).
 type Infra struct {
 	// Log is the per-run event log (default eventlog.NewMemory over the Store).
 	Log eventlog.Log
@@ -55,39 +49,12 @@ type Infra struct {
 	Installs skills.InstallState
 }
 
-// NewRedisClient builds the Redis client of the configuration (REDIS_*,
-// USE_SENTINEL): a Sentinel failover client or a standalone one.
-func NewRedisClient(cfg *config.Config) redis.UniversalClient {
-	return redisx.New(redisx.Options{
-		Sentinel: cfg.UseSentinel, SentinelHosts: cfg.RedisSentinelHosts, MasterName: cfg.RedisMasterName,
-		Host: cfg.RedisHost, Port: cfg.RedisPort, Password: cfg.RedisPassword, DB: cfg.RedisDB, PoolSize: cfg.RedisPoolSize,
-	})
-}
-
-// RedisInfra builds the Infra of a deployment that shares Redis: event log
-// (streams over st), queue and bus, locks, job list and skill installs.
-func RedisInfra(rdb redis.UniversalClient, st Store) Infra {
-	q := redisx.NewQueue(rdb)
-	return Infra{
-		Log:         redisx.NewEventLog(rdb, st),
-		Broker:      q,
-		Coordinator: redisx.NewCoordinator(rdb),
-		Jobs:        redisx.NewJobs(rdb),
-		Installs:    redisx.NewSkillInstalls(rdb),
-	}
-}
-
-// resolveInfra applies the options' infrastructure: Infra, else Redis, else
-// nothing; then fills what is missing with the in-process implementations.
+// resolveInfra applies the options' infrastructure (Options.Infra, or nothing) and fills what is missing with the
+// in-process implementations.
 func resolveInfra(o Options, st Store) (Infra, error) {
 	var in Infra
-	switch {
-	case o.Infra != nil && o.Redis != nil:
-		return in, errors.New("harness: set Options.Infra or Options.Redis, not both")
-	case o.Infra != nil:
+	if o.Infra != nil {
 		in = *o.Infra
-	case o.Redis != nil:
-		in = RedisInfra(o.Redis, st)
 	}
 	if in.Broker == nil {
 		in.Broker = queue.NewMemory()

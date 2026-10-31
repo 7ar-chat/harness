@@ -15,6 +15,7 @@ import (
 	"github.com/7ar-chat/harness/app/product"
 	"github.com/7ar-chat/harness/config"
 	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/redisinfra"
 )
 
 // buildHarness is the only place this command constructs the harness; the rest of
@@ -80,7 +81,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 	}
 	b := &built{team: ts, closer: closers}
 	if _, ok := os.LookupEnv("REDIS_HOST"); ok && ts != nil {
-		rdb := harness.NewRedisClient(cfg)
+		rdb := redisinfra.NewClient(cfg)
 		closers = append(closers, rdb)
 		b.closer = closers
 		if cfg.PingDBAtStartup {

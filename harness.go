@@ -14,7 +14,7 @@
 //	for ev := range h.Events(ctx, run.ID, 0) { … }   // AG-UI events
 //
 // Without Redis and Postgres everything lives in the process (memory store,
-// event log and queue); pass Options.Store (store/pgstore) and Options.Redis
+// event log and queue); pass Options.Store (store/pgstore) and Options.Infra (redisinfra)
 // to share state between processes.
 package harness
 
@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 
 	"github.com/7ar-chat/harness/adapters/store/memstore"
 	"github.com/7ar-chat/harness/ai/llm"
@@ -78,11 +77,9 @@ type Options struct {
 	// Infra holds the implementations of what several processes share: run
 	// queue and control bus, event log, locks, job list, skill installs. Every
 	// part is optional and falls back to its in-process version. A host on
-	// another transport (NATS, SQS...) injects its own; see RedisInfra.
+	// another transport (NATS, SQS...) injects its own; package redisinfra
+	// builds the Redis one. Without it the harness is single-process.
 	Infra *Infra
-	// Redis is a convenience for Infra: RedisInfra(Redis, Store). Set at most
-	// one of the two. Without either the harness is single-process.
-	Redis redis.UniversalClient
 	// Features are the capabilities to install, in order (default: the profile
 	// of AGENT_PROFILE: ProfileWork, ProfileCoding or ProfileMinimal). Compose
 	// your own list from the constructors (Sandbox(), Memory()...) and your

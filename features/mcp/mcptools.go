@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"regexp"
 	"slices"
 	"time"
 
@@ -84,16 +83,8 @@ func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return t.base.RoundTrip(req)
 }
 
-var invalidName = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
-
 // ToolName is the exposed name of an MCP tool: {server}__{tool}, sanitized, ≤ 64 chars.
-func ToolName(server, name string) string {
-	n := invalidName.ReplaceAllString(server+"__"+name, "_")
-	if len(n) > 64 {
-		n = n[:64]
-	}
-	return n
-}
+func ToolName(server, name string) string { return config.MCPToolName(server, name) }
 
 // uniqueName is ToolName, made unique among taken with a short hash of the
 // original name when sanitizing or truncating made two tools collide (A-23).

@@ -12,6 +12,7 @@ import (
 	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
 	"github.com/7ar-chat/harness/config"
 	"github.com/7ar-chat/harness/engine/queue"
+	"github.com/7ar-chat/harness/redisinfra"
 )
 
 // Wiring says what the harness of a worker is connected to.
@@ -36,8 +37,9 @@ type built struct {
 // (POSTGRES_HOST set) unless the caller supplies a Store; the worker then shares its queue, event log
 // and store with the processes that Send. Standalone keeps whatever is not supplied in memory.
 func buildHarness(ctx context.Context, cfg *config.Config, o Options, m *metrics) (*built, error) {
+	rdb := o.Redis
 	ho := harness.Options{
-		Config: cfg, Store: o.Store, Models: o.Models, Backend: o.Backend, Redis: o.Redis,
+		Config: cfg, Store: o.Store, Models: o.Models, Backend: o.Backend,
 		RuntimeID: o.RuntimeID, Version: "worker",
 		Hooks: []runtimeHook{m},
 	}
@@ -50,15 +52,14 @@ func buildHarness(ctx context.Context, cfg *config.Config, o Options, m *metrics
 	fail := func(err error) (*built, error) { cleanup(); return nil, err }
 
 	if !o.Standalone {
-		if ho.Redis == nil {
-			rdb := harness.NewRedisClient(cfg)
+		if rdb == nil {
+			rdb = redisinfra.NewClient(cfg)
 			cleanups = append(cleanups, func() { _ = rdb.Close() })
 			if cfg.PingDBAtStartup {
 				if err := rdb.Ping(ctx).Err(); err != nil {
 					return fail(fmt.Errorf("connect to Redis: %w", err))
 				}
 			}
-			ho.Redis = rdb
 		}
 		if ho.Store == nil {
 			if _, ok := os.LookupEnv("POSTGRES_HOST"); !ok {
@@ -74,6 +75,15 @@ func buildHarness(ctx context.Context, cfg *config.Config, o Options, m *metrics
 			}
 			ho.Store = pgstore.NewPG(pool)
 		}
+	}
+	if rdb != nil {
+		st := ho.Store
+		if st == nil { // harness.New defaults to a memory store; the event log has to be over the same one
+			st = memstore.New()
+			ho.Store = st
+		}
+		infra := redisinfra.Infra(rdb, st)
+		ho.Infra = &infra
 	}
 	h, err := harness.New(ho)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -24,6 +25,8 @@ import (
 // server pending: the tool is not offered again on the thread (its earlier result is in the history). The hash is
 // part of the name, so a changed command is a new tool and asks again. Where no approval can be asked the tool is
 // refused (approvals.Gate.Denial), so the server stays unstarted.
+
+var invalidName = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
 
 // approveToolName is the name of the approval tool of a pending server.
 func approveToolName(s config.MCPServer) string {

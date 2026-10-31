@@ -60,7 +60,7 @@ h.Cancel(ctx, "alice", run.ID)
   implementation (see [Front ends and the client contract](#front-ends-and-the-client-contract)).
 * **Single process** (default): store, event log and queue live in memory — nothing to run
   except the sandbox server. **Multi process**: pass `Options.Store` (`adapters/store/pgstore` +
-  `adapters/store/pgstore/migrate`) and `Options.Redis` (or any `Options.Infra`, see
+  `adapters/store/pgstore/migrate`) and `Options.Infra` (`redisinfra.Infra(rdb, store)` for Redis; see
   [Infrastructure](#infrastructure)); replicas then share runs, logs, sandbox locks
   and skill installs, and a crashed runtime's runs are finished as `interrupted` by another.
 * **Local, no container**: `SANDBOX_BACKEND=local` (optionally `LOCAL_WORKSPACE=dir`, default the current
@@ -544,8 +544,16 @@ injects (`Options.Infra`; every field optional, a missing one stays in process):
 | `Jobs` | `sandboxtools.JobList`: running background jobs and their leases | memory only | `redisx.NewJobs` |
 | `Installs` | `skills.InstallState`: installed skill revisions and install locks | per process | `redisx.NewSkillInstalls` |
 
-`Options.Redis` is the convenience: `harness.RedisInfra(rdb, store)` builds all five (set `Infra` or `Redis`,
-not both). To run on NATS or SQS, implement the interfaces above and pass them in `Infra`; nothing else changes.
+Package `redisinfra` builds all five over a Redis client:
+
+```go
+rdb := redisinfra.NewClient(cfg)              // REDIS_*, USE_SENTINEL
+infra := redisinfra.Infra(rdb, store)
+h, err := harness.New(harness.Options{Config: cfg, Store: store, Infra: &infra})
+```
+
+It is its own package so that a program that does not use Redis does not link go-redis. To run on NATS or SQS,
+implement the interfaces above and pass them in `Infra`; nothing else changes.
 
 ## Layout
 
@@ -994,8 +1002,9 @@ the `.har/memory/` prefix, which is stripped. The workspace checkpoints leave `.
 ## Building
 
 `make build` produces stripped binaries in `bin/` (`app/cmd/harness` is about 30 MB; a plain `go build` is 44 MB
-because it keeps the symbol table and DWARF). Idle resident memory is about 20 MB. go-redis remains linked
-(the facade offers `Options.Redis`); the engine, sandbox, features and store packages do not import it.
+because it keeps the symbol table and DWARF). Idle resident memory is about 20 MB. An application that embeds
+the harness links none of go-redis, the MCP SDK or the OpenSandbox SDK unless it imports `redisinfra`, `mcpfeature` or
+`adapters/sandbox/opensandbox` (a test pins this); the engine, sandbox, features and store packages do not import go-redis.
 
 CI (`.github/workflows/ci.yml`, every push and pull request) runs `gofmt`, `go vet` and `go test ./...` against a
 Postgres service, the web checks (`typecheck`, `test`, `build`) and a Docker build plus a `docker-compose.prod.yml`

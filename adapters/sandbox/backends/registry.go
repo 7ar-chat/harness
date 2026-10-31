@@ -62,7 +62,8 @@ var (
 )
 
 // Register makes a backend selectable by SANDBOX_BACKEND=<name>. Built-ins
-// register themselves: "none" (here), "opensandbox" (adapters/sandbox/opensandbox) and "local" (unix only,
+// register themselves: "none" (here), and "opensandbox" when adapters/sandbox/opensandbox is imported (a blank import;
+// the harness package does not import it, so that programs without OpenSandbox do not link its SDK) and "local" (unix only,
 // from the harness package). A host with its own adapter calls Register from
 // an init function or before harness.New, then runs with SANDBOX_BACKEND=<name>
 // (or passes the sandbox.Backend in harness.Options.Backend instead, which needs no
@@ -107,7 +108,13 @@ func NewBackend(s Settings) (sandbox.Backend, error) {
 	f, ok := registry[name]
 	regMu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("%w %q (SANDBOX_BACKEND); registered: %s", ErrUnknownBackend, name, strings.Join(Registered(), ", "))
+		hint := ""
+		if name == "opensandbox" {
+			// The backend registers itself when its package is imported; nothing imports it by default so that
+			// programs that do not use it do not link its SDK.
+			hint = `; import _ "github.com/7ar-chat/harness/adapters/sandbox/opensandbox" to register it`
+		}
+		return nil, fmt.Errorf("%w %q (SANDBOX_BACKEND); registered: %s%s", ErrUnknownBackend, name, strings.Join(Registered(), ", "), hint)
 	}
 	return f(s)
 }

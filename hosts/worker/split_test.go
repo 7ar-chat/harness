@@ -19,6 +19,7 @@ import (
 	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
 	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/hosts/worker"
+	"github.com/7ar-chat/harness/redisinfra"
 )
 
 // split is the two-process deployment inside one test binary: one shared store and one shared Redis,
@@ -45,7 +46,8 @@ func newSplit(t *testing.T) *split {
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 	st := memstore.New()
-	web, err := harness.New(harness.Options{Config: cfg, Store: st, Redis: rdb,
+	infra := redisinfra.Infra(rdb, st)
+	web, err := harness.New(harness.Options{Config: cfg, Store: st, Infra: &infra,
 		Models: llmtest.Factory{M: llmtest.New()}, Backend: sandboxtest.NewBackend(), RuntimeID: "web"})
 	if err != nil {
 		t.Fatal(err)

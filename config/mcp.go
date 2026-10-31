@@ -14,6 +14,18 @@ import (
 	"strings"
 )
 
+var invalidMCPNameChar = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
+
+// MCPToolName is the name the model sees for the tool of an MCP server: {server}__{tool}, characters outside
+// [a-zA-Z0-9_-] replaced by "_", at most 64 characters.
+func MCPToolName(server, tool string) string {
+	n := invalidMCPNameChar.ReplaceAllString(server+"__"+tool, "_")
+	if len(n) > 64 {
+		n = n[:64]
+	}
+	return n
+}
+
 // MCPServer is one MCP server: an entry of MCP_SERVERS, of a .mcp.json file or
 // of the mcp.servers section of config.yml. A remote server has a URL (and
 // maybe headers), a local one a Command that is started as a child process

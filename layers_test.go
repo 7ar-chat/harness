@@ -21,13 +21,15 @@ const module = "github.com/7ar-chat/harness"
 //	3 plug-ins    adapters/ (store, sandbox, blob and Redis implementations of the ports) and coding/ (the
 //	              coding toolset); they do not import each other's group
 //	4 features    optional capabilities built on the engine (permissions, memory, skills, documents...)
-//	5 hosts       the facade (package harness), the client contract, TUI, HTTP API, worker
+//	5 hosts       the facade (package harness) and the packages that plug SDK-backed parts into it (redisinfra,
+//	              mcpfeature), the client contract, TUI, HTTP API, worker
 //	6 product     teams, identity and connectors on top of the HTTP API (app/product/)
 //	9 tooling     benchmarks, long-session tests, examples and commands: may import anything
 func layer(p string) int {
 	rel := strings.TrimPrefix(strings.TrimPrefix(p, module), "/")
 	switch {
-	case rel == "":
+	case rel == "", rel == "redisinfra", rel == "mcpfeature":
+		// the facade and the packages that carry its optional SDK-backed parts (Redis, MCP): they import the facade
 		return 5
 	case under(rel, "core"), rel == "config", rel == "modelinfo", rel == "engine/syncx", rel == "prompts", under(rel, "ai"):
 		return 0
@@ -385,6 +387,23 @@ func TestTheStandaloneModulesRequireOnlyTheirDeclaredModules(t *testing.T) {
 			dep := strings.TrimPrefix(strings.Fields(strings.TrimPrefix(line, "require "))[0], module+"/")
 			if !slices.Contains(allowedDeps, dep) {
 				t.Errorf("module %s requires %s, allowed: %v", dir, dep, allowedDeps)
+			}
+		}
+	}
+}
+
+// TestTheFacadeLinksNoOptionalSDKs: package harness must not import go-redis, the MCP SDK or the OpenSandbox SDK, directly or
+// through another package. They are carried by redisinfra, mcpfeature and adapters/sandbox/opensandbox, which a program
+// imports when it uses them; this is what keeps an application that embeds the harness from linking all three.
+func TestTheFacadeLinksNoOptionalSDKs(t *testing.T) {
+	out, err := exec.Command("go", "list", "-deps", module).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dep := range strings.Fields(string(out)) {
+		for _, sdk := range []string{"github.com/redis/go-redis", "github.com/modelcontextprotocol/go-sdk", "github.com/alibaba/OpenSandbox"} {
+			if strings.HasPrefix(dep, sdk) {
+				t.Errorf("package harness links %s (import it from redisinfra, mcpfeature or the backend package instead)", dep)
 			}
 		}
 	}

@@ -58,7 +58,7 @@ Host rules on top of the layers:
 * `hosts/*` do not import each other; the facade imports no host.
 
 Configuration rule: `engine/*`, `adapters/*` and `features/*` do not import `config`, except the two packages named in
-"Known gaps". The facade (`NewSandboxBackend`, `SandboxSettings`, `NewRedisClient`, `OpenLocalStore`) and the hosts
+"Known gaps". The facade (`NewSandboxBackend`, `SandboxSettings`, `OpenLocalStore`; `redisinfra.NewClient`) and the hosts
 translate `*config.Config` into each package's options.
 
 ## The seams

@@ -18,6 +18,7 @@ import (
 	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
 	"github.com/7ar-chat/harness/engine/eventlog"
 	"github.com/7ar-chat/harness/engine/queue"
+	"github.com/7ar-chat/harness/redisinfra"
 )
 
 // countingBroker counts the runs enqueued through an injected Broker.
@@ -98,8 +99,10 @@ func TestAHarnessRunsOnTheRedisAdapterOverMiniredis(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
+	st := memstore.New()
+	infra := redisinfra.Infra(rdb, st)
 	h, err := harness.New(harness.Options{
-		Config: featureConfig(t, nil), Backend: sandboxtest.NewBackend(), Redis: rdb,
+		Config: featureConfig(t, nil), Store: st, Backend: sandboxtest.NewBackend(), Infra: &infra,
 		Models: llmtest.Factory{M: llmtest.New(
 			llmtest.Turn{Chunks: llmtest.Text("Hello through Redis")},
 			llmtest.Turn{Chunks: llmtest.Text("A title")})},
@@ -120,20 +123,5 @@ func TestAHarnessRunsOnTheRedisAdapterOverMiniredis(t *testing.T) {
 	}
 	if !mr.Exists(queue.Stream) {
 		t.Fatal("the run was not queued through the Redis stream")
-	}
-}
-
-func TestInfraAndRedisAreMutuallyExclusive(t *testing.T) {
-	// Arrange
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { _ = rdb.Close() })
-
-	// Act
-	_, err := harness.New(harness.Options{Config: featureConfig(t, nil), Redis: rdb, Infra: &harness.Infra{}})
-
-	// Assert
-	if err == nil {
-		t.Fatal("expected an error")
 	}
 }
