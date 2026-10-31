@@ -1,11 +1,11 @@
 # Architecture
 
-The repository is a root Go module plus six standalone modules (`go.work`), arranged in layers. A package imports
+The repository is a root Go module plus seven standalone modules (`go.work`), arranged in layers. A package imports
 only packages of its own layer or a lower one, and a few groups are further restricted. `layers_test.go` fails the
 build when a rule is broken, so this page describes what the test enforces.
 
 ```
- front ends     hosts/tui   hosts/httpapi ◄── product      hosts/worker        cmd/*
+ front ends     hosts/tui   hosts/httpapi ◄── app/product  hosts/worker        app/cmd/*
                     │            │               │               │
                     ▼            ▼               ▼               ▼
                 hosts/client (Client contract)   harness (facade: Options, Feature/Builder, profiles)
@@ -26,12 +26,12 @@ build when a rule is broken, so this page describes what the test enforces.
 | 3 plug-ins | `adapters/*`, `coding/*` | layers 0, 2; **not each other's group** | Implementations of the ports (Postgres, Redis, S3, OpenSandbox, local) and the coding toolset |
 | 4 features | `features/*` | layers 0, 2, 3 (`coding`) | Optional capabilities (memory, skills, goals, permissions…). A feature never imports another feature |
 | 5 hosts | `harness` (facade), `hosts/*` | everything below | The facade composes the engine and features; hosts drive it |
-| 6 product | `product` | `hosts/httpapi`, `hosts/client`, the facade, `core/`, the engine's extension API | Teams, identity, connectors, assistant |
-| 9 tooling | `cmd/*`, `bench`, `longtest`, `examples` | anything | Composition roots and tests |
+| 6 product | `app/product` | `hosts/httpapi`, `hosts/client`, the facade, `core/`, the engine's extension API | Teams, identity, connectors, assistant |
+| 9 tooling | `app/cmd/*`, `bench`, `longtest`, `examples` | anything | Composition roots and tests |
 
 ## The modules
 
-Six directories are Go modules of their own, so a program can use one without the rest. Each builds and tests alone
+Seven directories are Go modules of their own, so a program can use one without the rest. Each builds and tests alone
 (`GOWORK=off`, `make test-modules`), and `TestTheStandaloneModulesRequireOnlyTheirDeclaredModules` pins which modules
 each may require.
 
@@ -43,9 +43,10 @@ each may require.
 | `hosts/client` | core, modelinfo | the `Client` contract and its HTTP implementation |
 | `hosts/tui` | hosts/client, core, modelinfo | the terminal UI |
 | `adapters/sandbox` | core | local and OpenSandbox backends |
+| `app` | the root and all of the above | the team product (`app/product`: OIDC, projects, audit, connectors, the assistant) and the commands (`app/cmd`: `harness`, `harness-web`, `harness-worker`, `bench`, `gen-ts`). It is an application, not a library; nothing imports it |
 
-What stays in the root module is what needs the engine: `hosts/inproc` (a `Client` over a `Harness`),
-`hosts/clienttest`, the HTTP server, features, the product. Tests that join a standalone module to the engine live in
+What stays in the root module is what needs the engine and is meant to be embedded: `hosts/inproc` (a `Client` over a `Harness`),
+`hosts/clienttest`, the HTTP server, features, the stores. The product and the commands are in `app`, so an application that embeds the root does not inherit their dependencies (OIDC, JOSE and the terminal UI libraries). Tests that join a standalone module to the engine live in
 `integration/`.
 
 Host rules on top of the layers:
@@ -81,9 +82,9 @@ refuses it in team mode or on a non-loopback address unless `HARNESS_ALLOW_LOCAL
 
 **The HTTP API is a core plus an extension seam.** `hosts/httpapi` serves threads, runs, approvals, files and the SSE
 stream for a single user. A product plugs in through `httpapi.Extension` (a `Policy` that decides who may see a
-thread, who is recorded as the author, what is audited, plus `Setup`/`Install` to add routes). `product` is the
+thread, who is recorded as the author, what is audited, plus `Setup`/`Install` to add routes). `app/product` is the
 team implementation: OIDC login, projects with roles, the audit log and live feed, the assistant (supervisor),
-GitHub/Telegram connectors and the memory review pages. `cmd/harness-web` composes `product.New(h, api, prod)`.
+GitHub/Telegram connectors and the memory review pages. `app/cmd/harness-web` composes `product.New(h, api, prod)`.
 
 **Front ends are written against `hosts/client.Client`**, with an in-process (`hosts/inproc`) and an HTTP implementation checked by
 the same conformance suite (`clienttest`). Operations a server may lack are `client.Extras`
@@ -94,12 +95,12 @@ the same conformance suite (`clienttest`). Operations a server may lack are `cli
 `web/` is a React app built by `make web` into `hosts/httpapi/ui`, which the Go binary embeds. The build output is
 not committed (a `.gitkeep` keeps `go:embed` compiling); a binary built without it serves a notice at `/`.
 
-Its API types come from the Go types: `cmd/gen-ts` (a tooling-layer command, so it may import `hosts/client`,
-`core/store`, `features/memory` and `product`) reflects over an explicit list (`cmd/gen-ts/types.go`, plus
+Its API types come from the Go types: `app/cmd/gen-ts` (a tooling-layer command, so it may import `hosts/client`,
+`core/store`, `features/memory` and `product`) reflects over an explicit list (`app/cmd/gen-ts/types.go`, plus
 `product.WireTypes()` for the unexported views of `product`, among them the memory pages' entry, list and stats) and writes `web/src/api/generated.ts`, which is
 committed. It honours json tags, `omitempty`, embedded structs (`extends`), pointers (`| null`), `time.Time` (string),
 `json.RawMessage` and `any` (`unknown`) and `[]byte` (base64 string); the string unions (roles, statuses, modes...) come
-from the Go constants through a per-field override table. `make gen` rewrites the file, and `go test ./cmd/gen-ts` (so
+from the Go constants through a per-field override table. `make gen` rewrites the file, and `go test ./cmd/gen-ts` in `app/` (so
 CI's Go job) fails while it differs from a fresh generation. `web/src/api/types.ts` re-exports the generated types and
 keeps only the web-only shapes. Add a DTO by listing it in `types.go` and running `make gen`.
 
@@ -109,7 +110,7 @@ keeps only the web-only shapes. Add a DTO by listing it in `types.go` and runnin
   `engine/`, `adapters/` and `features/` that import `config`, listed in `mayImportConfig` in `layers_test.go` (to be
   migrated after the MCP trust work). Every other package takes its own option struct (`llm.Options`,
   `redisx.Options`, `backends.Settings`, `skills.DiscoverOptions`, `memory.Options`...) and the composition roots
-  (the facade, `hosts/*`, `cmd/*`) map `config.Config` onto them. The names of the `.har` folders live in
+  (the facade, `hosts/*`, `app/cmd/*`) map `config.Config` onto them. The names of the `.har` folders live in
   `core/layout` for packages that need a path but not the configuration.
 * There is one agent loop, `ai/agent.Loop`. It owns the shape of a run (steps, the budget, the order of the phases,
   one recovery attempt when a call fails with no answer, `EndStep` after every started step) and asks a `Policy`

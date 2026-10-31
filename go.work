@@ -4,6 +4,7 @@ use (
 	.
 	./adapters/sandbox
 	./ai
+	./app
 	./core
 	./hosts/client
 	./hosts/tui

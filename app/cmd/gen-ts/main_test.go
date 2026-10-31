@@ -18,7 +18,7 @@ func TestGeneratedFileIsCurrent(t *testing.T) {
 	}
 
 	// Act
-	got, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(outFile)))
+	got, err := os.ReadFile(filepath.Join("..", "..", "..", filepath.FromSlash(outFile)))
 
 	// Assert
 	if err != nil {

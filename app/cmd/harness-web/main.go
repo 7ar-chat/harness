@@ -24,12 +24,12 @@ import (
 	"time"
 
 	"github.com/7ar-chat/harness/adapters/errtrack"
+	"github.com/7ar-chat/harness/app/product"
 	"github.com/7ar-chat/harness/config"
 	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/hosts/client"
 	"github.com/7ar-chat/harness/hosts/httpapi"
 	"github.com/7ar-chat/harness/modelinfo"
-	"github.com/7ar-chat/harness/product"
 )
 
 func main() {

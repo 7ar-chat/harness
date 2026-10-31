@@ -14,7 +14,7 @@ import (
 	"os"
 )
 
-// outFile is where the generated types live, relative to the repository root.
+// outFile is where the generated types live, relative to the repository root (this command runs from app/, so make gen passes -o).
 const outFile = "web/src/api/generated.ts"
 
 func render() ([]byte, error) {

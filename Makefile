@@ -1,21 +1,21 @@
-# Small, stripped binaries: -s -w drops the symbol table and DWARF (44 MB -> 30 MB for cmd/harness).
+# Small, stripped binaries: -s -w drops the symbol table and DWARF (44 MB -> 30 MB for app/cmd/harness).
 GOFLAGS_BUILD = -trimpath -ldflags='-s -w'
 
 # The standalone Go modules next to the root one (see go.work); each is also built and tested alone, with GOWORK=off.
-MODULES = ai core modelinfo hosts/client hosts/tui adapters/sandbox
+MODULES = ai core modelinfo hosts/client hosts/tui adapters/sandbox app
 
 .PHONY: build test test-modules check-embed bench-offline vet web ci gen
 build:
-	go build $(GOFLAGS_BUILD) -o bin/harness ./cmd/harness
-	go build $(GOFLAGS_BUILD) -o bin/harness-web ./cmd/harness-web
-	go build $(GOFLAGS_BUILD) -o bin/bench ./cmd/bench
+	cd app && go build $(GOFLAGS_BUILD) -o ../bin/harness ./cmd/harness
+	cd app && go build $(GOFLAGS_BUILD) -o ../bin/harness-web ./cmd/harness-web
+	cd app && go build $(GOFLAGS_BUILD) -o ../bin/bench ./cmd/bench
 
 vet:
 	gofmt -l . | (! grep .) && go vet ./... && for m in $(MODULES); do (cd $$m && go vet ./...) || exit 1; done
 
 test:
 	go test ./...
-	$(MAKE) test-modules
+	$(MAKE) test-modules   # includes app/ (the product, the commands), run alone
 
 # Every module on its own, workspace off: proves it builds with only the modules it declares.
 test-modules:
@@ -34,11 +34,11 @@ check-embed:
 bench-offline:
 	go test ./bench ./longtest
 
-# web/src/api/generated.ts holds the TypeScript types of the wire format, written from the Go types (cmd/gen-ts).
-# Run this after changing a DTO of hosts/client, a view of product or a type they embed; `go test ./cmd/gen-ts`
+# web/src/api/generated.ts holds the TypeScript types of the wire format, written from the Go types (app/cmd/gen-ts).
+# Run this after changing a DTO of hosts/client, a view of product or a type they embed; `go test ./cmd/gen-ts` in app/
 # (part of `make test` and CI) fails while the committed file is stale.
 gen:
-	go run ./cmd/gen-ts
+	cd app && go run ./cmd/gen-ts -o ../web/src/api/generated.ts
 
 # The browser UI (web/) builds into hosts/httpapi/ui, which the Go binary embeds.
 web:

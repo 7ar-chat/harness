@@ -17,10 +17,11 @@ COPY modelinfo/go.mod modelinfo/go.sum* modelinfo/
 COPY hosts/client/go.mod hosts/client/go.sum* hosts/client/
 COPY hosts/tui/go.mod hosts/tui/go.sum* hosts/tui/
 COPY adapters/sandbox/go.mod adapters/sandbox/go.sum* adapters/sandbox/
+COPY app/go.mod app/go.sum* app/
 RUN go mod download
 COPY . .
 COPY --from=web /src/hosts/httpapi/ui hosts/httpapi/ui
-RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/harness-web ./cmd/harness-web
+RUN cd app && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/harness-web ./cmd/harness-web
 
 FROM debian:bookworm-slim
 # What the coding agent's local sandbox needs: a shell, git (project clones) and the usual tools.

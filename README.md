@@ -8,12 +8,12 @@ rendering), skills, memory, goals and plans, tool approvals and permissions, con
 verification of produced documents.
 
 It is meant to sit behind any front end: a web server, a TUI, a worker, a desktop app. The repository contains
-a terminal client (`cmd/harness`), a `net/http` + SSE server package and a benchmark runner; product-specific
+a terminal client (`app/cmd/harness`), a `net/http` + SSE server package and a benchmark runner; product-specific
 HTTP APIs (authentication, multi-tenant routing) are left to the embedding application.
 
 ```
         web UI ──► product ► hosts/httpapi (net/http, SSE) ──┐
-        TUI    ──► cmd/harness (reference)  ───┤
+        TUI    ──► app/cmd/harness (reference)  ───┤
         your app ──────────────────────────────┤
                                                ▼
                                     harness.Harness  (Send / Events / Cancel / Steer)
@@ -52,8 +52,8 @@ h.Cancel(ctx, "alice", run.ID)
   (see [Configuration files and standards](#configuration-files-and-standards)).
 * **Web**: `httpapi.New(h, httpapi.Options{…})` (`hosts/httpapi`) serves threads, runs, approvals,
   files and the run's events as SSE (`id` = seq, so reconnects resume without loss), plus a built-in
-  browser UI; `cmd/harness-web` runs it (see [Web host](#web-host)).
-* **TUI**: `cmd/harness` is a Bubble Tea terminal client with a print mode (see
+  browser UI; `app/cmd/harness-web` runs it (see [Web host](#web-host)).
+* **TUI**: `app/cmd/harness` is a Bubble Tea terminal client with a print mode (see
   [Terminal UI](#terminal-ui)); package `tui` has the model and renderers to embed. It runs on an in-process
   engine or attaches to a running `harness-web` (`-remote`).
 * **Your own front end**: write it against `hosts/client`, one narrow interface with an in-process and an HTTP
@@ -151,7 +151,7 @@ use `-parallel 1` for memory comparisons.
 
 ## Terminal UI
 
-`cmd/harness` is a terminal client (Bubble Tea) over one thread of an in-process harness, or of a remote `harness-web`.
+`app/cmd/harness` is a terminal client (Bubble Tea) over one thread of an in-process harness, or of a remote `harness-web`.
 
 ```
 harness -model gpt-5                  # interactive UI (stdin is a terminal)
@@ -235,7 +235,7 @@ with one render function per event type and golden tests in `hosts/tui/testdata`
 ## Web host
 
 `hosts/httpapi` (package `httpapi`) is a standalone HTTP server for any web front end, with a small browser UI
-embedded. `cmd/harness-web` runs it:
+embedded. `app/cmd/harness-web` runs it:
 
 ```
 harness-web -local                      # in a repository: coding agent on this directory, UI at http://127.0.0.1:8080/
@@ -345,7 +345,7 @@ waits for a terminal event never hangs.
 **Dependency rules** (`layers_test.go`; see [docs/architecture.md](docs/architecture.md)): `core/` imports only `core/`;
 `engine/` imports `core/` and `engine/`; features import `core/`, `engine/` and `coding/`, never another feature;
 `adapters/` and `coding/` do not import each other; `hosts/tui` imports only `hosts/client` and `core/agui`;
-`hosts/httpapi` imports only the facade, `hosts/client` and `core/`; `product/` builds on `hosts/httpapi`; the facade
+`hosts/httpapi` imports only the facade, `hosts/client` and `core/`; `app/product/` builds on `hosts/httpapi`; the facade
 imports no host.
 
 ## Sessions
@@ -549,7 +549,7 @@ not both). To run on NATS or SQS, implement the interfaces above and pass them i
 
 ## Layout
 
-The repository is a root Go module plus six standalone modules (listed in `go.work`), in strict layers; a lower
+The repository is a root Go module plus seven standalone modules (listed in `go.work`), in strict layers; a lower
 layer never imports a higher one (`layers_test.go` enforces it, and that each standalone module requires only the
 modules it declares; the reasoning is in [docs/architecture.md](docs/architecture.md)).
 
@@ -561,7 +561,8 @@ modules it declares; the reasoning is in [docs/architecture.md](docs/architectur
 | `hosts/client` | the `Client` contract front ends are written against, with its HTTP implementation | `core`, `modelinfo` |
 | `hosts/tui` | the terminal UI | `hosts/client`, `core`, charm libraries |
 | `adapters/sandbox` | local and OpenSandbox backends, the `SANDBOX_BACKEND` registry | `core`, the OpenSandbox SDK |
-| root | the engine, features, facade, HTTP API, product, commands | all of the above |
+| root | the engine, features, facade, HTTP API, stores: what you embed | all of the above |
+| `app` | the team product (`app/product`) and the commands (`app/cmd`); an application, nothing imports it | the root and all of the above |
 
 `make test-modules` builds and tests each one alone (`GOWORK=off`).
 
@@ -592,15 +593,15 @@ harness.go feature*.go profiles.go infra.go   the facade: New / Send / Events / 
 hosts/                         ways to drive the engine, and the contract front ends are written against
   client/ (the Client contract + HTTP implementation)   inproc/ (Client over a harness in this process)   clienttest/ (conformance suite)
   tui/ (terminal)   httpapi/ (HTTP + SSE + embedded UI; a Policy/Extension seam)   worker/ (headless queue consumer)
-product/                       the team product on top of hosts/httpapi: OIDC, projects, audit, feed, assistant, connectors, memory review
-cmd/harness  cmd/harness-web  cmd/harness-worker  cmd/bench   binaries;  cmd/gen-ts = the TypeScript type generator;  bench/ longtest/ = benchmark and long-session tests
+app/product/                   the team product on top of hosts/httpapi: OIDC, projects, audit, feed, assistant, connectors, memory review
+app/cmd/harness  app/cmd/harness-web  app/cmd/harness-worker  app/cmd/bench   binaries (module app, with app/product);  app/cmd/gen-ts = the TypeScript type generator;  bench/ longtest/ = benchmark and long-session tests
 web/                           the React app; `make web` builds it into hosts/httpapi/ui (not committed); its API types
                                (web/src/api/generated.ts) are generated from the Go DTOs: `make gen`
 ```
 
 ## Worker
 
-`cmd/harness-worker` (package `hosts/worker`) is a headless process that executes runs queued by other
+`app/cmd/harness-worker` (package `hosts/worker`) is a headless process that executes runs queued by other
 processes: a web server or API calls `Send` (it never calls `Run`), and any number of workers consume the
 shared Redis queue and Postgres store, each with its own sandboxes. Intelligence and sandboxes scale
 independently of the front end.
@@ -992,14 +993,14 @@ the `.har/memory/` prefix, which is stripped. The workspace checkpoints leave `.
 
 ## Building
 
-`make build` produces stripped binaries in `bin/` (`cmd/harness` is about 30 MB; a plain `go build` is 44 MB
+`make build` produces stripped binaries in `bin/` (`app/cmd/harness` is about 30 MB; a plain `go build` is 44 MB
 because it keeps the symbol table and DWARF). Idle resident memory is about 20 MB. go-redis remains linked
 (the facade offers `Options.Redis`); the engine, sandbox, features and store packages do not import it.
 
 CI (`.github/workflows/ci.yml`, every push and pull request) runs `gofmt`, `go vet` and `go test ./...` against a
 Postgres service, the web checks (`typecheck`, `test`, `build`) and a Docker build plus a `docker-compose.prod.yml`
 validation. `make ci` runs the Go and web steps locally. After changing a DTO of `hosts/client` or a view of `product`, run
-`make gen`: `go test ./cmd/gen-ts` fails while `web/src/api/generated.ts` is stale.
+`make gen`: `go test ./cmd/gen-ts` (run in `app/`) fails while `web/src/api/generated.ts` is stale.
 
 ## Status / known gaps
 

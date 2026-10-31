@@ -26,7 +26,7 @@ an optional, per-run resource, behind an adapter ([sandbox-adapters.md](sandbox-
 | | Library only | Library + `hosts/httpapi` | Web + workers |
 |---|---|---|---|
 | You write | endpoints, SSE relay | auth + mount the handler | the same, split in two processes |
-| Runs execute in | your process (`h.Run`) | your process | `cmd/harness-worker` processes |
+| Runs execute in | your process (`h.Run`) | your process | `app/cmd/harness-worker` processes |
 | State | memory or `filestore` | memory or `filestore` | Postgres + Redis (shared) |
 | Scale | one node | one node | N web x M workers |
 | Use when | you want your own API shape | you want the ready JSON+SSE API | production, long runs, sandboxes on another network |
@@ -79,7 +79,7 @@ the run gets a sandbox, quotas.
 
 ### Web + workers
 
-The web tier calls `Send` and never `Run`; workers (`cmd/harness-worker`, see
+The web tier calls `Send` and never `Run`; workers (`app/cmd/harness-worker`, see
 README "Worker") consume the Redis queue, execute runs and write the event log,
 which any web replica streams from. Configuration is only environment:
 

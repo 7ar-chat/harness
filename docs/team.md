@@ -129,7 +129,7 @@ GIF up to 512 KB, type checked from the bytes; no SVG), shown on every message, 
 
 `harness.Options` gains `MemoryKey` (which memory a run uses) and `Tools`/`Features` for the supervisor and
 `httpapi.RepoCheckout`; `httpapi.Options` gains `Team`, `OIDC`, `Supervisor` and `GitHub`.
-`cmd/harness-web/build.go` is the reference composition.
+`app/cmd/harness-web/build.go` is the reference composition.
 
 ## Several replicas
 

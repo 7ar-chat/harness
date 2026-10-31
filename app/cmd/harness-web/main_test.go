@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/7ar-chat/harness/app/product"
 	"github.com/7ar-chat/harness/config"
-	"github.com/7ar-chat/harness/product"
 )
 
 // TestMain keeps the tests from downloading the model price table.

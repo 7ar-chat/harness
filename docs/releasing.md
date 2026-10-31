@@ -1,6 +1,6 @@
 # Releasing
 
-The repository is a root Go module plus six modules in subdirectories (`go.work` joins them for local work). A program
+The repository is a root Go module plus seven modules in subdirectories (`go.work` joins them for local work). A program
 that imports any of them needs a **tag per module**: Go resolves `github.com/7ar-chat/harness/core@v0.1.0` from the git tag
 `core/v0.1.0`, and the root module from `v0.1.0`.
 
@@ -12,7 +12,8 @@ that imports any of them needs a **tag per module**: Go resolves `github.com/7ar
 | `hosts/client` | `hosts/client/vX.Y.Z` | core, modelinfo |
 | `adapters/sandbox` | `adapters/sandbox/vX.Y.Z` | core |
 | `hosts/tui` | `hosts/tui/vX.Y.Z` | core, modelinfo, hosts/client |
-| root (the engine, features, facade, HTTP API) | `vX.Y.Z` | all of the above |
+| root (the engine, features, facade, HTTP API, stores) | `vX.Y.Z` | all of the above |
+| `app` (the product and the commands) | `app/vX.Y.Z` | the root and all of the above |
 
 Inside the checkout the modules reference each other through `go.work`, so `go build ./...` always uses the local source.
 **On `main`, the `go.mod` files require tagged versions of each other and have no `replace` lines**, so a module resolves
@@ -39,6 +40,7 @@ Go bottom-up, one layer at a time: a module can be verified only once everything
    Commit, push, tag.
 3. **Layer 3: `hosts/tui`.** Same, requiring the layer 1 and 2 tags.
 4. **Root.** Require every tag, `GOWORK=off go build ./... && GOWORK=off go test ./...`, commit, push, tag `vX.Y.Z`.
+5. **`app`.** Require the root tag and the rest, verify with the workspace off, commit, push, tag `app/vX.Y.Z`. Nothing imports `app`, so it can be released whenever its own code changes.
 
 `scripts/release-modules.sh check` lists the latest tag of each module and how many local `replace` lines it still has.
 

@@ -21,6 +21,7 @@ LAYERS=(
   "hosts/client adapters/sandbox"
   "hosts/tui"
   "."
+  "app"
 )
 all_modules() { for l in "${LAYERS[@]}"; do for m in $l; do echo "$m"; done; done; }
 modpath() { [ "$1" = . ] && echo "$PREFIX" || echo "$PREFIX/$1"; }

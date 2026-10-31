@@ -12,9 +12,9 @@ import (
 	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
 	"github.com/7ar-chat/harness/adapters/store/teamstore"
+	"github.com/7ar-chat/harness/app/product"
 	"github.com/7ar-chat/harness/config"
 	"github.com/7ar-chat/harness/core/store"
-	"github.com/7ar-chat/harness/product"
 )
 
 // buildHarness is the only place this command constructs the harness; the rest of

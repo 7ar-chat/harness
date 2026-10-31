@@ -22,7 +22,7 @@ const module = "github.com/7ar-chat/harness"
 //	              coding toolset); they do not import each other's group
 //	4 features    optional capabilities built on the engine (permissions, memory, skills, documents...)
 //	5 hosts       the facade (package harness), the client contract, TUI, HTTP API, worker
-//	6 product     teams, identity and connectors on top of the HTTP API (product/)
+//	6 product     teams, identity and connectors on top of the HTTP API (app/product/)
 //	9 tooling     benchmarks, long-session tests, examples and commands: may import anything
 func layer(p string) int {
 	rel := strings.TrimPrefix(strings.TrimPrefix(p, module), "/")
@@ -39,10 +39,10 @@ func layer(p string) int {
 		return 4
 	case strings.HasPrefix(rel, "hosts/"):
 		return 5
-	case under(rel, "product"):
+	case under(rel, "app/product"):
 		return 6
 	}
-	return 9 // bench, longtest, examples, cmd/...
+	return 9 // bench, longtest, examples, app/cmd/...
 }
 
 func under(p, root string) bool { return p == root || strings.HasPrefix(p, root+"/") }
@@ -144,15 +144,15 @@ func TestTheHostRulesCatchBadImports(t *testing.T) {
 		m + "hosts/tui " + m + " " + m + "hosts/httpapi " + m + "hosts/worker " + m + "engine/agent " + m + "features/memory " +
 			m + "core/store " + m + "core/sandbox " + m + "hosts/client " + m + "core/agui",
 		m + "hosts/httpapi " + m + "hosts/tui " + m + "hosts/client " + m + " " + m + "core/store " + m + "engine/agent " +
-			m + "features/memory " + m + "product",
+			m + "features/memory " + m + "app/product",
 		m + "hosts/worker " + m + "hosts/httpapi " + m + "hosts/client " + m + " " + m + "engine/runtime " + m + "adapters/redisx",
 		m + "hosts/client " + m + "hosts/tui " + m + " " + m + "hosts/inproc " + m + "hosts/clienttest",
 		m + "hosts/inproc " + m + "hosts/client " + m + " " + m + "hosts/tui",
-		m + "product " + m + "hosts/httpapi " + m + "hosts/client " + m + " " + m + "core/store " + m + "engine/agent " + m + "hosts/tui " +
+		m + "app/product " + m + "hosts/httpapi " + m + "hosts/client " + m + " " + m + "core/store " + m + "engine/agent " + m + "hosts/tui " +
 			m + "adapters/redisx " + m + "features/memory " + m + "features/goals",
 		m + "engine/agent " + m + "hosts/client",
 		m + "features/memory " + m + "hosts/httpapi",
-		m + " " + m + "hosts/httpapi " + m + "engine/agent " + m + "product",
+		m + " " + m + "hosts/httpapi " + m + "engine/agent " + m + "app/product",
 		m + "hosts/clienttest " + m + "hosts/client " + m + " " + m + "ai/llm/llmtest",
 	}
 
@@ -171,19 +171,19 @@ func TestTheHostRulesCatchBadImports(t *testing.T) {
 		"hosts/httpapi imports hosts/tui (hosts/httpapi must not import another host)",
 		"hosts/httpapi imports engine/agent (hosts/httpapi may import only",
 		"hosts/httpapi imports features/memory (hosts/httpapi may import only",
-		"hosts/httpapi imports product (hosts/httpapi may import only",
+		"hosts/httpapi imports app/product (hosts/httpapi may import only",
 		"hosts/worker imports hosts/httpapi (hosts/worker must not import another host)",
 		"hosts/worker imports hosts/client (hosts/worker must not import another host)",
 		"hosts/client imports hosts/tui (hosts/client must not import a host that uses it)",
 		"hosts/client imports hosts/inproc (hosts/client must not import a host that uses it)",
 		"hosts/inproc imports hosts/tui (the client implementations must not import a front end)",
-		"product imports adapters/redisx (product may import only",
-		"product imports hosts/tui (product may import only",
-		"product imports features/goals (product may import only",
+		"app/product imports adapters/redisx (product may import only",
+		"app/product imports hosts/tui (product may import only",
+		"app/product imports features/goals (product may import only",
 		"engine/agent imports hosts/client (the engine must not import hosts or the facade)",
 		"features/memory imports hosts/httpapi (the engine must not import hosts or the facade)",
 		"the facade (package harness) imports hosts/httpapi (hosts import the facade, not the reverse)",
-		"the facade (package harness) imports product (hosts import the facade, not the reverse)",
+		"the facade (package harness) imports app/product (hosts import the facade, not the reverse)",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing violation %q in:\n%s", want, got)
@@ -192,7 +192,7 @@ func TestTheHostRulesCatchBadImports(t *testing.T) {
 	for _, bad := range []string{"hosts/tui imports hosts/client ", "hosts/tui imports core/agui", "hosts/httpapi imports hosts/client",
 		"hosts/httpapi imports the facade", "hosts/httpapi imports core/store", "hosts/worker imports the facade", "hosts/worker imports engine/runtime",
 		"hosts/worker imports adapters", "hosts/client imports the facade", "hosts/inproc imports hosts/client", "clienttest imports", "hosts/httpapi imports hosts/inproc",
-		"product imports hosts/httpapi", "product imports hosts/client", "product imports the facade", "product imports core/store", "product imports engine/agent", "product imports features/memory"} {
+		"app/product imports hosts/httpapi", "app/product imports hosts/client", "app/product imports the facade", "app/product imports core/store", "app/product imports engine/agent", "app/product imports features/memory"} {
 		if strings.Contains(got, bad) {
 			t.Errorf("a legal edge was reported (%q):\n%s", bad, got)
 		}
@@ -242,7 +242,7 @@ func findViolations(lines []string) []string {
 //
 //	engine <- facade (package harness) <- hosts/client (InProcess) <- front ends (hosts/tui, other apps)
 //	                                      hosts/httpapi (HTTP API server) <- hosts/client (HTTP)
-//	                                      product (teams, identity, connectors) <- hosts/httpapi
+//	                                      app/product (teams, identity, connectors) <- hosts/httpapi
 //
 // A front end is written against hosts/client only, so that it works the same on an in-process engine and on a
 // remote server. Hosts do not depend on each other. The HTTP API is a transport over the client contract: it
@@ -286,7 +286,7 @@ func hostViolation(pkg, imp string) string {
 		if isHost(imp) && !family(imp) {
 			return pkg + " imports " + imp + " (the client implementations must not import a front end)"
 		}
-	case under(pkg, "product"):
+	case under(pkg, "app/product"):
 		// The product extends the harness with features of its own (the supervisor's tools, the repository
 		// checkout), so it may use the engine's extension API; it must not reach into the plug-ins or other hosts.
 		if under(imp, "adapters") || under(imp, "coding") || isHost(imp) && !under(imp, "hosts/httpapi") && !family(imp) ||
@@ -294,11 +294,11 @@ func hostViolation(pkg, imp string) string {
 			return pkg + " imports " + name(imp) + " (product may import only the facade, hosts/httpapi, hosts/client, core and the engine's extension API)"
 		}
 	case under(pkg, "engine"), under(pkg, "features"), under(pkg, "core"), under(pkg, "config"), under(pkg, "adapters"), under(pkg, "coding"):
-		if isHost(imp) || imp == "" || under(imp, "product") {
+		if isHost(imp) || imp == "" || under(imp, "app/product") {
 			return pkg + " imports " + name(imp) + " (the engine must not import hosts or the facade)"
 		}
 	case pkg == "":
-		if isHost(imp) || under(imp, "product") {
+		if isHost(imp) || under(imp, "app/product") {
 			return "the facade (package harness) imports " + imp + " (hosts import the facade, not the reverse)"
 		}
 	}
@@ -365,6 +365,8 @@ var modules = map[string][]string{
 	"hosts/client":     {"core", "modelinfo"},
 	"hosts/tui":        {"core", "modelinfo", "hosts/client"},
 	"adapters/sandbox": {"core"},
+	// The product and the commands: they use the root module (the engine) and everything it uses.
+	"app": {"ai", "core", "modelinfo", "hosts/client", "hosts/tui", "adapters/sandbox"},
 }
 
 // TestTheStandaloneModulesRequireOnlyTheirDeclaredModules: a module that starts importing the engine, a feature or a
