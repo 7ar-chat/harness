@@ -1,0 +1,37 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { groups } from '../../docs/nav';
+---
+<DocsLayout title="Documentation" description="Embed the 7ar agent harness in a Go program, run it as a terminal UI or a team web product, and extend it." slug="" landing>
+  <p class="eyebrow">Documentation</p>
+  <h1 class="docs-title">The 7ar harness documentation</h1>
+  <p class="docs-desc">An open, embeddable agent harness written in Go: a ReAct loop whose tools run in a sandbox, streaming AG-UI events. Start with the path that matches what you want to do.</p>
+
+  <h2 id="choose-your-path">Choose your path</h2>
+  <div class="paths">
+    <a class="path" href="/docs/quickstart/embed/"><b>Embed it in my Go program</b><span>One conversation in about forty lines, with a scripted model so it runs offline.</span><small>Quickstart · Smallest embedding</small></a>
+    <a class="path" href="/docs/quickstart/cli/"><b>Use it in my terminal</b><span>The Bubble Tea UI and print mode, on a repository, with permissions and undo.</span><small>Quickstart · CLI and TUI</small></a>
+    <a class="path" href="/docs/quickstart/web/"><b>Run the web product for a team</b><span>harness-web, Docker Compose, OIDC login, projects and workers.</span><small>Quickstart · Web product</small></a>
+    <a class="path" href="/docs/guides/embed-website/"><b>Put agents in my website</b><span>Own authentication, per-user threads, a custom tool, the ready HTTP API.</span><small>Guide · Embed in a website</small></a>
+    <a class="path" href="/docs/guides/custom-feature/"><b>Extend the harness</b><span>Custom tools, features, sandbox backends and MCP servers.</span><small>Guides · Custom tool, feature, backend</small></a>
+    <a class="path" href="/docs/guides/use-ai/"><b>Use one module on its own</b><span>ai, core, modelinfo, hosts/client and hosts/tui are separate Go modules.</span><small>Guides · Standalone modules</small></a>
+    <a class="path" href="/docs/guides/postgres-redis/"><b>Scale to several processes</b><span>Postgres store, Redis queue and event log, headless workers.</span><small>Guide · Postgres and Redis</small></a>
+    <a class="path" href="/docs/operations/troubleshooting/"><b>Something failed</b><span>The real error messages the code emits and what fixes them.</span><small>Operations · Troubleshooting</small></a>
+  </div>
+
+  <h2 id="all-pages">All sections</h2>
+  <div class="group-list">
+    {groups.map((g) => (
+      <div id={g.id} style="margin-top:28px">
+        <h3>{g.label}</h3>
+        <p style="color:var(--muted);margin:4px 0 0">{g.blurb}</p>
+        <ul>
+          {g.pages.map((p) => <li><a href={`/docs/${p.slug}/`}>{p.title}</a></li>)}
+        </ul>
+      </div>
+    ))}
+  </div>
+  <div class="callout note">
+    <p>These pages describe the repository at tag <code>v0.3.1</code>. The authoritative detail is in the <a href="https://github.com/7ar-chat/harness">README</a> and the doc comments of each package; run <code>go doc</code> on any package listed in the <a href="/docs/reference/packages/">package index</a>.</p>
+  </div>
+</DocsLayout>

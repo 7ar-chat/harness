@@ -179,7 +179,7 @@ The agent runs untrusted, model-written code, and reads untrusted files.
 * **Egress policy at `Create`.** The default for a remote adapter is
   *deny all, allow a list* (`SANDBOX_EGRESS_ALLOWLIST`). Without a list, deny at
   least private, link-local, CGNAT and metadata ranges
-  (`SANDBOX_EGRESS_DENY_CIDRS`, default in `sandbox.DefaultEgressDenyCIDRs`), so a
+  (`SANDBOX_EGRESS_DENY_CIDRS`, default in `opensandbox.DefaultEgressDenyCIDRs`), so a
   sandbox cannot reach other sandboxes, the host, the orchestrator or the cloud
   metadata service. `config.EgressMode()` (checked by `harness.NewSandboxBackend`) refuses unrestricted egress in
   production unless `SANDBOX_EGRESS_UNRESTRICTED=true`. Your adapter must apply

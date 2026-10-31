@@ -247,7 +247,7 @@ HARNESS_WEB_ADDR=0.0.0.0:8080 HARNESS_WEB_TOKEN=secret OPENSANDBOX_URL=… harne
 `-user` (the single user's login, default `local`). A non-loopback address is refused unless `HARNESS_WEB_TOKEN` is set.
 
 **Routes** (all under `/api`, also served without the prefix; errors are `{"error":{"code","message"}}`; the full
-table with bodies is the doc comment of `hosts/httpapi/httpapi.go`):
+table with bodies is the doc comment of `hosts/httpapi/httpserver.go`):
 
 | Route | |
 |---|---|
@@ -304,7 +304,7 @@ Both implementations pass the same suite, `clienttest.Run(t, newClient)`: create
 resume from a seq, steer, cancel, approval and `ask_user` round trips, files, validation and ownership.
 A new implementation (a gRPC client, a recorded replay…) is tested by calling it.
 
-A complete front end, in about 25 lines (`hosts/client/example_test.go` compiles and runs it):
+A complete front end, in about 25 lines (`integration/client/example_test.go` compiles and runs it):
 
 ```go
 func ask(ctx context.Context, c client.Client, question string) error {

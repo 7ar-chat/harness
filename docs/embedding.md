@@ -11,7 +11,7 @@ go get github.com/7ar-chat/harness@latest
 ```
 
 The root module is the engine: `harness.New`, the HTTP API, the features and the stores. It requires the smaller modules
-(`ai`, `core`, `modelinfo`, `hosts/client`, `hosts/tui`, `adapters/sandbox`), all of which are released with it; you can also
+(`ai`, `core`, `modelinfo`, `hosts/client`, `adapters/sandbox`), all of which are released with it; you can also
 use those on their own. `make check-embed` (and the `embed` CI job on every release tag) builds a small application in an
 empty directory against the published versions and runs a conversation through it, so what is documented here is
 what a stranger gets.
@@ -149,8 +149,10 @@ func ordersFeature(db Orders) harness.Feature {
   answer for "missing" and "not yours".
 * Remote tools: `MCP_SERVERS` (the `mcp` feature) mounts MCP servers' tools. They need no sandbox.
   Pass per-user credentials in a provider of your own rather than in the shared MCP config.
-* Risky tools: name them so `APPROVAL_RISKY_TOOL_PATTERNS` (default `create|send|update|delete|post|publish|write`) matches, and run with
-  `Interactive: true` so the user approves (`resume` API).
+* Risky tools: in an `Interactive: true` run (the user approves through the `resume` API) a tool needs approval when it is
+  registered with `approvals.RegisterRisky("name", ...)` at start-up, or its name starts with `delete`, `remove`, `move` or
+  `rename`. `APPROVAL_RISKY_TOOL_PATTERNS` (default `create|send|update|delete|post|publish|write`) applies only to MCP tools
+  (`server__tool` names), not to your own.
 * Prompt injection: tool results are data. Keep your
   tools from returning secrets or other users' content in the first place.
 
