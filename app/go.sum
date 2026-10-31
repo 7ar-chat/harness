@@ -1,5 +1,5 @@
-github.com/7ar-chat/harness v0.1.0 h1:BQ0gOiRr97og07Zj1ZwLTU7QEJ7q4cei0geAvftXaHE=
-github.com/7ar-chat/harness v0.1.0/go.mod h1:stB98HSjSXljOgVdGlTSBsV2bW1QkcQrbth3wSMVXFA=
+github.com/7ar-chat/harness v0.2.0 h1:iTwIBLAN632/pfXDeTsjzzAz8Z4WilF730ru19ifsJ4=
+github.com/7ar-chat/harness v0.2.0/go.mod h1:aqLyqrMENDy/aAXhs0NiXSxGFY4PX5z7vm2lF6SVgbY=
 github.com/7ar-chat/harness/adapters/sandbox v0.1.0 h1:dg6gguf0ehZNRzWNj5WcQUrbJQyuzt4inWBKROaDRo8=
 github.com/7ar-chat/harness/adapters/sandbox v0.1.0/go.mod h1:gw7mvMpmpyDQK67sWsIUE0KHfITnRsGtmibdrsq7wDo=
 github.com/7ar-chat/harness/ai v0.1.1 h1:1Zjbu2Um1KfmIeNZOhzwPQOhMUz8CTb9bSkPJnMqAo8=

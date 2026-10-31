@@ -7,7 +7,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 version=${1:-$(git tag -l 'v[0-9]*' | sort -V | tail -1)}
 tmp=$(mktemp -d)
-trap 'chmod -R u+w "$tmp" 2>/dev/null; rm -rf "$tmp"' EXIT
+# The module cache is read-only (hence -modcacherw below); cleanup must not decide the result of the check.
+trap 'chmod -R u+w "$tmp" 2>/dev/null || true; rm -rf "$tmp" 2>/dev/null || true' EXIT
 mkdir -p "$tmp/app" && cp scripts/embedcheck/main.go.txt "$tmp/app/main.go"
 cd "$tmp/app"
 export GOMODCACHE="$tmp/modcache" GOFLAGS=-modcacherw GOWORK=off GOPROXY=${GOPROXY:-direct} GONOSUMDB='*'
