@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/GhaziBenDahmane/harness/adapters/redisx"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 )
 

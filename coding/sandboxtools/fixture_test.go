@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/cloudwego/eino/components/tool"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/GhaziBenDahmane/harness/adapters/redisx"
 	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
@@ -22,7 +22,7 @@ import (
 
 type fixture struct {
 	backend *sandboxtest.Backend
-	tools   map[string]tool.InvokableTool
+	tools   map[string]ai.InvokableTool
 	sb      *sandboxtest.Sandbox
 }
 
@@ -33,7 +33,7 @@ func newFixture(t *testing.T, setup func(*sandboxtest.Sandbox)) *fixture {
 	t.Cleanup(func() { _ = rdb.Close() })
 	st := memstore.New()
 	th, _ := st.CreateThread(context.Background(), "alice", "t")
-	f := &fixture{backend: sandboxtest.NewBackend(), tools: map[string]tool.InvokableTool{}}
+	f := &fixture{backend: sandboxtest.NewBackend(), tools: map[string]ai.InvokableTool{}}
 	f.backend.OnCreate = func(sb *sandboxtest.Sandbox) {
 		f.sb = sb
 		if setup != nil {
@@ -48,7 +48,7 @@ func newFixture(t *testing.T, setup func(*sandboxtest.Sandbox)) *fixture {
 	}
 	for _, x := range ts {
 		info, _ := x.Info(context.Background())
-		f.tools[info.Name] = x.(tool.InvokableTool)
+		f.tools[info.Name] = x.(ai.InvokableTool)
 	}
 	return f
 }
@@ -105,10 +105,10 @@ func newHostFixtureAt(t *testing.T, base string, env map[string]string) (*fixtur
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fixture{tools: map[string]tool.InvokableTool{}}
+	f := &fixture{tools: map[string]ai.InvokableTool{}}
 	for _, x := range ts {
 		info, _ := x.Info(context.Background())
-		f.tools[info.Name] = x.(tool.InvokableTool)
+		f.tools[info.Name] = x.(ai.InvokableTool)
 	}
 	return f, hb
 }

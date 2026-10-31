@@ -2,6 +2,7 @@ package mcptools_test
 
 import (
 	"context"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"io"
 	"log/slog"
 	"net/http"
@@ -12,9 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/mcp"
@@ -58,7 +57,7 @@ func kbServer(t *testing.T) (*httptest.Server, func() []string) {
 	return ts, func() []string { mu.Lock(); defer mu.Unlock(); return append([]string(nil), seen...) }
 }
 
-func names(t *testing.T, ts []tool.BaseTool) []string {
+func names(t *testing.T, ts []ai.BaseTool) []string {
 	var out []string
 	for _, x := range ts {
 		info, _ := x.Info(context.Background())
@@ -80,7 +79,7 @@ func TestMCPToolsArePrefixedAndFiltered(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cleanup()
-	out, callErr := list[0].(tool.InvokableTool).InvokableRun(context.Background(), `{"query":"vacation policy"}`)
+	out, callErr := list[0].(ai.InvokableTool).InvokableRun(context.Background(), `{"query":"vacation policy"}`)
 
 	// Assert
 	if got := names(t, list); len(got) != 1 || got[0] != "kb__search" {

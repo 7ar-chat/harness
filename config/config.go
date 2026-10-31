@@ -66,7 +66,7 @@ type Config struct {
 	// (GET {base}/models) and adds them to LLMModels, so the UI offers them and runs may use them. Off by default:
 	// LLM_MODELS is an allow-list and discovery widens it to everything the key can reach.
 	LLMDiscoverModels bool `env:"LLM_DISCOVER_MODELS"`
-	LLMTimeout      int      `env:"LLM_TIMEOUT_SECONDS" envDefault:"300"`
+	LLMTimeout        int  `env:"LLM_TIMEOUT_SECONDS" envDefault:"300"`
 
 	AgentMaxSteps           int `env:"AGENT_MAX_STEPS" envDefault:"60"`
 	AgentMaxToolOutputChars int `env:"AGENT_MAX_TOOL_OUTPUT_CHARS" envDefault:"30000"`

@@ -109,7 +109,7 @@ Decide it **server-side**, as the example does; do not forward a browser-supplie
 
 ## 3. Your own tools
 
-A tool is a `tools.Provider` (eino tools, built per run) registered by a Feature:
+A tool is a `tools.Provider` (`ai.InvokableTool`s, built per run; `ai.InferTool` derives the schema from a Go struct) registered by a Feature:
 
 ```go
 func ordersFeature(db Orders) harness.Feature {

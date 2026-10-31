@@ -7,11 +7,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
 	"github.com/GhaziBenDahmane/harness/adapters/store/teamstore"
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 // supModel plays the supervisor: it calls one tool once (the one named by next()), then says done.
@@ -28,13 +27,13 @@ func supModel(next func() (tool, args string)) *llmtest.Model {
 		if len(c.Tools) == 0 || !has {
 			return llmtest.Turn{Chunks: llmtest.Text("ok")}
 		}
-		if last := c.Messages[len(c.Messages)-1]; last.Role == schema.Tool {
+		if last := c.Messages[len(c.Messages)-1]; last.Role == ai.RoleTool {
 			return llmtest.Turn{Chunks: llmtest.Text("done")}
 		}
 		mu.Lock()
 		tool, args := next()
 		mu.Unlock()
-		return llmtest.Turn{Chunks: []*schema.Message{llmtest.Finish(llmtest.ToolCall(0, "c1", tool, args), "tool_calls")}}
+		return llmtest.Turn{Chunks: []*ai.Message{llmtest.Finish(llmtest.ToolCall(0, "c1", tool, args), "tool_calls")}}
 	})
 }
 

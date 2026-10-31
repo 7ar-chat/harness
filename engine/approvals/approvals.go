@@ -20,8 +20,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
@@ -140,7 +139,7 @@ func PreviewMatches(expected, current string) bool {
 
 // MatchesCall reports whether an approval still describes a tool call (same
 // tool, same arguments): an approve decision only runs a matching call.
-func MatchesCall(a *store.Approval, tc schema.ToolCall) bool {
+func MatchesCall(a *store.Approval, tc ai.ToolCall) bool {
 	if a.ToolCallID != tc.ID || normalize(a.ToolName) != normalize(tc.Function.Name) {
 		return false
 	}
@@ -485,7 +484,7 @@ func underWorkArea(p string) bool {
 }
 
 // Pause records the pending approval of a call and returns the interrupt that ends the run.
-func (g *Gate) Pause(ctx context.Context, run *store.Run, tc schema.ToolCall) (*tools.Interrupt, error) {
+func (g *Gate) Pause(ctx context.Context, run *store.Run, tc ai.ToolCall) (*tools.Interrupt, error) {
 	preview := Preview(tc.Function.Arguments)
 	if IsTrustMCPTool(tc.Function.Name) {
 		if g.Describe != nil {

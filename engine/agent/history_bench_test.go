@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GhaziBenDahmane/harness/ai/compaction"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/compaction"
 )
 
 // thread builds n steps of a coding session: an assistant tool call and a 6 kB tool result each.

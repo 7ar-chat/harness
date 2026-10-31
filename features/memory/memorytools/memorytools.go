@@ -11,10 +11,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/schema"
-	"github.com/eino-contrib/jsonschema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
@@ -79,7 +76,7 @@ func New(svc *memory.Service) *Provider { return &Provider{Svc: svc} }
 func (p *Provider) Name() string { return "memory" }
 
 // Tools implements tools.Provider.
-func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]tool.BaseTool, func(), error) {
+func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]ai.BaseTool, func(), error) {
 	layers := p.Svc.Layers(ctx, rc.Login, rc.ThreadID)
 	enabled, err := p.Svc.Enabled(ctx, layers[0].Key)
 	if err != nil {
@@ -88,14 +85,13 @@ func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]tool.BaseT
 	if !enabled {
 		return nil, func() {}, nil
 	}
-	out := make([]tool.BaseTool, 0, len(specs))
+	out := make([]ai.BaseTool, 0, len(specs))
 	for _, s := range specs {
-		var js jsonschema.Schema
-		if err := json.Unmarshal([]byte(s.schema), &js); err != nil {
+		var params map[string]any
+		if err := json.Unmarshal([]byte(s.schema), &params); err != nil {
 			return nil, nil, fmt.Errorf("memory tool %s schema: %w", s.name, err)
 		}
-		out = append(out, &memTool{p: p, rc: rc, layers: layers, info: &schema.ToolInfo{Name: s.name, Desc: s.desc,
-			ParamsOneOf: schema.NewParamsOneOfByJSONSchema(&js)}})
+		out = append(out, &memTool{p: p, rc: rc, layers: layers, info: &ai.ToolInfo{Name: s.name, Desc: s.desc, Parameters: params}})
 	}
 	return out, func() {}, nil
 }
@@ -106,15 +102,15 @@ type memTool struct {
 	// layers are the memories of the run: the project's (or the user's own in a personal thread) first,
 	// then the user's private layer inside a project.
 	layers []memory.Layer
-	info   *schema.ToolInfo
+	info   *ai.ToolInfo
 }
 
-func (t *memTool) Info(context.Context) (*schema.ToolInfo, error) { return t.info, nil }
+func (t *memTool) Info(context.Context) (*ai.ToolInfo, error) { return t.info, nil }
 
 // InvokableRun validates the arguments like Work, runs the operation and
 // returns its JSON result; an error result is returned as a tool error
 // ("Error: {"error": {code, message, details}}").
-func (t *memTool) InvokableRun(ctx context.Context, argsJSON string, _ ...tool.Option) (string, error) {
+func (t *memTool) InvokableRun(ctx context.Context, argsJSON string) (string, error) {
 	name := t.info.Name
 	args, err := decodeArgs(argsJSON)
 	if err != nil {

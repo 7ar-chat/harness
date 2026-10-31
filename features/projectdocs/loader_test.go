@@ -12,9 +12,9 @@ import (
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/projectdocs"
+	"github.com/GhaziBenDahmane/harness/prompts"
 )
 
 // env is a loader over a fake sandbox holding files.

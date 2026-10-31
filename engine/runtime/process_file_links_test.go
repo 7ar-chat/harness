@@ -4,10 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 // knownTypes are the event types of an ordinary run with tool calls and artifacts.
@@ -19,9 +18,9 @@ var knownTypes = map[string]bool{
 }
 
 // lastUserText is the last user message sent to the model in a call.
-func lastUserText(msgs []*schema.Message) string {
+func lastUserText(msgs []*ai.Message) string {
 	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role == schema.User {
+		if msgs[i].Role == ai.RoleUser {
 			return msgs[i].Content
 		}
 	}

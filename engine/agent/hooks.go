@@ -5,8 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
@@ -28,7 +27,7 @@ type ToolHook interface {
 type BeforeToolHook interface {
 	// ctx is the run's: Stop cancels a decision that needs the sandbox (round 3, N5).
 	NeedsApproval(ctx context.Context, run *store.Run, toolName, arguments string) bool
-	Pause(ctx context.Context, run *store.Run, tc schema.ToolCall) (*tools.Interrupt, error)
+	Pause(ctx context.Context, run *store.Run, tc ai.ToolCall) (*tools.Interrupt, error)
 }
 
 // ToolDenier is implemented by BeforeToolHooks that can refuse a call outright
@@ -78,7 +77,7 @@ func (st *runState) stepNotes(ctx context.Context) {
 		}
 	}
 	if len(notes) > 0 {
-		st.history = append(st.history, schema.UserMessage("<system-reminder>\n"+strings.Join(notes, "\n\n")+"\n</system-reminder>"))
+		st.history = append(st.history, ai.UserMessage("<system-reminder>\n"+strings.Join(notes, "\n\n")+"\n</system-reminder>"))
 	}
 }
 
@@ -131,11 +130,11 @@ func (st *runState) checkAnswer(ctx context.Context) (note string) {
 
 // ImageAttacher adds attached images as image parts for vision models.
 type ImageAttacher interface {
-	AttachImages(ctx context.Context, run *store.Run, history []*schema.Message) []*schema.Message
+	AttachImages(ctx context.Context, run *store.Run, history []*ai.Message) []*ai.Message
 }
 
 // afterTool runs the tool hooks with the call's emitter in ctx and merges their metadata.
-func (st *runState) afterTool(ctx context.Context, tc schema.ToolCall, em *toolEmitter) map[string]any {
+func (st *runState) afterTool(ctx context.Context, tc ai.ToolCall, em *toolEmitter) map[string]any {
 	if ctx.Err() != nil {
 		return nil // cancelled: the end-of-run hook catches up
 	}
@@ -164,10 +163,10 @@ func safeToolHook(runID string, fn func() map[string]any) (out map[string]any) {
 
 // userMessage is the model view of a user message: its attachments are listed
 // after the text ("[Attached files: …]") and kept in Extra for ImageAttacher.
-func userMessage(m *store.Message, content string) *schema.Message {
+func userMessage(m *store.Message, content string) *ai.Message {
 	atts := store.MessageAttachments(m)
 	if len(atts) == 0 {
-		return schema.UserMessage(content)
+		return ai.UserMessage(content)
 	}
 	paths := make([]string, 0, len(atts))
 	for _, a := range atts {
@@ -177,12 +176,12 @@ func userMessage(m *store.Message, content string) *schema.Message {
 	if text := strings.TrimRight(content, "\n"); strings.TrimSpace(text) != "" {
 		line = text + "\n\n" + line
 	}
-	msg := schema.UserMessage(line)
+	msg := ai.UserMessage(line)
 	msg.Extra = map[string]any{store.ExtraAttachments: atts}
 	return msg
 }
 
-func (a *Agent) attachImages(ctx context.Context, run *store.Run, history []*schema.Message) (out []*schema.Message) {
+func (a *Agent) attachImages(ctx context.Context, run *store.Run, history []*ai.Message) (out []*ai.Message) {
 	out = history
 	if a.Harness.Images == nil {
 		return out

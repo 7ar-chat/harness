@@ -5,10 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/features/goals"
 	"github.com/GhaziBenDahmane/harness/features/titles"
 	"github.com/GhaziBenDahmane/harness/features/verify"
@@ -124,7 +123,7 @@ func TestAuxiliaryCallsAreCountedInTheRunUsageAndRunAtLowEffort(t *testing.T) {
 	// The title and goal-judge calls run at low effort on reasoning models and their tokens are part of RUN_FINISHED.usage (A-25).
 	// Arrange
 	withUsage := func(text string, in, out int) llmtest.Turn {
-		return llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(&schema.Message{Role: schema.Assistant, Content: text}, in, out)}}
+		return llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(&ai.Message{Role: ai.RoleAssistant, Content: text}, in, out)}}
 	}
 	r := newRig(t, withUsage("Here is the report.", 100, 10), withUsage("Q3 report", 20, 3), withUsage(`{"met": true, "reason": "ok"}`, 50, 5))
 	for _, h := range r.opts.Hooks {

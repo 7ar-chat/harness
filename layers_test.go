@@ -1,7 +1,10 @@
 package harness_test
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -12,8 +15,8 @@ const module = "github.com/GhaziBenDahmane/harness"
 // layer says where a package of this module sits. A package may import only packages of its own layer or a
 // lower one; the rules below tighten that further.
 //
-//	0 foundation  core/ (events, domain types, ports: agui, store, sandbox, blobs), config, modelinfo, engine/syncx,
-//	              engine/agent/prompts
+//	0 foundation  core/ (events, domain types, ports: agui, store, sandbox, blobs), ai/ (messages, tools, model
+//	              contract and the OpenAI client), config, modelinfo, engine/syncx, prompts
 //	2 engine      the agent loop, LLM clients, tools, runtime, event log, queue, approvals
 //	3 plug-ins    adapters/ (store, sandbox, blob and Redis implementations of the ports) and coding/ (the
 //	              coding toolset); they do not import each other's group
@@ -26,7 +29,7 @@ func layer(p string) int {
 	switch {
 	case rel == "":
 		return 5
-	case under(rel, "core"), rel == "config", rel == "modelinfo", rel == "engine/syncx", rel == "engine/agent/prompts":
+	case under(rel, "core"), rel == "config", rel == "modelinfo", rel == "engine/syncx", rel == "prompts", under(rel, "ai"):
 		return 0
 	case strings.HasPrefix(rel, "engine/"):
 		return 2
@@ -48,7 +51,7 @@ func under(p, root string) bool { return p == root || strings.HasPrefix(p, root+
 // features/skills/skilltools, are one unit, and a shared type belongs in core).
 var featureEdges = map[string][]string{}
 
-// mayImportConfig lists the packages of engine/, adapters/ and features/ that still read the whole
+// mayImportConfig lists the packages of ai/, engine/, adapters/ and features/ that still read the whole
 // *config.Config. They are migrated to their own option structs after the MCP trust work; until then this list
 // is the one place that names them. Every other package under those roots takes its own options (the
 // composition roots - the facade, hosts and cmd - map config.Config onto them).
@@ -58,7 +61,7 @@ var mayImportConfig = map[string]bool{
 }
 
 // configRoots are the trees whose packages must not import config (except mayImportConfig).
-var configRoots = []string{"engine", "adapters", "features"}
+var configRoots = []string{"ai", "engine", "adapters", "features"}
 
 func mustNotImportConfig(rel string) bool {
 	for _, r := range configRoots {
@@ -71,7 +74,7 @@ func mustNotImportConfig(rel string) bool {
 
 func TestPackagesOnlyImportTheSameOrLowerLayers(t *testing.T) {
 	// Arrange
-	out, err := exec.Command("go", "list", "-f", "{{.ImportPath}} {{join .Imports \" \"}}", "./...").Output()
+	out, err := exec.Command("go", "list", "-f", "{{.ImportPath}} {{join .Imports \" \"}}", module+"/...").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +94,7 @@ func TestTheLayeringCheckCatchesBadImports(t *testing.T) {
 	// be reported.
 	m := module + "/"
 	lines := []string{
-		m + "engine/agent " + m + "features/memory " + m + "hosts/httpapi " + m + "engine/llm " + m + "core/store",
+		m + "engine/agent " + m + "features/memory " + m + "hosts/httpapi " + m + "ai/llm " + m + "core/store",
 		m + "features/goals " + m + "features/artifacts " + m + "engine/agent " + m + "coding/sandboxtools",
 		m + "features/artifacts/workspace " + m + "features/artifacts",
 		m + "features/memory/memorytools " + m + "features/memory",
@@ -102,7 +105,7 @@ func TestTheLayeringCheckCatchesBadImports(t *testing.T) {
 		m + "bench " + m + " " + m + "hosts/tui",
 		m + "features/skills " + m + "config " + m + "core/layout",
 		m + "adapters/redisx " + m + "config",
-		m + "engine/llm " + m + "config",
+		m + "ai/llm " + m + "config",
 		m + "features/mcp " + m + "config " + m + "engine/tools",
 		m + "features/permissions " + m + "config",
 	}
@@ -119,7 +122,7 @@ func TestTheLayeringCheckCatchesBadImports(t *testing.T) {
 		"core/sandbox imports config (the core imports only core)",
 		"features/skills imports config (take your own options",
 		"adapters/redisx imports config (take your own options",
-		"engine/llm imports config (take your own options",
+		"ai/llm imports config (take your own options",
 		"adapters/redisx imports coding/sandboxtools (adapters and coding do not import each other)",
 		"coding/sandboxtools imports adapters/redisx (adapters and coding do not import each other)",
 	} {
@@ -143,13 +146,14 @@ func TestTheHostRulesCatchBadImports(t *testing.T) {
 		m + "hosts/httpapi " + m + "hosts/tui " + m + "hosts/client " + m + " " + m + "core/store " + m + "engine/agent " +
 			m + "features/memory " + m + "product",
 		m + "hosts/worker " + m + "hosts/httpapi " + m + "hosts/client " + m + " " + m + "engine/runtime " + m + "adapters/redisx",
-		m + "hosts/client " + m + "hosts/tui " + m + " " + m + "hosts/client/clienttest",
+		m + "hosts/client " + m + "hosts/tui " + m + " " + m + "hosts/inproc " + m + "hosts/clienttest",
+		m + "hosts/inproc " + m + "hosts/client " + m + " " + m + "hosts/tui",
 		m + "product " + m + "hosts/httpapi " + m + "hosts/client " + m + " " + m + "core/store " + m + "engine/agent " + m + "hosts/tui " +
 			m + "adapters/redisx " + m + "features/memory " + m + "features/goals",
 		m + "engine/agent " + m + "hosts/client",
 		m + "features/memory " + m + "hosts/httpapi",
 		m + " " + m + "hosts/httpapi " + m + "engine/agent " + m + "product",
-		m + "hosts/client/clienttest " + m + "hosts/client " + m + " " + m + "engine/llm/llmtest",
+		m + "hosts/clienttest " + m + "hosts/client " + m + " " + m + "ai/llm/llmtest",
 	}
 
 	// Act
@@ -171,6 +175,8 @@ func TestTheHostRulesCatchBadImports(t *testing.T) {
 		"hosts/worker imports hosts/httpapi (hosts/worker must not import another host)",
 		"hosts/worker imports hosts/client (hosts/worker must not import another host)",
 		"hosts/client imports hosts/tui (hosts/client must not import a host that uses it)",
+		"hosts/client imports hosts/inproc (hosts/client must not import a host that uses it)",
+		"hosts/inproc imports hosts/tui (the client implementations must not import a front end)",
 		"product imports adapters/redisx (product may import only",
 		"product imports hosts/tui (product may import only",
 		"product imports features/goals (product may import only",
@@ -185,7 +191,7 @@ func TestTheHostRulesCatchBadImports(t *testing.T) {
 	}
 	for _, bad := range []string{"hosts/tui imports hosts/client ", "hosts/tui imports core/agui", "hosts/httpapi imports hosts/client",
 		"hosts/httpapi imports the facade", "hosts/httpapi imports core/store", "hosts/worker imports the facade", "hosts/worker imports engine/runtime",
-		"hosts/worker imports adapters", "hosts/client imports the facade", "hosts/client imports hosts/client/clienttest", "clienttest imports",
+		"hosts/worker imports adapters", "hosts/client imports the facade", "hosts/inproc imports hosts/client", "clienttest imports", "hosts/httpapi imports hosts/inproc",
 		"product imports hosts/httpapi", "product imports hosts/client", "product imports the facade", "product imports core/store", "product imports engine/agent", "product imports features/memory"} {
 		if strings.Contains(got, bad) {
 			t.Errorf("a legal edge was reported (%q):\n%s", bad, got)
@@ -244,6 +250,11 @@ func findViolations(lines []string) []string {
 // extension points.
 func hostViolation(pkg, imp string) string {
 	isHost := func(p string) bool { return strings.HasPrefix(p, "hosts/") }
+	// The client family: the contract and its two engine-bound implementations (in process, conformance suite).
+	// Only the contract is free of the engine; the other two import the facade.
+	family := func(p string) bool {
+		return under(p, "hosts/client") || under(p, "hosts/inproc") || under(p, "hosts/clienttest")
+	}
 	name := func(p string) string {
 		if p == "" {
 			return "the facade (package harness)"
@@ -259,8 +270,8 @@ func hostViolation(pkg, imp string) string {
 		if under(imp, "hosts/tui") || under(imp, "hosts/worker") {
 			return pkg + " imports " + imp + " (hosts/httpapi must not import another host)"
 		}
-		if !under(imp, "hosts/httpapi") && !under(imp, "hosts/client") && imp != "" && !under(imp, "core") &&
-			imp != "config" && imp != "modelinfo" && !under(imp, "engine/llm/llmtest") {
+		if !under(imp, "hosts/httpapi") && !family(imp) && imp != "" && !under(imp, "core") &&
+			imp != "config" && imp != "modelinfo" && !under(imp, "ai/llm/llmtest") {
 			return pkg + " imports " + name(imp) + " (hosts/httpapi may import only the facade, hosts/client and core)"
 		}
 	case under(pkg, "hosts/worker"):
@@ -271,10 +282,14 @@ func hostViolation(pkg, imp string) string {
 		if isHost(imp) && !under(imp, "hosts/client") {
 			return pkg + " imports " + imp + " (hosts/client must not import a host that uses it)"
 		}
+	case under(pkg, "hosts/inproc"), under(pkg, "hosts/clienttest"):
+		if isHost(imp) && !family(imp) {
+			return pkg + " imports " + imp + " (the client implementations must not import a front end)"
+		}
 	case under(pkg, "product"):
 		// The product extends the harness with features of its own (the supervisor's tools, the repository
 		// checkout), so it may use the engine's extension API; it must not reach into the plug-ins or other hosts.
-		if under(imp, "adapters") || under(imp, "coding") || isHost(imp) && !under(imp, "hosts/httpapi") && !under(imp, "hosts/client") ||
+		if under(imp, "adapters") || under(imp, "coding") || isHost(imp) && !under(imp, "hosts/httpapi") && !family(imp) ||
 			strings.HasPrefix(imp, "features/") && !under(imp, "features/memory") {
 			return pkg + " imports " + name(imp) + " (product may import only the facade, hosts/httpapi, hosts/client, core and the engine's extension API)"
 		}
@@ -302,7 +317,7 @@ func sameFeature(a, b string) bool {
 // infrastructure must satisfy; only the adapter package adapters/redisx (and the facade, as a convenience) import go-redis.
 func TestTheCoreDoesNotDependOnRedis(t *testing.T) {
 	// Arrange / Act
-	out, err := exec.Command("go", "list", "-deps", "./core/...", "./engine/...", "./features/...", "./coding/...", "./config/...").Output()
+	out, err := exec.Command("go", "list", "-deps", module+"/core/...", module+"/engine/...", module+"/features/...", module+"/coding/...", module+"/config/...").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,4 +337,53 @@ func allowed(from, to string) bool {
 		}
 	}
 	return false
+}
+
+// TestTheAIPackageImportsNothingFromTheModule: ai/ is the standalone vocabulary of models and tools. It may
+// import the standard library and third-party code only, which is what lets it move into its own module.
+func TestTheAIPackageImportsNothingFromTheModule(t *testing.T) {
+	out, err := exec.Command("go", "list", "-f", "{{.ImportPath}} {{join .Imports \" \"}}", module+"/ai/...").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		fields := strings.Fields(line)
+		for _, imp := range fields[1:] {
+			if strings.HasPrefix(imp, module+"/") && !under(strings.TrimPrefix(imp, module+"/"), "ai") {
+				t.Errorf("%s imports %s", fields[0], imp)
+			}
+		}
+	}
+}
+
+// modules are the standalone Go modules of the repository and the modules each may require. Every one builds and
+// tests with GOWORK=off, which is what makes it usable without the rest; the root module requires them all.
+var modules = map[string][]string{
+	"ai":               {},
+	"core":             {},
+	"modelinfo":        {},
+	"hosts/client":     {"core", "modelinfo"},
+	"hosts/tui":        {"core", "modelinfo", "hosts/client"},
+	"adapters/sandbox": {"core"},
+}
+
+// TestTheStandaloneModulesRequireOnlyTheirDeclaredModules: a module that starts importing the engine, a feature or a
+// sibling it did not declare would stop building alone; this fails before it ships.
+func TestTheStandaloneModulesRequireOnlyTheirDeclaredModules(t *testing.T) {
+	for dir, allowedDeps := range modules {
+		gomod, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+		if err != nil {
+			t.Fatalf("%s: %v", dir, err)
+		}
+		for _, line := range strings.Split(string(gomod), "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.Contains(line, module+"/") || strings.HasPrefix(line, "module ") || strings.HasPrefix(line, "replace ") {
+				continue
+			}
+			dep := strings.TrimPrefix(strings.Fields(strings.TrimPrefix(line, "require "))[0], module+"/")
+			if !slices.Contains(allowedDeps, dep) {
+				t.Errorf("module %s requires %s, allowed: %v", dir, dep, allowedDeps)
+			}
+		}
+	}
 }

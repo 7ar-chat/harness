@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	goopenai "github.com/meguminnnnnnnnn/go-openai"
+	"github.com/GhaziBenDahmane/harness/ai/openai"
 
 	"github.com/GhaziBenDahmane/harness/adapters/redisx"
 	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 )
@@ -35,7 +35,7 @@ func (f *failingSteerStore) AppendMessages(ctx context.Context, msgs ...*store.M
 func (r *rig) steerThenFail(during func()) (*store.Thread, *store.Run) {
 	r.t.Helper()
 	var runID string
-	r.model = llmtest.New(llmtest.Turn{Err: &goopenai.APIError{HTTPStatusCode: 400}, OnCall: func() {
+	r.model = llmtest.New(llmtest.Turn{Err: &openai.APIError{Status: 400}, OnCall: func() {
 		if err := r.q.PushSteer(context.Background(), runID, queue.Steer{ID: "s-1", Text: "also B"}); err != nil {
 			r.t.Error(err)
 		}

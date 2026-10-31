@@ -5,8 +5,7 @@ import (
 	"log/slog"
 	"slices"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/approvals"
@@ -61,7 +60,7 @@ func (h *Hook) Risky(ctx context.Context, run *store.Run, toolName, arguments st
 
 // Pause implements agent.BeforeToolHook: it records the approval like the
 // interactive gate does.
-func (h *Hook) Pause(ctx context.Context, run *store.Run, tc schema.ToolCall) (*tools.Interrupt, error) {
+func (h *Hook) Pause(ctx context.Context, run *store.Run, tc ai.ToolCall) (*tools.Interrupt, error) {
 	return h.Inner.Pause(ctx, run, tc)
 }
 

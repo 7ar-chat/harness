@@ -5,9 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 )
 
 func TestAViewThatFailedAfterTheLastChangeDoesNotBlockTheStop(t *testing.T) {
@@ -15,7 +14,7 @@ func TestAViewThatFailedAfterTheLastChangeDoesNotBlockTheStop(t *testing.T) {
 	// Arrange
 	r := verifyRig(t, true,
 		llmtest.Turn{Chunks: streamedCall("w1", "write_file", `{"path":"outputs/report.docx","content":"fine"}`)},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "v1", "view_file", `{"path":"outputs/report.docx"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "v1", "view_file", `{"path":"outputs/report.docx"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("Report ready; I could not view its pages (render failed).")},
 		llmtest.Turn{Chunks: llmtest.Text("unexpected call")},
 	)

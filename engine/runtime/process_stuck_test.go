@@ -7,11 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 // failing is a tool that always fails with the message of its "msg" argument.
@@ -101,7 +100,7 @@ func TestEightFailedCallsInARowForceAnAnswerWithoutTools(t *testing.T) {
 		t.Fatalf("fifth result %v", results[4]["content"])
 	}
 	final := calls[8]
-	if final.ToolChoice == nil || *final.ToolChoice != schema.ToolChoiceForbidden ||
+	if final.ToolChoice == nil || *final.ToolChoice != ai.ToolChoiceForbidden ||
 		final.Messages[len(final.Messages)-1].Content != fmt.Sprintf(agent.TooManyErrorsNote, 8) {
 		t.Fatalf("final call choice %v last %+v", final.ToolChoice, final.Messages[len(final.Messages)-1])
 	}
@@ -143,7 +142,7 @@ func TestUnfinishedPlanIsRemindedInAResumedRun(t *testing.T) {
 	plan := `{"items":[{"id":"1","title":"Load data","status":"completed"},{"id":"2","title":"Write the report","status":"in_progress"}]}`
 	r := newRig(t,
 		callTurn("p1", "update_plan", plan),
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "ask", "ask_user", askArgs)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "ask", "ask_user", askArgs)}},
 		llmtest.Turn{Chunks: llmtest.Text("Done.")},
 		llmtest.Turn{Chunks: llmtest.Text("Now done.")},
 	)

@@ -8,15 +8,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GhaziBenDahmane/harness/ai/compaction"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
-	"github.com/GhaziBenDahmane/harness/engine/compaction"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/features/goals"
 	"github.com/GhaziBenDahmane/harness/features/memory"
 	"github.com/GhaziBenDahmane/harness/features/skills"
 	skillsfs "github.com/GhaziBenDahmane/harness/features/skills/skillsfs"
+	"github.com/GhaziBenDahmane/harness/prompts"
 )
 
 var updatePrompts = flag.Bool("update-prompts", false, "rewrite testdata/prompts/*.golden")

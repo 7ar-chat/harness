@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"log/slog"
 	"math/rand/v2"
@@ -12,12 +13,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/schema"
-	"github.com/google/uuid"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm"
 	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/engine/llm"
 )
 
 // Harness v3 §1: model call budgets, retries and the texts of their outcomes.
@@ -44,7 +42,7 @@ var errStalled = errors.New("the model stream was silent for too long")
 
 // stepOutput is the outcome of a successful model call.
 type stepOutput struct {
-	msg         *schema.Message
+	msg         *ai.Message
 	assistantID string
 	reasoningID string
 	reasoning   string
@@ -126,7 +124,7 @@ type attemptResult struct {
 // "retried" error result), nothing of it is persisted, and CUSTOM work.retry
 // precedes the new attempt. A cancelled call returns its partial output with
 // ctx.Err().
-func (st *runState) callModel(ctx context.Context, m model.ToolCallingChatModel, msgs []*schema.Message, opts ...model.Option) (*stepOutput, error) {
+func (st *runState) callModel(ctx context.Context, m ai.Model, msgs []*ai.Message, opts ...ai.Option) (*stepOutput, error) {
 	retries := st.a.stepRetries()
 	for attempt := 1; ; attempt++ {
 		res := st.attempt(ctx, m, msgs, opts...)
@@ -255,7 +253,7 @@ func (st *runState) effortScaled(d time.Duration) time.Duration {
 }
 
 // attempt is one model call: it streams the answer as AG-UI events.
-func (st *runState) attempt(ctx context.Context, m model.ToolCallingChatModel, msgs []*schema.Message, opts ...model.Option) attemptResult {
+func (st *runState) attempt(ctx context.Context, m ai.Model, msgs []*ai.Message, opts ...ai.Option) attemptResult {
 	actx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	actx, info := llm.WithCallInfo(actx)
@@ -277,7 +275,7 @@ func (st *runState) attempt(ctx context.Context, m model.ToolCallingChatModel, m
 	}
 	defer sr.Close()
 	t := &translator{st: st, assistantID: uuid.NewString(), calls: map[string]*liveCall{}, byIndex: map[int]string{}}
-	var chunks []*schema.Message
+	var chunks []*ai.Message
 	var streamErr error
 	for {
 		chunk, err := sr.Recv()
@@ -301,15 +299,15 @@ func (st *runState) attempt(ctx context.Context, m model.ToolCallingChatModel, m
 
 	// Tool calls are merged by the translator: concatenating them would fail on
 	// providers that reuse an Index for parallel calls with distinct ids (A-18).
-	final := &schema.Message{Role: schema.Assistant}
+	final := &ai.Message{Role: ai.RoleAssistant}
 	if len(chunks) > 0 {
-		stripped := make([]*schema.Message, 0, len(chunks))
+		stripped := make([]*ai.Message, 0, len(chunks))
 		for _, c := range chunks {
 			cp := *c
 			cp.ToolCalls = nil
 			stripped = append(stripped, &cp)
 		}
-		if merged, err := schema.ConcatMessages(stripped); err == nil {
+		if merged, err := ai.ConcatMessages(stripped); err == nil {
 			final = merged
 		} else {
 			slog.Warn("agent: merging stream chunks failed", "run_id", st.in.Run.ID, "error", err)
@@ -364,7 +362,7 @@ type translator struct {
 // Without both, only the first fragment of a chunk may continue the previous
 // call (argument streaming), and only when it does not name a new tool;
 // other positions are new calls.
-func (t *translator) callKey(tc schema.ToolCall, pos int) string {
+func (t *translator) callKey(tc ai.ToolCall, pos int) string {
 	switch {
 	case tc.Index != nil:
 		key, ok := t.byIndex[*tc.Index]
@@ -442,7 +440,7 @@ func (t *translator) startCall(ctx context.Context, c *liveCall) error {
 	return nil
 }
 
-func (t *translator) handle(ctx context.Context, chunk *schema.Message) error {
+func (t *translator) handle(ctx context.Context, chunk *ai.Message) error {
 	if chunk == nil {
 		return nil
 	}
@@ -535,16 +533,16 @@ func (t *translator) announced() []string {
 }
 
 // finish closes open messages and returns the tool calls merged by the
-// translator itself (schema.ConcatMessages does not merge Index-less fragments).
+// translator itself (ai.ConcatMessages does not merge Index-less fragments).
 // When the stream broke (cancelled), announced calls are ended and no call is returned.
-func (t *translator) finish(ctx context.Context, broken bool) ([]schema.ToolCall, error) {
+func (t *translator) finish(ctx context.Context, broken bool) ([]ai.ToolCall, error) {
 	if err := t.closeReasoning(ctx); err != nil {
 		return nil, err
 	}
 	if err := t.closeText(ctx); err != nil {
 		return nil, err
 	}
-	var calls []schema.ToolCall
+	var calls []ai.ToolCall
 	for _, c := range t.order {
 		if broken && !c.started {
 			continue
@@ -558,7 +556,7 @@ func (t *translator) finish(ctx context.Context, broken bool) ([]schema.ToolCall
 			}
 		}
 		if !broken {
-			calls = append(calls, schema.ToolCall{ID: c.id, Type: "function", Function: schema.FunctionCall{Name: c.name, Arguments: c.args.String()}})
+			calls = append(calls, ai.ToolCall{ID: c.id, Type: "function", Function: ai.FunctionCall{Name: c.name, Arguments: c.args.String()}})
 		}
 	}
 	if err := t.endOpenCall(ctx); err != nil {

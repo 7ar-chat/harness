@@ -5,8 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/approvals"
 )
@@ -94,7 +93,7 @@ func TestHookApprovedEditKindIsNotAskedAgainButCommandsAre(t *testing.T) {
 
 func TestHookPauseRecordsTheApproval(t *testing.T) {
 	h, fs := newHook(ModeAsk)
-	tc := schema.ToolCall{ID: "call1", Function: schema.FunctionCall{Name: "execute_command", Arguments: cmdArgs("git push")}}
+	tc := ai.ToolCall{ID: "call1", Function: ai.FunctionCall{Name: "execute_command", Arguments: cmdArgs("git push")}}
 
 	intr, err := h.Pause(context.Background(), &store.Run{ID: "r1", ThreadID: "t1"}, tc)
 

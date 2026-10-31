@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/cloudwego/eino/components/tool"
+	"github.com/GhaziBenDahmane/harness/ai"
 )
 
 // SandboxOff is RunContext.Sandbox of a run without sandbox.
@@ -26,7 +26,7 @@ type RunContext struct {
 type Provider interface {
 	Name() string
 	// Tools returns the provider's tools for this run and a cleanup func called at run end.
-	Tools(ctx context.Context, rc RunContext) ([]tool.BaseTool, func(), error)
+	Tools(ctx context.Context, rc RunContext) ([]ai.BaseTool, func(), error)
 }
 
 // ApprovalNamer is a tool whose exposed name may not show what it does (MCP:
@@ -56,8 +56,8 @@ func NewRegistry(providers ...Provider) *Registry {
 func (r *Registry) Name() string { return "registry" }
 
 // Tools implements Provider: merges every provider's tools, dropping duplicate names.
-func (r *Registry) Tools(ctx context.Context, rc RunContext) ([]tool.BaseTool, func(), error) {
-	var all []tool.BaseTool
+func (r *Registry) Tools(ctx context.Context, rc RunContext) ([]ai.BaseTool, func(), error) {
+	var all []ai.BaseTool
 	var cleanups []func()
 	seen := map[string]bool{}
 	for _, p := range r.providers {

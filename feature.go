@@ -7,13 +7,12 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/cloudwego/eino/components/tool"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm"
 	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/llm"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/artifacts"
@@ -351,7 +350,7 @@ type lateProvider struct {
 
 func (l *lateProvider) Name() string { return l.name }
 
-func (l *lateProvider) Tools(ctx context.Context, rc tools.RunContext) ([]tool.BaseTool, func(), error) {
+func (l *lateProvider) Tools(ctx context.Context, rc tools.RunContext) ([]ai.BaseTool, func(), error) {
 	if l.p == nil {
 		return nil, func() {}, nil
 	}

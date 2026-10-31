@@ -10,8 +10,8 @@ import (
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
 	"github.com/GhaziBenDahmane/harness/features/projectdocs"
+	"github.com/GhaziBenDahmane/harness/prompts"
 )
 
 func manager(t *testing.T, files map[string]string) (sandbox.Manager, string) {

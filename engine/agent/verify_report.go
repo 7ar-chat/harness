@@ -7,8 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/store"
 )
@@ -136,7 +135,7 @@ func (st *runState) answerVerification() map[string]any {
 
 // answerMetadata is the metadata of an assistant message: metadata.verification
 // on answers (no tool calls) of a run that changed deliverables.
-func (st *runState) answerMetadata(msg *schema.Message) map[string]any {
+func (st *runState) answerMetadata(msg *ai.Message) map[string]any {
 	if msg == nil || len(msg.ToolCalls) > 0 {
 		return nil
 	}

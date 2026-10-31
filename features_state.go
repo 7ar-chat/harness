@@ -10,7 +10,6 @@ import (
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/artifacts"
@@ -23,6 +22,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/features/skills/skilltools"
 	"github.com/GhaziBenDahmane/harness/features/titles"
 	"github.com/GhaziBenDahmane/harness/features/verify"
+	"github.com/GhaziBenDahmane/harness/prompts"
 )
 
 // Skills offers the skills (<name>/SKILL.md folders): the load_skill tool, the

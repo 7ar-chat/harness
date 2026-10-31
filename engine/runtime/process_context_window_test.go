@@ -8,11 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 )
 
@@ -73,7 +72,7 @@ func dumpTool() *fakeTool {
 }
 
 func dumpCall(n int) llmtest.Turn {
-	return llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, fmt.Sprintf("d%d", n), "dump", fmt.Sprintf(`{"n":%d}`, n))}}
+	return llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, fmt.Sprintf("d%d", n), "dump", fmt.Sprintf(`{"n":%d}`, n))}}
 }
 
 func TestProcessMasksOldToolResultsInTheModelInput(t *testing.T) {
@@ -98,7 +97,7 @@ func TestProcessMasksOldToolResultsInTheModelInput(t *testing.T) {
 	results := func(c llmtest.Call) []string {
 		var out []string
 		for _, m := range c.Messages {
-			if m.Role == schema.Tool {
+			if m.Role == ai.RoleTool {
 				out = append(out, m.Content)
 			}
 		}
@@ -166,7 +165,7 @@ func TestProcessKeepsTheTailOfOldToolOutputsFromEarlierRuns(t *testing.T) {
 	checkStrictOrder(t, r.events(run.ID))
 	var got string
 	for _, m := range r.model.Calls()[0].Messages {
-		if m.Role == schema.Tool {
+		if m.Role == ai.RoleTool {
 			got = m.Content
 		}
 	}
@@ -179,8 +178,8 @@ func TestProcessSpillsALargeToolOutputToAFile(t *testing.T) {
 	// An output over AGENT_TOOL_OUTPUT_SPILL_CHARS is written in full to a file of /workspace/.work/tool-output/ of the running sandbox; the model gets its head, tail, path and a paging hint, so nothing is silently dropped (A-04).
 	// Arrange
 	big := "HEAD-MARK " + strings.Repeat("row,1,2,3\n", 5000) + " TAIL-MARK"
-	r := newRig(t, llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "c0", "execute_command", `{"command":"true"}`)}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "c1", "dump", `{}`)}}, llmtest.Turn{Chunks: llmtest.Text("ok")})
+	r := newRig(t, llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "c0", "execute_command", `{"command":"true"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "c1", "dump", `{}`)}}, llmtest.Turn{Chunks: llmtest.Text("ok")})
 	r.withTools(&fakeTool{name: "dump", run: func(context.Context, string) (string, error) { return big, nil }})
 	r.agent.Harness.Spill = tools.SandboxSpiller{Sandboxes: r.mgr}
 	th, run := r.queued("dump the table")
@@ -208,7 +207,7 @@ func TestProcessSpillsALargeToolOutputToAFile(t *testing.T) {
 func assistantReasoning(c llmtest.Call) []string {
 	var out []string
 	for _, m := range c.Messages {
-		if m.Role == schema.Assistant {
+		if m.Role == ai.RoleAssistant {
 			out = append(out, m.ReasoningContent)
 		}
 	}
@@ -219,8 +218,8 @@ func TestProcessPassesReasoningBackWithinAndAcrossRuns(t *testing.T) {
 	// For LLM_REASONING_PASSBACK_MODELS, assistant messages carry their reasoning_content on the next steps and in later runs (stored reasoning rows); other models never get it (A-10).
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.Reasoning("think 1"), llmtest.ToolCall(0, "c1", "list_files", `{}`)}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.Reasoning("think 2"), {Role: schema.Assistant, Content: "listed"}}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.Reasoning("think 1"), llmtest.ToolCall(0, "c1", "list_files", `{}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.Reasoning("think 2"), {Role: ai.RoleAssistant, Content: "listed"}}},
 		llmtest.Turn{Chunks: llmtest.Text("again")},
 	)
 	r.agent.Harness.ReasoningPassback = func(m string) bool { return m == "deepseek-test" }
@@ -228,7 +227,7 @@ func TestProcessPassesReasoningBackWithinAndAcrossRuns(t *testing.T) {
 	first := r.create(th, store.NewRun{Model: "deepseek-test", Message: store.Message{Role: store.RoleUser, Content: "list"}})
 	r.process(first)
 	second := r.create(th, store.NewRun{Model: "deepseek-test", Message: store.Message{Role: store.RoleUser, Content: "list again"}})
-	other := newRig(t, llmtest.Turn{Chunks: []*schema.Message{llmtest.Reasoning("think"), llmtest.ToolCall(0, "c1", "list_files", `{}`)}}, llmtest.Turn{Chunks: llmtest.Text("ok")})
+	other := newRig(t, llmtest.Turn{Chunks: []*ai.Message{llmtest.Reasoning("think"), llmtest.ToolCall(0, "c1", "list_files", `{}`)}}, llmtest.Turn{Chunks: llmtest.Text("ok")})
 	_, plain := other.queued("list")
 
 	// Act
@@ -249,7 +248,7 @@ func TestProcessPassesReasoningBackWithinAndAcrossRuns(t *testing.T) {
 	}
 }
 
-func sameMessage(a, b *schema.Message) bool {
+func sameMessage(a, b *ai.Message) bool {
 	if a.Role != b.Role || a.Content != b.Content || a.ToolCallID != b.ToolCallID || len(a.ToolCalls) != len(b.ToolCalls) {
 		return false
 	}
@@ -304,9 +303,9 @@ func TestProcessRehydratesPlanSkillsAndDeliverablesAfterACompaction(t *testing.T
 	skill := "SKILL docx: always run the finish gate before answering. " + strings.Repeat("z", 12000)
 	ok := true
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "s1", "load_skill", `{"name":"docx"}`)}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "p1", "update_plan", `{"items":[{"id":"1","title":"Write the report","status":"completed"}]}`)}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.ToolCall(0, "d1", "dump", `{}`), 16000, 10)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "s1", "load_skill", `{"name":"docx"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "p1", "update_plan", `{"items":[{"id":"1","title":"Write the report","status":"completed"}]}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(llmtest.ToolCall(0, "d1", "dump", `{}`), 16000, 10)}},
 		llmtest.Turn{Chunks: llmtest.Text("## Goal\nWrite the report.")},
 		llmtest.Turn{Chunks: llmtest.Text("Report written.")},
 	)
@@ -330,7 +329,7 @@ func TestProcessRehydratesPlanSkillsAndDeliverablesAfterACompaction(t *testing.T
 	final := calls[4].Messages
 	ctxMsg := final[1]
 	for _, want := range []string{"SKILL docx: always run the finish gate", "Write the report", "completed", "/workspace/outputs/r.docx", "inspect_docx", "12 checks passed"} {
-		if ctxMsg.Role != schema.User || !strings.Contains(ctxMsg.Content, want) {
+		if ctxMsg.Role != ai.RoleUser || !strings.Contains(ctxMsg.Content, want) {
 			t.Fatalf("context message lacks %q: %+v", want, ctxMsg)
 		}
 	}

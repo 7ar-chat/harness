@@ -7,17 +7,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 // lastToolResult is the content of the newest tool message of a model call.
 func lastToolResult(c llmtest.Call) string {
 	for i := len(c.Messages) - 1; i >= 0; i-- {
-		if c.Messages[i].Role == schema.Tool {
+		if c.Messages[i].Role == ai.RoleTool {
 			return c.Messages[i].Content
 		}
 	}
@@ -45,7 +44,7 @@ func TestPollingARunningJobIsNeverRefusedAsALoop(t *testing.T) {
 	r.model = llmtest.NewFunc(func(c llmtest.Call) llmtest.Turn {
 		switch {
 		case jobID == "" && lastToolResult(c) == "":
-			return llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "x1", "execute_command", `{"command":"make all","background":true}`)}}
+			return llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "x1", "execute_command", `{"command":"make all","background":true}`)}}
 		case jobID == "":
 			var res struct {
 				JobID string `json:"jobId"`
@@ -60,7 +59,7 @@ func TestPollingARunningJobIsNeverRefusedAsALoop(t *testing.T) {
 			close(release) // the 4th poll finds the job finished
 			time.Sleep(50 * time.Millisecond)
 		}
-		return llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "p"+string(rune('0'+polls)), "job_output", `{"jobId":"`+jobID+`"}`)}}
+		return llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "p"+string(rune('0'+polls)), "job_output", `{"jobId":"`+jobID+`"}`)}}
 	})
 	r.agent.Models = llmtest.Factory{M: r.model}
 	_, run := r.queued("build it")

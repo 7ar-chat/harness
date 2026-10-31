@@ -14,13 +14,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/components/tool/utils"
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/agent"
+	"github.com/GhaziBenDahmane/harness/ai/llm"
 	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/engine/llm"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 )
 
@@ -64,19 +61,19 @@ type input struct {
 	Task string `json:"task" jsonschema_description:"A self-contained question or investigation, with any file or symbol names that help"`
 }
 
-type readOnlyTool struct{ tool.InvokableTool }
+type readOnlyTool struct{ ai.InvokableTool }
 
 func (readOnlyTool) ReadOnly() bool { return true }
 
 // Tools implements tools.Provider.
-func (p *Provider) Tools(_ context.Context, rc tools.RunContext) ([]tool.BaseTool, func(), error) {
-	t, err := utils.InferTool("explore", description, func(ctx context.Context, in input) (string, error) {
+func (p *Provider) Tools(_ context.Context, rc tools.RunContext) ([]ai.BaseTool, func(), error) {
+	t, err := ai.InferTool("explore", description, func(ctx context.Context, in input) (string, error) {
 		return p.explore(ctx, rc, in.Task)
 	})
 	if err != nil {
 		return nil, nil, err
 	}
-	return []tool.BaseTool{readOnlyTool{t}}, nil, nil
+	return []ai.BaseTool{readOnlyTool{t}}, nil, nil
 }
 
 func (p *Provider) explore(ctx context.Context, rc tools.RunContext, task string) (string, error) {
@@ -90,15 +87,15 @@ func (p *Provider) explore(ctx context.Context, rc tools.RunContext, task string
 	if cleanup != nil {
 		defer cleanup()
 	}
-	byName := map[string]tool.InvokableTool{}
-	var infos []*schema.ToolInfo
+	var list []ai.InvokableTool
+	var infos []*ai.ToolInfo
 	for _, t := range all {
 		info, err := t.Info(ctx)
-		inv, ok := t.(tool.InvokableTool)
+		inv, ok := t.(ai.InvokableTool)
 		if err != nil || info == nil || !ok || !readOnlyNames[info.Name] {
 			continue
 		}
-		byName[info.Name] = inv
+		list = append(list, inv)
 		infos = append(infos, info)
 	}
 	if len(infos) == 0 {
@@ -116,44 +113,53 @@ func (p *Provider) explore(ctx context.Context, rc tools.RunContext, task string
 	if steps <= 0 {
 		steps = DefaultMaxSteps
 	}
-	msgs := []*schema.Message{schema.SystemMessage(systemPrompt), schema.UserMessage(task)}
 	rep := newReporter(ctx, p.Model)
 	rep.emit(agui.SubagentStart, map[string]any{"task": clipText(task, 400)})
-	for step := 1; ; step++ {
-		var opts []model.Option
-		if step >= steps {
-			msgs = append(msgs, schema.UserMessage("Step limit reached: write your report now from what you found."))
-			opts = append(opts, model.WithToolChoice(schema.ToolChoiceForbidden))
-		}
-		rep.step = step
-		rep.emit(agui.SubagentStep, nil)
-		reply, err := m.Generate(ctx, msgs, opts...)
-		rep.addUsage(reply)
-		if err != nil {
-			rep.finish(0, true)
-			if ctx.Err() != nil {
-				return "", ctx.Err()
+	res, err := agent.Run(ctx, agent.Config{
+		Model: m, Tools: list, MaxSteps: steps,
+		LimitNudge: "Step limit reached: write your report now from what you found.",
+		OnStep: func(step int) {
+			rep.step = step
+			rep.emit(agui.SubagentStep, nil)
+		},
+		OnReply: func(_ int, reply *ai.Message) {
+			rep.addUsage(reply)
+			if len(reply.ToolCalls) > 0 {
+				if t := strings.TrimSpace(reply.Content); t != "" {
+					rep.emit(agui.SubagentText, map[string]any{"text": clipText(t, maxEventText)})
+				}
 			}
-			return "", tools.Errorf("the explorer failed: %v", err)
-		}
-		if len(reply.ToolCalls) == 0 || step >= steps {
-			out := report(reply.Content)
-			rep.finish(len(out), false)
-			return out, nil
-		}
-		msgs = append(msgs, reply)
-		if t := strings.TrimSpace(reply.Content); t != "" {
-			rep.emit(agui.SubagentText, map[string]any{"text": clipText(t, maxEventText)})
-		}
-		for _, tc := range reply.ToolCalls {
-			res := runTool(ctx, byName, tc)
+		},
+		Invoke: func(ctx context.Context, tc ai.ToolCall) string {
+			res := runTool(ctx, byName(list), tc)
 			rep.tool(tc, res)
-			msgs = append(msgs, schema.ToolMessage(res, tc.ID))
+			return res
+		},
+	}, []*ai.Message{ai.SystemMessage(systemPrompt), ai.UserMessage(task)})
+	if err != nil {
+		rep.finish(0, true)
+		if ctx.Err() != nil {
+			return "", ctx.Err()
 		}
+		return "", tools.Errorf("the explorer failed: %v", err)
 	}
+	out := report(res.Reply.Content)
+	rep.finish(len(out), false)
+	return out, nil
 }
 
-func runTool(ctx context.Context, byName map[string]tool.InvokableTool, tc schema.ToolCall) string {
+// byName indexes the explorer's tools by the name the model calls them with.
+func byName(list []ai.InvokableTool) map[string]ai.InvokableTool {
+	out := make(map[string]ai.InvokableTool, len(list))
+	for _, t := range list {
+		if info, err := t.Info(context.Background()); err == nil && info != nil {
+			out[info.Name] = t
+		}
+	}
+	return out
+}
+
+func runTool(ctx context.Context, byName map[string]ai.InvokableTool, tc ai.ToolCall) string {
 	t, ok := byName[tc.Function.Name]
 	if !ok {
 		return fmt.Sprintf("error: %s is not available to the explorer (read_file, search_files, list_files only)", tc.Function.Name)
@@ -220,7 +226,7 @@ func (r *reporter) emit(phase string, extra map[string]any) {
 	tools.Live(r.ctx, agui.SubagentEvent(v))
 }
 
-func (r *reporter) addUsage(m *schema.Message) {
+func (r *reporter) addUsage(m *ai.Message) {
 	if m == nil || m.ResponseMeta == nil || m.ResponseMeta.Usage == nil {
 		return
 	}
@@ -230,7 +236,7 @@ func (r *reporter) addUsage(m *schema.Message) {
 	r.cached += u.PromptTokenDetails.CachedTokens
 }
 
-func (r *reporter) tool(tc schema.ToolCall, result string) {
+func (r *reporter) tool(tc ai.ToolCall, result string) {
 	r.emit(agui.SubagentTool, map[string]any{"tool": map[string]any{
 		"name": tc.Function.Name, "args": argSummary(tc.Function.Name, tc.Function.Arguments),
 		"result": clipText(firstLine(result), maxEventResult), "isError": strings.HasPrefix(result, "error:"),

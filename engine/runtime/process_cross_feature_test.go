@@ -5,13 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/compaction"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/compaction"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 // Cross-feature behaviour of the merged harness v2 (artifacts × goals, compaction, ask_user).
@@ -110,7 +109,7 @@ func TestAskUserResumeWithArtifactsOnBothSides(t *testing.T) {
 	// A file written before ask_user is reported before the interrupt; the resumed run replays the answer first and versions the file again.
 	// Arrange
 	r := newScriptedRig(t, false,
-		llmtest.Turn{Chunks: []*schema.Message{
+		llmtest.Turn{Chunks: []*ai.Message{
 			llmtest.ToolCall(0, "call_w", "write_file", `{"path":"report.md","content":"# Draft"}`),
 			llmtest.ToolCall(1, "call_ask", "ask_user", askArgs),
 		}},

@@ -5,8 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/store"
 )
 
@@ -47,7 +46,7 @@ func TestProcessRebuildsProviderValidHistory(t *testing.T) {
 			t.Fatal("reasoning leaked into the history")
 		}
 	}
-	if msgs[1].Role != schema.Assistant || len(msgs[1].ToolCalls) != 2 {
+	if msgs[1].Role != ai.RoleAssistant || len(msgs[1].ToolCalls) != 2 {
 		t.Fatalf("assistant tool calls lost: %+v", msgs[1])
 	}
 }
@@ -78,7 +77,7 @@ func TestProcessTruncatesOldToolOutputs(t *testing.T) {
 	// Assert
 	byID := map[string]int{}
 	for _, m := range r.model.Calls()[0].Messages {
-		if m.Role == schema.Tool {
+		if m.Role == ai.RoleTool {
 			byID[m.ToolCallID] = len(m.Content)
 		}
 	}

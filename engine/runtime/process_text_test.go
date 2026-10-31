@@ -5,11 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
 	"github.com/GhaziBenDahmane/harness/adapters/redisx"
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 func TestProcessStreamsTextAnswerAndCompletes(t *testing.T) {
@@ -63,7 +62,7 @@ func TestProcessGivesModelSystemPromptAndUserMessage(t *testing.T) {
 	// Assert
 	calls := r.model.Calls()
 	msgs := calls[0].Messages
-	if len(msgs) != 2 || msgs[0].Role != schema.System || msgs[1].Role != schema.User || msgs[1].Content != "Compute 2+2" {
+	if len(msgs) != 2 || msgs[0].Role != ai.RoleSystem || msgs[1].Role != ai.RoleUser || msgs[1].Content != "Compute 2+2" {
 		t.Fatalf("messages %+v", msgs)
 	}
 	sys := msgs[0].Content
@@ -89,10 +88,10 @@ func TestProcessGivesModelSystemPromptAndUserMessage(t *testing.T) {
 func TestProcessStreamsReasoningSeparately(t *testing.T) {
 	// Reasoning deltas become REASONING_* events and a reasoning message, closed before the answer.
 	// Arrange
-	r := newRig(t, llmtest.Turn{Chunks: []*schema.Message{
-		{Role: schema.Assistant, ReasoningContent: "thinking"},
-		{Role: schema.Assistant, ReasoningContent: " more"},
-		{Role: schema.Assistant, Content: "Answer"},
+	r := newRig(t, llmtest.Turn{Chunks: []*ai.Message{
+		{Role: ai.RoleAssistant, ReasoningContent: "thinking"},
+		{Role: ai.RoleAssistant, ReasoningContent: " more"},
+		{Role: ai.RoleAssistant, Content: "Answer"},
 	}})
 	th, run := r.queued("q")
 

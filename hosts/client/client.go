@@ -7,7 +7,7 @@
 // answering an approval or a question, and a thread's files. Two
 // implementations satisfy it and behave the same (clienttest.Run checks both):
 //
-//   - InProcess drives a harness.Harness living in the same process;
+//   - hosts/inproc drives a harness.Harness living in the same process;
 //   - HTTP speaks the JSON + Server-Sent Events API served by hosts/web, so a
 //     front end can attach to a remote harness-web.
 //
@@ -358,10 +358,18 @@ var (
 	ErrTooLarge        = &Error{Status: 413, Code: "too_large", Message: "The file is too large to download."}
 )
 
-// errorf returns a copy of sentinel with a specific message.
-func errorf(sentinel *Error, format string, args ...any) *Error {
+// Errorf returns a copy of sentinel with a specific message.
+func Errorf(sentinel *Error, format string, args ...any) *Error {
 	e := *sentinel
 	e.Message = fmt.Sprintf(format, args...)
+	return &e
+}
+
+// Wrap returns sentinel's status and code with message and err as the cause errors.Unwrap reports. An
+// engine-side Client uses it to keep the original error behind the API error.
+func Wrap(sentinel *Error, message string, err error) *Error {
+	e := *sentinel
+	e.Message, e.cause = message, err
 	return &e
 }
 

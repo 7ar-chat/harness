@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
+	"github.com/GhaziBenDahmane/harness/prompts"
 )
 
 func TestAgentProfileCodingSelectsTheCodingPromptUnlessVariantsAreSetExplicitly(t *testing.T) {

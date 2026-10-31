@@ -48,6 +48,7 @@ import (
 
 	"github.com/GhaziBenDahmane/harness"
 	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/GhaziBenDahmane/harness/hosts/inproc"
 )
 
 // Caller is an authenticated user.
@@ -214,14 +215,14 @@ func (s *Server) Authed(kind ResourceKind, next Handler) http.HandlerFunc {
 
 // ---- handlers ----
 //
-// The handlers are a thin HTTP skin over client.InProcess: the DTOs, the
+// The handlers are a thin HTTP skin over inproc.New: the DTOs, the
 // validation and the errors are those of package client, which is also what
 // client.HTTP decodes.
 
 // api is the engine as seen by the caller.
 func (s *Server) API(c Caller) client.Client {
-	return client.InProcess(s.H, c.Login, client.WithModels(s.O.Models, s.O.DefaultModel), client.WithModelInfo(s.O.ModelInfo),
-		client.WithAuthor(s.policy.Author(c)))
+	return inproc.New(s.H, c.Login, inproc.WithModels(s.O.Models, s.O.DefaultModel), inproc.WithModelInfo(s.O.ModelInfo),
+		inproc.WithAuthor(s.policy.Author(c)))
 }
 
 func (s *Server) models(w http.ResponseWriter, r *http.Request, c Caller) {

@@ -6,9 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/components/tool"
-
 	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
@@ -31,10 +30,10 @@ func TestAfterPathNoteIsAppendedToReadWriteAndEditResults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	byName := map[string]tool.InvokableTool{}
+	byName := map[string]ai.InvokableTool{}
 	for _, x := range ts {
 		info, _ := x.Info(context.Background())
-		byName[info.Name] = x.(tool.InvokableTool)
+		byName[info.Name] = x.(ai.InvokableTool)
 	}
 	ctx := context.Background()
 

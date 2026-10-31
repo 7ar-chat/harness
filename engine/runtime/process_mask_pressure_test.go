@@ -5,23 +5,22 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 // dumpCallUsing is dumpCall whose model call reports prompt tokens of its request.
 func dumpCallUsing(n, promptTokens int) llmtest.Turn {
 	c := llmtest.ToolCall(0, fmt.Sprintf("d%d", n), "dump", fmt.Sprintf(`{"n":%d}`, n))
-	return llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(c, promptTokens, 10)}}
+	return llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(c, promptTokens, 10)}}
 }
 
 // stubCount counts the masked tool results of a request.
 func stubCount(c llmtest.Call) int {
 	n := 0
 	for _, m := range c.Messages {
-		if m.Role == schema.Tool && strings.HasPrefix(m.Content, "[dump result,") {
+		if m.Role == ai.RoleTool && strings.HasPrefix(m.Content, "[dump result,") {
 			n++
 		}
 	}

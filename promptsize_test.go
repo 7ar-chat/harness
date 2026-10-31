@@ -13,21 +13,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
 	"github.com/GhaziBenDahmane/harness"
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/compaction"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
-	"github.com/GhaziBenDahmane/harness/engine/compaction"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/GhaziBenDahmane/harness/prompts"
 )
 
 // fixedOverhead is what every request of a profile carries before the user speaks.
 type fixedOverhead struct {
-	Tools        []*schema.ToolInfo
+	Tools        []*ai.ToolInfo
 	ToolTokens   map[string]int
 	Sections     []string // names, in prompt order
 	SectionTok   map[string]int
@@ -75,7 +74,7 @@ func measure(t *testing.T, env map[string]string) fixedOverhead {
 			t.Fatal(err)
 		}
 		out.Tools = append(out.Tools, info)
-		out.ToolTokens[info.Name] = compaction.EstimateTools([]*schema.ToolInfo{info})
+		out.ToolTokens[info.Name] = compaction.EstimateTools([]*ai.ToolInfo{info})
 	}
 	out.TotalTools = compaction.EstimateTools(out.Tools)
 	b, _ := json.Marshal(out.Tools)

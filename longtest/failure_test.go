@@ -4,16 +4,15 @@ package longtest_test
 
 import (
 	"context"
+	"github.com/GhaziBenDahmane/harness/ai/openai"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-	goopenai "github.com/meguminnnnnnnnn/go-openai"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/longtest"
 )
@@ -48,11 +47,11 @@ func TestModelStreamErrorsMidRunAreRetriedAndLeaveNoTrace(t *testing.T) {
 		switch step {
 		case 30:
 			failed[step] = true
-			return llmtest.Turn{Chunks: []*schema.Message{{Role: schema.Assistant, Content: "PARTIAL-ATTEMPT-TEXT"}, llmtest.ToolCall(0, "cx", "read_file", `{"path":"/work`)},
-				FailAfter: &goopenai.APIError{HTTPStatusCode: 502, Message: "bad gateway"}}
+			return llmtest.Turn{Chunks: []*ai.Message{{Role: ai.RoleAssistant, Content: "PARTIAL-ATTEMPT-TEXT"}, llmtest.ToolCall(0, "cx", "read_file", `{"path":"/work`)},
+				FailAfter: &openai.APIError{Status: 502, Message: "bad gateway"}}
 		case 70:
 			failed[step] = true
-			return llmtest.Turn{Err: &goopenai.APIError{HTTPStatusCode: 503, Message: "overloaded"}}
+			return llmtest.Turn{Err: &openai.APIError{Status: 503, Message: "overloaded"}}
 		}
 		return turn
 	}
@@ -93,7 +92,7 @@ func TestHangingCommandTimesOutIntoABackgroundJobAndTheRunContinues(t *testing.T
 		t.Fatalf("status %q", o.Status)
 	}
 	res := o.Calls[20].Messages[len(o.Calls[20].Messages)-1] // the request after step 20
-	if res.Role != schema.Tool || !strings.Contains(res.Content, "job") {
+	if res.Role != ai.RoleTool || !strings.Contains(res.Content, "job") {
 		t.Fatalf("result of the hanging command: %.300q", res.Content)
 	}
 	// (The job's process and its watcher goroutine outlive the run until the command ends: by design.)
@@ -139,7 +138,7 @@ func TestAnswerCutByTheOutputLimitIsContinued(t *testing.T) {
 	// Arrange
 	wrap := func(step int, turn llmtest.Turn) llmtest.Turn {
 		if step == 40 {
-			return llmtest.Turn{Chunks: []*schema.Message{llmtest.Finish(&schema.Message{Role: schema.Assistant, Content: "I will now continue with the modules and then"}, "length")}}
+			return llmtest.Turn{Chunks: []*ai.Message{llmtest.Finish(&ai.Message{Role: ai.RoleAssistant, Content: "I will now continue with the modules and then"}, "length")}}
 		}
 		return turn
 	}
@@ -165,7 +164,7 @@ func TestToolCallCutByTheOutputLimitDoesNotEndTheRun(t *testing.T) {
 	// Arrange
 	wrap := func(step int, turn llmtest.Turn) llmtest.Turn {
 		if step == 40 {
-			return llmtest.Turn{Chunks: []*schema.Message{llmtest.Finish(llmtest.ToolCall(0, "cut", "edit_file", `{"path":"/workspace/pkg/m01/f01.go","oldText":"// TODO(m01`), "length")}}
+			return llmtest.Turn{Chunks: []*ai.Message{llmtest.Finish(llmtest.ToolCall(0, "cut", "edit_file", `{"path":"/workspace/pkg/m01/f01.go","oldText":"// TODO(m01`), "length")}}
 		}
 		return turn
 	}
@@ -177,9 +176,9 @@ func TestToolCallCutByTheOutputLimitDoesNotEndTheRun(t *testing.T) {
 	if o.Status != "finished" {
 		t.Fatalf("status %q", o.Status)
 	}
-	var res *schema.Message
+	var res *ai.Message
 	for _, m := range o.Calls[40].Messages {
-		if m.Role == schema.Tool && m.ToolCallID == "cut" {
+		if m.Role == ai.RoleTool && m.ToolCallID == "cut" {
 			res = m
 		}
 	}
@@ -227,7 +226,7 @@ func TestStepBudgetEndsWithAForcedAnswerWithoutTools(t *testing.T) {
 		t.Fatalf("%d model calls, want exactly the budget of 45", len(o.Calls))
 	}
 	last := o.Calls[44]
-	if last.ToolChoice == nil || *last.ToolChoice != schema.ToolChoiceForbidden {
+	if last.ToolChoice == nil || *last.ToolChoice != ai.ToolChoiceForbidden {
 		t.Errorf("tool choice on the last step: %v", last.ToolChoice)
 	}
 	if got := last.Messages[len(last.Messages)-1].Content; got != agent.StepLimitNudge {

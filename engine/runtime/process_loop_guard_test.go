@@ -5,15 +5,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
 )
 
 func probeCall(id, args string) llmtest.Turn {
-	return llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, id, "probe", args)}}
+	return llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, id, "probe", args)}}
 }
 
 func TestProcessRefusesThirdIdenticalToolCallInARow(t *testing.T) {
@@ -83,7 +82,7 @@ func TestProcessForgetsRepeatedCallsAfterASteer(t *testing.T) {
 	r := newRig(t)
 	r.model = llmtest.New(
 		probeCall("c1", `{}`),
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "c2", "probe", `{}`)}, OnCall: func() {
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "c2", "probe", `{}`)}, OnCall: func() {
 			_ = r.q.PushSteer(context.Background(), runID, queue.Steer{ID: "s-1", Text: "try once more"})
 		}},
 		probeCall("c3", `{}`),

@@ -4,9 +4,9 @@ import (
 	"strings"
 
 	"github.com/GhaziBenDahmane/harness/adapters/sandbox/backends"
+	"github.com/GhaziBenDahmane/harness/ai/llm"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/engine/llm"
 )
 
 // llmOptions maps the configuration (LLM_*) to the options of the default chat-model factory.

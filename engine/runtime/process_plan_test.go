@@ -4,17 +4,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 func TestProcessUpdatePlanPersistsAndSnapshotsThePlan(t *testing.T) {
 	// update_plan stores the items on the thread and emits STATE_SNAPSHOT {plan} right after its TOOL_CALL_RESULT.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "p1", "update_plan",
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "p1", "update_plan",
 			`{"items":[{"id":"1","title":"Load the data","status":"completed"},{"id":"2","title":"Plot it","status":"in_progress"},{"id":"3","title":"Write the report","status":"pending"}]}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("Working on it")},
 	)
@@ -48,7 +47,7 @@ func TestProcessUpdatePlanRejectsInvalidItems(t *testing.T) {
 	// Unknown statuses or duplicate ids are a tool error for the model; the stored plan is unchanged.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "p1", "update_plan", `{"items":[{"id":"1","title":"A","status":"done"}]}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "p1", "update_plan", `{"items":[{"id":"1","title":"A","status":"done"}]}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("ok")},
 	)
 	th, run := r.queued("q")

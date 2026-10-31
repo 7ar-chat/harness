@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	skillsfs "github.com/GhaziBenDahmane/harness/features/skills/skillsfs"
 	"github.com/GhaziBenDahmane/harness/features/verify"
 )

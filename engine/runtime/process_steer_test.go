@@ -5,13 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
 )
 
@@ -19,7 +18,7 @@ func TestProcessInjectsSteerBeforeNextModelCall(t *testing.T) {
 	// A steer sent while a tool runs is given to the model before its next call, persisted and announced.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "c1", "execute_command", `{"command":"ls"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "c1", "execute_command", `{"command":"ls"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("Bien sûr")},
 	)
 	var runID string
@@ -45,7 +44,7 @@ func TestProcessInjectsSteerBeforeNextModelCall(t *testing.T) {
 	}
 	second := r.model.Calls()[1].Messages
 	lastMsg := second[len(second)-1]
-	if lastMsg.Role != schema.User || lastMsg.Content != agent.SteerPrefix+"answer in French" {
+	if lastMsg.Role != ai.RoleUser || lastMsg.Content != agent.SteerPrefix+"answer in French" {
 		t.Fatalf("model input %+v", lastMsg)
 	}
 	var persisted *store.Message

@@ -11,9 +11,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/components/tool/utils"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/skills"
@@ -37,19 +35,19 @@ type loadInput struct {
 }
 
 // Tools implements tools.Provider.
-func (p *Provider) Tools(_ context.Context, rc tools.RunContext) ([]tool.BaseTool, func(), error) {
-	t, err := utils.InferTool("load_skill", loadDesc, func(ctx context.Context, in loadInput) (string, error) {
+func (p *Provider) Tools(_ context.Context, rc tools.RunContext) ([]ai.BaseTool, func(), error) {
+	t, err := ai.InferTool("load_skill", loadDesc, func(ctx context.Context, in loadInput) (string, error) {
 		return p.load(ctx, rc, strings.TrimSpace(in.Name))
 	})
 	if err != nil {
 		return nil, nil, err
 	}
-	return []tool.BaseTool{readOnlyTool{t}}, func() {}, nil
+	return []ai.BaseTool{readOnlyTool{t}}, func() {}, nil
 }
 
 // readOnlyTool marks load_skill read-only (tools.ReadOnly): it returns the
 // skill's instructions and at most installs its files (idempotently).
-type readOnlyTool struct{ tool.InvokableTool }
+type readOnlyTool struct{ ai.InvokableTool }
 
 func (readOnlyTool) ReadOnly() bool { return true }
 

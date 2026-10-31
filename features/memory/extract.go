@@ -9,11 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 )
 
@@ -194,13 +192,13 @@ func (x *Extractor) extract(ctx context.Context, run *store.Run) error {
 	if err != nil {
 		return err
 	}
-	var opts []model.Option
+	var opts []ai.Option
 	if x.SupportsReasoning != nil && x.SupportsReasoning(modelName) {
-		opts = llm.WithReasoningEffort("low")
+		opts = []ai.Option{ai.WithReasoningEffort("low")}
 	}
-	out, err := m.Generate(ctx, []*schema.Message{
-		schema.SystemMessage(extractInstructions),
-		schema.UserMessage("Existing memories:\n" + prior.String() + "\nConversation:\n" + text),
+	out, err := m.Generate(ctx, []*ai.Message{
+		ai.SystemMessage(extractInstructions),
+		ai.UserMessage("Existing memories:\n" + prior.String() + "\nConversation:\n" + text),
 	}, opts...)
 	if err != nil {
 		return err

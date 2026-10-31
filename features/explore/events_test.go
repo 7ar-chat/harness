@@ -5,15 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/schema"
-
 	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/explore"
 )
@@ -40,7 +38,7 @@ func (r *recorder) values() []map[string]any {
 	return out
 }
 
-func exploreTool(t *testing.T, turns ...llmtest.Turn) tool.InvokableTool {
+func exploreTool(t *testing.T, turns ...llmtest.Turn) ai.InvokableTool {
 	t.Helper()
 	be := sandboxtest.NewBackend()
 	be.OnCreate = func(s *sandboxtest.Sandbox) { s.Put("/workspace/pkg/a.go", "package pkg\n\nfunc Handle() {}\n") }
@@ -52,17 +50,17 @@ func exploreTool(t *testing.T, turns ...llmtest.Turn) tool.InvokableTool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return ts[0].(tool.InvokableTool)
+	return ts[0].(ai.InvokableTool)
 }
 
 func TestExploreReportsItsStepsToolsAndUsageAsSubagentEvents(t *testing.T) {
 	// Arrange
 	tl := exploreTool(t,
-		llmtest.Turn{Chunks: []*schema.Message{
+		llmtest.Turn{Chunks: []*ai.Message{
 			llmtest.WithUsage(llmtest.Finish(llmtest.ToolCall(0, "c1", "read_file", `{"path":"/workspace/pkg/a.go","offset":2,"limit":5}`), "tool_calls"), 100, 10),
 			llmtest.Finish(llmtest.ToolCall(1, "c2", "search_files", `{"pattern":"Handle"}`), "tool_calls"),
 		}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.Finish(&schema.Message{Role: schema.Assistant, Content: "Handle is in pkg/a.go:3."}, "stop"), 150, 20)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(llmtest.Finish(&ai.Message{Role: ai.RoleAssistant, Content: "Handle is in pkg/a.go:3."}, "stop"), 150, 20)}},
 	)
 	rec := &recorder{}
 	ctx := tools.WithCall(context.Background(), "call_9", rec)
@@ -115,7 +113,7 @@ func TestExploreWithoutAnEmitterRunsSilently(t *testing.T) {
 
 func TestExploreCapsTheNumberOfSubagentEvents(t *testing.T) {
 	// Arrange: 11 steps of 20 tool calls each
-	var calls []*schema.Message
+	var calls []*ai.Message
 	for i := 0; i < 20; i++ {
 		calls = append(calls, llmtest.Finish(llmtest.ToolCall(i, "c"+string(rune('a'+i)), "list_files", `{"path":"/workspace"}`), "tool_calls"))
 	}

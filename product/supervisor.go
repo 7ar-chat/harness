@@ -10,15 +10,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/components/tool/utils"
-
 	"github.com/GhaziBenDahmane/harness"
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/engine/approvals"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/GhaziBenDahmane/harness/hosts/inproc"
 )
 
 // The supervisor is the user's global agent: a personal thread (kind
@@ -217,31 +216,31 @@ type supTools struct{ sv *Supervisor }
 
 func (supTools) Name() string { return "supervisor" }
 
-func (p supTools) Tools(ctx context.Context, rc tools.RunContext) ([]tool.BaseTool, func(), error) {
+func (p supTools) Tools(ctx context.Context, rc tools.RunContext) ([]ai.BaseTool, func(), error) {
 	sv := p.sv
 	if sv.s == nil || !sv.isSupervisorThread(ctx, rc.ThreadID) {
 		return nil, func() {}, nil
 	}
 	me := rc.Login // the supervisor thread is personal: its owner is the user
-	var out []tool.BaseTool
-	add := func(t tool.BaseTool, err error) {
+	var out []ai.BaseTool
+	add := func(t ai.BaseTool, err error) {
 		if err == nil {
 			out = append(out, t)
 		}
 	}
-	add(utils.InferTool("list_sessions", "List the sessions (agent conversations) the user can see, with project, creator, status (idle, queued, running, waiting_approval, waiting_input, failed) and what they wait for. Optionally only one project or status.",
+	add(ai.InferTool("list_sessions", "List the sessions (agent conversations) the user can see, with project, creator, status (idle, queued, running, waiting_approval, waiting_input, failed) and what they wait for. Optionally only one project or status.",
 		func(ctx context.Context, in listArgs) (any, error) { return sv.listSessions(ctx, me, in) }))
-	add(utils.InferTool("read_session", "Read a session: its status, the latest messages with their authors, and any pending approval or question (with the ids to answer them).",
+	add(ai.InferTool("read_session", "Read a session: its status, the latest messages with their authors, and any pending approval or question (with the ids to answer them).",
 		func(ctx context.Context, in readArgs) (any, error) { return sv.readSession(ctx, me, in) }))
-	add(utils.InferTool("session_send", "Send a message to a session as the supervisor on the user's behalf: steers it if it is running, otherwise starts a new run.",
+	add(ai.InferTool("session_send", "Send a message to a session as the supervisor on the user's behalf: steers it if it is running, otherwise starts a new run.",
 		func(ctx context.Context, in sendArgs) (any, error) { return sv.sendToSession(ctx, me, in) }))
-	add(utils.InferTool("session_approve", "Approve or deny the tool call a session is waiting on. always=true approves that tool for the rest of the run.",
+	add(ai.InferTool("session_approve", "Approve or deny the tool call a session is waiting on. always=true approves that tool for the rest of the run.",
 		func(ctx context.Context, in approveArgs) (any, error) { return sv.approveSession(ctx, me, in) }))
-	add(utils.InferTool("session_answer", "Answer the question a session asked the user (ask_user).",
+	add(ai.InferTool("session_answer", "Answer the question a session asked the user (ask_user).",
 		func(ctx context.Context, in answerArgs) (any, error) { return sv.answerSession(ctx, me, in) }))
-	add(utils.InferTool("session_cancel", "Stop the running run of a session.",
+	add(ai.InferTool("session_cancel", "Stop the running run of a session.",
 		func(ctx context.Context, in cancelArgs) (any, error) { return sv.cancelSession(ctx, me, in) }))
-	add(utils.InferTool("session_spawn", "Start a new session in a project with a task for its agent.",
+	add(ai.InferTool("session_spawn", "Start a new session in a project with a task for its agent.",
 		func(ctx context.Context, in spawnArgs) (any, error) { return sv.spawnSession(ctx, me, in) }))
 	return out, func() {}, nil
 }
@@ -420,8 +419,8 @@ func (sv *Supervisor) client(c Caller, onBehalfOf string) client.Client {
 	if onBehalfOf == "" {
 		onBehalfOf = c.Actor
 	}
-	return client.InProcess(sv.s.H, c.Login, client.WithModels(sv.s.O.Models, sv.s.O.DefaultModel),
-		client.WithAuthor(harness.Author{Kind: store.AuthorSupervisor, OnBehalfOf: onBehalfOf}))
+	return inproc.New(sv.s.H, c.Login, inproc.WithModels(sv.s.O.Models, sv.s.O.DefaultModel),
+		inproc.WithAuthor(harness.Author{Kind: store.AuthorSupervisor, OnBehalfOf: onBehalfOf}))
 }
 
 // audit records a supervisor action.
@@ -756,8 +755,8 @@ func (sv *Supervisor) flush(ctx context.Context) {
 			continue
 		}
 		msg := "[watcher] These sessions need attention:\n- " + strings.Join(dedupe(lines), "\n- ")
-		cl := client.InProcess(sv.s.H, u, client.WithModels(sv.s.O.Models, sv.s.O.DefaultModel),
-			client.WithAuthor(harness.Author{Kind: store.AuthorSystem, OnBehalfOf: u}))
+		cl := inproc.New(sv.s.H, u, inproc.WithModels(sv.s.O.Models, sv.s.O.DefaultModel),
+			inproc.WithAuthor(harness.Author{Kind: store.AuthorSystem, OnBehalfOf: u}))
 		run, err := cl.Send(ctx, id, msg, client.SendOptions{Sandbox: "off", Interactive: true})
 		if err != nil {
 			continue // busy or failing: try again at the next tick

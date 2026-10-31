@@ -62,11 +62,7 @@ func allTools(t *testing.T) []renderedTool {
 		if err != nil {
 			t.Fatal(err)
 		}
-		js, err := info.ParamsOneOf.ToJSONSchema()
-		if err != nil {
-			t.Fatal(err)
-		}
-		raw, _ := json.Marshal(js)
+		raw, _ := json.Marshal(info.Parameters)
 		var params map[string]any
 		_ = json.Unmarshal(raw, &params)
 		ro, _ := tl.(tools.ReadOnly)

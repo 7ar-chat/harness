@@ -36,15 +36,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/components/tool/utils"
-
 	"github.com/GhaziBenDahmane/harness"
 	"github.com/GhaziBenDahmane/harness/adapters/store/filestore"
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/hosts/httpapi"
 )
@@ -88,11 +86,11 @@ func (ordersTools) Name() string { return "orders" }
 // Tools is called once per run: rc.Login is the run's user, so the closure
 // below cannot be tricked (by a prompt injection or the model) into reading
 // another customer's order.
-func (p ordersTools) Tools(_ context.Context, rc tools.RunContext) ([]tool.BaseTool, func(), error) {
+func (p ordersTools) Tools(_ context.Context, rc tools.RunContext) ([]ai.BaseTool, func(), error) {
 	type in struct {
 		OrderID string `json:"orderId" jsonschema_description:"The order number, e.g. A-1042"`
 	}
-	t, err := utils.InferTool("lookup_order", "Look up the status of one of the signed-in customer's orders.",
+	t, err := ai.InferTool("lookup_order", "Look up the status of one of the signed-in customer's orders.",
 		func(ctx context.Context, a in) (string, error) {
 			status, ok := p.orders.Lookup(ctx, rc.Login, a.OrderID)
 			if !ok {
@@ -100,7 +98,7 @@ func (p ordersTools) Tools(_ context.Context, rc tools.RunContext) ([]tool.BaseT
 			}
 			return status, nil
 		})
-	return []tool.BaseTool{t}, func() {}, err
+	return []ai.BaseTool{t}, func() {}, err
 }
 
 // newHarness builds the harness. Backend nil means "no sandbox at all": the

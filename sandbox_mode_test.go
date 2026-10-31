@@ -7,13 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-
 	"github.com/GhaziBenDahmane/harness"
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/longtest"
 )
 
@@ -27,7 +26,7 @@ type modeRun struct {
 
 // runWith builds a work-profile harness with a custom tool "ping" and plays
 // one run whose model calls first, then answers.
-func runWith(t *testing.T, backend *sandboxtest.Backend, mode harness.SandboxMode, first *schema.Message) *modeRun {
+func runWith(t *testing.T, backend *sandboxtest.Backend, mode harness.SandboxMode, first *ai.Message) *modeRun {
 	t.Helper()
 	m := &modeRun{}
 	opts := harness.Options{Config: featureConfig(t, nil)}
@@ -36,7 +35,7 @@ func runWith(t *testing.T, backend *sandboxtest.Backend, mode harness.SandboxMod
 	}
 	opts.Tools = append(opts.Tools, longtest.ExtraTool("ping", func(context.Context, string) (string, error) { m.pinged = true; return "pong", nil }))
 	m.model = llmtest.New(
-		llmtest.Turn{Chunks: []*schema.Message{first}},
+		llmtest.Turn{Chunks: []*ai.Message{first}},
 		llmtest.Turn{Chunks: llmtest.Text("all good")},
 		llmtest.Turn{Chunks: llmtest.Text("A title")},
 	)

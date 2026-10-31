@@ -9,13 +9,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/llm"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 )
 
@@ -138,11 +136,11 @@ func (h *Hook) generate(ctx context.Context, modelName, question, answer string)
 	if answer != "" {
 		prompt += "\n\nAssistant:\n" + clip(answer, answerChars)
 	}
-	var opts []model.Option
+	var opts []ai.Option
 	if h.SupportsReasoning != nil && h.SupportsReasoning(modelName) {
-		opts = llm.WithReasoningEffort("low")
+		opts = []ai.Option{ai.WithReasoningEffort("low")}
 	}
-	out, err := m.Generate(ctx, []*schema.Message{schema.SystemMessage(Instructions), schema.UserMessage(prompt)}, opts...)
+	out, err := m.Generate(ctx, []*ai.Message{ai.SystemMessage(Instructions), ai.UserMessage(prompt)}, opts...)
 	if err != nil {
 		return generated{}, err
 	}

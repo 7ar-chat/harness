@@ -8,8 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/cloudwego/eino/components/tool"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
@@ -299,10 +298,10 @@ func TestToolsTellTheModelWhenTheSandboxWasRecreated(t *testing.T) {
 	_ = fresh.MkdirAll(context.Background(), "/workspace")
 	p := sandboxtools.New(recreatedManager{sb: fresh}, sandboxtools.Options{})
 	ts, _, _ := p.Tools(context.Background(), tools.RunContext{ThreadID: "t", Login: "alice"})
-	byName := map[string]tool.InvokableTool{}
+	byName := map[string]ai.InvokableTool{}
 	for _, x := range ts {
 		info, _ := x.Info(context.Background())
-		byName[info.Name] = x.(tool.InvokableTool)
+		byName[info.Name] = x.(ai.InvokableTool)
 	}
 
 	// Act

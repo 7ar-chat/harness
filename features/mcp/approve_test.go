@@ -5,9 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/approvals"
@@ -40,12 +38,12 @@ func pendingProvider(t *testing.T, s config.MCPServer, mode string) (*mcptools.P
 	return p, g, fs
 }
 
-func approvalTool(t *testing.T, list []tool.BaseTool) (string, tool.InvokableTool) {
+func approvalTool(t *testing.T, list []ai.BaseTool) (string, ai.InvokableTool) {
 	t.Helper()
 	for _, x := range list {
 		info, _ := x.Info(context.Background())
 		if approvals.IsTrustMCPTool(info.Name) {
-			return info.Name, x.(tool.InvokableTool)
+			return info.Name, x.(ai.InvokableTool)
 		}
 	}
 	return "", nil
@@ -64,7 +62,7 @@ func TestPendingProjectServerAsksThenStartsAfterApproval(t *testing.T) {
 
 	// Act
 	needs := g.NeedsApproval(ctx, run, name, "{}")
-	intr, pauseErr := g.Pause(ctx, run, schema.ToolCall{ID: "c1", Function: schema.FunctionCall{Name: name, Arguments: "{}"}})
+	intr, pauseErr := g.Pause(ctx, run, ai.ToolCall{ID: "c1", Function: ai.FunctionCall{Name: name, Arguments: "{}"}})
 	out, runErr := approve.InvokableRun(ctx, "{}") // the resume run executes the approved call
 	second, cleanSecond, err2 := p.Tools(ctx, tools.RunContext{RunID: "r2", ThreadID: "t"})
 	defer cleanSecond()
@@ -86,7 +84,7 @@ func TestPendingProjectServerAsksThenStartsAfterApproval(t *testing.T) {
 	if strings.Contains(preview, "hunter2") || strings.Contains(preview, "flag-ok") {
 		t.Errorf("approval preview leaks environment values: %s", preview)
 	}
-	if !approvals.MatchesCall(intr.Approval, schema.ToolCall{ID: "c1", Function: schema.FunctionCall{Name: name, Arguments: "{}"}}) {
+	if !approvals.MatchesCall(intr.Approval, ai.ToolCall{ID: "c1", Function: ai.FunctionCall{Name: name, Arguments: "{}"}}) {
 		t.Error("the approved call no longer matches its approval")
 	}
 	if !ok || !strings.Contains(out, "next run") {
@@ -184,7 +182,7 @@ func TestPendingProjectServerFailsClosedWhereNobodyCanAnswer(t *testing.T) {
 	if denial == "" || needs || trusted {
 		t.Fatalf("automatic run: denial %q, needs approval %v, trusted %v", denial, needs, trusted)
 	}
-	if _, err := gate.Pause(ctx, &store.Run{ID: "r"}, schema.ToolCall{ID: "c", Function: schema.FunctionCall{Name: approvals.TrustMCPToolPrefix + "unknown", Arguments: "{}"}}); err == nil {
+	if _, err := gate.Pause(ctx, &store.Run{ID: "r"}, ai.ToolCall{ID: "c", Function: ai.FunctionCall{Name: approvals.TrustMCPToolPrefix + "unknown", Arguments: "{}"}}); err == nil {
 		t.Error("an approval tool the provider does not know must not be asked")
 	}
 }

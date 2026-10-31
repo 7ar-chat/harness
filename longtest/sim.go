@@ -26,15 +26,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/schema"
-
 	"github.com/GhaziBenDahmane/harness"
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/compaction"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/compaction"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 )
 
@@ -282,24 +280,24 @@ func Run(tb testing.TB, sc Scenario) *Outcome {
 		}
 		usage := compaction.EstimateMessages(call.Messages) + compaction.EstimateTools(call.Tools)
 		var t llmtest.Turn
-		forbidden := call.ToolChoice != nil && *call.ToolChoice == schema.ToolChoiceForbidden
+		forbidden := call.ToolChoice != nil && *call.ToolChoice == ai.ToolChoiceForbidden
 		switch {
 		case forbidden: // the last step, or a forced answer: tools are not allowed
-			t = llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.Finish(&schema.Message{Role: schema.Assistant, Content: "Out of budget; partial work done."}, "stop"), usage, 20)}}
+			t = llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(llmtest.Finish(&ai.Message{Role: ai.RoleAssistant, Content: "Out of budget; partial work done."}, "stop"), usage, 20)}}
 		case n == 1:
-			t = llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.Finish(llmtest.ToolCall(0, "c1", "update_plan",
+			t = llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(llmtest.Finish(llmtest.ToolCall(0, "c1", "update_plan",
 				`{"items":[{"id":"1","title":"`+PlanTitle+`","status":"in_progress"},{"id":"2","title":"Verify","status":"pending"}]}`), "tool_calls"), usage, 20)}}
 		case n == sc.Steps-1 && !sc.NoFinish: // close the plan, or the harness asks the model to continue
-			t = llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.Finish(llmtest.ToolCall(0, "plan-done", "update_plan",
+			t = llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(llmtest.Finish(llmtest.ToolCall(0, "plan-done", "update_plan",
 				`{"items":[{"id":"1","title":"`+PlanTitle+`","status":"completed"},{"id":"2","title":"Verify","status":"completed"}]}`), "tool_calls"), usage, 20)}}
 		case n >= sc.Steps && !sc.NoFinish:
-			t = llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.Finish(&schema.Message{Role: schema.Assistant, Content: "All modules tuned."}, "stop"), usage, 20)}}
+			t = llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(llmtest.Finish(&ai.Message{Role: ai.RoleAssistant, Content: "All modules tuned."}, "stop"), usage, 20)}}
 		default:
 			name, args := sc.Action(n)
 			if name == "" {
-				t = llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.Finish(&schema.Message{Role: schema.Assistant, Content: "Nothing more to do."}, "stop"), usage, 20)}}
+				t = llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(llmtest.Finish(&ai.Message{Role: ai.RoleAssistant, Content: "Nothing more to do."}, "stop"), usage, 20)}}
 			} else {
-				t = llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.Finish(llmtest.ToolCall(0, "c"+strconv.Itoa(n), name, args), "tool_calls"), usage, 30)}}
+				t = llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(llmtest.Finish(llmtest.ToolCall(0, "c"+strconv.Itoa(n), name, args), "tool_calls"), usage, 30)}}
 			}
 		}
 		if sc.Wrap != nil {
@@ -451,15 +449,15 @@ type funcProvider struct {
 }
 
 func (p funcProvider) Name() string { return p.name }
-func (p funcProvider) Tools(context.Context, tools.RunContext) ([]tool.BaseTool, func(), error) {
-	return []tool.BaseTool{funcTool(p)}, func() {}, nil
+func (p funcProvider) Tools(context.Context, tools.RunContext) ([]ai.BaseTool, func(), error) {
+	return []ai.BaseTool{funcTool(p)}, func() {}, nil
 }
 
 type funcTool funcProvider
 
-func (f funcTool) Info(context.Context) (*schema.ToolInfo, error) {
-	return &schema.ToolInfo{Name: f.name, Desc: "scripted " + f.name}, nil
+func (f funcTool) Info(context.Context) (*ai.ToolInfo, error) {
+	return &ai.ToolInfo{Name: f.name, Desc: "scripted " + f.name}, nil
 }
-func (f funcTool) InvokableRun(ctx context.Context, args string, _ ...tool.Option) (string, error) {
+func (f funcTool) InvokableRun(ctx context.Context, args string) (string, error) {
 	return f.run(ctx, args)
 }

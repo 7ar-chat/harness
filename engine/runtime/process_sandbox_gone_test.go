@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 // killed removes the thread's sandbox at the provider while this runtime still

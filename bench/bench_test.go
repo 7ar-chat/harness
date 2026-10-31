@@ -7,11 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/bench"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 func needs(t *testing.T, task bench.Task) {
@@ -90,7 +89,7 @@ func testConfig(t *testing.T) *config.Config {
 
 // scripted writes the files of the task's reference solution with write_file calls, then answers.
 func scripted(task bench.Task) llmtest.Turn {
-	var chunks []*schema.Message
+	var chunks []*ai.Message
 	i := 0
 	for path, content := range task.Solution {
 		args := `{"path":` + quote("/workspace/"+path) + `,"content":` + quote(content) + `}`

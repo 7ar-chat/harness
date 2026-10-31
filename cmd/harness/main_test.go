@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/GhaziBenDahmane/harness"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/coding/gitsafe"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 // TestMain keeps the tests' saved conversations out of the user's state directory.

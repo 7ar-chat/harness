@@ -3,12 +3,10 @@ package agent
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"sync"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/schema"
-	"github.com/google/uuid"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 )
@@ -56,7 +54,7 @@ const maxParallelTools = 4
 // runTools runs the tool calls of a step: consecutive read-only calls
 // (tools.ReadOnly, not gated by an approval) run in parallel, the others alone,
 // and every result is emitted and recorded in the model's call order.
-func (st *runState) runTools(ctx context.Context, calls []schema.ToolCall, toolMap map[string]tool.BaseTool) error {
+func (st *runState) runTools(ctx context.Context, calls []ai.ToolCall, toolMap map[string]ai.BaseTool) error {
 	for i := 0; i < len(calls); {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -82,14 +80,14 @@ func (st *runState) runTools(ctx context.Context, calls []schema.ToolCall, toolM
 }
 
 // parallelizable reports a call that may run concurrently with its neighbours.
-func (st *runState) parallelizable(ctx context.Context, tc schema.ToolCall, toolMap map[string]tool.BaseTool) bool {
+func (st *runState) parallelizable(ctx context.Context, tc ai.ToolCall, toolMap map[string]ai.BaseTool) bool {
 	ro, ok := toolMap[tc.Function.Name].(tools.ReadOnly)
 	return ok && ro.ReadOnly() && st.h.interrupt == nil && st.gate(ctx, tc, toolMap) == nil
 }
 
 // runParallel runs read-only calls concurrently (at most maxParallelTools at
 // once), then finishes them in order.
-func (st *runState) runParallel(ctx context.Context, calls []schema.ToolCall, toolMap map[string]tool.BaseTool) error {
+func (st *runState) runParallel(ctx context.Context, calls []ai.ToolCall, toolMap map[string]ai.BaseTool) error {
 	type outcome struct {
 		content string
 		err     error

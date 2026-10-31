@@ -14,18 +14,30 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
-	"github.com/GhaziBenDahmane/harness/core/store"
 )
 
-// Store is what the manager needs from the thread store.
+// ErrThreadNotFound is what a Store returns for an unknown or deleted thread.
+var ErrThreadNotFound = errors.New("sandbox: thread not found")
+
+// UserSandbox is a live thread of a user with a recorded sandbox.
+type UserSandbox struct {
+	ThreadID  string
+	SandboxID string
+}
+
+// Store is what the manager needs from the thread store: the sandbox id recorded on each thread.
 type Store interface {
-	store.SandboxStore
+	// ThreadSandbox returns the sandbox recorded for the thread ("" when none), or
+	// ErrThreadNotFound when the thread is unknown or deleted.
+	ThreadSandbox(ctx context.Context, threadID string) (string, error)
+	// SetThreadSandbox sets sandbox_id when it currently equals expected.
+	SetThreadSandbox(ctx context.Context, threadID, expected, sandboxID string) error
+	CountUserSandboxes(ctx context.Context, login string) (int, error)
 	// SwapThreadSandbox is SetThreadSandbox reporting whether it changed the row
 	// (false: another sandbox was recorded meanwhile, or the thread was deleted).
 	SwapThreadSandbox(ctx context.Context, threadID, expected, sandboxID string) (bool, error)
 	// UserSandboxes lists the user's live threads with a recorded sandbox.
-	UserSandboxes(ctx context.Context, login string) ([]store.UserSandbox, error)
+	UserSandboxes(ctx context.Context, login string) ([]UserSandbox, error)
 }
 
 // ManagerOptions configures the manager.
@@ -311,7 +323,7 @@ func (m *DefaultManager) Get(ctx context.Context, threadID string) (Sandbox, err
 	}
 	id, err := m.store.ThreadSandbox(ctx, threadID)
 	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
+		if errors.Is(err, ErrThreadNotFound) {
 			return nil, ErrNoSandbox
 		}
 		return nil, err
@@ -520,7 +532,7 @@ func (m *DefaultManager) Acquire(ctx context.Context, threadID, login string) (S
 // thread was deleted (the created sandbox is already being killed; C-10).
 func (m *DefaultManager) recordedInstead(ctx context.Context, threadID, createdID string) (Sandbox, error) {
 	cur, err := m.store.ThreadSandbox(ctx, threadID)
-	if errors.Is(err, store.ErrNotFound) {
+	if errors.Is(err, ErrThreadNotFound) {
 		slog.Info("sandbox: thread deleted during creation; sandbox killed", "thread_id", threadID, "sandbox_id", createdID)
 		return nil, fmt.Errorf("%w: the conversation was deleted", ErrNoSandbox)
 	}

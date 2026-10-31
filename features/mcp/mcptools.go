@@ -14,10 +14,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/cloudwego/eino-ext/components/tool/mcp/officialmcp"
-	"github.com/cloudwego/eino/components/tool"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
@@ -114,8 +113,8 @@ func uniqueName(taken map[string]bool, server, name string) string {
 }
 
 // Tools implements tools.Provider. Failing servers are logged and skipped.
-func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]tool.BaseTool, func(), error) {
-	var all []tool.BaseTool
+func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]ai.BaseTool, func(), error) {
+	var all []ai.BaseTool
 	var sessions []*mcp.ClientSession
 	taken := map[string]bool{} // exposed names are unique across the servers
 	offer, approved := p.pendingTools(ctx, rc)
@@ -136,7 +135,7 @@ func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]tool.BaseT
 	}, nil
 }
 
-func (p *Provider) connect(ctx context.Context, s config.MCPServer, rc tools.RunContext, taken map[string]bool) ([]tool.BaseTool, *mcp.ClientSession, error) {
+func (p *Provider) connect(ctx context.Context, s config.MCPServer, rc tools.RunContext, taken map[string]bool) ([]ai.BaseTool, *mcp.ClientSession, error) {
 	tr := &headerTransport{base: http.DefaultTransport, headers: s.Headers}
 	if s.IsStdio() && s.ProjectRoot != "" {
 		ok, err := config.MCPApproved(p.TrustDir, s.ProjectRoot, s)
@@ -194,7 +193,7 @@ type Server struct {
 // Connect opens a session to s and returns its allowed tools, exposed as
 // ToolName(server, tool) with results capped at maxResultChars. connectTimeout
 // bounds connect + list tools; the session (closed by the caller) outlives it.
-func Connect(ctx context.Context, s Server, version string, connectTimeout time.Duration, maxResultChars int) ([]tool.BaseTool, *mcp.ClientSession, error) {
+func Connect(ctx context.Context, s Server, version string, connectTimeout time.Duration, maxResultChars int) ([]ai.BaseTool, *mcp.ClientSession, error) {
 	tr := s.Transport
 	if tr == nil {
 		tr = http.DefaultTransport
@@ -225,7 +224,6 @@ func Connect(ctx context.Context, s Server, version string, connectTimeout time.
 	if err != nil {
 		return nil, nil, err
 	}
-	errAsError := true
 	// Original "{server}__{tool}" names per exposed name: the approval gate
 	// decides riskiness from them, not from the sanitized/truncated name.
 	originals := map[string][]string{}
@@ -234,26 +232,18 @@ func Connect(ctx context.Context, s Server, version string, connectTimeout time.
 	if taken == nil {
 		taken = map[string]bool{}
 	}
-	exposedOf := map[string]string{} // original tool name → exposed (the mapper may run more than once)
-	ts, err := officialmcp.GetTools(cctx, &officialmcp.Config{
-		Cli:           sess,
-		ServerName:    s.Name,
-		ToolNameList:  s.Tools,
-		ListToolsMode: officialmcp.ListToolsAllPages,
-		ToolNameMapper: func(_ context.Context, in officialmcp.ToolNameMapperInput) (officialmcp.ToolNameMapperOutput, error) {
-			exposed, ok := exposedOf[in.Tool.Name]
+	exposedOf := map[string]string{} // original tool name → exposed
+	ts, err := listBridgeTools(cctx, bridgeConfig{
+		Session: sess, ServerName: s.Name, Only: s.Tools, MaxChars: maxResultChars, PreserveTail: 2000,
+		Expose: func(server string, t *mcp.Tool) string {
+			exposed, ok := exposedOf[t.Name]
 			if !ok {
-				exposed = uniqueName(taken, in.ServerName, in.Tool.Name)
-				exposedOf[in.Tool.Name] = exposed
-				originals[exposed] = []string{in.ServerName + "__" + in.Tool.Name}
-				readOnly[exposed] = in.Tool.Annotations != nil && in.Tool.Annotations.ReadOnlyHint
+				exposed = uniqueName(taken, server, t.Name)
+				exposedOf[t.Name] = exposed
+				originals[exposed] = []string{server + "__" + t.Name}
+				readOnly[exposed] = t.Annotations != nil && t.Annotations.ReadOnlyHint
 			}
-			return officialmcp.ToolNameMapperOutput{ExposedName: exposed}, nil
-		},
-		ResultPolicy: &officialmcp.ResultPolicy{
-			MaxChars:          maxResultChars,
-			PreserveTailChars: 2000,
-			ErrorAsError:      &errAsError,
+			return exposed
 		},
 	})
 	if err != nil {
@@ -261,7 +251,7 @@ func Connect(ctx context.Context, s Server, version string, connectTimeout time.
 		return nil, nil, err
 	}
 	for i, t := range ts {
-		inv, ok := t.(tool.InvokableTool)
+		inv, ok := t.(ai.InvokableTool)
 		if !ok {
 			continue
 		}
@@ -286,7 +276,7 @@ func Connect(ctx context.Context, s Server, version string, connectTimeout time.
 // namedTool is an MCP tool that also reports its original names
 // (tools.ApprovalNamer) and bounds every call by its timeout.
 type namedTool struct {
-	tool.InvokableTool
+	ai.InvokableTool
 	names   []string
 	timeout time.Duration
 }
@@ -297,10 +287,10 @@ func (t *namedTool) ApprovalNames() []string { return t.names }
 var errCallTimeout = errors.New("the MCP tool call timed out")
 
 // InvokableRun calls the tool within its timeout.
-func (t *namedTool) InvokableRun(ctx context.Context, args string, opts ...tool.Option) (string, error) {
+func (t *namedTool) InvokableRun(ctx context.Context, args string) (string, error) {
 	cctx, cancel := context.WithTimeout(ctx, t.timeout)
 	defer cancel()
-	out, err := t.InvokableTool.InvokableRun(cctx, args, opts...)
+	out, err := t.InvokableTool.InvokableRun(cctx, args)
 	if err != nil && ctx.Err() == nil && errors.Is(cctx.Err(), context.DeadlineExceeded) {
 		return "", tools.Errorf("%v after %s; try again later or with a smaller request", errCallTimeout, t.timeout)
 	}

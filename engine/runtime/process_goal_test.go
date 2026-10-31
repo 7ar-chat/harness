@@ -7,10 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 	"github.com/GhaziBenDahmane/harness/features/goals"
 )
@@ -177,7 +176,7 @@ func TestProcessGoalStopsAfterTwoFailedEvaluations(t *testing.T) {
 func TestProcessGoalIsNotJudgedWhileWaitingForAnAnswer(t *testing.T) {
 	// A run waiting for an ask_user answer is not judged and starts nothing.
 	// Arrange
-	r := newRig(t, llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "q", "ask_user", `{"question":"Which year?"}`)}})
+	r := newRig(t, llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "q", "ask_user", `{"question":"Which year?"}`)}})
 	th, _, run := r.goalRun(3)
 
 	// Act
@@ -381,7 +380,7 @@ func TestProcessGoalContinuationFollowsAModeSwitchedDuringTheRun(t *testing.T) {
 	// A mode switched while a goal run is active is kept by the next goal run (and the thread is not switched back).
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "s1", "switch_mode", `{}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "s1", "switch_mode", `{}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("I loaded the data.")},
 		llmtest.Turn{Chunks: llmtest.Text(`{"met": false, "reason": "The PDF does not exist yet."}`)},
 	)

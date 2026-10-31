@@ -4,18 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/google/uuid"
 	"log/slog"
 	"strings"
 	"time"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/schema"
-	"github.com/google/uuid"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/compaction"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/approvals"
-	"github.com/GhaziBenDahmane/harness/engine/compaction"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 )
 
@@ -28,7 +26,7 @@ var errPausePanicked = errors.New("the approval hook crashed")
 // calls that need the user (risky calls, ask_user after an approval) are
 // deferred without a result: the resumed run takes them up one at a time,
 // in order. Other calls of the step still run.
-func (st *runState) callTool(ctx context.Context, tc schema.ToolCall, toolMap map[string]tool.BaseTool) error {
+func (st *runState) callTool(ctx context.Context, tc ai.ToolCall, toolMap map[string]ai.BaseTool) error {
 	if refusal := st.denial(ctx, tc, toolMap); refusal != "" {
 		st.g.observed(tc, refusal, true)
 		return st.refuseTool(ctx, tc, refusal)
@@ -54,7 +52,7 @@ func (st *runState) callTool(ctx context.Context, tc schema.ToolCall, toolMap ma
 
 // denial asks the hooks that can refuse calls (ToolDenier) for a refusal text
 // ("" runs the call as usual; a panicking hook refuses: fail closed).
-func (st *runState) denial(ctx context.Context, tc schema.ToolCall, toolMap map[string]tool.BaseTool) (text string) {
+func (st *runState) denial(ctx context.Context, tc ai.ToolCall, toolMap map[string]ai.BaseTool) (text string) {
 	if len(st.a.Harness.BeforeTool) == 0 || toolMap[tc.Function.Name] == nil {
 		return ""
 	}
@@ -85,13 +83,13 @@ func (st *runState) denial(ctx context.Context, tc schema.ToolCall, toolMap map[
 
 // gate returns the hook that requires approval for a call (nil: run it). Unknown
 // tools and invalid arguments are not gated: invoking them has no effect.
-func (st *runState) gate(ctx context.Context, tc schema.ToolCall, toolMap map[string]tool.BaseTool) BeforeToolHook {
+func (st *runState) gate(ctx context.Context, tc ai.ToolCall, toolMap map[string]ai.BaseTool) BeforeToolHook {
 	return st.hookFor(ctx, tc, toolMap, needsApproval)
 }
 
 // hookFor returns the first hook for which check holds for one of the call's
 // names (nil: none, an unknown tool or invalid arguments).
-func (st *runState) hookFor(ctx context.Context, tc schema.ToolCall, toolMap map[string]tool.BaseTool,
+func (st *runState) hookFor(ctx context.Context, tc ai.ToolCall, toolMap map[string]ai.BaseTool,
 	check func(ctx context.Context, run *store.Run, h BeforeToolHook, toolName, arguments string) bool) BeforeToolHook {
 	if len(st.a.Harness.BeforeTool) == 0 || toolMap[tc.Function.Name] == nil {
 		return nil
@@ -147,7 +145,7 @@ func risky(ctx context.Context, run *store.Run, h BeforeToolHook, toolName, argu
 
 // pause records the call's pending approval and ends the run after this step.
 // When the approval cannot be recorded the call is refused (never run unapproved).
-func (st *runState) pause(ctx context.Context, tc schema.ToolCall, h BeforeToolHook) error {
+func (st *runState) pause(ctx context.Context, tc ai.ToolCall, h BeforeToolHook) error {
 	intr, err := func() (intr *tools.Interrupt, err error) {
 		defer func() {
 			if p := recover(); p != nil {
@@ -172,7 +170,7 @@ func (st *runState) pause(ctx context.Context, tc schema.ToolCall, h BeforeToolH
 }
 
 // refuseTool gives a call an error result without running it.
-func (st *runState) refuseTool(ctx context.Context, tc schema.ToolCall, content string) error {
+func (st *runState) refuseTool(ctx context.Context, tc ai.ToolCall, content string) error {
 	id := uuid.NewString()
 	if err := st.emit(ctx, agui.New(agui.ToolCallResult, map[string]any{
 		"messageId": id, "toolCallId": tc.ID, "content": content, "role": "tool", "metadata": map[string]any{"isError": true},
@@ -181,7 +179,7 @@ func (st *runState) refuseTool(ctx context.Context, tc schema.ToolCall, content 
 	}
 	row := &store.Message{ID: id, Role: store.RoleTool, Content: content, ToolCallID: tc.ID, Error: truncate(content, 2000)}
 	st.persist(ctx, row)
-	hm := schema.ToolMessage(content, tc.ID, schema.WithToolName(tc.Function.Name))
+	hm := ai.ToolMessage(content, tc.ID, ai.WithToolName(tc.Function.Name))
 	compaction.SetPosition(hm, row.Position)
 	st.addToolResult(tc.ID, hm)
 	return nil
@@ -189,7 +187,7 @@ func (st *runState) refuseTool(ctx context.Context, tc schema.ToolCall, content 
 
 // addToolResult appends a tool result to the history, or fills the slot of a
 // call finished by a resumed run (its placeholder result follows the call).
-func (st *runState) addToolResult(toolCallID string, hm *schema.Message) {
+func (st *runState) addToolResult(toolCallID string, hm *ai.Message) {
 	if i, ok := st.h.slots[toolCallID]; ok && i < len(st.history) {
 		st.history[i] = hm
 		delete(st.h.slots, toolCallID)
@@ -221,7 +219,7 @@ func (st *runState) emitApprovalResolved(ctx context.Context) error {
 // with its exact arguments (refused when they changed), then the calls that
 // were deferred, in order (a risky one pauses the run again). paused reports
 // that the run ends on a new interrupt before any model call.
-func (st *runState) resumeStep(ctx context.Context, msgs []*store.Message, toolMap map[string]tool.BaseTool) (paused bool, err error) {
+func (st *runState) resumeStep(ctx context.Context, msgs []*store.Message, toolMap map[string]ai.BaseTool) (paused bool, err error) {
 	if st.h.ownMessage {
 		return false, nil // a new message ended the interrupted step
 	}
@@ -242,7 +240,7 @@ func (st *runState) resumeStep(ctx context.Context, msgs []*store.Message, toolM
 	st.h.slots = map[string]int{}
 	defer func() { st.h.slots = nil }()
 	for i, m := range st.history {
-		if m.Role == schema.Tool {
+		if m.Role == ai.RoleTool {
 			for _, tc := range calls {
 				if tc.ID == m.ToolCallID {
 					st.h.slots[tc.ID] = i
@@ -277,7 +275,7 @@ func (st *runState) resumeStep(ctx context.Context, msgs []*store.Message, toolM
 }
 
 // unansweredCalls are the calls of the assistant message holding anchor that have no result yet.
-func unansweredCalls(msgs []*store.Message, anchor string) []schema.ToolCall {
+func unansweredCalls(msgs []*store.Message, anchor string) []ai.ToolCall {
 	answered := map[string]bool{}
 	var holder *store.Message
 	for _, m := range msgs {
@@ -295,10 +293,10 @@ func unansweredCalls(msgs []*store.Message, anchor string) []schema.ToolCall {
 	if holder == nil {
 		return nil
 	}
-	var out []schema.ToolCall
+	var out []ai.ToolCall
 	for _, c := range holder.ToolCalls {
 		if !answered[c.ID] {
-			out = append(out, schema.ToolCall{ID: c.ID, Type: "function", Function: schema.FunctionCall{Name: c.Function.Name, Arguments: c.Function.Arguments}})
+			out = append(out, ai.ToolCall{ID: c.ID, Type: "function", Function: ai.FunctionCall{Name: c.Function.Name, Arguments: c.Function.Arguments}})
 		}
 	}
 	return out

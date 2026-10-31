@@ -11,9 +11,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/components/tool/utils"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
@@ -46,20 +44,20 @@ func New(st Store) *Provider { return &Provider{st: st} }
 func (p *Provider) Name() string { return "harness" }
 
 // Tools implements tools.Provider.
-func (p *Provider) Tools(_ context.Context, rc tools.RunContext) ([]tool.BaseTool, func(), error) {
+func (p *Provider) Tools(_ context.Context, rc tools.RunContext) ([]ai.BaseTool, func(), error) {
 	b := &binding{p: p, rc: rc}
-	var out []tool.BaseTool
-	add := func(t tool.InvokableTool, err error) error {
+	var out []ai.BaseTool
+	add := func(t ai.InvokableTool, err error) error {
 		if err != nil {
 			return err
 		}
 		out = append(out, t)
 		return nil
 	}
-	plan, err := utils.InferTool("update_plan", planDesc, b.updatePlan)
+	plan, err := ai.InferTool("update_plan", planDesc, b.updatePlan)
 	errs := []error{
 		add(&planTool{InvokableTool: plan, b: b}, err),
-		add(utils.InferTool("ask_user", askDesc, b.askUser)),
+		add(ai.InferTool("ask_user", askDesc, b.askUser)),
 	}
 	if err := errors.Join(errs...); err != nil {
 		return nil, nil, err
@@ -86,7 +84,7 @@ type binding struct {
 
 // planTool is update_plan; it is a tools.StopGuard for the plan of the current run.
 type planTool struct {
-	tool.InvokableTool
+	ai.InvokableTool
 	b *binding
 }
 

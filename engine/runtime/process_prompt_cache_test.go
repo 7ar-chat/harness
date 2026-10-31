@@ -5,10 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 func TestGoalTurnsShareOneSystemPromptAndGetTheirCounterAtTheEnd(t *testing.T) {
@@ -38,7 +37,7 @@ func TestGoalTurnsShareOneSystemPromptAndGetTheirCounterAtTheEnd(t *testing.T) {
 		t.Fatalf("system prompts differ between goal turns or carry the counter:\n%s\n---\n%s", turn1[0].Content, turn2[0].Content)
 	}
 	last1, last2 := turn1[len(turn1)-1], turn2[len(turn2)-1]
-	if last1.Role != schema.User || !strings.Contains(last1.Content, "1 of 3 automatic goal turns used") || !strings.Contains(last2.Content, "2 of 3 automatic goal turns used") {
+	if last1.Role != ai.RoleUser || !strings.Contains(last1.Content, "1 of 3 automatic goal turns used") || !strings.Contains(last2.Content, "2 of 3 automatic goal turns used") {
 		t.Fatalf("trailing reminders %q / %q", last1.Content, last2.Content)
 	}
 	for i := 0; i < len(turn1)-1; i++ {

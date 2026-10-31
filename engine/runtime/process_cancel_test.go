@@ -5,12 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 func contains(list []string, s string) bool {
@@ -59,7 +58,7 @@ func TestProcessStopsWhenUserCancels(t *testing.T) {
 func TestProcessCancelInterruptsRunningCommandViaHeartbeat(t *testing.T) {
 	// cancel_requested is also picked up by the heartbeat poll and interrupts an in-flight sandbox command.
 	// Arrange
-	r := newRig(t, llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "c1", "execute_command", `{"command":"sleep 600"}`)}})
+	r := newRig(t, llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "c1", "execute_command", `{"command":"sleep 600"}`)}})
 	r.opts.Heartbeat = 20 * time.Millisecond
 	started := make(chan struct{})
 	r.backend.OnCreate = func(sb *sandboxtest.Sandbox) {

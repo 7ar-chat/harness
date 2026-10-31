@@ -3,22 +3,19 @@ package agent
 import (
 	"context"
 	"errors"
+	"github.com/google/uuid"
 	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/schema"
-	"github.com/google/uuid"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/compaction"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
-	"github.com/GhaziBenDahmane/harness/engine/compaction"
-	"github.com/GhaziBenDahmane/harness/engine/llm"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/modelinfo"
+	"github.com/GhaziBenDahmane/harness/prompts"
 )
 
 // SummaryStore persists the thread's compaction summary.
@@ -156,7 +153,7 @@ type harnessState struct {
 	untrusted  bool
 	extraUsage map[string]*agui.Usage
 	usageMu    sync.Mutex // guards extraUsage (sub-agent usage arrives from parallel tool calls)
-	summarizer model.BaseChatModel
+	summarizer ai.ChatModel
 	// Approvals: the approval this run resumes, whether the run carries its own
 	// user message, and the history slots of calls finished by this run.
 	approval   *store.Approval
@@ -176,7 +173,7 @@ type harnessState struct {
 	// skills are the load_skill results of this run; rehydration is the context
 	// message restored after the last compaction (sent after the system prompt).
 	skills      []loadedSkill
-	rehydration *schema.Message
+	rehydration *ai.Message
 	// maskedCalls are the tool call ids whose results the model input masks
 	// (set once the prompt passed Harness.MaskFromFraction × window).
 	maskedCalls map[string]bool
@@ -233,14 +230,14 @@ func untrustedResult(tool, content string) bool {
 	return !trustedTools[tool]
 }
 
-func untrustedHistory(history []*schema.Message) bool {
+func untrustedHistory(history []*ai.Message) bool {
 	for _, m := range history {
 		switch m.Role {
-		case schema.Tool:
+		case ai.RoleTool:
 			if untrustedResult(m.ToolName, m.Content) {
 				return true
 			}
-		case schema.User:
+		case ai.RoleUser:
 			if _, ok := m.Extra[store.ExtraAttachments]; ok {
 				return true
 			}
@@ -266,8 +263,8 @@ func (st *runState) emitResumed(ctx context.Context) error {
 
 // system is the system prompt of the next call: the run's prompt with the
 // current summary in its dynamic context (prompts.Prompt.Render).
-func (st *runState) system() *schema.Message {
-	return schema.SystemMessage(st.h.prompt.Render(st.h.summary))
+func (st *runState) system() *ai.Message {
+	return ai.SystemMessage(st.h.prompt.Render(st.h.summary))
 }
 
 // FenceData wraps untrusted text in <tag>…</tag>, escaping every opening or
@@ -277,10 +274,10 @@ func FenceData(tag, text string) string { return prompts.FenceData(tag, text) }
 
 // callOptions are the per-call model options of the run (reasoning effort,
 // prompt cache key = the thread id).
-func (st *runState) callOptions() []model.Option {
-	var opts []model.Option
+func (st *runState) callOptions() []ai.Option {
+	var opts []ai.Option
 	if f := st.a.Harness.PromptCacheKey; f != nil && f(st.in.Run.Model) {
-		opts = append(opts, llm.WithPromptCacheKey(st.in.Run.ThreadID)...)
+		opts = append(opts, ai.WithPromptCacheKey(st.in.Run.ThreadID))
 	}
 	effort := st.in.Run.ReasoningEffort
 	if effort == "" || st.a.Harness.SupportsReasoning == nil || !st.a.Harness.SupportsReasoning(st.in.Run.Model) {
@@ -291,11 +288,11 @@ func (st *runState) callOptions() []model.Option {
 			return opts
 		}
 	}
-	return append(opts, llm.WithReasoningEffort(effort)...)
+	return append(opts, ai.WithReasoningEffort(effort))
 }
 
 // observe records the prompt size reported for a call made with history[:callAt].
-func (st *runState) observe(msg *schema.Message, callAt int) {
+func (st *runState) observe(msg *ai.Message, callAt int) {
 	st.h.callAt = callAt
 	st.h.lastPrompt = 0
 	if msg != nil && msg.ResponseMeta != nil && msg.ResponseMeta.Usage != nil {
@@ -313,7 +310,7 @@ func (st *runState) observed() int {
 	return st.h.lastPrompt + compaction.EstimateMessages(st.history[st.h.callAt:])
 }
 
-func (st *runState) summarizerModel(ctx context.Context, base model.BaseChatModel) model.BaseChatModel {
+func (st *runState) summarizerModel(ctx context.Context, base ai.ChatModel) ai.ChatModel {
 	if st.h.summarizer != nil {
 		return st.h.summarizer
 	}
@@ -337,7 +334,7 @@ func (st *runState) summarizerName() string {
 	return st.in.Run.Model
 }
 
-func (st *runState) addModelUsage(name string, msg *schema.Message) {
+func (st *runState) addModelUsage(name string, msg *ai.Message) {
 	if name == st.in.Run.Model {
 		st.addUsage(msg)
 		return
@@ -359,7 +356,7 @@ func (st *runState) addModelUsage(name string, msg *schema.Message) {
 	u.InputTokens += r.PromptTokens
 	u.OutputTokens += r.CompletionTokens
 	u.TotalTokens += r.TotalTokens
-	u.ReasoningTokens += r.CompletionTokensDetails.ReasoningTokens
+	u.ReasoningTokens += r.CompletionTokenDetails.ReasoningTokens
 	u.CachedInputTokens += r.PromptTokenDetails.CachedTokens
 }
 
@@ -396,7 +393,7 @@ func (st *runState) usages() []agui.Usage {
 }
 
 // summarize is the compaction model call.
-func (st *runState) summarize(base model.BaseChatModel) compaction.Summarizer {
+func (st *runState) summarize(base ai.ChatModel) compaction.Summarizer {
 	return func(ctx context.Context, previous, transcript string) (string, error) {
 		m := st.summarizerModel(ctx, base)
 		ctx, cancel := context.WithTimeout(ctx, summaryTimeout)
@@ -406,11 +403,11 @@ func (st *runState) summarize(base model.BaseChatModel) compaction.Summarizer {
 			prompt.WriteString("Previous summary (merge it):\n\n" + previous + "\n\n")
 		}
 		prompt.WriteString("Conversation part to summarize:\n\n" + transcript)
-		var opts []model.Option
+		var opts []ai.Option
 		if f := st.a.Harness.SupportsReasoning; f != nil && f(st.summarizerName()) {
-			opts = llm.WithReasoningEffort("low") // auxiliary call (A-25)
+			opts = []ai.Option{ai.WithReasoningEffort("low")} // auxiliary call (A-25)
 		}
-		out, err := m.Generate(ctx, []*schema.Message{schema.SystemMessage(compaction.Instructions), schema.UserMessage(prompt.String())}, opts...)
+		out, err := m.Generate(ctx, []*ai.Message{ai.SystemMessage(compaction.Instructions), ai.UserMessage(prompt.String())}, opts...)
 		if err != nil {
 			return "", err
 		}
@@ -463,7 +460,7 @@ func (st *runState) threshold() float64 {
 // compact runs the compaction check before a model call (or for a manual compact run).
 // A cancellation while summarizing emits phase "cancelled" (A-20) and returns
 // ctx.Err(): the run ends cancelled.
-func (st *runState) compact(ctx context.Context, base model.BaseChatModel, mode int) error {
+func (st *runState) compact(ctx context.Context, base ai.ChatModel, mode int) error {
 	trigger := TriggerAuto
 	if mode == compactManual {
 		trigger = TriggerManual
@@ -558,7 +555,7 @@ func (st *runState) recordCompaction(ctx context.Context, trigger string, before
 }
 
 // compactRun is a run of kind compact: it only compacts the thread's context.
-func (st *runState) compactRun(ctx context.Context, base model.BaseChatModel) (Result, error) {
+func (st *runState) compactRun(ctx context.Context, base ai.ChatModel) (Result, error) {
 	if err := st.compact(ctx, base, compactManual); err != nil {
 		if ctx.Err() != nil {
 			return Result{}, ctx.Err()
@@ -642,7 +639,7 @@ func (e *toolEmitter) flushAfter() error {
 
 // interrupted handles a tool that needs the user: the first one ends the run
 // after this step; later ones in the same step are refused.
-func (st *runState) interrupted(tc schema.ToolCall, intr *tools.Interrupt) (string, bool) {
+func (st *runState) interrupted(tc ai.ToolCall, intr *tools.Interrupt) (string, bool) {
 	if st.h.interrupt != nil {
 		return OneQuestionResult, false
 	}

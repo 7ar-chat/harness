@@ -5,10 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
 )
 
@@ -29,7 +28,7 @@ func TestProcessNudgesModelOnceAfterEmptyAnswer(t *testing.T) {
 		t.Fatalf("status %s calls %d", got.Status, len(calls))
 	}
 	second := calls[1].Messages
-	if lastMsg := second[len(second)-1]; lastMsg.Role != schema.User || lastMsg.Content != emptyNudge {
+	if lastMsg := second[len(second)-1]; lastMsg.Role != ai.RoleUser || lastMsg.Content != emptyNudge {
 		t.Fatalf("second call %+v", second)
 	}
 	msgs := r.messages(th.ID)
@@ -78,7 +77,7 @@ func TestProcessRemindsModelBeforeItStopsWithUnfinishedWork(t *testing.T) {
 		t.Fatalf("status %s calls %d", got.Status, len(calls))
 	}
 	second := calls[1].Messages
-	if lastMsg := second[len(second)-1]; lastMsg.Role != schema.User || lastMsg.Content != "<system-reminder>\n2 todo items are not completed.\n</system-reminder>" {
+	if lastMsg := second[len(second)-1]; lastMsg.Role != ai.RoleUser || lastMsg.Content != "<system-reminder>\n2 todo items are not completed.\n</system-reminder>" {
 		t.Fatalf("second call %+v", second)
 	}
 	var contents []string
@@ -197,7 +196,7 @@ func TestProcessKeepsAcceptingSteersWhileANudgeContinuesTheRun(t *testing.T) {
 }
 
 func planCall(id, items string) llmtest.Turn {
-	return llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, id, "update_plan", `{"items":`+items+`}`)}}
+	return llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, id, "update_plan", `{"items":`+items+`}`)}}
 }
 
 func TestProcessRemindsAboutUnfinishedItemsOfAPlanWrittenInThisRun(t *testing.T) {

@@ -2,15 +2,14 @@ package mcptools_test
 
 import (
 	"context"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/mcp"
@@ -45,7 +44,7 @@ func resilienceServer(t *testing.T) *httptest.Server {
 	return ts
 }
 
-func resilienceTools(t *testing.T, callTimeout time.Duration) map[string]tool.BaseTool {
+func resilienceTools(t *testing.T, callTimeout time.Duration) map[string]ai.BaseTool {
 	t.Helper()
 	ts := resilienceServer(t)
 	p := mcptools.New([]config.MCPServer{{Name: "jira", URL: ts.URL}}, "test", 10000)
@@ -55,7 +54,7 @@ func resilienceTools(t *testing.T, callTimeout time.Duration) map[string]tool.Ba
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	out := map[string]tool.BaseTool{}
+	out := map[string]ai.BaseTool{}
 	for _, x := range list {
 		info, _ := x.Info(context.Background())
 		out[info.Name] = x
@@ -77,7 +76,7 @@ func TestMCPNameCollisionsGetASuffixInsteadOfDroppingATool(t *testing.T) {
 		if name == "jira__slow" {
 			continue
 		}
-		if out, err := x.(tool.InvokableTool).InvokableRun(context.Background(), `{"query":"q"}`); err == nil {
+		if out, err := x.(ai.InvokableTool).InvokableRun(context.Background(), `{"query":"q"}`); err == nil {
 			results[name] = out
 		}
 	}
@@ -105,7 +104,7 @@ func TestMCPNameCollisionsGetASuffixInsteadOfDroppingATool(t *testing.T) {
 func TestMCPCallsTimeOut(t *testing.T) {
 	// A slow MCP tool call fails with a timeout error after MCP_CALL_TIMEOUT_SECONDS instead of hanging the run.
 	// Arrange
-	slow := resilienceTools(t, 200*time.Millisecond)["jira__slow"].(tool.InvokableTool)
+	slow := resilienceTools(t, 200*time.Millisecond)["jira__slow"].(ai.InvokableTool)
 
 	// Act
 	start := time.Now()

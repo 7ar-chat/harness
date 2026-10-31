@@ -6,11 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/verify"
 )
@@ -252,7 +251,7 @@ func TestAViewWhosePagesWereNeverSentDoesNotCountAsViewed(t *testing.T) {
 	// Arrange
 	r := verifyRig(t, true,
 		llmtest.Turn{Chunks: streamedCall("c1", "execute_command", `{"command":"true"}`)},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "v1", "view_file", `{"path":"outputs/deck.pptx","pages":"1"}`), llmtest.ToolCall(1, "v2", "view", `{}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "v1", "view_file", `{"path":"outputs/deck.pptx","pages":"1"}`), llmtest.ToolCall(1, "v2", "view", `{}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("Deck ready.")},
 		llmtest.Turn{Chunks: llmtest.Text("Deck ready; I could not look at slide 1.")},
 	)
@@ -293,8 +292,8 @@ func TestALargeJSONResultIsSpilledAsValidJSON(t *testing.T) {
 	// Arrange
 	big := `{"content":"HEAD ` + strings.Repeat("row,1,2,3\\n", 3000) + ` TAIL","pages":7}`
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "c0", "execute_command", `{"command":"true"}`)}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "c1", "dump", `{}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "c0", "execute_command", `{"command":"true"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "c1", "dump", `{}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("ok")},
 	)
 	r.withTools(&fakeTool{name: "dump", run: func(context.Context, string) (string, error) { return big, nil }})

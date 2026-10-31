@@ -4,12 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/components/tool/utils"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 )
 
@@ -18,15 +16,15 @@ type delegateProvider struct{}
 
 func (delegateProvider) Name() string { return "delegate" }
 
-func (delegateProvider) Tools(context.Context, tools.RunContext) ([]tool.BaseTool, func(), error) {
-	t, err := utils.InferTool("delegate", "runs a sub-agent", func(ctx context.Context, in struct{}) (string, error) {
+func (delegateProvider) Tools(context.Context, tools.RunContext) ([]ai.BaseTool, func(), error) {
+	t, err := ai.InferTool("delegate", "runs a sub-agent", func(ctx context.Context, in struct{}) (string, error) {
 		id, _ := tools.CallFromContext(ctx)
 		tools.Live(ctx, agui.SubagentEvent(map[string]any{"toolCallId": id, "phase": agui.SubagentStart, "agent": "explore", "task": "find it"}))
 		tools.Live(ctx, agui.SubagentEvent(map[string]any{"toolCallId": id, "phase": agui.SubagentEnd, "agent": "explore"}))
 		tools.SubagentUsage(ctx, "cheap-model", 100, 20, 40)
 		return "report", nil
 	})
-	return []tool.BaseTool{t}, nil, err
+	return []ai.BaseTool{t}, nil, err
 }
 
 func TestProcessEmitsSubagentEventsLiveAndCountsTheirUsage(t *testing.T) {

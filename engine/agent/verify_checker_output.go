@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cloudwego/eino/schema"
+	"github.com/GhaziBenDahmane/harness/ai"
 )
 
 // checkerOutput is the checker contract's stdout (also when the model runs a checker itself).
@@ -82,7 +82,7 @@ func parseChecker(checker, stdout string, exitCode int) (r CheckResult, out chec
 // It counts only when strict: the command ran a script (.py or .sh), its
 // stdout ends with the checker contract JSON with a non-empty checks list, and
 // the reported file resolves to a deliverable of the turn.
-func (v *verifyState) modelRanChecker(tc schema.ToolCall, content string) (CheckResult, bool) {
+func (v *verifyState) modelRanChecker(tc ai.ToolCall, content string) (CheckResult, bool) {
 	if tc.Function.Name != "execute_command" {
 		return CheckResult{}, false
 	}
@@ -122,7 +122,7 @@ func (v *verifyState) modelRanChecker(tc schema.ToolCall, content string) (Check
 // command of p (CheckCommander; its words in any order, quotes removed, no
 // pipe, redirection or background job) and nothing before it can change what
 // that step runs (unsafeShell): the check saw p's final content.
-func (st *runState) checkedLast(tc schema.ToolCall, p string) bool {
+func (st *runState) checkedLast(tc ai.ToolCall, p string) bool {
 	cc, ok := st.a.Harness.Checker.(CheckCommander)
 	if !ok || tc.Function.Name != "execute_command" {
 		return false

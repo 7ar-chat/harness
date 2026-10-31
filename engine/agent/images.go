@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 )
@@ -42,20 +41,20 @@ func (st *runState) addToolImages(imgs []tools.Image) {
 	for _, img := range imgs {
 		paths = append(paths, img.Path)
 	}
-	parts := []schema.MessageInputPart{{Type: schema.ChatMessagePartTypeText,
+	parts := []ai.Part{{Type: ai.PartText,
 		Text: "[Images attached by the tool calls above, shown once: " + strings.Join(paths, ", ") + "]"}}
 	for _, img := range imgs {
 		b64 := base64.StdEncoding.EncodeToString(img.Data)
-		parts = append(parts, schema.MessageInputPart{Type: schema.ChatMessagePartTypeImageURL,
-			Image: &schema.MessageInputImage{MessagePartCommon: schema.MessagePartCommon{Base64Data: &b64, MIMEType: img.MIMEType}},
+		parts = append(parts, ai.Part{Type: ai.PartImage,
+			Image: &ai.Image{Base64Data: b64, MIMEType: img.MIMEType},
 			Extra: map[string]any{imagePathKey: img.Path}})
 	}
-	st.history = append(st.history, &schema.Message{Role: schema.User, UserInputMultiContent: parts})
+	st.history = append(st.history, &ai.Message{Role: ai.RoleUser, Parts: parts})
 }
 
 // imagePaths names the image parts of a message, in order: the tools' paths,
 // else the path of the attachment the part was made from (by artifact id).
-func imagePaths(m *schema.Message) []string {
+func imagePaths(m *ai.Message) []string {
 	atts := map[string]string{}
 	if list, ok := m.Extra[store.ExtraAttachments].([]store.Attachment); ok {
 		for _, a := range list {
@@ -63,8 +62,8 @@ func imagePaths(m *schema.Message) []string {
 		}
 	}
 	var out []string
-	for _, p := range m.UserInputMultiContent {
-		if p.Type != schema.ChatMessagePartTypeImageURL {
+	for _, p := range m.Parts {
+		if p.Type != ai.PartImage {
 			continue
 		}
 		path, _ := p.Extra[imagePathKey].(string)
@@ -77,27 +76,27 @@ func imagePaths(m *schema.Message) []string {
 	return out
 }
 
-func imageStub(path, why string) schema.MessageInputPart {
+func imageStub(path, why string) ai.Part {
 	if path == "" {
 		path = "attachment"
 	}
-	return schema.MessageInputPart{Type: schema.ChatMessagePartTypeText, Text: fmt.Sprintf("[image %s %s]", path, why)}
+	return ai.Part{Type: ai.PartText, Text: fmt.Sprintf("[image %s %s]", path, why)}
 }
 
-func imageBytes(p schema.MessageInputPart) int {
-	if p.Image == nil || p.Image.Base64Data == nil {
+func imageBytes(p ai.Part) int {
+	if p.Image == nil {
 		return 0
 	}
-	return len(*p.Image.Base64Data) * 3 / 4
+	return len(p.Image.Base64Data) * 3 / 4
 }
 
 // stubImages returns m with its image parts replaced (keep reports the parts to keep).
-func stubImages(m *schema.Message, why string, keep func(i int, p schema.MessageInputPart) bool) *schema.Message {
+func stubImages(m *ai.Message, why string, keep func(i int, p ai.Part) bool) *ai.Message {
 	paths := imagePaths(m)
-	parts := make([]schema.MessageInputPart, 0, len(m.UserInputMultiContent))
+	parts := make([]ai.Part, 0, len(m.Parts))
 	k, changed := 0, false
-	for _, p := range m.UserInputMultiContent {
-		if p.Type != schema.ChatMessagePartTypeImageURL {
+	for _, p := range m.Parts {
+		if p.Type != ai.PartImage {
 			parts = append(parts, p)
 			continue
 		}
@@ -112,15 +111,15 @@ func stubImages(m *schema.Message, why string, keep func(i int, p schema.Message
 		return m
 	}
 	cp := *m
-	cp.UserInputMultiContent = parts
+	cp.Parts = parts
 	return &cp
 }
 
 // capImages keeps at most maxRequestImages images and maxRequestImageBytes of
 // them in a request, the newest first; the others become stubs (copies).
-func capImages(msgs []*schema.Message) []*schema.Message {
+func capImages(msgs []*ai.Message) []*ai.Message {
 	count, size := 0, 0
-	var out []*schema.Message
+	var out []*ai.Message
 	for i := len(msgs) - 1; i >= 0; i-- {
 		m := msgs[i]
 		if compactionImages(m) == 0 {
@@ -129,11 +128,11 @@ func capImages(msgs []*schema.Message) []*schema.Message {
 		// Within a message, the last images are the newest.
 		n := compactionImages(m)
 		keepFrom := make([]bool, n)
-		parts := m.UserInputMultiContent
+		parts := m.Parts
 		k := n - 1
 		for j := len(parts) - 1; j >= 0; j-- {
 			p := parts[j]
-			if p.Type != schema.ChatMessagePartTypeImageURL {
+			if p.Type != ai.PartImage {
 				continue
 			}
 			b := imageBytes(p)
@@ -143,10 +142,10 @@ func capImages(msgs []*schema.Message) []*schema.Message {
 			}
 			k--
 		}
-		capped := stubImages(m, notShownStub, func(i int, _ schema.MessageInputPart) bool { return keepFrom[i] })
+		capped := stubImages(m, notShownStub, func(i int, _ ai.Part) bool { return keepFrom[i] })
 		if capped != m {
 			if out == nil {
-				out = append([]*schema.Message(nil), msgs...)
+				out = append([]*ai.Message(nil), msgs...)
 			}
 			out[i] = capped
 		}
@@ -157,10 +156,10 @@ func capImages(msgs []*schema.Message) []*schema.Message {
 	return out
 }
 
-func compactionImages(m *schema.Message) int {
+func compactionImages(m *ai.Message) int {
 	n := 0
-	for _, p := range m.UserInputMultiContent {
-		if p.Type == schema.ChatMessagePartTypeImageURL {
+	for _, p := range m.Parts {
+		if p.Type == ai.PartImage {
 			n++
 		}
 	}
@@ -172,13 +171,13 @@ func compactionImages(m *schema.Message) int {
 // carried become "shown earlier", those the per-request cap left out "not
 // shown" (with the same text as in that request); views whose pages were all
 // sent now count as views of their document.
-func (st *runState) imagesSent(msgs []*schema.Message) {
+func (st *runState) imagesSent(msgs []*ai.Message) {
 	sent := map[string]bool{}
 	for _, m := range msgs {
 		paths := imagePaths(m)
 		k := 0
-		for _, p := range m.UserInputMultiContent {
-			if p.Type == schema.ChatMessagePartTypeImageURL {
+		for _, p := range m.Parts {
+			if p.Type == ai.PartImage {
 				if k < len(paths) && paths[k] != "" {
 					sent[paths[k]] = true
 				}
@@ -191,7 +190,7 @@ func (st *runState) imagesSent(msgs []*schema.Message) {
 			continue
 		}
 		paths := imagePaths(m)
-		shown := stubImages(m, shownStub, func(k int, _ schema.MessageInputPart) bool {
+		shown := stubImages(m, shownStub, func(k int, _ ai.Part) bool {
 			return k < len(paths) && paths[k] != "" && !sent[paths[k]]
 		})
 		st.history[i] = stubImages(shown, notShownStub, nil)

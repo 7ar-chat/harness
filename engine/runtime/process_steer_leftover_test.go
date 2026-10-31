@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	goopenai "github.com/meguminnnnnnnnn/go-openai"
+	"github.com/GhaziBenDahmane/harness/ai/openai"
 
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
 )
 
@@ -31,7 +31,7 @@ func TestFailedRunAnnouncesLeftoverSteersBeforeRunError(t *testing.T) {
 	// Arrange
 	var runID string
 	r := newRig(t)
-	r.model = llmtest.New(llmtest.Turn{Err: &goopenai.APIError{HTTPStatusCode: 400}, OnCall: func() {
+	r.model = llmtest.New(llmtest.Turn{Err: &openai.APIError{Status: 400}, OnCall: func() {
 		_ = r.q.PushSteer(context.Background(), runID, queue.Steer{ID: "s-1", Text: "also B"})
 	}})
 	r.agent.Models = llmtest.Factory{M: r.model}
@@ -96,7 +96,7 @@ func TestSteerMessagesRecordWhetherTheyWereDelivered(t *testing.T) {
 	// Arrange
 	var runID string
 	r := newRig(t)
-	r.model = llmtest.New(llmtest.Turn{Err: &goopenai.APIError{HTTPStatusCode: 400}, OnCall: func() {
+	r.model = llmtest.New(llmtest.Turn{Err: &openai.APIError{Status: 400}, OnCall: func() {
 		_ = r.q.PushSteer(context.Background(), runID, queue.Steer{ID: "late", Text: "kept"})
 	}})
 	r.agent.Models = llmtest.Factory{M: r.model}

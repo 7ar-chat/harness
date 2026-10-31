@@ -15,12 +15,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-
 	"github.com/GhaziBenDahmane/harness"
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/hosts/httpapi"
 )
 
@@ -48,10 +47,10 @@ func scripted(tool, args string) *llmtest.Model {
 		if len(c.Tools) == 0 { // title and other utility calls
 			return llmtest.Turn{Chunks: llmtest.Text("A title")}
 		}
-		if last := c.Messages[len(c.Messages)-1]; last.Role == schema.Tool {
+		if last := c.Messages[len(c.Messages)-1]; last.Role == ai.RoleTool {
 			return llmtest.Turn{Chunks: llmtest.Text("done")}
 		}
-		return llmtest.Turn{Chunks: []*schema.Message{llmtest.Finish(llmtest.ToolCall(0, "c1", tool, args), "tool_calls")}}
+		return llmtest.Turn{Chunks: []*ai.Message{llmtest.Finish(llmtest.ToolCall(0, "c1", tool, args), "tool_calls")}}
 	})
 }
 

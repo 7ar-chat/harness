@@ -2,17 +2,16 @@ package runtime_test
 
 import (
 	"context"
+	"github.com/GhaziBenDahmane/harness/ai/openai"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-	goopenai "github.com/meguminnnnnnnnn/go-openai"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 // assertBalanced checks that every START has its END before the terminal event (strict AG-UI order).
@@ -47,7 +46,7 @@ func assertBalanced(t *testing.T, evs []event) {
 func TestCancelledRunClosesOpenSteps(t *testing.T) {
 	// A run cancelled during a tool call closes its step before RUN_FINISHED.
 	// Arrange
-	r := newRig(t, llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "c1", "execute_command", `{"command":"sleep 9"}`)}})
+	r := newRig(t, llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "c1", "execute_command", `{"command":"sleep 9"}`)}})
 	started := make(chan struct{})
 	r.backend.OnCreate = func(sb *sandboxtest.Sandbox) {
 		sb.SetExec(func(ctx context.Context, _ sandbox.ExecRequest) (sandbox.ExecResult, error) {
@@ -76,8 +75,8 @@ func TestCancelledRunClosesOpenSteps(t *testing.T) {
 func TestFailedRunsCloseOpenMessagesAndHideRawErrors(t *testing.T) {
 	// A model failure closes open text and step events, and RUN_ERROR carries a generic message, not the raw gateway error.
 	// Arrange
-	r := newRig(t, llmtest.Turn{Chunks: []*schema.Message{{Role: schema.Assistant, ReasoningContent: "hmm"}, {Role: schema.Assistant, Content: "par"}},
-		FailAfter: &goopenai.APIError{HTTPStatusCode: 500, Message: "upstream http://llm-gateway.internal:5000 refused"}})
+	r := newRig(t, llmtest.Turn{Chunks: []*ai.Message{{Role: ai.RoleAssistant, ReasoningContent: "hmm"}, {Role: ai.RoleAssistant, Content: "par"}},
+		FailAfter: &openai.APIError{Status: 500, Message: "upstream http://llm-gateway.internal:5000 refused"}})
 	r.agent.StepRetries = -1 // the failure is final (retries are covered by the resilience tests)
 	_, run := r.queued("q")
 

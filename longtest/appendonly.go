@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cloudwego/eino/schema"
+	"github.com/GhaziBenDahmane/harness/ai"
 )
 
 // Fingerprint is the byte-exact identity of a message as the provider sees it.
-func Fingerprint(m *schema.Message) string {
+func Fingerprint(m *ai.Message) string {
 	b, _ := json.Marshal(struct {
-		Role       schema.RoleType
+		Role       ai.Role
 		Content    string
 		Reasoning  string
-		ToolCalls  []schema.ToolCall
+		ToolCalls  []ai.ToolCall
 		ToolCallID string
 		ToolName   string
 	}{m.Role, m.Content, m.ReasoningContent, m.ToolCalls, m.ToolCallID, m.ToolName})
@@ -25,7 +25,7 @@ func Fingerprint(m *schema.Message) string {
 // message and byte for byte: what a provider's prompt cache needs between two
 // consecutive steps of a run. It is the strict form; use AppendOnlyExceptMasks
 // for runs where tool-output masking is on.
-func AssertAppendOnly(prev, next []*schema.Message) error {
+func AssertAppendOnly(prev, next []*ai.Message) error {
 	if len(next) < len(prev) {
 		return fmt.Errorf("the request shrank from %d to %d messages", len(prev), len(next))
 	}
@@ -38,8 +38,8 @@ func AssertAppendOnly(prev, next []*schema.Message) error {
 }
 
 // IsMaskStub reports whether a tool message is the stub masking leaves behind.
-func IsMaskStub(m *schema.Message) bool {
-	return m.Role == schema.Tool && strings.HasPrefix(m.Content, "[") && strings.Contains(m.Content, " result, ") &&
+func IsMaskStub(m *ai.Message) bool {
+	return m.Role == ai.RoleTool && strings.HasPrefix(m.Content, "[") && strings.Contains(m.Content, " result, ") &&
 		strings.Contains(m.Content, "hidden to save context")
 }
 
@@ -48,7 +48,7 @@ func IsMaskStub(m *schema.Message) bool {
 // as the prompt grows). It returns the index of the first message that
 // differs (len(prev) when none does), so callers can measure how much of the
 // previous request a cache keeps, and how many results were newly masked.
-func AppendOnlyExceptMasks(prev, next []*schema.Message) (firstDiff, newlyMasked int, err error) {
+func AppendOnlyExceptMasks(prev, next []*ai.Message) (firstDiff, newlyMasked int, err error) {
 	if len(next) < len(prev) {
 		return 0, 0, fmt.Errorf("the request shrank from %d to %d messages", len(prev), len(next))
 	}
@@ -57,7 +57,7 @@ func AppendOnlyExceptMasks(prev, next []*schema.Message) (firstDiff, newlyMasked
 		if Fingerprint(m) == Fingerprint(next[i]) {
 			continue
 		}
-		if !(m.Role == schema.Tool && !IsMaskStub(m) && IsMaskStub(next[i]) && next[i].ToolCallID == m.ToolCallID) {
+		if !(m.Role == ai.RoleTool && !IsMaskStub(m) && IsMaskStub(next[i]) && next[i].ToolCallID == m.ToolCallID) {
 			return i, newlyMasked, fmt.Errorf("message %d (%s) was rewritten between consecutive requests, not by masking", i, m.Role)
 		}
 		if firstDiff == len(prev) {

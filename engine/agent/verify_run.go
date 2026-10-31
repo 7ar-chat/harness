@@ -9,8 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 )
 
@@ -77,7 +76,7 @@ func withVerification(content string, results []CheckResult, pending []any) stri
 // call), notes view_file calls and checkers the model ran itself, and returns
 // the result with the checker results added and the tool message metadata
 // with metadata.verification.
-func (st *runState) verifyAfterTool(ctx context.Context, tc schema.ToolCall, content string, failed bool, metadata map[string]any, em *toolEmitter) (string, map[string]any) {
+func (st *runState) verifyAfterTool(ctx context.Context, tc ai.ToolCall, content string, failed bool, metadata map[string]any, em *toolEmitter) (string, map[string]any) {
 	v := &st.v3.verify
 	var results []CheckResult
 	var modelRun []bool
@@ -252,7 +251,7 @@ func (st *runState) checkPending(ctx context.Context) error {
 			return err
 		}
 	}
-	st.history = append(st.history, schema.UserMessage("<system-reminder>\nChecks of files changed earlier (more than "+
+	st.history = append(st.history, ai.UserMessage("<system-reminder>\nChecks of files changed earlier (more than "+
 		fmt.Sprint(maxChecksPerCall)+" in one call):\n"+strings.Join(lines, "\n")+"\n</system-reminder>"))
 	return nil
 }

@@ -8,7 +8,7 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
+	"github.com/GhaziBenDahmane/harness/prompts"
 )
 
 // Attachment reasons.

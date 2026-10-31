@@ -10,9 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 )
@@ -87,7 +85,7 @@ type guardState struct {
 }
 
 // stopGuards lists the run's StopGuard tools in tool-name order.
-func stopGuards(toolMap map[string]tool.BaseTool) []tools.StopGuard {
+func stopGuards(toolMap map[string]ai.BaseTool) []tools.StopGuard {
 	names := make([]string, 0, len(toolMap))
 	for n := range toolMap {
 		names = append(names, n)
@@ -103,7 +101,7 @@ func stopGuards(toolMap map[string]tool.BaseTool) []tools.StopGuard {
 }
 
 // callSignature identifies a call by tool name and canonical arguments (sorted keys, no spacing).
-func callSignature(tc schema.ToolCall) string {
+func callSignature(tc ai.ToolCall) string {
 	args := strings.TrimSpace(tc.Function.Arguments)
 	dec := json.NewDecoder(strings.NewReader(args))
 	dec.UseNumber()
@@ -119,7 +117,7 @@ func callSignature(tc schema.ToolCall) string {
 // looping records a call about to run and returns the refusal when it is the
 // 3rd identical call in a row or completes an A-B-A-B-A-B alternation ("": run
 // it). Polling a job that was still running (job_output) is never a loop.
-func (g *guardState) looping(tc schema.ToolCall) string {
+func (g *guardState) looping(tc ai.ToolCall) string {
 	if refusal := g.peekLoop(tc); refusal != "" {
 		return refusal
 	}
@@ -129,7 +127,7 @@ func (g *guardState) looping(tc schema.ToolCall) string {
 
 // peekLoop is looping without recording the call (before an approval is asked:
 // a call the guard would refuse is refused without asking the user).
-func (g *guardState) peekLoop(tc schema.ToolCall) string {
+func (g *guardState) peekLoop(tc ai.ToolCall) string {
 	sig := callSignature(tc)
 	if g.polling[sig] {
 		return "" // waiting for a running background job
@@ -167,7 +165,7 @@ func errorKey(s string) string {
 }
 
 // observed records a call's outcome and returns the note to append to its result.
-func (g *guardState) observed(tc schema.ToolCall, content string, failed bool) string {
+func (g *guardState) observed(tc ai.ToolCall, content string, failed bool) string {
 	if tc.Function.Name == "job_output" {
 		g.notePoll(callSignature(tc), content, failed)
 	}
@@ -201,7 +199,7 @@ func (g *guardState) observed(tc schema.ToolCall, content string, failed bool) s
 
 // repeated counts the identical results of a call and returns the note of
 // the repeatedResultNote-th one ("" otherwise; never for a running job's poll).
-func (g *guardState) repeated(tc schema.ToolCall, content string) string {
+func (g *guardState) repeated(tc ai.ToolCall, content string) string {
 	sig := callSignature(tc)
 	if g.polling[sig] {
 		return ""
@@ -261,13 +259,13 @@ func (st *runState) seedGuards(turn []*store.Message) {
 		if m.Role != store.RoleAssistant {
 			continue
 		}
-		var calls []schema.ToolCall
+		var calls []ai.ToolCall
 		for _, c := range m.ToolCalls {
-			calls = append(calls, schema.ToolCall{Function: schema.FunctionCall{Name: c.Function.Name, Arguments: c.Function.Arguments}})
+			calls = append(calls, ai.ToolCall{Function: ai.FunctionCall{Name: c.Function.Name, Arguments: c.Function.Arguments}})
 		}
 		g.noteFileIntent(m.Content, calls)
 		for _, c := range m.ToolCalls {
-			tc := schema.ToolCall{ID: c.ID, Function: schema.FunctionCall{Name: c.Function.Name, Arguments: c.Function.Arguments}}
+			tc := ai.ToolCall{ID: c.ID, Function: ai.FunctionCall{Name: c.Function.Name, Arguments: c.Function.Arguments}}
 			r := results[c.ID]
 			if r == nil {
 				continue // not run yet (the resumed call)
@@ -282,7 +280,7 @@ func (st *runState) seedGuards(turn []*store.Message) {
 }
 
 // observeTurn gives the turn's earlier calls to the tools that keep state across runs.
-func (st *runState) observeTurn(toolMap map[string]tool.BaseTool) {
+func (st *runState) observeTurn(toolMap map[string]ai.BaseTool) {
 	if len(st.g.turn) == 0 {
 		return
 	}
@@ -345,7 +343,7 @@ var outputsMention = regexp.MustCompile(`/workspace/outputs\b|(?:^|[^\w./-])outp
 
 // noteFileIntent records an assistant message that names /workspace/outputs/
 // (in its text or in a tool call's arguments).
-func (g *guardState) noteFileIntent(content string, calls []schema.ToolCall) {
+func (g *guardState) noteFileIntent(content string, calls []ai.ToolCall) {
 	if g.asksFile {
 		return
 	}
@@ -374,7 +372,7 @@ func (g *guardState) noteInPlace(metadata map[string]any) {
 func (st *runState) budgetReminder(step int) {
 	if left := st.a.MaxSteps - step + 1; st.a.MaxSteps >= minPushSteps && st.in.Sandbox && !st.g.pushed && left == st.lateSteps() && !st.produced() {
 		st.g.pushed = true
-		st.history = append(st.history, schema.UserMessage(fmt.Sprintf(PartialDeliverableReminder, left)))
+		st.history = append(st.history, ai.UserMessage(fmt.Sprintf(PartialDeliverableReminder, left)))
 	}
 	if step <= 1 || (step-1)%reminderEvery != 0 || st.a.MaxSteps <= 0 {
 		return
@@ -397,7 +395,7 @@ func (st *runState) budgetReminder(step int) {
 		}
 		parts = append(parts, "Deliverables not verified yet: "+strings.Join(names, ", ")+".")
 	}
-	st.history = append(st.history, schema.UserMessage("<system-reminder>\n"+strings.Join(parts, "\n")+"\n</system-reminder>"))
+	st.history = append(st.history, ai.UserMessage("<system-reminder>\n"+strings.Join(parts, "\n")+"\n</system-reminder>"))
 }
 
 // stopReminder asks the StopGuard tools (and the verification guard) whether the model may stop.

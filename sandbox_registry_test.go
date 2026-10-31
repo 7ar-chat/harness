@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/GhaziBenDahmane/harness"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 func TestSandboxBackendSelectsARegisteredAdapter(t *testing.T) {

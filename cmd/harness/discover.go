@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/GhaziBenDahmane/harness/ai/llm"
 	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/engine/llm"
 )
 
 // discoverer returns the func /model uses to ask the selected provider which

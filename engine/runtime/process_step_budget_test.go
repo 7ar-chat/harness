@@ -5,16 +5,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 // lsCall is a list_files call of path.
 func lsCall(id, path string) llmtest.Turn {
-	return llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, id, "list_files", `{"path":"`+path+`"}`)}}
+	return llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, id, "list_files", `{"path":"`+path+`"}`)}}
 }
 
 func TestProcessNotesACallThatKeepsReturningTheSameResult(t *testing.T) {
@@ -22,7 +21,7 @@ func TestProcessNotesACallThatKeepsReturningTheSameResult(t *testing.T) {
 	// Arrange
 	var turns []llmtest.Turn
 	for i, n := range []int{1, 2, 3, 1, 2, 3, 1} {
-		turns = append(turns, llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, fmt.Sprintf("c%d", i), "dump", fmt.Sprintf(`{"n":%d}`, n))}})
+		turns = append(turns, llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, fmt.Sprintf("c%d", i), "dump", fmt.Sprintf(`{"n":%d}`, n))}})
 	}
 	r := newRig(t, append(turns, llmtest.Turn{Chunks: llmtest.Text("done")})...)
 	r.agent.MaxSteps = 10
@@ -68,7 +67,7 @@ func TestProcessPushesForAPartialDeliverableBeforeTheLastSteps(t *testing.T) {
 	for i, c := range calls {
 		pushes := 0
 		for _, m := range c.Messages {
-			if m.Role == schema.User && strings.Contains(m.Content, "Only 3 steps left and no deliverable has been written yet") {
+			if m.Role == ai.RoleUser && strings.Contains(m.Content, "Only 3 steps left and no deliverable has been written yet") {
 				pushes++
 			}
 		}
@@ -80,7 +79,7 @@ func TestProcessPushesForAPartialDeliverableBeforeTheLastSteps(t *testing.T) {
 
 func TestProcessEndsWithMaxStepsWhenTheBudgetRunsOutWithoutTheFileItWasAskedFor(t *testing.T) {
 	// A run that was going to write a file (its plan, its own words or a call names /workspace/outputs/) and is forced to answer on its last step without having written one ends with RUN_ERROR max_steps (not a success); its answer is kept (A2, F3).
-	for name, first := range map[string][]*schema.Message{
+	for name, first := range map[string][]*ai.Message{
 		"plan":    {llmtest.ToolCall(0, "c1", "update_plan", `{"items":[{"id":"1","title":"Write /workspace/outputs/synthesis.docx","status":"in_progress"}]}`)},
 		"said":    append(llmtest.Text("I will write the synthesis to /workspace/outputs/synthesis.docx."), llmtest.ToolCall(0, "c1", "list_files", `{"path":"/workspace"}`)),
 		"started": {llmtest.ToolCall(0, "c1", "execute_command", `{"command":"mkdir -p /workspace/outputs && python3 /workspace/.work/make_synthesis.py"}`)},
@@ -131,7 +130,7 @@ func TestProcessCompletesARunThatChangedAnUploadInPlaceBeforeItsBudgetRanOut(t *
 	// A run that edited a file the user uploaded where it is (outside /workspace/outputs/) produced its result: forced to answer on its last step, it completes (F3).
 	// Arrange
 	r := newScriptedRig(t, false,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w1", "write_file", `{"path":"/workspace/notes.md","content":"# Notes, fixed"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "w1", "write_file", `{"path":"/workspace/notes.md","content":"# Notes, fixed"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("Notes fixed in place.")})
 	r.agent.MaxSteps = 2
 	run := r.attachedRunWith("fix the typos in my notes", map[string][]byte{"notes.md": []byte("# Ntoes")})
@@ -149,7 +148,7 @@ func TestProcessCompletesWhenTheLastStepAnswersAfterWritingADeliverable(t *testi
 	// A model that wrote a deliverable and answers on the last (tool-less) step completes the run.
 	// Arrange
 	r := newScriptedRig(t, false,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w1", "write_file", `{"path":"/workspace/outputs/notes.md","content":"# Notes"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "w1", "write_file", `{"path":"/workspace/outputs/notes.md","content":"# Notes"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("Notes written.")})
 	r.agent.MaxSteps = 2
 	_, run := r.queued("write notes")

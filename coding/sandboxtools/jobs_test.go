@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/cloudwego/eino/components/tool"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/GhaziBenDahmane/harness/adapters/redisx"
 	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
@@ -26,7 +26,7 @@ func newKeepAliveFixture(t *testing.T, job sandboxtest.JobFunc) (*fixture, *atom
 	t.Cleanup(func() { _ = rdb.Close() })
 	st := memstore.New()
 	th, _ := st.CreateThread(context.Background(), "alice", "t")
-	f := &fixture{backend: sandboxtest.NewBackend(), tools: map[string]tool.InvokableTool{}}
+	f := &fixture{backend: sandboxtest.NewBackend(), tools: map[string]ai.InvokableTool{}}
 	f.backend.OnCreate = func(sb *sandboxtest.Sandbox) { f.sb = sb; sb.SetJobs(job) }
 	mgr := sandbox.NewManager(f.backend, st, redisx.NewCoordinator(rdb), sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour, RenewEvery: 5 * time.Millisecond})
 	var live atomic.Int32
@@ -42,7 +42,7 @@ func newKeepAliveFixture(t *testing.T, job sandboxtest.JobFunc) (*fixture, *atom
 	}
 	for _, x := range ts {
 		info, _ := x.Info(context.Background())
-		f.tools[info.Name] = x.(tool.InvokableTool)
+		f.tools[info.Name] = x.(ai.InvokableTool)
 	}
 	return f, &live
 }

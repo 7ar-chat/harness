@@ -7,8 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/longtest"
 )
@@ -29,7 +28,7 @@ func steerTexts(o *longtest.Outcome) []string {
 	return out
 }
 
-func countIn(c []*schema.Message, sub string) int {
+func countIn(c []*ai.Message, sub string) int {
 	n := 0
 	for _, m := range c {
 		n += strings.Count(m.Content, sub)
@@ -61,7 +60,7 @@ func checkLongSession(t *testing.T, o *longtest.Outcome, window, minCompactions 
 		}
 	}
 	for _, m := range o.Calls[len(o.Calls)-1].Messages {
-		if m.Role == schema.Tool && len(m.Content) > 20000 {
+		if m.Role == ai.RoleTool && len(m.Content) > 20000 {
 			bigResults++
 		}
 		if longtest.IsMaskStub(m) {
@@ -98,7 +97,7 @@ func checkLongSession(t *testing.T, o *longtest.Outcome, window, minCompactions 
 		}
 		verbatim := false
 		for _, m := range after.Messages {
-			verbatim = verbatim || (m.Role == schema.User && m.Content == longtest.Request)
+			verbatim = verbatim || (m.Role == ai.RoleUser && m.Content == longtest.Request)
 		}
 		if !verbatim {
 			t.Logf("note: after the compaction before step %d the request is carried by the summary/rehydration, not as its own user message", idx+1)
@@ -200,28 +199,28 @@ func TestLongSessionInATightWindowMasksAndCompacts(t *testing.T) {
 
 func TestAssertAppendOnly(t *testing.T) {
 	// Arrange
-	a := []*schema.Message{schema.SystemMessage("s"), schema.UserMessage("q")}
-	tool := &schema.Message{Role: schema.Tool, ToolCallID: "c1", ToolName: "read_file", Content: strings.Repeat("x", 800)}
-	stub := &schema.Message{Role: schema.Tool, ToolCallID: "c1", ToolName: "read_file", Content: agent.MaskStub("read_file", tool.Content)}
+	a := []*ai.Message{ai.SystemMessage("s"), ai.UserMessage("q")}
+	tool := &ai.Message{Role: ai.RoleTool, ToolCallID: "c1", ToolName: "read_file", Content: strings.Repeat("x", 800)}
+	stub := &ai.Message{Role: ai.RoleTool, ToolCallID: "c1", ToolName: "read_file", Content: agent.MaskStub("read_file", tool.Content)}
 
 	// Act / Assert
-	if err := longtest.AssertAppendOnly(a, append(append([]*schema.Message{}, a...), schema.AssistantMessage("x", nil))); err != nil {
+	if err := longtest.AssertAppendOnly(a, append(append([]*ai.Message{}, a...), ai.AssistantMessage("x", nil))); err != nil {
 		t.Fatalf("appending is fine: %v", err)
 	}
-	if err := longtest.AssertAppendOnly(a, []*schema.Message{schema.SystemMessage("s2"), a[1]}); err == nil {
+	if err := longtest.AssertAppendOnly(a, []*ai.Message{ai.SystemMessage("s2"), a[1]}); err == nil {
 		t.Fatal("a changed system prompt must fail")
 	}
 	if err := longtest.AssertAppendOnly(a, a[:1]); err == nil {
 		t.Fatal("a shrinking request must fail")
 	}
-	prev := []*schema.Message{a[0], tool}
-	if err := longtest.AssertAppendOnly(prev, []*schema.Message{a[0], stub}); err == nil {
+	prev := []*ai.Message{a[0], tool}
+	if err := longtest.AssertAppendOnly(prev, []*ai.Message{a[0], stub}); err == nil {
 		t.Fatal("strict mode must reject masking")
 	}
-	if first, n, err := longtest.AppendOnlyExceptMasks(prev, []*schema.Message{a[0], stub, a[1]}); err != nil || n != 1 || first != 1 {
+	if first, n, err := longtest.AppendOnlyExceptMasks(prev, []*ai.Message{a[0], stub, a[1]}); err != nil || n != 1 || first != 1 {
 		t.Fatalf("masking tolerated: first %d n %d err %v", first, n, err)
 	}
-	if _, _, err := longtest.AppendOnlyExceptMasks([]*schema.Message{a[0], stub}, []*schema.Message{a[0], tool}); err == nil {
+	if _, _, err := longtest.AppendOnlyExceptMasks([]*ai.Message{a[0], stub}, []*ai.Message{a[0], tool}); err == nil {
 		t.Fatal("unmasking must fail")
 	}
 }

@@ -7,15 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/components/tool"
-
 	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/memory"
 	"github.com/GhaziBenDahmane/harness/features/memory/memorytools"
 )
 
-func provider(t *testing.T) (*memstore.Store, map[string]tool.InvokableTool) {
+func provider(t *testing.T) (*memstore.Store, map[string]ai.InvokableTool) {
 	t.Helper()
 	st := memstore.New()
 	p := memorytools.New(memory.New(st, memory.Options{}))
@@ -23,15 +22,15 @@ func provider(t *testing.T) (*memstore.Store, map[string]tool.InvokableTool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := map[string]tool.InvokableTool{}
+	out := map[string]ai.InvokableTool{}
 	for _, tl := range list {
 		info, _ := tl.Info(context.Background())
-		out[info.Name] = tl.(tool.InvokableTool)
+		out[info.Name] = tl.(ai.InvokableTool)
 	}
 	return st, out
 }
 
-func call(t *testing.T, tl tool.InvokableTool, args string) (map[string]any, bool) {
+func call(t *testing.T, tl ai.InvokableTool, args string) (map[string]any, bool) {
 	t.Helper()
 	out, err := tl.InvokableRun(context.Background(), args)
 	text := out
@@ -91,11 +90,7 @@ func TestToolsHaveWorksNamesAndInputSchemas(t *testing.T) {
 			t.Fatalf("missing %s", name)
 		}
 		info, _ := tl.Info(context.Background())
-		js, err := info.ParamsOneOf.ToJSONSchema()
-		if err != nil {
-			t.Fatal(err)
-		}
-		b, _ := json.Marshal(js)
+		b, _ := json.Marshal(info.Parameters)
 		var got, want any
 		_ = json.Unmarshal(b, &got)
 		_ = json.Unmarshal([]byte(workSchemas[name]), &want)
@@ -281,9 +276,9 @@ func TestDeleteBatchAcceptsPathsAlone(t *testing.T) {
 
 	// Assert
 	info, _ := all["memory_delete_batch"].Info(context.Background())
-	js, _ := info.ParamsOneOf.ToJSONSchema()
-	if isErr || res["deleted_count"] != float64(1) || len(js.Required) != 0 {
-		t.Fatalf("result %v required %v", res, js.Required)
+	required, _ := info.Parameters["required"].([]any)
+	if isErr || res["deleted_count"] != float64(1) || len(required) != 0 {
+		t.Fatalf("result %v required %v", res, required)
 	}
 }
 

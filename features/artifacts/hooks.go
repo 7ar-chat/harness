@@ -6,8 +6,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 )
@@ -42,7 +41,7 @@ type Images struct {
 }
 
 // AttachImages implements agent.ImageAttacher.
-func (im Images) AttachImages(ctx context.Context, run *store.Run, history []*schema.Message) []*schema.Message {
+func (im Images) AttachImages(ctx context.Context, run *store.Run, history []*ai.Message) []*ai.Message {
 	if im.Svc == nil || im.Vision == nil || !im.Vision(run.Model) {
 		return history
 	}
@@ -50,10 +49,10 @@ func (im Images) AttachImages(ctx context.Context, run *store.Run, history []*sc
 	for i := len(history) - 1; i >= 0 && budget > 0 && messages < maxImageMessages; i-- {
 		m := history[i]
 		atts, _ := m.Extra[store.ExtraAttachments].([]store.Attachment)
-		if m.Role != schema.User || len(atts) == 0 {
+		if m.Role != ai.RoleUser || len(atts) == 0 {
 			continue
 		}
-		var parts []schema.MessageInputPart
+		var parts []ai.Part
 		for _, a := range atts {
 			if budget == 0 || !visionMIME[a.MimeType] || a.SizeBytes > maxImageBytes {
 				continue
@@ -63,8 +62,8 @@ func (im Images) AttachImages(ctx context.Context, run *store.Run, history []*sc
 				continue
 			}
 			b64 := base64.StdEncoding.EncodeToString(data)
-			parts = append(parts, schema.MessageInputPart{Type: schema.ChatMessagePartTypeImageURL,
-				Image: &schema.MessageInputImage{MessagePartCommon: schema.MessagePartCommon{Base64Data: &b64, MIMEType: mime}},
+			parts = append(parts, ai.Part{Type: ai.PartImage,
+				Image: &ai.Image{Base64Data: b64, MIMEType: mime},
 				Extra: map[string]any{agent.ImageAttachmentKey: a.ArtifactID}}) // its stub names this file
 			budget--
 		}
@@ -72,7 +71,7 @@ func (im Images) AttachImages(ctx context.Context, run *store.Run, history []*sc
 			continue
 		}
 		messages++
-		m.UserInputMultiContent = append([]schema.MessageInputPart{{Type: schema.ChatMessagePartTypeText, Text: m.Content}}, parts...)
+		m.Parts = append([]ai.Part{{Type: ai.PartText, Text: m.Content}}, parts...)
 		m.Content = ""
 	}
 	return history

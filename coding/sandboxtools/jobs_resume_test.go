@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/cloudwego/eino/components/tool"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/GhaziBenDahmane/harness/adapters/redisx"
 	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
@@ -29,7 +29,7 @@ func TestARestartedRuntimeResumesTheKeepAliveOfRunningJobs(t *testing.T) {
 	backend := sandboxtest.NewBackend()
 	var sb *sandboxtest.Sandbox
 	backend.OnCreate = func(s *sandboxtest.Sandbox) { sb = s; s.SetJobs(blockingJob(make(chan struct{}))) }
-	process := func(rdb *redis.Client) (map[string]tool.InvokableTool, *sandboxtools.Provider, *atomic.Int32) {
+	process := func(rdb *redis.Client) (map[string]ai.InvokableTool, *sandboxtools.Provider, *atomic.Int32) {
 		mgr := sandbox.NewManager(backend, st, redisx.NewCoordinator(rdb), sandbox.ManagerOptions{MaxPerUser: 5, Timeout: time.Hour, RenewEvery: 5 * time.Millisecond})
 		var live atomic.Int32
 		p := sandboxtools.New(mgr, sandboxtools.Options{CommandTimeout: time.Second, JobPollEvery: 10 * time.Millisecond, Jobs: redisx.NewJobs(rdb),
@@ -42,10 +42,10 @@ func TestARestartedRuntimeResumesTheKeepAliveOfRunningJobs(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		out := map[string]tool.InvokableTool{}
+		out := map[string]ai.InvokableTool{}
 		for _, x := range ts {
 			info, _ := x.Info(context.Background())
-			out[info.Name] = x.(tool.InvokableTool)
+			out[info.Name] = x.(ai.InvokableTool)
 		}
 		return out, p, &live
 	}
@@ -81,7 +81,7 @@ func TestARestartedRuntimeResumesTheKeepAliveOfRunningJobs(t *testing.T) {
 // jobRuntime is one runtime process of the job tests: its tools, its provider
 // and the keep-alives it holds.
 type jobRuntime struct {
-	tools map[string]tool.InvokableTool
+	tools map[string]ai.InvokableTool
 	p     *sandboxtools.Provider
 	live  *atomic.Int32
 }
@@ -101,10 +101,10 @@ func newJobRuntime(t *testing.T, backend *sandboxtest.Backend, st *memstore.Stor
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := map[string]tool.InvokableTool{}
+	out := map[string]ai.InvokableTool{}
 	for _, x := range ts {
 		info, _ := x.Info(context.Background())
-		out[info.Name] = x.(tool.InvokableTool)
+		out[info.Name] = x.(ai.InvokableTool)
 	}
 	return jobRuntime{tools: out, p: p, live: live}
 }

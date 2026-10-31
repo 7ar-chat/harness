@@ -12,11 +12,10 @@ import (
 	"time"
 
 	"github.com/GhaziBenDahmane/harness"
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-
-	"github.com/cloudwego/eino/schema"
 )
 
 func TestLocalBackendRunsAgentToolsOnTheHostWorkspace(t *testing.T) {
@@ -33,7 +32,7 @@ func TestLocalBackendRunsAgentToolsOnTheHostWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	call := func(id, name, args string) llmtest.Turn {
-		return llmtest.Turn{Chunks: []*schema.Message{llmtest.Finish(llmtest.ToolCall(0, id, name, args), "tool_calls")}}
+		return llmtest.Turn{Chunks: []*ai.Message{llmtest.Finish(llmtest.ToolCall(0, id, name, args), "tool_calls")}}
 	}
 	h, err := harness.New(harness.Options{Config: cfg, Models: llmtest.Factory{M: llmtest.New(
 		call("c1", "write_file", `{"path":"/workspace/hello.txt","content":"one\ntwo\n"}`),

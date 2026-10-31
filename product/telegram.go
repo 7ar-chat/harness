@@ -18,6 +18,7 @@ import (
 	"github.com/GhaziBenDahmane/harness"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/GhaziBenDahmane/harness/hosts/inproc"
 )
 
 // Telegram lets a user talk to their assistant from Telegram, and tells them
@@ -420,8 +421,8 @@ func (b *telegramBridge) link(ctx context.Context, chat, code, username, first s
 // assistantClient acts for the user on their assistant thread.
 func (b *telegramBridge) assistantClient(login string) client.Client {
 	s := b.s
-	return client.InProcess(s.H, login, client.WithModels(s.O.Models, s.O.DefaultModel),
-		client.WithAuthor(harness.Author{Login: login, Kind: store.AuthorUser}))
+	return inproc.New(s.H, login, inproc.WithModels(s.O.Models, s.O.DefaultModel),
+		inproc.WithAuthor(harness.Author{Login: login, Kind: store.AuthorUser}))
 }
 
 // toAssistant puts a Telegram message into the assistant's thread: it answers

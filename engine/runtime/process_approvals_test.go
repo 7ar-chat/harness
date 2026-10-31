@@ -6,14 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/components/tool/utils"
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
 	"github.com/GhaziBenDahmane/harness/engine/approvals"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 )
 
@@ -58,23 +55,23 @@ func (r *rig) file(p string) (string, bool) {
 }
 
 // approvalTestTools adds tools to the rig's registry.
-type approvalTestTools []tool.BaseTool
+type approvalTestTools []ai.BaseTool
 
 func (s approvalTestTools) Name() string { return "static" }
-func (s approvalTestTools) Tools(context.Context, tools.RunContext) ([]tool.BaseTool, func(), error) {
+func (s approvalTestTools) Tools(context.Context, tools.RunContext) ([]ai.BaseTool, func(), error) {
 	return s, nil, nil
 }
 
-func addTools(t *testing.T, r *rig, ts ...tool.BaseTool) {
+func addTools(t *testing.T, r *rig, ts ...ai.BaseTool) {
 	t.Helper()
 	r.agent.Tools = tools.NewRegistry(r.agent.Tools, approvalTestTools(ts))
 }
 
 type noArgs struct{}
 
-func scriptedTool(t *testing.T, name string, fn func(ctx context.Context) (string, error)) tool.BaseTool {
+func scriptedTool(t *testing.T, name string, fn func(ctx context.Context) (string, error)) ai.BaseTool {
 	t.Helper()
-	tl, err := utils.InferTool(name, "test tool", func(ctx context.Context, _ noArgs) (string, error) { return fn(ctx) })
+	tl, err := ai.InferTool(name, "test tool", func(ctx context.Context, _ noArgs) (string, error) { return fn(ctx) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +90,7 @@ func TestProcessAutomaticModeRunsRiskyToolsWithoutApproval(t *testing.T) {
 	// Automatic runs (the API default) are unchanged: a write_file call runs at once, nothing waits for a decision.
 	// Arrange
 	r := newApprovalRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w1", "write_file", writeArgs)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "w1", "write_file", writeArgs)}},
 		llmtest.Turn{Chunks: llmtest.Text("Written")},
 	)
 	th, run := r.queued("write the report")
@@ -161,7 +158,7 @@ func TestProcessApproveExecutesTheExactPendingCall(t *testing.T) {
 	// approve: the resume run announces the decision, runs the paused call with its exact arguments and gives the model its real result.
 	// Arrange
 	r := newApprovalRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w1", "write_file", writeArgs)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "w1", "write_file", writeArgs)}},
 		llmtest.Turn{Chunks: llmtest.Text("Report written")},
 	)
 	th, first := r.interactive("write the report")
@@ -190,7 +187,7 @@ func TestProcessApproveExecutesTheExactPendingCall(t *testing.T) {
 	}
 	msgs := r.model.Calls()[1].Messages
 	n := len(msgs)
-	if msgs[n-2].Role != schema.Assistant || msgs[n-2].ToolCalls[0].ID != "w1" || msgs[n-1].Role != schema.Tool ||
+	if msgs[n-2].Role != ai.RoleAssistant || msgs[n-2].ToolCalls[0].ID != "w1" || msgs[n-1].Role != ai.RoleTool ||
 		msgs[n-1].ToolCallID != "w1" || !strings.Contains(msgs[n-1].Content, "bytesWritten") {
 		t.Fatalf("history %+v", msgs[1:])
 	}
@@ -218,7 +215,7 @@ func TestProcessDenyAndRespondGiveWorksTexts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Arrange
 			r := newApprovalRig(t,
-				llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w1", "write_file", writeArgs)}},
+				llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "w1", "write_file", writeArgs)}},
 				llmtest.Turn{Chunks: llmtest.Text("OK")},
 			)
 			th, first := r.interactive("write the report")
@@ -238,7 +235,7 @@ func TestProcessDenyAndRespondGiveWorksTexts(t *testing.T) {
 				t.Fatal("a refused call ran")
 			}
 			msgs := r.model.Calls()[1].Messages
-			if last := msgs[len(msgs)-1]; last.Role != schema.Tool || last.Content != tc.want {
+			if last := msgs[len(msgs)-1]; last.Role != ai.RoleTool || last.Content != tc.want {
 				t.Fatalf("model saw %+v", last)
 			}
 			if a := approvalEvents(evs)[0]["approval"].(map[string]any); a["decision"] != tc.decision {
@@ -265,7 +262,7 @@ func TestProcessApproveRefusesACallWhoseArgumentsChanged(t *testing.T) {
 	// An approval only runs the call it describes: changed arguments get an error result and the call is not run.
 	// Arrange
 	r := newApprovalRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w1", "write_file", writeArgs)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "w1", "write_file", writeArgs)}},
 		llmtest.Turn{Chunks: llmtest.Text("OK")},
 	)
 	th, first := r.interactive("write the report")
@@ -291,7 +288,7 @@ func TestProcessRiskyCallsOfOneStepAreApprovedOneAtATime(t *testing.T) {
 	// approving the first runs it and pauses on the second without a model call; approving the second continues the loop.
 	// Arrange
 	r := newApprovalRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{
+		llmtest.Turn{Chunks: []*ai.Message{
 			llmtest.ToolCall(0, "w1", "write_file", writeArgs),
 			llmtest.ToolCall(1, "l1", "list_files", `{"path":"/workspace"}`),
 			llmtest.ToolCall(2, "x1", "execute_command", `{"command":"wc -c report.md"}`)}},
@@ -341,7 +338,7 @@ func TestProcessMCPDeleteToolIsGated(t *testing.T) {
 	// MCP tools ({server}__{tool}) whose tool part starts with delete/remove/move/rename need approval; others run.
 	// Arrange
 	var deleted, listed bool
-	r := newApprovalRig(t, llmtest.Turn{Chunks: []*schema.Message{
+	r := newApprovalRig(t, llmtest.Turn{Chunks: []*ai.Message{
 		llmtest.ToolCall(0, "m1", "jira__list_issues", `{}`), llmtest.ToolCall(1, "m2", "jira__delete_issue", `{}`)}})
 	addTools(t, r,
 		scriptedTool(t, "jira__list_issues", func(context.Context) (string, error) { listed = true; return "[]", nil }),
@@ -363,7 +360,7 @@ func TestProcessMCPDeleteToolIsGated(t *testing.T) {
 func TestProcessAskUserAfterAPausedCallWaitsForTheDecision(t *testing.T) {
 	// An ask_user call after a paused risky call is deferred: after approval the call runs, then the question interrupts.
 	// Arrange
-	r := newApprovalRig(t, llmtest.Turn{Chunks: []*schema.Message{
+	r := newApprovalRig(t, llmtest.Turn{Chunks: []*ai.Message{
 		llmtest.ToolCall(0, "w1", "write_file", writeArgs), llmtest.ToolCall(1, "q1", "ask_user", `{"question":"Which title?"}`)}})
 	th, first := r.interactive("report")
 	r.process(first)
@@ -390,7 +387,7 @@ func TestProcessNewMessageCancelsThePendingApproval(t *testing.T) {
 	// A new message instead of a decision cancels the approval: the call is not run, the model sees why, deferred calls stay unrun.
 	// Arrange
 	r := newApprovalRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{
+		llmtest.Turn{Chunks: []*ai.Message{
 			llmtest.ToolCall(0, "w1", "write_file", writeArgs), llmtest.ToolCall(1, "x1", "execute_command", `{"command":"ls"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("OK, something else")},
 	)
@@ -429,7 +426,7 @@ func TestProcessCancelledRunDoesNotKeepItsApproval(t *testing.T) {
 	// A run cancelled after it paused (a later call of the step was still running) leaves no pending approval.
 	// Arrange
 	started := make(chan struct{})
-	r := newApprovalRig(t, llmtest.Turn{Chunks: []*schema.Message{
+	r := newApprovalRig(t, llmtest.Turn{Chunks: []*ai.Message{
 		llmtest.ToolCall(0, "w1", "write_file", writeArgs), llmtest.ToolCall(1, "s1", "slow_lookup", `{}`)}})
 	addTools(t, r, scriptedTool(t, "slow_lookup", func(ctx context.Context) (string, error) {
 		close(started)
@@ -462,7 +459,7 @@ func TestProcessNextRunAnnouncesAnApprovalCancelledByStop(t *testing.T) {
 	// Stop while waiting for an approval cancels it (no run is left to report it): the next run starts with work.approval resolved (cancelled), once.
 	// Arrange
 	r := newApprovalRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w1", "write_file", writeArgs)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "w1", "write_file", writeArgs)}},
 		llmtest.Turn{Chunks: llmtest.Text("OK, something else")},
 		llmtest.Turn{Chunks: llmtest.Text("Fine")},
 	)
@@ -493,7 +490,7 @@ func TestProcessNextRunAnnouncesAnApprovalCancelledByStop(t *testing.T) {
 
 // originalNamed is a tool whose exposed name hides its original one (truncated MCP name).
 type originalNamed struct {
-	tool.InvokableTool
+	ai.InvokableTool
 	original string
 }
 
@@ -502,9 +499,9 @@ func (o originalNamed) ApprovalNames() []string { return []string{o.original} }
 func TestProcessGatesAToolByItsOriginalName(t *testing.T) {
 	// A tool whose exposed name was truncated ("srv__de") but whose original name is risky ("srv__delete_everything") waits for approval.
 	// Arrange
-	r := newApprovalRig(t, llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "d1", "srv__de", `{}`)}})
+	r := newApprovalRig(t, llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "d1", "srv__de", `{}`)}})
 	ran := false
-	inv := scriptedTool(t, "srv__de", func(context.Context) (string, error) { ran = true; return "gone", nil }).(tool.InvokableTool)
+	inv := scriptedTool(t, "srv__de", func(context.Context) (string, error) { ran = true; return "gone", nil }).(ai.InvokableTool)
 	addTools(t, r, originalNamed{InvokableTool: inv, original: "srv__delete_everything"})
 	th, run := r.interactive("clean up")
 

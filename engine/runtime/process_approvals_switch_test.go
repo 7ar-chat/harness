@@ -4,14 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
-func switchModeTool(t *testing.T, r *rig, th *store.Thread, mode string) tool.BaseTool {
+func switchModeTool(t *testing.T, r *rig, th *store.Thread, mode string) ai.BaseTool {
 	t.Helper()
 	return scriptedTool(t, "switch_mode", func(ctx context.Context) (string, error) {
 		if err := r.st.SetThreadInteractionMode(ctx, "alice", th.ID, mode); err != nil {
@@ -25,8 +23,8 @@ func TestProcessSwitchToInteractiveMidRunGatesTheNextRiskyCall(t *testing.T) {
 	// A run started automatic asks for approval of the risky calls made after the user switched the thread to interactive.
 	// Arrange
 	r := newApprovalRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "s1", "switch_mode", `{}`)}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w1", "write_file", writeArgs)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "s1", "switch_mode", `{}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "w1", "write_file", writeArgs)}},
 	)
 	th, run := r.queued("write the report")
 	addTools(t, r, switchModeTool(t, r, th, store.InteractionInteractive))
@@ -48,8 +46,8 @@ func TestProcessSwitchToAutomaticMidRunStopsAskingForApproval(t *testing.T) {
 	// A run started interactive runs the risky calls made after the user switched the thread to automatic without asking.
 	// Arrange
 	r := newApprovalRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "s1", "switch_mode", `{}`)}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w1", "write_file", writeArgs)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "s1", "switch_mode", `{}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "w1", "write_file", writeArgs)}},
 		llmtest.Turn{Chunks: llmtest.Text("Written")},
 	)
 	th, run := r.interactive("write the report")
@@ -72,8 +70,8 @@ func TestProcessSwitchWhileAnApprovalIsPendingKeepsTheCardAndResumesInTheNewMode
 	// Arrange
 	notesArgs := `{"path":"/workspace/notes.md","content":"notes"}`
 	r := newApprovalRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w1", "write_file", writeArgs)}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w2", "write_file", notesArgs)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "w1", "write_file", writeArgs)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "w2", "write_file", notesArgs)}},
 		llmtest.Turn{Chunks: llmtest.Text("Both written")},
 	)
 	th, first := r.interactive("write the report and the notes")
@@ -105,7 +103,7 @@ func TestProcessSwitchToAutomaticMidStepKeepsLaterRiskyCallsBehindThePausedOne(t
 	// Arrange
 	notesArgs := `{"path":"/workspace/notes.md","content":"notes"}`
 	r := newApprovalRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{
+		llmtest.Turn{Chunks: []*ai.Message{
 			llmtest.ToolCall(0, "w1", "write_file", writeArgs),
 			llmtest.ToolCall(1, "s1", "switch_mode", `{}`),
 			llmtest.ToolCall(2, "w2", "write_file", notesArgs)}},

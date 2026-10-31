@@ -1,7 +1,6 @@
 # harness
 
-An open, embeddable agent harness written in Go: a ReAct loop
-([eino](https://github.com/cloudwego/eino)) whose tools run in a **sandbox** (a local directory or a remote
+An open, embeddable agent harness written in Go: a ReAct loop whose tools run in a **sandbox** (a local directory or a remote
 [OpenSandbox](https://github.com/alibaba/OpenSandbox) container), streaming
 [AG-UI](https://docs.ag-ui.com) events. The Go loop drives the model (OpenAI-compatible or Anthropic) and the
 sandbox only executes; nothing spawns another agent CLI. It ships tools (files, shell, search, document
@@ -73,7 +72,7 @@ h.Cancel(ctx, "alice", run.ID)
   [docs/sandbox-adapters.md](docs/sandbox-adapters.md). `core/sandbox/sandboxtest` is an in-memory fake for tests.
 * **A website**: [docs/embedding.md](docs/embedding.md) and `examples/website` (own auth, per-user threads, a
   custom tool, a sandbox only for the requests that need one, `hosts/httpapi` mounted under `/agent/`).
-* **Your own tools**: `Options.Tools` takes `tools.Provider`s (eino tools, per-run).
+* **Your own tools**: `Options.Tools` takes `tools.Provider`s (`ai.InvokableTool`s, per run).
 
 ## Coding profile
 
@@ -282,7 +281,7 @@ engine/ features/ store/ sandbox/            the core (a library, no HTTP, no UI
         ▲
    harness.Harness                           the facade
         ▲                       ▲
-  client.InProcess(h, user)   hosts/httpapi      the HTTP API server (JSON + SSE, bearer auth)
+  inproc.New(h, user)   hosts/httpapi      the HTTP API server (JSON + SSE, bearer auth)
         │                       ▲
         │                client.HTTP(url, token)     Last-Event-ID reconnect with backoff
         └───────────┬───────────┘
@@ -334,7 +333,7 @@ func ask(ctx context.Context, c client.Client, question string) error {
 	return nil
 }
 
-// in-process:  ask(ctx, client.InProcess(h, "alice", client.WithModels(cfg.LLMModels, "gpt-5")), "Say hello")
+// in-process:  ask(ctx, inproc.New(h, "alice", inproc.WithModels(cfg.LLMModels, "gpt-5")), "Say hello")
 // remote:      ask(ctx, client.HTTP("http://127.0.0.1:8080", os.Getenv("HARNESS_REMOTE_TOKEN")), "Say hello")
 ```
 
@@ -550,20 +549,37 @@ not both). To run on NATS or SQS, implement the interfaces above and pass them i
 
 ## Layout
 
-The repository is one Go module in strict layers; a lower layer never imports a higher one
-(`layers_test.go` enforces it; the reasoning is in [docs/architecture.md](docs/architecture.md)).
+The repository is a root Go module plus six standalone modules (listed in `go.work`), in strict layers; a lower
+layer never imports a higher one (`layers_test.go` enforces it, and that each standalone module requires only the
+modules it declares; the reasoning is in [docs/architecture.md](docs/architecture.md)).
+
+| Module | Holds | Needs |
+|---|---|---|
+| `ai` | messages, tools, model contract, the OpenAI / Anthropic / Responses clients, a tool-calling loop (`ai/agent`), context compaction | the standard library, a JSON-schema reflector |
+| `core` | AG-UI events, domain types and ports (`store`, `sandbox`, `blobs`) | uuid |
+| `modelinfo` | the model price and context-window table | nothing |
+| `hosts/client` | the `Client` contract front ends are written against, with its HTTP implementation | `core`, `modelinfo` |
+| `hosts/tui` | the terminal UI | `hosts/client`, `core`, charm libraries |
+| `adapters/sandbox` | local and OpenSandbox backends, the `SANDBOX_BACKEND` registry | `core`, the OpenSandbox SDK |
+| root | the engine, features, facade, HTTP API, product, commands | all of the above |
+
+`make test-modules` builds and tests each one alone (`GOWORK=off`).
 
 ```
-core/                          the vocabulary: no dependencies on the rest of the module
+ai/                            module ai: how the agent talks to models and tools
+  (root)      Message, ToolInfo, Model, options, streams, InferTool, ConcatMessages
+  agent/      a store-free tool-calling loop      openai/  Chat Completions client
+  llm/        provider factory, OpenAI Responses + Anthropic Messages clients, retry, test doubles (llm/llmtest)
+  compaction/ context estimation and summarisation
+core/                          module core: the vocabulary, no dependencies on the rest
   agui/       AG-UI events           store/     domain types + persistence ports (Store, Full, TeamStore…)
   sandbox/    sandbox contract, manager, background-job port, sandboxtest (fake)   blobs/   content-store port
-config/ modelinfo/ engine/syncx engine/agent/prompts    settings, model table, small helpers, prompt text
+config/ modelinfo/ engine/syncx prompts    settings, model table (module modelinfo), small helpers, prompt text
 engine/                        the reusable intelligence
-  agent/      the ReAct loop: steps, streaming, retries, steering, hooks, spill, masking
-  llm/        OpenAI chat + Responses, Anthropic Messages, retry, test doubles (llm/llmtest)
+  agent/      the run loop: steps, streaming, retries, steering, hooks, spill, masking, persistence
   tools/      tool interfaces and the registry
   runtime/    run claiming, heartbeat, sweeper, end-of-run hooks
-  eventlog/ queue/ compaction/ approvals/   (interfaces and in-memory implementations only)
+  eventlog/ queue/ approvals/   (interfaces and in-memory implementations only)
 coding/                        the coding toolset: sandboxtools (read/write/edit/search/exec/jobs), gitsafe, codecheck
 adapters/                      implementations of the ports
   store/{memstore,filestore,pgstore,teamstore}   memory, durable local files, Postgres
@@ -574,7 +590,7 @@ features/                      optional capabilities a host switches on (never i
   permissions/ projectdocs/ explore/ plan/ mcp/ memory/ skills/ goals/ titles/ verify/ artifacts/ (+ artifacts/workspace)
 harness.go feature*.go profiles.go infra.go   the facade: New / Send / Events / Steer / Cancel / Resume, Feature + Builder, profiles, Infra
 hosts/                         ways to drive the engine, and the contract front ends are written against
-  client/ (the Client contract: in-process + HTTP; client/clienttest = its conformance suite)
+  client/ (the Client contract + HTTP implementation)   inproc/ (Client over a harness in this process)   clienttest/ (conformance suite)
   tui/ (terminal)   httpapi/ (HTTP + SSE + embedded UI; a Policy/Extension seam)   worker/ (headless queue consumer)
 product/                       the team product on top of hosts/httpapi: OIDC, projects, audit, feed, assistant, connectors, memory review
 cmd/harness  cmd/harness-web  cmd/harness-worker  cmd/bench   binaries;  cmd/gen-ts = the TypeScript type generator;  bench/ longtest/ = benchmark and long-session tests

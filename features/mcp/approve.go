@@ -8,9 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/approvals"
@@ -66,7 +64,7 @@ func describePending(s config.MCPServer) string {
 
 // pendingTools returns the approval tools of the pending servers still unasked on the thread, and connects the
 // servers approved since the configuration was loaded (the approval of an earlier run).
-func (p *Provider) pendingTools(ctx context.Context, rc tools.RunContext) (offer []tool.BaseTool, approved []config.MCPServer) {
+func (p *Provider) pendingTools(ctx context.Context, rc tools.RunContext) (offer []ai.BaseTool, approved []config.MCPServer) {
 	for _, s := range p.Pending {
 		ok, err := config.MCPApproved(p.TrustDir, s.ProjectRoot, s)
 		switch {
@@ -114,19 +112,19 @@ type approveTool struct {
 	name     string
 }
 
-func (t *approveTool) Info(context.Context) (*schema.ToolInfo, error) {
-	return &schema.ToolInfo{
+func (t *approveTool) Info(context.Context) (*ai.ToolInfo, error) {
+	return &ai.ToolInfo{
 		Name: t.name,
 		Desc: fmt.Sprintf("The project defines the MCP server %q (a local program) that is not approved yet, so its tools are missing. "+
 			"Call this tool, with no arguments, to ask the user to approve running it; if the task needs that server, call it first. "+
 			"If the user denies, do not ask again; its tools then become available in the run after an approval.", t.server.Name),
-		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{}),
+		Parameters: map[string]any{"type": "object", "properties": map[string]any{}},
 	}, nil
 }
 
 // InvokableRun runs only once the user approved the call (the approval gate pauses it, and refuses it where the
 // user cannot be asked): it records the approval of the exact command.
-func (t *approveTool) InvokableRun(context.Context, string, ...tool.Option) (string, error) {
+func (t *approveTool) InvokableRun(context.Context, string) (string, error) {
 	if _, err := config.ApproveMCP(t.trustDir, t.server.ProjectRoot, t.server); err != nil {
 		return "", tools.Errorf("the approval could not be recorded: %v", err)
 	}

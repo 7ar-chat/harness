@@ -3,22 +3,21 @@ package runtime_test
 import (
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
-func frag(id, name, args string) *schema.Message {
-	return &schema.Message{Role: schema.Assistant, ToolCalls: []schema.ToolCall{{ID: id, Type: "function", Function: schema.FunctionCall{Name: name, Arguments: args}}}}
+func frag(id, name, args string) *ai.Message {
+	return &ai.Message{Role: ai.RoleAssistant, ToolCalls: []ai.ToolCall{{ID: id, Type: "function", Function: ai.FunctionCall{Name: name, Arguments: args}}}}
 }
 
 func TestProcessMergesToolCallFragmentsWithoutIndex(t *testing.T) {
 	// Providers that omit ToolCall.Index still yield one tool call per id, with all argument fragments, after leading text.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{
-			{Role: schema.Assistant, Content: "Let me look."},
+		llmtest.Turn{Chunks: []*ai.Message{
+			{Role: ai.RoleAssistant, Content: "Let me look."},
 			frag("c1", "list_files", ""), frag("", "", `{"pa`), frag("", "", `th":"/workspace"}`),
 			frag("c2", "write_file", `{"path":"a.txt",`), frag("", "", `"content":"hi"}`),
 		}},
@@ -53,7 +52,7 @@ func TestProcessMergesToolCallFragmentsWithoutIndex(t *testing.T) {
 func TestProcessKeepsToolsOnLastStepButForbidsCalls(t *testing.T) {
 	// The last step keeps tool definitions (history has tool messages) and sends tool_choice=none.
 	// Arrange
-	r := newRig(t, llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "c1", "list_files", `{}`)}}, llmtest.Turn{Chunks: llmtest.Text("summary")})
+	r := newRig(t, llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "c1", "list_files", `{}`)}}, llmtest.Turn{Chunks: llmtest.Text("summary")})
 	r.agent.MaxSteps = 2
 	_, run := r.queued("q")
 
@@ -63,7 +62,7 @@ func TestProcessKeepsToolsOnLastStepButForbidsCalls(t *testing.T) {
 	// Assert
 	calls := r.model.Calls()
 	lastCall := calls[len(calls)-1]
-	if len(lastCall.Tools) == 0 || lastCall.ToolChoice == nil || *lastCall.ToolChoice != schema.ToolChoiceForbidden || calls[0].ToolChoice != nil {
+	if len(lastCall.Tools) == 0 || lastCall.ToolChoice == nil || *lastCall.ToolChoice != ai.ToolChoiceForbidden || calls[0].ToolChoice != nil {
 		t.Fatalf("last call tools=%d choice=%v first choice=%v", len(lastCall.Tools), lastCall.ToolChoice, calls[0].ToolChoice)
 	}
 }
@@ -71,11 +70,11 @@ func TestProcessKeepsToolsOnLastStepButForbidsCalls(t *testing.T) {
 func TestProcessKeepsSeveralIDlessCallsOfOneChunkApart(t *testing.T) {
 	// A chunk carrying several tool calls without ID or Index yields one call each, with valid JSON arguments.
 	// Arrange
-	two := &schema.Message{Role: schema.Assistant, ToolCalls: []schema.ToolCall{
-		{Function: schema.FunctionCall{Name: "list_files", Arguments: `{"path":"/workspace"}`}},
-		{Function: schema.FunctionCall{Name: "write_file", Arguments: `{"path":"a.txt","content":"x"}`}},
+	two := &ai.Message{Role: ai.RoleAssistant, ToolCalls: []ai.ToolCall{
+		{Function: ai.FunctionCall{Name: "list_files", Arguments: `{"path":"/workspace"}`}},
+		{Function: ai.FunctionCall{Name: "write_file", Arguments: `{"path":"a.txt","content":"x"}`}},
 	}}
-	r := newRig(t, llmtest.Turn{Chunks: []*schema.Message{two}}, llmtest.Turn{Chunks: llmtest.Text("ok")})
+	r := newRig(t, llmtest.Turn{Chunks: []*ai.Message{two}}, llmtest.Turn{Chunks: llmtest.Text("ok")})
 	th, run := r.queued("q")
 
 	// Act

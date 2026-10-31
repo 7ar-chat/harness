@@ -5,17 +5,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 func TestProcessAnEditOfAnUnreadFileShowsItAndTheNextEditWorks(t *testing.T) {
 	// edit_file refusing a file the model has not read returns the file's numbered content and counts as a read, so the retried edit works in the next step (A6).
 	// Arrange
 	edit := func(id string) llmtest.Turn {
-		return llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, id, "edit_file", `{"path":"/workspace/run.py","oldText":"x = 1","newText":"x = 2"}`)}}
+		return llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, id, "edit_file", `{"path":"/workspace/run.py","oldText":"x = 1","newText":"x = 2"}`)}}
 	}
 	r := newRig(t, edit("e1"), edit("e2"), llmtest.Turn{Chunks: llmtest.Text("done")})
 	th, run := r.queued("set x to 2 in run.py")

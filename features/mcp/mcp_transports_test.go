@@ -2,6 +2,7 @@ package mcptools_test
 
 import (
 	"context"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,9 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/mcp"
@@ -32,12 +31,12 @@ func runFakeStdio() {
 	_ = fakeServer().Run(context.Background(), &mcp.StdioTransport{})
 }
 
-func callEcho(t *testing.T, ts []tool.BaseTool) string {
+func callEcho(t *testing.T, ts []ai.BaseTool) string {
 	t.Helper()
 	if len(ts) != 1 {
 		t.Fatalf("tools %v", names(t, ts))
 	}
-	out, err := ts[0].(tool.InvokableTool).InvokableRun(context.Background(), `{"query":"hi"}`)
+	out, err := ts[0].(ai.InvokableTool).InvokableRun(context.Background(), `{"query":"hi"}`)
 	if err != nil {
 		t.Fatal(err)
 	}

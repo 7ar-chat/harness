@@ -4,10 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 const askArgs = `{"question":"Which format do you want?","options":[{"label":"PDF","description":"For printing"},{"label":"Word"}],"allowFreeText":false}`
@@ -46,7 +45,7 @@ func TestProcessResumedRunGivesTheAnswerAsToolResult(t *testing.T) {
 	// The run created with resume replays the answer as TOOL_CALL_RESULT first, and its model sees ask_user followed by the answer.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "call_ask", "ask_user", askArgs)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "call_ask", "ask_user", askArgs)}},
 		llmtest.Turn{Chunks: llmtest.Text("Here is the PDF")},
 	)
 	th, first := r.queued("make the report")
@@ -65,8 +64,8 @@ func TestProcessResumedRunGivesTheAnswerAsToolResult(t *testing.T) {
 	}
 	msgs := r.model.Calls()[1].Messages
 	n := len(msgs)
-	if msgs[n-2].Role != schema.Assistant || msgs[n-2].ToolCalls[0].ID != "call_ask" ||
-		msgs[n-1].Role != schema.Tool || msgs[n-1].ToolCallID != "call_ask" || msgs[n-1].Content != "The user chose: PDF" {
+	if msgs[n-2].Role != ai.RoleAssistant || msgs[n-2].ToolCalls[0].ID != "call_ask" ||
+		msgs[n-1].Role != ai.RoleTool || msgs[n-1].ToolCallID != "call_ask" || msgs[n-1].Content != "The user chose: PDF" {
 		t.Fatalf("history %+v", msgs[1:])
 	}
 	if r.thread(th.ID).PendingQuestion != nil {
@@ -78,7 +77,7 @@ func TestProcessAnswerAfterLeftoverSteerStaysNextToItsCall(t *testing.T) {
 	// A steer kept in the thread after the question does not separate the ask_user call from its later answer in the model history.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "call_ask", "ask_user", `{"question":"Which year?"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "call_ask", "ask_user", `{"question":"Which year?"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("2025 it is")},
 	)
 	th, first := r.queued("report")
@@ -105,7 +104,7 @@ func TestProcessAnswerAfterLeftoverSteerStaysNextToItsCall(t *testing.T) {
 func TestProcessSecondQuestionInOneStepIsRefused(t *testing.T) {
 	// Only the first ask_user of a step interrupts; a second one gets an error result.
 	// Arrange
-	r := newRig(t, llmtest.Turn{Chunks: []*schema.Message{
+	r := newRig(t, llmtest.Turn{Chunks: []*ai.Message{
 		llmtest.ToolCall(0, "q1", "ask_user", `{"question":"A?"}`), llmtest.ToolCall(1, "q2", "ask_user", `{"question":"B?"}`)}})
 	th, run := r.queued("q")
 

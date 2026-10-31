@@ -42,6 +42,7 @@ import (
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/features/permissions"
 	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/GhaziBenDahmane/harness/hosts/inproc"
 	"github.com/GhaziBenDahmane/harness/hosts/tui"
 	"github.com/GhaziBenDahmane/harness/modelinfo"
 )
@@ -178,7 +179,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	o.status = statusFunc(cfg)
 	lookup := modelLookup(hctx, cfg)
 	o.info = lookup
-	c := client.InProcess(h, o.user, client.WithModels(cfg.LLMModels, o.model), client.WithModelInfo(lookup))
+	c := inproc.New(h, o.user, inproc.WithModels(cfg.LLMModels, o.model), inproc.WithModelInfo(lookup))
 	if !cfg.SandboxEnabled() && !o.json {
 		fmt.Fprintln(stderr, "(no sandbox: set SANDBOX_BACKEND=local or OPENSANDBOX_URL; the agent has no tools)")
 	}

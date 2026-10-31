@@ -1,8 +1,7 @@
 package agent
 
 import (
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/store"
 )
@@ -37,13 +36,13 @@ func (st *runState) resumeTurn(msgs []*store.Message) {
 
 // UsageOf is the usage a model call reported (zero when none), for counting
 // auxiliary calls (title, goal judge) in the run's usage.
-func UsageOf(model string, msg *schema.Message) agui.Usage {
+func UsageOf(model string, msg *ai.Message) agui.Usage {
 	u := agui.Usage{Model: model}
 	if msg == nil || msg.ResponseMeta == nil || msg.ResponseMeta.Usage == nil {
 		return u
 	}
 	r := msg.ResponseMeta.Usage
 	u.InputTokens, u.OutputTokens, u.TotalTokens = r.PromptTokens, r.CompletionTokens, r.TotalTokens
-	u.ReasoningTokens = r.CompletionTokensDetails.ReasoningTokens
+	u.ReasoningTokens = r.CompletionTokenDetails.ReasoningTokens
 	return u
 }

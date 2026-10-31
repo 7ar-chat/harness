@@ -11,11 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 func newSite(t *testing.T, model *llmtest.Model, backend *sandboxtest.Backend) *httptest.Server {
@@ -62,10 +61,10 @@ func lookupModel() *llmtest.Model {
 		if len(c.Tools) == 0 {
 			return llmtest.Turn{Chunks: llmtest.Text("A title")}
 		}
-		if c.Messages[len(c.Messages)-1].Role == schema.Tool {
+		if c.Messages[len(c.Messages)-1].Role == ai.RoleTool {
 			return llmtest.Turn{Chunks: llmtest.Text("Your order is on its way.")}
 		}
-		return llmtest.Turn{Chunks: []*schema.Message{llmtest.Finish(llmtest.ToolCall(0, "c1", "lookup_order", `{"orderId":"A-1042"}`), "tool_calls")}}
+		return llmtest.Turn{Chunks: []*ai.Message{llmtest.Finish(llmtest.ToolCall(0, "c1", "lookup_order", `{"orderId":"A-1042"}`), "tool_calls")}}
 	})
 }
 

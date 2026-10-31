@@ -6,17 +6,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 func TestProcessStopEndsAnInteractiveWriteWhileItsSandboxStarts(t *testing.T) {
 	// In interactive mode the work-area check of a write never starts a sandbox outside the run: Stop while the sandbox is still starting ends the run at once (N5).
 	// Arrange
-	r := newApprovalRig(t, llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w1", "write_file", `{"path":"/workspace/outputs/report.md","content":"# Report"}`)}})
+	r := newApprovalRig(t, llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "w1", "write_file", `{"path":"/workspace/outputs/report.md","content":"# Report"}`)}})
 	r.backend.CreateDelay = 20 * time.Second // a cold sandbox start
 	_, run := r.interactive("write it")
 	done := make(chan *store.Run, 1)
@@ -43,10 +42,10 @@ func TestProcessResolvesAWorkAreaPathAgainAfterACommandChangedIt(t *testing.T) {
 	// In interactive mode a write is gated on the real path of its target as it is now: after an approved command turned a work-area directory into a symbolic link to /workspace/src, writing the same path again asks for approval (F6: no stale cached real path).
 	// Arrange
 	write := func(id string) llmtest.Turn {
-		return llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, id, "write_file", `{"path":"/workspace/outputs/x/a.md","content":"`+id+`"}`)}}
+		return llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, id, "write_file", `{"path":"/workspace/outputs/x/a.md","content":"`+id+`"}`)}}
 	}
 	command := func(id, cmd string) llmtest.Turn {
-		return llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, id, "execute_command", `{"command":"`+cmd+`"}`)}}
+		return llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, id, "execute_command", `{"command":"`+cmd+`"}`)}}
 	}
 	r := newApprovalRig(t, command("x1", "ls"), write("w1"), command("x2", "rm -rf outputs/x && ln -s /workspace/src outputs/x"), write("w2"),
 		llmtest.Turn{Chunks: llmtest.Text("done")})
@@ -84,9 +83,9 @@ func TestProcessWritesAndEditsNeverGoThroughASymlink(t *testing.T) {
 	// write_file and edit_file resolve their target in the same sandbox exec that writes it and refuse one that is, or is inside, a symbolic link (a work-area path the gate let through), so a file outside it is never changed (N6).
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w1", "write_file", `{"path":"/workspace/outputs/x/main.py","content":"pwned"}`)}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "r1", "read_file", `{"path":"/workspace/outputs/notes.md"}`)}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "e1", "edit_file", `{"path":"/workspace/outputs/notes.md","oldText":"original","newText":"pwned"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "w1", "write_file", `{"path":"/workspace/outputs/x/main.py","content":"pwned"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "r1", "read_file", `{"path":"/workspace/outputs/notes.md"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "e1", "edit_file", `{"path":"/workspace/outputs/notes.md","oldText":"original","newText":"pwned"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("done")})
 	th, run := r.queued("update the notes")
 	if _, err := r.mgr.Acquire(context.Background(), th.ID, "alice"); err != nil {
@@ -123,7 +122,7 @@ func TestProcessInteractiveWriteInTheWorkAreaThroughTheOpenSandboxLineTransportD
 	// In interactive mode, with the sandbox live and its output delivered like OpenSandbox's (a newline appended to every message), a write to /workspace/outputs/ runs without approval (ADISTU-6764: the work-area check failed closed and asked).
 	// Arrange
 	r := newApprovalRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w1", "write_file", `{"path":"/workspace/outputs/report.md","content":"# Report"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "w1", "write_file", `{"path":"/workspace/outputs/report.md","content":"# Report"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("done")},
 	)
 	th, run := r.interactive("write it")

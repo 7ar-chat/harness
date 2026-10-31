@@ -9,15 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-
 	"github.com/GhaziBenDahmane/harness"
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/longtest"
 )
@@ -80,7 +79,7 @@ func TestACustomFeatureAddsAToolAPromptSectionAndAHook(t *testing.T) {
 		return nil
 	})
 	model := llmtest.New(
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "c1", "ping", "{}")}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "c1", "ping", "{}")}},
 		llmtest.Turn{Chunks: llmtest.Text("all good")},
 		llmtest.Turn{Chunks: llmtest.Text("A title")},
 	)

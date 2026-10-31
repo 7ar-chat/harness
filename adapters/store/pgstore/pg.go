@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"strings"
 	"time"
@@ -486,7 +487,7 @@ func (s *PG) ThreadSandbox(ctx context.Context, threadID string) (string, error)
 	var id string
 	err := s.pool.QueryRow(ctx, `SELECT coalesce(sandbox_id, '') FROM work_threads WHERE id = $1 AND deleted_at IS NULL`, threadID).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", store.ErrNotFound
+		return "", sandbox.ErrThreadNotFound
 	}
 	return id, err
 }

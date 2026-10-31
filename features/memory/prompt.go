@@ -10,7 +10,7 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/agent/prompts"
+	"github.com/GhaziBenDahmane/harness/prompts"
 )
 
 // MaxRecallChars bounds the whole recall block (heading and fences included):

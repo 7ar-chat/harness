@@ -3,17 +3,16 @@ package runtime_test
 import (
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 func TestProcessInteractiveRunWritesDeliverablesWithoutAsking(t *testing.T) {
 	// In interactive mode writes under /workspace/outputs/ and /workspace/.work/ run at once; only the command waits for approval.
 	// Arrange
 	r := newApprovalRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{
+		llmtest.Turn{Chunks: []*ai.Message{
 			llmtest.ToolCall(0, "w1", "write_file", `{"path":"/workspace/outputs/report.md","content":"# R"}`),
 			llmtest.ToolCall(1, "w2", "write_file", `{"path":".work/notes.txt","content":"n"}`),
 			llmtest.ToolCall(2, "x1", "execute_command", `{"command":"ls"}`)}},
@@ -36,9 +35,9 @@ func TestProcessApprovalForTheTaskCoversLaterCallsOfTheSameKind(t *testing.T) {
 	// "Allow for this task" (scope run): the approved command runs, and later commands of the run chain run without asking; a risky write still asks.
 	// Arrange
 	r := newApprovalRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "x1", "execute_command", `{"command":"ls"}`)}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "x2", "execute_command", `{"command":"pwd"}`)}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "w1", "write_file", `{"path":"/workspace/setup.sh","content":"x"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "x1", "execute_command", `{"command":"ls"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "x2", "execute_command", `{"command":"pwd"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "w1", "write_file", `{"path":"/workspace/setup.sh","content":"x"}`)}},
 	)
 	th, run := r.interactive("inspect the workspace")
 	r.process(run)

@@ -8,19 +8,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"log/slog"
 	"strings"
 	"time"
 	"unicode/utf8"
 
-	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/schema"
-	"github.com/google/uuid"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/llm"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 )
@@ -317,11 +315,11 @@ func (h *Hook) evaluate(ctx context.Context, g *store.Goal, run *store.Run, f *r
 		slog.Warn("goals: building the evaluation failed", "run_id", run.ID, "error", err)
 		return verdict{}, false
 	}
-	var opts []model.Option
+	var opts []ai.Option
 	if h.SupportsReasoning != nil && h.SupportsReasoning(run.Model) {
-		opts = llm.WithReasoningEffort("low")
+		opts = []ai.Option{ai.WithReasoningEffort("low")}
 	}
-	msgs := []*schema.Message{schema.SystemMessage(JudgeInstructions), schema.UserMessage(prompt)}
+	msgs := []*ai.Message{ai.SystemMessage(JudgeInstructions), ai.UserMessage(prompt)}
 	for attempt := 0; attempt < 2; attempt++ {
 		out, err := m.Generate(ctx, msgs, opts...)
 		if f != nil && out != nil {
@@ -342,8 +340,8 @@ func (h *Hook) evaluate(ctx context.Context, g *store.Goal, run *store.Run, f *r
 			return checked(v, evidence), true
 		}
 		slog.Warn("goals: evaluation was not valid JSON", "run_id", run.ID, "attempt", attempt+1)
-		msgs = append(msgs, schema.AssistantMessage(out.Content, nil),
-			schema.UserMessage(`That was not valid JSON. Answer with the JSON object only: {"met": true or false, "reason": "...", "blockers": ["..."]}`))
+		msgs = append(msgs, ai.AssistantMessage(out.Content, nil),
+			ai.UserMessage(`That was not valid JSON. Answer with the JSON object only: {"met": true or false, "reason": "...", "blockers": ["..."]}`))
 	}
 	return verdict{}, false
 }

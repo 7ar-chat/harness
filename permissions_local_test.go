@@ -5,6 +5,7 @@ package harness_test
 import (
 	"context"
 	"encoding/json"
+	"github.com/google/uuid"
 	"io"
 	"log/slog"
 	"os"
@@ -13,14 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-	"github.com/google/uuid"
-
 	"github.com/GhaziBenDahmane/harness"
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/config"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 // permRig is a harness on the local backend with a scripted model: the model
@@ -57,10 +56,10 @@ func newPermRig(t *testing.T, env map[string]string, toolName, args string) *per
 		if len(c.Tools) == 0 { // title and other utility calls
 			return llmtest.Turn{Chunks: llmtest.Text("A title")}
 		}
-		if last := c.Messages[len(c.Messages)-1]; last.Role == schema.Tool {
+		if last := c.Messages[len(c.Messages)-1]; last.Role == ai.RoleTool {
 			return llmtest.Turn{Chunks: llmtest.Text("done")}
 		}
-		return llmtest.Turn{Chunks: []*schema.Message{llmtest.Finish(llmtest.ToolCall(0, "c1", toolName, args), "tool_calls")}}
+		return llmtest.Turn{Chunks: []*ai.Message{llmtest.Finish(llmtest.ToolCall(0, "c1", toolName, args), "tool_calls")}}
 	})
 	h, err := harness.New(harness.Options{Config: cfg, Models: llmtest.Factory{M: model}})
 	if err != nil {
@@ -104,7 +103,7 @@ func (r *permRig) toolResults() []string {
 	for i := len(calls) - 1; i >= 0; i-- {
 		var out []string
 		for _, m := range calls[i].Messages {
-			if m.Role == schema.Tool {
+			if m.Role == ai.RoleTool {
 				out = append(out, m.Content)
 			}
 		}

@@ -6,10 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/features/artifacts"
 )
 
@@ -52,7 +51,7 @@ func TestAttachedFilesAreListedAfterTheUserText(t *testing.T) {
 	// Assert
 	msgs := r.model.Calls()[0].Messages
 	user := msgs[len(msgs)-1]
-	if user.Role != schema.User || user.Content != "Look at this\n\n[Attached files: /workspace/data.csv]" || len(user.UserInputMultiContent) != 0 {
+	if user.Role != ai.RoleUser || user.Content != "Look at this\n\n[Attached files: /workspace/data.csv]" || len(user.Parts) != 0 {
 		t.Fatalf("user message %+v", user)
 	}
 }
@@ -68,13 +67,13 @@ func TestVisionModelsReceiveAttachedImagesAsImageParts(t *testing.T) {
 
 	// Assert
 	msgs := r.model.Calls()[0].Messages
-	parts := msgs[len(msgs)-1].UserInputMultiContent
-	if len(parts) != 2 || parts[0].Type != schema.ChatMessagePartTypeText || !strings.HasSuffix(parts[0].Text, "[Attached files: /workspace/chart.png]") {
+	parts := msgs[len(msgs)-1].Parts
+	if len(parts) != 2 || parts[0].Type != ai.PartText || !strings.HasSuffix(parts[0].Text, "[Attached files: /workspace/chart.png]") {
 		t.Fatalf("parts %+v", parts)
 	}
 	img := parts[1].Image
-	if parts[1].Type != schema.ChatMessagePartTypeImageURL || img == nil || img.MIMEType != "image/png" || img.Base64Data == nil ||
-		*img.Base64Data != base64.StdEncoding.EncodeToString(pngBytes) {
+	if parts[1].Type != ai.PartImage || img == nil || img.MIMEType != "image/png" ||
+		img.Base64Data != base64.StdEncoding.EncodeToString(pngBytes) {
 		t.Fatalf("image part %+v", parts[1])
 	}
 }

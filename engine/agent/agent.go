@@ -7,22 +7,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"log/slog"
 	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 
-	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/schema"
-	"github.com/google/uuid"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/compaction"
+	"github.com/GhaziBenDahmane/harness/ai/llm"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/compaction"
 	"github.com/GhaziBenDahmane/harness/engine/eventlog"
-	"github.com/GhaziBenDahmane/harness/engine/llm"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 )
@@ -132,10 +129,10 @@ type runState struct {
 	a       *Agent
 	in      Input
 	w       eventlog.Writer
-	history []*schema.Message
+	history []*ai.Message
 	usage   agui.Usage
 	carry   []queue.Steer
-	base    model.ToolCallingChatModel
+	base    ai.Model
 	h       harnessState
 	g       guardState
 	v3      toolRunState // harness v3 tool-side state (tool images, verification…)
@@ -154,7 +151,7 @@ func (a *Agent) Run(ctx context.Context, in Input, w eventlog.Writer) (Result, e
 	st.resumeTurn(msgs)
 	st.history = a.attachImages(ctx, in.Run, st.history)
 
-	var toolList []tool.BaseTool
+	var toolList []ai.BaseTool
 	cleanup := func() {}
 	if a.Tools != nil {
 		toolList, cleanup, err = a.Tools.Tools(ctx, tools.RunContext{
@@ -177,8 +174,8 @@ func (a *Agent) Run(ctx context.Context, in Input, w eventlog.Writer) (Result, e
 			hasExec = true
 		}
 	}
-	toolMap := map[string]tool.BaseTool{}
-	var infos []*schema.ToolInfo
+	toolMap := map[string]ai.BaseTool{}
+	var infos []*ai.ToolInfo
 	for _, t := range toolList {
 		info, err := t.Info(ctx)
 		if err != nil || info == nil {
@@ -302,7 +299,7 @@ func (st *runState) injectSteers(ctx context.Context, final bool) error {
 		row := &store.Message{ID: id, Role: store.RoleUser, Content: s.Text, Metadata: map[string]any{"steer": true, "delivered": true},
 			AuthorLogin: s.Author, AuthorKind: s.AuthorKind, OnBehalfOf: s.OnBehalfOf}
 		st.persist(ctx, row)
-		hm := schema.UserMessage(SteerPrefix + AuthorTag(s.Author, s.AuthorKind, s.OnBehalfOf) + s.Text)
+		hm := ai.UserMessage(SteerPrefix + AuthorTag(s.Author, s.AuthorKind, s.OnBehalfOf) + s.Text)
 		compaction.SetPosition(hm, row.Position)
 		compaction.MarkSteer(hm)
 		st.history = append(st.history, hm)
@@ -314,7 +311,7 @@ func (st *runState) injectSteers(ctx context.Context, final bool) error {
 }
 
 func (st *runState) step(ctx context.Context, step int, last bool,
-	m model.ToolCallingChatModel, hasTools bool, toolMap map[string]tool.BaseTool) (done bool, err error) {
+	m ai.Model, hasTools bool, toolMap map[string]ai.BaseTool) (done bool, err error) {
 	stepName := fmt.Sprintf("step-%d", step)
 	if err := st.emit(ctx, agui.New(agui.StepStarted, map[string]any{"stepName": stepName})); err != nil {
 		return false, err
@@ -333,7 +330,7 @@ func (st *runState) step(ctx context.Context, step int, last bool,
 		return false, err
 	}
 	forced := st.g.forceAnswer && !last // stuck on failing calls (guards.go)
-	request := func() ([]*schema.Message, []model.Option) {
+	request := func() ([]*ai.Message, []ai.Option) {
 		msgs := st.requestMessages()
 		opts := st.callOptions()
 		if last || forced {
@@ -342,9 +339,9 @@ func (st *runState) step(ctx context.Context, step int, last bool,
 			if forced {
 				nudge = fmt.Sprintf(TooManyErrorsNote, st.g.failedInRow)
 			}
-			msgs = append(msgs, schema.UserMessage(nudge))
+			msgs = append(msgs, ai.UserMessage(nudge))
 			if hasTools {
-				opts = append(opts, model.WithToolChoice(schema.ToolChoiceForbidden))
+				opts = append(opts, ai.WithToolChoice(ai.ToolChoiceForbidden))
 			}
 		}
 		return msgs, opts
@@ -401,7 +398,7 @@ func (st *runState) step(ctx context.Context, step int, last bool,
 			}
 		}
 		if row != nil {
-			hm := schema.AssistantMessage(out.msg.Content, out.msg.ToolCalls)
+			hm := ai.AssistantMessage(out.msg.Content, out.msg.ToolCalls)
 			if st.passback() {
 				hm.ReasoningContent = out.reasoning
 			}
@@ -445,7 +442,7 @@ func (st *runState) step(ctx context.Context, step int, last bool,
 		if empty && st.h.interrupt == nil {
 			st.g.nudged = true
 			st.g.redirected()
-			st.history = append(st.history, schema.UserMessage(EmptyAnswerNudge))
+			st.history = append(st.history, ai.UserMessage(EmptyAnswerNudge))
 			return false, nil
 		}
 		if last {
@@ -460,13 +457,13 @@ func (st *runState) step(ctx context.Context, step int, last bool,
 			// The answer was cut by the output limit: let the model finish it.
 			st.h.continuations++
 			st.g.redirected()
-			st.history = append(st.history, schema.UserMessage(ContinueAfterLengthNote))
+			st.history = append(st.history, ai.UserMessage(ContinueAfterLengthNote))
 			return false, nil
 		}
 		// Decide whether the run goes on before closing the steer list, so a
 		// steer is only refused by a run that really stops.
 		if note := st.continueAfterAnswer(ctx, out.msg.Content); note != "" {
-			st.history = append(st.history, schema.UserMessage(note))
+			st.history = append(st.history, ai.UserMessage(note))
 			return false, nil
 		}
 		if st.a.Steers != nil {
@@ -511,7 +508,7 @@ func (st *runState) step(ctx context.Context, step int, last bool,
 	return st.h.interrupt != nil, finish()
 }
 
-func (st *runState) addUsage(msg *schema.Message) {
+func (st *runState) addUsage(msg *ai.Message) {
 	if msg == nil || msg.ResponseMeta == nil || msg.ResponseMeta.Usage == nil {
 		return
 	}
@@ -520,10 +517,10 @@ func (st *runState) addUsage(msg *schema.Message) {
 	st.usage.InputTokens += u.PromptTokens
 	st.usage.OutputTokens += u.CompletionTokens
 	st.usage.TotalTokens += u.TotalTokens
-	st.usage.ReasoningTokens += u.CompletionTokensDetails.ReasoningTokens
+	st.usage.ReasoningTokens += u.CompletionTokenDetails.ReasoningTokens
 }
 
-func toStoreCalls(calls []schema.ToolCall) []store.ToolCall {
+func toStoreCalls(calls []ai.ToolCall) []store.ToolCall {
 	out := make([]store.ToolCall, 0, len(calls))
 	for _, c := range calls {
 		out = append(out, store.ToolCall{ID: c.ID, Type: "function", Function: store.ToolCallFunction{Name: c.Function.Name, Arguments: c.Function.Arguments}})
@@ -531,7 +528,7 @@ func toStoreCalls(calls []schema.ToolCall) []store.ToolCall {
 	return out
 }
 
-func (st *runState) runTool(ctx context.Context, tc schema.ToolCall, toolMap map[string]tool.BaseTool) error {
+func (st *runState) runTool(ctx context.Context, tc ai.ToolCall, toolMap map[string]ai.BaseTool) error {
 	em := &toolEmitter{st: st, ctx: ctx}
 	content, toolErr := st.execTool(ctx, tc, toolMap, em, st.g.looping(tc))
 	return st.finishTool(ctx, tc, em, content, toolErr)
@@ -540,7 +537,7 @@ func (st *runState) runTool(ctx context.Context, tc schema.ToolCall, toolMap map
 // execTool runs a call (or returns the loop guard's refusal: identical ×3,
 // A-B-A-B-A-B): no events but the tool's own live output, no state change
 // (read-only calls run it in parallel).
-func (st *runState) execTool(ctx context.Context, tc schema.ToolCall, toolMap map[string]tool.BaseTool, em *toolEmitter, refusal string) (string, error) {
+func (st *runState) execTool(ctx context.Context, tc ai.ToolCall, toolMap map[string]ai.BaseTool, em *toolEmitter, refusal string) (string, error) {
 	if refusal != "" {
 		return refusal, errors.New(refusal)
 	}
@@ -548,7 +545,7 @@ func (st *runState) execTool(ctx context.Context, tc schema.ToolCall, toolMap ma
 }
 
 // finishTool emits, hooks, persists and records a call's result (in call order).
-func (st *runState) finishTool(ctx context.Context, tc schema.ToolCall, em *toolEmitter, content string, toolErr error) error {
+func (st *runState) finishTool(ctx context.Context, tc ai.ToolCall, em *toolEmitter, content string, toolErr error) error {
 	if err := em.flushOutput(); err != nil {
 		return err
 	}
@@ -593,7 +590,7 @@ func (st *runState) finishTool(ctx context.Context, tc schema.ToolCall, em *tool
 	}
 	row := &store.Message{ID: fields["messageId"].(string), Role: store.RoleTool, Content: content, ToolCallID: tc.ID, Error: errMsg, Metadata: metadata}
 	st.persist(ctx, row)
-	hm := schema.ToolMessage(content, tc.ID, schema.WithToolName(tc.Function.Name))
+	hm := ai.ToolMessage(content, tc.ID, ai.WithToolName(tc.Function.Name))
 	compaction.SetPosition(hm, row.Position)
 	compaction.SetFiles(hm, store.ArtifactPaths(row.Metadata))
 	st.addToolResult(tc.ID, hm)
@@ -603,7 +600,7 @@ func (st *runState) finishTool(ctx context.Context, tc schema.ToolCall, em *tool
 	return em.flushAfter()
 }
 
-func (st *runState) invoke(ctx context.Context, tc schema.ToolCall, toolMap map[string]tool.BaseTool, em *toolEmitter) (string, error) {
+func (st *runState) invoke(ctx context.Context, tc ai.ToolCall, toolMap map[string]ai.BaseTool, em *toolEmitter) (string, error) {
 	t, ok := toolMap[tc.Function.Name]
 	if !ok {
 		names := make([]string, 0, len(toolMap))
@@ -614,7 +611,7 @@ func (st *runState) invoke(ctx context.Context, tc schema.ToolCall, toolMap map[
 		err := fmt.Errorf("unknown tool %q; available tools: %s", tc.Function.Name, strings.Join(names, ", "))
 		return "Error: " + err.Error(), err
 	}
-	inv, ok := t.(tool.InvokableTool)
+	inv, ok := t.(ai.InvokableTool)
 	if !ok {
 		err := fmt.Errorf("tool %q cannot be invoked", tc.Function.Name)
 		return "Error: " + err.Error(), err
@@ -643,7 +640,7 @@ func (st *runState) invoke(ctx context.Context, tc schema.ToolCall, toolMap map[
 	return out, nil
 }
 
-func safeInvoke(ctx context.Context, t tool.InvokableTool, args string) (out string, err error) {
+func safeInvoke(ctx context.Context, t ai.InvokableTool, args string) (out string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("the tool crashed: %v", r)

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 )
 
 func TestTheRuntimeDoesNotReCheckAFileTheCommandJustChecked(t *testing.T) {

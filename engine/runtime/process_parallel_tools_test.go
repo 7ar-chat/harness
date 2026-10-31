@@ -7,10 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 // readOnlyTool is a fakeTool implementing tools.ReadOnly.
@@ -42,7 +41,7 @@ func (l *toolLog) leave(name string) {
 }
 
 func calls(names ...string) llmtest.Turn {
-	var chunks []*schema.Message
+	var chunks []*ai.Message
 	for i, n := range names {
 		chunks = append(chunks, llmtest.ToolCall(i, "c-"+n, n, `{}`))
 	}

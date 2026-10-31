@@ -1,0 +1,188 @@
+// Package agent is the tool-calling loop: ask the model, run the tools it calls, feed the results back,
+// until it answers without a tool call or the step budget ends. It knows nothing of persistence, event
+// transports or approvals; a caller observes the loop through the Config hooks and keeps whatever it
+// needs from the returned transcript.
+package agent
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"sync"
+
+	"github.com/GhaziBenDahmane/harness/ai"
+)
+
+// DefaultMaxSteps bounds a loop whose Config.MaxSteps is not set.
+const DefaultMaxSteps = 20
+
+// Config describes one loop.
+type Config struct {
+	// Model answers each step; it must already offer the tools of the loop (ai.Model.WithTools).
+	Model ai.Model
+	// Tools are the tools the loop may run, by the name in their ToolInfo.
+	Tools []ai.InvokableTool
+	// MaxSteps is the number of model calls allowed (0: DefaultMaxSteps). The last one is made with
+	// tool calls forbidden and, when LimitNudge is set, after that message was appended.
+	MaxSteps int
+	// LimitNudge is the user message added before the last step.
+	LimitNudge string
+	// Options are passed to every model call.
+	Options []ai.Option
+	// Parallel runs the calls of one step at the same time when every one of them is ReadOnly; by default they
+	// run one after the other, in call order.
+	Parallel bool
+
+	// OnStep is called before each model call with the step number (from 1).
+	OnStep func(step int)
+	// OnReply is called with every answer of the model, also one that fails the loop's next stage.
+	OnReply func(step int, reply *ai.Message)
+	// OnTool is called after each tool call with its result text.
+	OnTool func(call ai.ToolCall, result string)
+	// Invoke runs one tool call and returns the text the model gets. Nil: the default runs the tool of that
+	// name and reports failures as "error: ..." text, an unknown tool by name.
+	Invoke func(ctx context.Context, call ai.ToolCall) string
+	// Steer returns messages to add to the conversation before a model call (nil: none).
+	Steer func(ctx context.Context, step int) []*ai.Message
+}
+
+// Result is a finished loop.
+type Result struct {
+	// Messages is the whole conversation: the input, every answer and every tool result.
+	Messages []*ai.Message
+	// Reply is the last answer of the model (no tool calls unless the step budget ended the loop).
+	Reply *ai.Message
+	// Steps is the number of model calls made.
+	Steps int
+}
+
+// ErrNoModel is returned when Config.Model is nil.
+var ErrNoModel = errors.New("agent: no model")
+
+// ReadOnly marks a tool that has no side effects, so several calls of one step may run at the same time (Config.Parallel).
+type ReadOnly interface{ ReadOnly() bool }
+
+// Run executes the loop over the conversation msgs (not modified). A failed model call returns the
+// conversation so far with the error; a cancelled context returns ctx.Err().
+func Run(ctx context.Context, cfg Config, msgs []*ai.Message) (Result, error) {
+	if cfg.Model == nil {
+		return Result{}, ErrNoModel
+	}
+	steps := cfg.MaxSteps
+	if steps <= 0 {
+		steps = DefaultMaxSteps
+	}
+	byName, err := index(ctx, cfg.Tools)
+	if err != nil {
+		return Result{}, err
+	}
+	invoke := cfg.Invoke
+	if invoke == nil {
+		invoke = func(ctx context.Context, call ai.ToolCall) string { return defaultInvoke(ctx, byName, call) }
+	}
+	conv := append([]*ai.Message(nil), msgs...)
+	res := Result{}
+	for step := 1; ; step++ {
+		if err := ctx.Err(); err != nil {
+			res.Messages = conv
+			return res, err
+		}
+		if cfg.Steer != nil {
+			conv = append(conv, cfg.Steer(ctx, step)...)
+		}
+		opts := append([]ai.Option(nil), cfg.Options...)
+		last := step >= steps
+		if last {
+			if cfg.LimitNudge != "" {
+				conv = append(conv, ai.UserMessage(cfg.LimitNudge))
+			}
+			opts = append(opts, ai.WithToolChoice(ai.ToolChoiceForbidden))
+		}
+		if cfg.OnStep != nil {
+			cfg.OnStep(step)
+		}
+		reply, err := cfg.Model.Generate(ctx, conv, opts...)
+		res.Steps = step
+		if reply != nil && cfg.OnReply != nil {
+			cfg.OnReply(step, reply)
+		}
+		if err != nil {
+			res.Messages = conv
+			return res, err
+		}
+		res.Reply = reply
+		if len(reply.ToolCalls) == 0 || last {
+			res.Messages = append(conv, reply)
+			return res, nil
+		}
+		conv = append(conv, reply)
+		results := runCalls(ctx, byName, reply.ToolCalls, invoke, cfg.Parallel)
+		for i, call := range reply.ToolCalls {
+			if cfg.OnTool != nil {
+				cfg.OnTool(call, results[i])
+			}
+			conv = append(conv, ai.ToolMessage(results[i], call.ID, ai.WithToolName(call.Function.Name)))
+		}
+	}
+}
+
+func index(ctx context.Context, list []ai.InvokableTool) (map[string]ai.InvokableTool, error) {
+	byName := make(map[string]ai.InvokableTool, len(list))
+	for _, t := range list {
+		info, err := t.Info(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("agent: tool info: %w", err)
+		}
+		if info == nil || info.Name == "" {
+			continue
+		}
+		byName[info.Name] = t
+	}
+	return byName, nil
+}
+
+// runCalls runs one step's calls, returning their results in call order. With parallel set and every call
+// read-only they run concurrently; otherwise one after the other.
+func runCalls(ctx context.Context, byName map[string]ai.InvokableTool, calls []ai.ToolCall, invoke func(context.Context, ai.ToolCall) string, parallel bool) []string {
+	out := make([]string, len(calls))
+	parallel = parallel && len(calls) > 1
+	for _, c := range calls {
+		if ro, ok := byName[c.Function.Name].(ReadOnly); !ok || !ro.ReadOnly() {
+			parallel = false
+			break
+		}
+	}
+	if !parallel {
+		for i, c := range calls {
+			out[i] = invoke(ctx, c)
+		}
+		return out
+	}
+	var wg sync.WaitGroup
+	for i, c := range calls {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			out[i] = invoke(ctx, c)
+		}()
+	}
+	wg.Wait()
+	return out
+}
+
+func defaultInvoke(ctx context.Context, byName map[string]ai.InvokableTool, call ai.ToolCall) string {
+	t, ok := byName[call.Function.Name]
+	if !ok {
+		return fmt.Sprintf("error: unknown tool %q", call.Function.Name)
+	}
+	args := call.Function.Arguments
+	if strings.TrimSpace(args) == "" {
+		args = "{}"
+	}
+	out, err := t.InvokableRun(ctx, args)
+	if err != nil {
+		return "error: " + err.Error()
+	}
+	return out
+}

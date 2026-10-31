@@ -5,7 +5,7 @@ import "context"
 // Extras are the operations beyond the core Client contract. A front end checks
 // for them with a type assertion (c.(client.Extras)); an implementation or a
 // server that lacks one answers ErrNotSupported, so a newer front end still
-// works against an older server. Both InProcess and HTTP implement it.
+// works against an older server. Both inproc.New and HTTP implement it.
 type Extras interface {
 	// Compact summarises the thread's history now (the automatic compaction runs by itself near the context limit).
 	Compact(ctx context.Context, threadID string) (*CompactResult, error)
@@ -69,7 +69,4 @@ type Attachment struct {
 	Data []byte `json:"data"`
 }
 
-var (
-	_ Extras = (*inProcess)(nil)
-	_ Extras = (*httpClient)(nil)
-)
+var _ Extras = (*httpClient)(nil)

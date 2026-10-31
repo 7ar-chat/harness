@@ -3,7 +3,7 @@ package pgstore
 import (
 	"context"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
 )
 
 // SwapThreadSandbox sets sandbox_id to sandboxID when it currently equals
@@ -20,16 +20,16 @@ func (s *PG) SwapThreadSandbox(ctx context.Context, threadID, expected, sandboxI
 
 // UserSandboxes lists the user's live threads with a recorded sandbox (what
 // CountUserSandboxes counts), for the quota's reconcile of dead sandboxes (C-09).
-func (s *PG) UserSandboxes(ctx context.Context, login string) ([]store.UserSandbox, error) {
+func (s *PG) UserSandboxes(ctx context.Context, login string) ([]sandbox.UserSandbox, error) {
 	rows, err := s.pool.Query(ctx, `SELECT id::text, sandbox_id FROM work_threads
 		WHERE user_login = $1 AND sandbox_id IS NOT NULL AND deleted_at IS NULL ORDER BY updated_at, id`, login)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []store.UserSandbox
+	var out []sandbox.UserSandbox
 	for rows.Next() {
-		var u store.UserSandbox
+		var u sandbox.UserSandbox
 		if err := rows.Scan(&u.ThreadID, &u.SandboxID); err != nil {
 			return nil, err
 		}

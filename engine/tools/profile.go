@@ -3,7 +3,7 @@ package tools
 import (
 	"context"
 
-	"github.com/cloudwego/eino/components/tool"
+	"github.com/GhaziBenDahmane/harness/ai"
 )
 
 // Filter is a Provider that offers only the tools of Inner that Allow accepts
@@ -17,7 +17,7 @@ type Filter struct {
 func (f Filter) Name() string { return f.Inner.Name() }
 
 // Tools implements Provider.
-func (f Filter) Tools(ctx context.Context, rc RunContext) ([]tool.BaseTool, func(), error) {
+func (f Filter) Tools(ctx context.Context, rc RunContext) ([]ai.BaseTool, func(), error) {
 	ts, cleanup, err := f.Inner.Tools(ctx, rc)
 	if err != nil {
 		return nil, cleanup, err

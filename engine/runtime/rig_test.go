@@ -13,19 +13,18 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/schema"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/GhaziBenDahmane/harness/adapters/redisx"
 	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
 	"github.com/GhaziBenDahmane/harness/engine/runtime"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
@@ -314,11 +313,11 @@ type fakeTool struct {
 	run  func(ctx context.Context, args string) (string, error)
 }
 
-func (f *fakeTool) Info(context.Context) (*schema.ToolInfo, error) {
-	return &schema.ToolInfo{Name: f.name, Desc: "fake " + f.name}, nil
+func (f *fakeTool) Info(context.Context) (*ai.ToolInfo, error) {
+	return &ai.ToolInfo{Name: f.name, Desc: "fake " + f.name}, nil
 }
 
-func (f *fakeTool) InvokableRun(ctx context.Context, args string, _ ...tool.Option) (string, error) {
+func (f *fakeTool) InvokableRun(ctx context.Context, args string) (string, error) {
 	if f.run == nil {
 		return "ok", nil
 	}
@@ -334,7 +333,7 @@ type guardTool struct {
 func (g *guardTool) StopReminder(context.Context) string { return g.reminder() }
 
 // withTools adds fake tools to the run's tools.
-func (r *rig) withTools(ts ...tool.BaseTool) {
+func (r *rig) withTools(ts ...ai.BaseTool) {
 	r.agent.Tools = tools.NewRegistry(r.agent.Tools, staticTools(ts))
 }
 

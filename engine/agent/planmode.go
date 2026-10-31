@@ -1,8 +1,7 @@
 package agent
 
 import (
-	"github.com/cloudwego/eino/components/tool"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 )
@@ -32,7 +31,7 @@ func planModeSection(in Input) string {
 // writes, memory writes and every tool that does not say it is read-only are
 // dropped from the tool set, so the model cannot call them: the restriction is
 // the tool set, not the prompt.
-func planAllows(t tool.BaseTool, name string) bool {
+func planAllows(t ai.BaseTool, name string) bool {
 	if ro, ok := t.(tools.ReadOnly); ok && ro.ReadOnly() {
 		return true
 	}

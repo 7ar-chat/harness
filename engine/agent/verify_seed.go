@@ -5,8 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/store"
 )
 
@@ -17,12 +16,12 @@ import (
 // when a model call followed it (its pages were sent).
 func (st *runState) seedVerification(turn []*store.Message) {
 	v := &st.v3.verify
-	calls := map[string]schema.ToolCall{}
+	calls := map[string]ai.ToolCall{}
 	for i, m := range turn {
 		switch m.Role {
 		case store.RoleAssistant:
 			for _, c := range m.ToolCalls {
-				calls[c.ID] = schema.ToolCall{ID: c.ID, Function: schema.FunctionCall{Name: c.Function.Name, Arguments: c.Function.Arguments}}
+				calls[c.ID] = ai.ToolCall{ID: c.ID, Function: ai.FunctionCall{Name: c.Function.Name, Arguments: c.Function.Arguments}}
 			}
 		case store.RoleTool:
 			items, _ := m.Metadata["verification"].([]any)

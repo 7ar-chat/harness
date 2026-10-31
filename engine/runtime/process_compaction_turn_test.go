@@ -8,12 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/compaction"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/compaction"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 // fetchTool returns size characters per call ({"n": k} keeps the calls distinct for the loop guard).
@@ -26,7 +25,7 @@ func fetchTool(size int) *fakeTool {
 }
 
 func fetchCall(n int) llmtest.Turn {
-	return llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, fmt.Sprintf("f%d", n), "fetch", fmt.Sprintf(`{"n":%d}`, n))}}
+	return llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, fmt.Sprintf("f%d", n), "fetch", fmt.Sprintf(`{"n":%d}`, n))}}
 }
 
 // fetchCallUsage is fetchCall reporting a prompt size.
@@ -41,7 +40,7 @@ func isSummaryCall(c llmtest.Call) bool {
 	return len(c.Messages) > 0 && c.Messages[0].Content == compaction.Instructions
 }
 
-func roles(msgs []*schema.Message) []string {
+func roles(msgs []*ai.Message) []string {
 	out := make([]string, 0, len(msgs))
 	for _, m := range msgs {
 		out = append(out, string(m.Role))
@@ -50,13 +49,13 @@ func roles(msgs []*schema.Message) []string {
 }
 
 // validToolOrder reports whether every tool message follows the assistant message that called it.
-func validToolOrder(msgs []*schema.Message) bool {
+func validToolOrder(msgs []*ai.Message) bool {
 	called := map[string]bool{}
 	for _, m := range msgs {
 		for _, tc := range m.ToolCalls {
 			called[tc.ID] = true
 		}
-		if m.Role == schema.Tool && !called[m.ToolCallID] {
+		if m.Role == ai.RoleTool && !called[m.ToolCallID] {
 			return false
 		}
 	}
@@ -90,7 +89,7 @@ func TestProcessCompactsInsideALongTurnAndKeepsTheRequestVerbatim(t *testing.T) 
 		t.Fatalf("status %s calls %d", got.Status, len(calls))
 	}
 	final := calls[13].Messages
-	if final[1].Role != schema.User || final[1].Content != longRequest || !validToolOrder(final) || final[2].Role != schema.Assistant ||
+	if final[1].Role != ai.RoleUser || final[1].Content != longRequest || !validToolOrder(final) || final[2].Role != ai.RoleAssistant ||
 		!strings.Contains(final[0].Content, agent.SummaryHeading) || len(final) >= 26 {
 		t.Fatalf("after compaction %v %q", roles(final), final[1].Content)
 	}
@@ -248,7 +247,7 @@ func TestCancellingDuringTheSummaryEndsTheRunCancelledWithoutAFailedCompaction(t
 	// Arrange
 	summarizing := make(chan struct{})
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.ToolCall(0, "p1", "update_plan", `{"items":[]}`), 16000, 10)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(llmtest.ToolCall(0, "p1", "update_plan", `{"items":[]}`), 16000, 10)}},
 		llmtest.Turn{Block: true, OnCall: func() { close(summarizing) }},
 	)
 	r.window = 20000

@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"log/slog"
 	"path"
 	"strconv"
@@ -15,10 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/components/tool/utils"
-	"github.com/google/uuid"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 )
@@ -115,21 +113,21 @@ func New(mgr sandbox.Manager, opts Options) *Provider {
 func (p *Provider) Name() string { return "sandbox" }
 
 // readOnlyTool marks a tool without side effects (tools.ReadOnly).
-type readOnlyTool struct{ tool.InvokableTool }
+type readOnlyTool struct{ ai.InvokableTool }
 
 func (readOnlyTool) ReadOnly() bool { return true }
 
 var _ tools.ReadOnly = readOnlyTool{}
 
 // Tools implements tools.Provider. The sandbox is acquired lazily on first tool call.
-func (p *Provider) Tools(_ context.Context, rc tools.RunContext) ([]tool.BaseTool, func(), error) {
+func (p *Provider) Tools(_ context.Context, rc tools.RunContext) ([]ai.BaseTool, func(), error) {
 	if rc.Sandbox == tools.SandboxOff {
 		return nil, func() {}, nil
 	}
 	b := &binding{p: p, rc: rc}
-	var out []tool.BaseTool
-	add := func(readOnly bool) func(t tool.InvokableTool, err error) error {
-		return func(t tool.InvokableTool, err error) error {
+	var out []ai.BaseTool
+	add := func(readOnly bool) func(t ai.InvokableTool, err error) error {
+		return func(t ai.InvokableTool, err error) error {
 			if err != nil {
 				return err
 			}
@@ -143,25 +141,25 @@ func (p *Provider) Tools(_ context.Context, rc tools.RunContext) ([]tool.BaseToo
 	rw, ro := add(false), add(true)
 	d := workDescriptions
 	readNotice := func(o string, n string) string { return n + "\n" + o }
-	readTool := func() (tool.InvokableTool, error) {
-		return utils.InferTool("read_file", d.read, withRecreateNotice(b.read, readNotice))
+	readTool := func() (ai.InvokableTool, error) {
+		return ai.InferTool("read_file", d.read, withRecreateNotice(b.read, readNotice))
 	}
 	if p.opts.Coding {
 		d = codingDescriptions
-		readTool = func() (tool.InvokableTool, error) {
-			return utils.InferTool("read_file", d.read, withRecreateNotice(b.readCoding, readNotice))
+		readTool = func() (ai.InvokableTool, error) {
+			return ai.InferTool("read_file", d.read, withRecreateNotice(b.readCoding, readNotice))
 		}
 	}
 	if err := errors.Join(
-		rw(utils.InferTool("execute_command", d.exec, withRecreateNotice(b.execute, func(o *execOutput, n string) *execOutput { o.Notice = n; return o }))),
-		ro(utils.InferTool("job_output", jobOutputDesc, b.jobOutput)),
-		rw(utils.InferTool("job_kill", jobKillDesc, b.jobKill)),
+		rw(ai.InferTool("execute_command", d.exec, withRecreateNotice(b.execute, func(o *execOutput, n string) *execOutput { o.Notice = n; return o }))),
+		ro(ai.InferTool("job_output", jobOutputDesc, b.jobOutput)),
+		rw(ai.InferTool("job_kill", jobKillDesc, b.jobKill)),
 		ro(readTool()),
-		ro(utils.InferTool("view_file", viewDesc, withRecreateNotice(b.view, func(o *viewOutput, n string) *viewOutput { o.Notice = n; return o }))),
-		ro(utils.InferTool("search_files", d.search, withRecreateNotice(b.search, func(o *searchOutput, n string) *searchOutput { o.Notice = n; return o }))),
-		rw(utils.InferTool("write_file", d.write, withRecreateNotice(b.write, func(o *writeOutput, n string) *writeOutput { o.Notice = n; return o }))),
-		rw(utils.InferTool("edit_file", d.edit, withRecreateNotice(b.edit, func(o *editOutput, n string) *editOutput { o.Notice = n; return o }))),
-		ro(utils.InferTool("list_files", d.list, withRecreateNotice(b.list, func(o *listOutput, n string) *listOutput { o.Notice = n; return o }))),
+		ro(ai.InferTool("view_file", viewDesc, withRecreateNotice(b.view, func(o *viewOutput, n string) *viewOutput { o.Notice = n; return o }))),
+		ro(ai.InferTool("search_files", d.search, withRecreateNotice(b.search, func(o *searchOutput, n string) *searchOutput { o.Notice = n; return o }))),
+		rw(ai.InferTool("write_file", d.write, withRecreateNotice(b.write, func(o *writeOutput, n string) *writeOutput { o.Notice = n; return o }))),
+		rw(ai.InferTool("edit_file", d.edit, withRecreateNotice(b.edit, func(o *editOutput, n string) *editOutput { o.Notice = n; return o }))),
+		ro(ai.InferTool("list_files", d.list, withRecreateNotice(b.list, func(o *listOutput, n string) *listOutput { o.Notice = n; return o }))),
 	); err != nil {
 		return nil, nil, err
 	}

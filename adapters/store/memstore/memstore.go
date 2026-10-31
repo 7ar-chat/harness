@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/store"
 )
 
@@ -542,7 +543,7 @@ func (s *Store) ThreadSandbox(_ context.Context, threadID string) (string, error
 	defer s.mu.Unlock()
 	t, ok := s.threads[threadID]
 	if !ok || t.deleted {
-		return "", store.ErrNotFound
+		return "", sandbox.ErrThreadNotFound
 	}
 	return t.SandboxID, nil
 }

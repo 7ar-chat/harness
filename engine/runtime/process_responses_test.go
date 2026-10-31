@@ -5,12 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/compaction"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
+	"github.com/GhaziBenDahmane/harness/ai/llm/responses"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/compaction"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/engine/llm/responses"
 )
 
 // Stream R: models on the Responses API carry their encrypted reasoning items
@@ -80,7 +79,7 @@ func TestProcessSendsReasoningItemsBackBeforeTheirToolCalls(t *testing.T) {
 	// Within a run, the reasoning item of a tool step is sent back right before its function_call, followed by the function_call_output.
 	// Arrange
 	r := newResponsesRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "c1", "calc", `{"expr":"17*23"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "c1", "calc", `{"expr":"17*23"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("391")},
 	)
 	th, run := r.queued("17*23?")
@@ -105,7 +104,7 @@ func TestProcessCarriesReasoningItemsIntoTheNextRun(t *testing.T) {
 	// A later run resends every reasoning item of the earlier runs, in order, each before the output it produced (persisted with its assistant message).
 	// Arrange
 	r := newResponsesRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "c1", "calc", `{"expr":"17*23"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "c1", "calc", `{"expr":"17*23"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("391")},
 		llmtest.Turn{Chunks: llmtest.Text("782")},
 	)
@@ -134,9 +133,9 @@ func TestProcessDropsReasoningItemsWithTheirCompactedTurn(t *testing.T) {
 	// A compaction that folds an earlier turn drops its reasoning items with it, while the items of the kept steps still precede their calls.
 	// Arrange
 	script := []llmtest.Turn{
-		{Chunks: []*schema.Message{llmtest.ToolCall(0, "c1", "calc", `{"expr":"17*23"}`)}},
+		{Chunks: []*ai.Message{llmtest.ToolCall(0, "c1", "calc", `{"expr":"17*23"}`)}},
 		{Chunks: llmtest.Text(strings.Repeat("x", 60000))},
-		{Chunks: []*schema.Message{llmtest.ToolCall(0, "c2", "calc", `{"expr":"391*2"}`)}},
+		{Chunks: []*ai.Message{llmtest.ToolCall(0, "c2", "calc", `{"expr":"391*2"}`)}},
 		{Chunks: llmtest.Text("782")},
 	}
 	r := newResponsesRig(t)
@@ -215,9 +214,9 @@ func TestProcessSendsReasoningItemsOnlyToTheirModel(t *testing.T) {
 func TestProcessResponsesRequestCarriesTheRunSettings(t *testing.T) {
 	// A Responses call is stateless (store:false, encrypted reasoning included) and carries the run's reasoning effort, the thread's prompt_cache_key and parallel tool calls; its usage (cached and reasoning tokens) reaches work.usage.
 	// Arrange
-	answer := llmtest.WithCachedUsage(&schema.Message{Role: schema.Assistant, Content: "done"}, 1200, 1000, 50)
-	answer.ResponseMeta.Usage.CompletionTokensDetails.ReasoningTokens = 30
-	r := newResponsesRig(t, llmtest.Turn{Chunks: []*schema.Message{answer}})
+	answer := llmtest.WithCachedUsage(&ai.Message{Role: ai.RoleAssistant, Content: "done"}, 1200, 1000, 50)
+	answer.ResponseMeta.Usage.CompletionTokenDetails.ReasoningTokens = 30
+	r := newResponsesRig(t, llmtest.Turn{Chunks: []*ai.Message{answer}})
 	r.agent.Harness.PromptCacheKey = func(string) bool { return true }
 	th, _ := r.st.CreateThread(t.Context(), "alice", "t")
 	run := r.create(th, store.NewRun{Model: "gpt-reasoning", ReasoningEffort: "high", Message: store.Message{Role: store.RoleUser, Content: "think"}})

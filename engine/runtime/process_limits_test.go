@@ -1,21 +1,20 @@
 package runtime_test
 
 import (
+	"github.com/GhaziBenDahmane/harness/ai/openai"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-	goopenai "github.com/meguminnnnnnnnn/go-openai"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 func TestProcessStopsAtStepLimit(t *testing.T) {
 	// On the last step the model is nudged (tool calls forbidden); more tool calls end in RUN_ERROR max_steps.
 	// Arrange
 	call := func(id string) llmtest.Turn {
-		return llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, id, "list_files", `{}`)}}
+		return llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, id, "list_files", `{}`)}}
 	}
 	r := newRig(t, call("c1"), call("c2"))
 	r.agent.MaxSteps = 2
@@ -40,8 +39,8 @@ func TestProcessRetriesTransientModelErrors(t *testing.T) {
 	// 429 and 5xx errors before the first token are retried.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Err: &goopenai.APIError{HTTPStatusCode: 429, Message: "slow down"}},
-		llmtest.Turn{Err: &goopenai.RequestError{HTTPStatusCode: 503, Err: errString("unavailable")}},
+		llmtest.Turn{Err: &openai.APIError{Status: 429, Message: "slow down"}},
+		llmtest.Turn{Err: &openai.APIError{Status: 503, Message: "unavailable"}},
 		llmtest.Turn{Chunks: llmtest.Text("ok")},
 	)
 	_, run := r.queued("q")
@@ -58,7 +57,7 @@ func TestProcessRetriesTransientModelErrors(t *testing.T) {
 func TestProcessFailsOnModelError(t *testing.T) {
 	// A non-transient model error (or exhausted retries) ends the run with RUN_ERROR model_error.
 	// Arrange
-	r := newRig(t, llmtest.Turn{Err: &goopenai.APIError{HTTPStatusCode: 400, Message: "bad request"}})
+	r := newRig(t, llmtest.Turn{Err: &openai.APIError{Status: 400, Message: "bad request"}})
 	_, run := r.queued("q")
 
 	// Act
@@ -74,7 +73,7 @@ func TestProcessFailsOnModelError(t *testing.T) {
 func TestProcessFailsWhenEveryAttemptBreaksMidAnswer(t *testing.T) {
 	// A stream that breaks on every attempt fails the run with model_error after the retries; the partial text is closed and never persisted (A-17).
 	// Arrange
-	broken := llmtest.Turn{Chunks: llmtest.Text("par"), FailAfter: &goopenai.APIError{HTTPStatusCode: 500}}
+	broken := llmtest.Turn{Chunks: llmtest.Text("par"), FailAfter: &openai.APIError{Status: 500}}
 	r := newRig(t, broken, broken, broken, broken)
 	th, run := r.queued("q")
 

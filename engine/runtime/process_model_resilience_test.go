@@ -2,17 +2,16 @@ package runtime_test
 
 import (
 	"context"
+	"github.com/GhaziBenDahmane/harness/ai/openai"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/schema"
-	goopenai "github.com/meguminnnnnnnnn/go-openai"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 // recordSleeps makes the agent's retry waits instant and records them.
@@ -32,9 +31,9 @@ func TestProcessRetriesTheWholeStepWhenTheStreamBreaks(t *testing.T) {
 	// A stream cut mid-step is re-issued: the failed attempt's text and call are closed, the call gets a retried error result, work.retry precedes the new attempt, and nothing of it is persisted.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{{Role: schema.Assistant, Content: "Let me"}, llmtest.ToolCall(0, "c1", "write_file", `{"path":"a.txt","con`)},
-			FailAfter: &goopenai.APIError{HTTPStatusCode: 502, Message: "bad gateway"}},
-		llmtest.Turn{Chunks: []*schema.Message{{Role: schema.Assistant, Content: "Let me write it."}, llmtest.ToolCall(0, "c2", "write_file", `{"path":"a.txt","content":"hi"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{{Role: ai.RoleAssistant, Content: "Let me"}, llmtest.ToolCall(0, "c1", "write_file", `{"path":"a.txt","con`)},
+			FailAfter: &openai.APIError{Status: 502, Message: "bad gateway"}},
+		llmtest.Turn{Chunks: []*ai.Message{{Role: ai.RoleAssistant, Content: "Let me write it."}, llmtest.ToolCall(0, "c2", "write_file", `{"path":"a.txt","content":"hi"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("done")},
 	)
 	recordSleeps(r)
@@ -136,7 +135,7 @@ func TestProcessHonoursRetryAfterOnRateLimits(t *testing.T) {
 	// A 429 waits at least the provider's Retry-After before the retry, which work.retry announces as rate_limited.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Err: &goopenai.APIError{HTTPStatusCode: 429, Message: "Request too large for gpt-5 on tokens per min (TPM)"}, RetryAfter: 7 * time.Second},
+		llmtest.Turn{Err: &openai.APIError{Status: 429, Message: "Request too large for gpt-5 on tokens per min (TPM)"}, RetryAfter: 7 * time.Second},
 		llmtest.Turn{Chunks: llmtest.Text("ok")},
 	)
 	delays := recordSleeps(r)
@@ -158,7 +157,7 @@ func TestProcessHonoursRetryAfterOnRateLimits(t *testing.T) {
 func TestProcessFailsWithRateLimitedWhenRetriesRunOut(t *testing.T) {
 	// 429 on every attempt ends the run with RUN_ERROR rate_limited after LLM_STEP_RETRIES retries with growing, jittered delays.
 	// Arrange
-	limited := llmtest.Turn{Err: &goopenai.APIError{HTTPStatusCode: 429, Message: "slow down"}}
+	limited := llmtest.Turn{Err: &openai.APIError{Status: 429, Message: "slow down"}}
 	r := newRig(t, limited, limited, limited, limited)
 	delays := recordSleeps(r)
 	_, run := r.queued("q")
@@ -180,7 +179,7 @@ func TestProcessRefusesToolCallsCutByTheOutputLimit(t *testing.T) {
 	// finish_reason=length never runs the message's tool calls: they get the "cut off" error result and the model continues.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.Finish(llmtest.ToolCall(0, "c1", "write_file", `{"path":"a.txt","content":"aaaa`), "length")}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.Finish(llmtest.ToolCall(0, "c1", "write_file", `{"path":"a.txt","content":"aaaa`), "length")}},
 		llmtest.Turn{Chunks: llmtest.Text("ok")},
 	)
 	_, run := r.queued("write a long file")
@@ -196,7 +195,7 @@ func TestProcessRefusesToolCallsCutByTheOutputLimit(t *testing.T) {
 		t.Fatalf("status %s results %v sandboxes %d", got.Status, res, len(r.backend.Created()))
 	}
 	second := r.model.Calls()[1].Messages
-	if tm := second[len(second)-1]; tm.Role != schema.Tool || tm.Content != agent.OutputLimitResult {
+	if tm := second[len(second)-1]; tm.Role != ai.RoleTool || tm.Content != agent.OutputLimitResult {
 		t.Fatalf("model did not get the cut-off result: %+v", tm)
 	}
 }
@@ -205,7 +204,7 @@ func TestProcessContinuesAnAnswerCutByTheOutputLimit(t *testing.T) {
 	// A text answer cut by finish_reason=length is kept and the model is asked to continue where it stopped.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.Finish(&schema.Message{Role: schema.Assistant, Content: "part one"}, "length")}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.Finish(&ai.Message{Role: ai.RoleAssistant, Content: "part one"}, "length")}},
 		llmtest.Turn{Chunks: llmtest.Text(" and part two")},
 	)
 	_, run := r.queued("explain")
@@ -228,7 +227,7 @@ func TestProcessContinuesAnAnswerCutByTheOutputLimit(t *testing.T) {
 func TestProcessFailsWithContentFilter(t *testing.T) {
 	// finish_reason=content_filter ends the run with RUN_ERROR content_filter and persists no half answer.
 	// Arrange
-	r := newRig(t, llmtest.Turn{Chunks: []*schema.Message{llmtest.Finish(&schema.Message{Role: schema.Assistant, Content: "Here is"}, "content_filter")}})
+	r := newRig(t, llmtest.Turn{Chunks: []*ai.Message{llmtest.Finish(&ai.Message{Role: ai.RoleAssistant, Content: "Here is"}, "content_filter")}})
 	th, run := r.queued("q")
 
 	// Act
@@ -282,7 +281,7 @@ func TestProcessKeepsParallelCallsThatShareAnIndex(t *testing.T) {
 	// A backend numbering every parallel call index 0 with distinct ids yields two calls instead of failing the stream.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "c1", "list_files", `{}`), llmtest.ToolCall(0, "c2", "list_files", `{"path":"/workspace"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "c1", "list_files", `{}`), llmtest.ToolCall(0, "c2", "list_files", `{"path":"/workspace"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("ok")},
 	)
 	th, run := r.queued("q")
@@ -303,7 +302,7 @@ func TestProcessClosesTextAndCallsBeforeTheNextOneStarts(t *testing.T) {
 	// The text message ends before the first tool call starts and each call ends before the next starts (strict AG-UI order).
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{{Role: schema.Assistant, Content: "Let me look."},
+		llmtest.Turn{Chunks: []*ai.Message{{Role: ai.RoleAssistant, Content: "Let me look."},
 			llmtest.ToolCall(0, "c1", "list_files", `{}`), llmtest.ToolCall(1, "c2", "list_files", `{"path":"/workspace"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("ok")},
 	)
@@ -322,7 +321,7 @@ func TestProcessClosesTextAndCallsBeforeTheNextOneStarts(t *testing.T) {
 func TestProcessReportsCachedInputTokens(t *testing.T) {
 	// Cached prompt tokens reported by the provider reach work.usage and the RUN_FINISHED usage as cachedInputTokens.
 	// Arrange
-	r := newRig(t, llmtest.Turn{Chunks: []*schema.Message{llmtest.WithCachedUsage(&schema.Message{Role: schema.Assistant, Content: "ok"}, 1000, 800, 10)}})
+	r := newRig(t, llmtest.Turn{Chunks: []*ai.Message{llmtest.WithCachedUsage(&ai.Message{Role: ai.RoleAssistant, Content: "ok"}, 1000, 800, 10)}})
 	_, run := r.queued("q")
 
 	// Act

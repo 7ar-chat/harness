@@ -6,19 +6,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
-func streamedCall(id, name string, argParts ...string) []*schema.Message {
+func streamedCall(id, name string, argParts ...string) []*ai.Message {
 	i := 0
-	out := []*schema.Message{{Role: schema.Assistant, ToolCalls: []schema.ToolCall{{Index: &i, ID: id, Type: "function", Function: schema.FunctionCall{Name: name}}}}}
+	out := []*ai.Message{{Role: ai.RoleAssistant, ToolCalls: []ai.ToolCall{{Index: &i, ID: id, Type: "function", Function: ai.FunctionCall{Name: name}}}}}
 	for _, p := range argParts {
-		out = append(out, &schema.Message{Role: schema.Assistant, ToolCalls: []schema.ToolCall{{Index: &i, Function: schema.FunctionCall{Arguments: p}}}})
+		out = append(out, &ai.Message{Role: ai.RoleAssistant, ToolCalls: []ai.ToolCall{{Index: &i, Function: ai.FunctionCall{Arguments: p}}}})
 	}
 	return out
 }
@@ -75,7 +74,7 @@ func TestProcessRunsSandboxCommandAndFeedsResultBack(t *testing.T) {
 	}
 	second := r.model.Calls()[1].Messages
 	toolMsg := second[len(second)-1]
-	if toolMsg.Role != schema.Tool || toolMsg.ToolCallID != "call_1" || !strings.Contains(toolMsg.Content, `"stdout":"hi\n"`) {
+	if toolMsg.Role != ai.RoleTool || toolMsg.ToolCallID != "call_1" || !strings.Contains(toolMsg.Content, `"stdout":"hi\n"`) {
 		t.Fatalf("model did not get the tool result: %+v", toolMsg)
 	}
 	msgs := r.messages(th.ID)
@@ -93,7 +92,7 @@ func TestProcessReturnsToolErrorsToTheModel(t *testing.T) {
 	// Unknown tools and invalid JSON arguments become error results for the model, not run failures.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "c1", "delete_everything", `{}`), llmtest.ToolCall(1, "c2", "execute_command", `{bad`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "c1", "delete_everything", `{}`), llmtest.ToolCall(1, "c2", "execute_command", `{bad`)}},
 		llmtest.Turn{Chunks: llmtest.Text("Sorry")},
 	)
 	th, run := r.queued("q")
@@ -127,7 +126,7 @@ func TestProcessCapsToolOutputGivenToTheModel(t *testing.T) {
 	// Tool output beyond AGENT_MAX_TOOL_OUTPUT_CHARS (the spill threshold never exceeds it) is cut to head and tail with a note that the full output was not kept (no spiller here).
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "c1", "read_file", `{"path":"big.txt"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "c1", "read_file", `{"path":"big.txt"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("ok")},
 	)
 	r.agent.MaxToolOutputChars = 500

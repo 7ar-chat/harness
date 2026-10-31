@@ -8,10 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/artifacts"
 )
@@ -33,9 +32,9 @@ func viewTool(n, size int) *fakeTool {
 // imageParts lists the image parts of a call and the text of its image stubs.
 func imageParts(c llmtest.Call) (images int, stubs []string) {
 	for _, m := range c.Messages {
-		for _, p := range m.UserInputMultiContent {
+		for _, p := range m.Parts {
 			switch {
-			case p.Type == schema.ChatMessagePartTypeImageURL:
+			case p.Type == ai.PartImage:
 				images++
 			case strings.HasPrefix(p.Text, "[image "):
 				stubs = append(stubs, p.Text)
@@ -49,8 +48,8 @@ func TestProcessSendsAToolImageOnceThenAStub(t *testing.T) {
 	// An image a tool attaches reaches a vision model in the next step only; later steps get "[image <path> shown earlier]" (A-13).
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "v1", "view", `{}`)}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "l1", "list_files", `{}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "v1", "view", `{}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "l1", "list_files", `{}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("The chart looks right.")},
 	)
 	r.withTools(viewTool(1, 100))
@@ -80,7 +79,7 @@ func TestProcessSendsAToolImageOnceThenAStub(t *testing.T) {
 func TestProcessNeverSendsImagesToModelsWithoutVision(t *testing.T) {
 	// A model outside LLM_VISION_MODELS gets no image part; the tool learns it cannot show images.
 	// Arrange
-	r := newRig(t, llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "v1", "view", `{}`)}}, llmtest.Turn{Chunks: llmtest.Text("ok")})
+	r := newRig(t, llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "v1", "view", `{}`)}}, llmtest.Turn{Chunks: llmtest.Text("ok")})
 	r.withTools(viewTool(1, 100))
 	_, run := r.queued("check the render")
 
@@ -99,9 +98,9 @@ func TestProcessNeverSendsImagesToModelsWithoutVision(t *testing.T) {
 func TestProcessCapsImagesPerRequest(t *testing.T) {
 	// One request carries at most 6 images and 6 MiB of them, the newest first; the others are stubbed.
 	// Arrange
-	byCount := newRig(t, llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "v1", "view", `{}`)}}, llmtest.Turn{Chunks: llmtest.Text("ok")})
+	byCount := newRig(t, llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "v1", "view", `{}`)}}, llmtest.Turn{Chunks: llmtest.Text("ok")})
 	byCount.withTools(viewTool(8, 1000))
-	bySize := newRig(t, llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "v1", "view", `{}`)}}, llmtest.Turn{Chunks: llmtest.Text("ok")})
+	bySize := newRig(t, llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "v1", "view", `{}`)}}, llmtest.Turn{Chunks: llmtest.Text("ok")})
 	bySize.withTools(viewTool(3, 5<<19)) // 2.5 MiB each
 	for _, r := range []*rig{byCount, bySize} {
 		r.agent.Harness.Vision = func(string) bool { return true }
@@ -127,7 +126,7 @@ func TestProcessSendsAnAttachedImageInTheFirstStepOnly(t *testing.T) {
 	// An attached image goes to the run's first model call; later steps name it in a stub instead of re-sending it (A-13).
 	// Arrange
 	r := newScriptedRig(t, true,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "l1", "list_files", `{}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "l1", "list_files", `{}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("A chart")},
 	)
 	r.agent.Harness.Vision = func(string) bool { return true }
@@ -150,7 +149,7 @@ func TestAnAttachedImageStubNamesItsOwnFile(t *testing.T) {
 	// When an attachment that is not sent as an image (an SVG) precedes an attached photo, the later stub names the photo, not the SVG.
 	// Arrange
 	r := newScriptedRig(t, true,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "l1", "list_files", `{}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "l1", "list_files", `{}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("A logo and a photo")},
 	)
 	r.agent.Harness.Vision = func(string) bool { return true }
@@ -186,8 +185,8 @@ func TestImagesLeftOutByTheRequestCapAreNotCalledShown(t *testing.T) {
 	// Images the per-request cap left out are stubbed "not shown" in later steps, the ones that were sent "shown earlier".
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "v1", "view", `{}`)}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "l1", "list_files", `{}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "v1", "view", `{}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "l1", "list_files", `{}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("ok")},
 	)
 	r.withTools(viewTool(8, 1000))

@@ -1,8 +1,8 @@
 # Architecture
 
-The module is one Go module arranged in layers. A package imports only packages of its own layer or a lower one,
-and a few groups are further restricted. `layers_test.go` fails the build when a rule is broken, so this page
-describes what the test enforces.
+The repository is a root Go module plus six standalone modules (`go.work`), arranged in layers. A package imports
+only packages of its own layer or a lower one, and a few groups are further restricted. `layers_test.go` fails the
+build when a rule is broken, so this page describes what the test enforces.
 
 ```
  front ends     hosts/tui   hosts/httpapi ◄── product      hosts/worker        cmd/*
@@ -21,18 +21,38 @@ describes what the test enforces.
 
 | Layer | Packages | May import | Role |
 |---|---|---|---|
-| 0 foundation | `core/{agui,store,sandbox,blobs,layout}`, `config`, `modelinfo`, `engine/syncx`, `engine/agent/prompts` | `core/` only (`core` never imports `config`) | Events, domain types and the ports: what the rest of the system agrees on |
-| 2 engine | `engine/*` | layers 0, 2 | The agent loop, LLM clients, tool registry, run runtime, approvals, compaction, in-memory queue and event log |
+| 0 foundation | `ai/*`, `core/{agui,store,sandbox,blobs,layout}`, `config`, `modelinfo`, `engine/syncx`, `prompts` | `core/` only (`core` never imports `config`); `ai/*` imports nothing of this repository outside `ai/` | Messages and tool vocabulary, model clients, events, domain types and the ports: what the rest of the system agrees on |
+| 2 engine | `engine/*` | layers 0, 2 | The run loop (persistence, approvals, steering), tool registry, run runtime, in-memory queue and event log |
 | 3 plug-ins | `adapters/*`, `coding/*` | layers 0, 2; **not each other's group** | Implementations of the ports (Postgres, Redis, S3, OpenSandbox, local) and the coding toolset |
 | 4 features | `features/*` | layers 0, 2, 3 (`coding`) | Optional capabilities (memory, skills, goals, permissions…). A feature never imports another feature |
 | 5 hosts | `harness` (facade), `hosts/*` | everything below | The facade composes the engine and features; hosts drive it |
 | 6 product | `product` | `hosts/httpapi`, `hosts/client`, the facade, `core/`, the engine's extension API | Teams, identity, connectors, assistant |
 | 9 tooling | `cmd/*`, `bench`, `longtest`, `examples` | anything | Composition roots and tests |
 
+## The modules
+
+Six directories are Go modules of their own, so a program can use one without the rest. Each builds and tests alone
+(`GOWORK=off`, `make test-modules`), and `TestTheStandaloneModulesRequireOnlyTheirDeclaredModules` pins which modules
+each may require.
+
+| Module | Requires | What a user gets |
+|---|---|---|
+| `ai` | – | `ai.Message`, `ai.Model`, tools (`InferTool`), the OpenAI Chat, Responses and Anthropic clients, `ai/agent` (a loop with no store), compaction |
+| `core` | – | AG-UI events, the `store` and `blobs` ports, the sandbox contract and its manager |
+| `modelinfo` | – | prices and context windows by model id |
+| `hosts/client` | core, modelinfo | the `Client` contract and its HTTP implementation |
+| `hosts/tui` | hosts/client, core, modelinfo | the terminal UI |
+| `adapters/sandbox` | core | local and OpenSandbox backends |
+
+What stays in the root module is what needs the engine: `hosts/inproc` (a `Client` over a `Harness`),
+`hosts/clienttest`, the HTTP server, features, the product. Tests that join a standalone module to the engine live in
+`integration/`.
+
 Host rules on top of the layers:
 
 * `hosts/tui` imports only `hosts/client` and `core/agui`, so it behaves the same against an in-process engine and a
-  remote server.
+  remote server. `hosts/client` is the contract; `hosts/inproc` and `hosts/clienttest` are its engine-bound
+  implementation and conformance suite, and are the only members of the family that import the facade.
 * `hosts/httpapi` imports only the facade, `hosts/client` and `core/`. It is a transport over the client contract.
 * `hosts/*` do not import each other; the facade imports no host.
 
@@ -65,7 +85,7 @@ thread, who is recorded as the author, what is audited, plus `Setup`/`Install` t
 team implementation: OIDC login, projects with roles, the audit log and live feed, the assistant (supervisor),
 GitHub/Telegram connectors and the memory review pages. `cmd/harness-web` composes `product.New(h, api, prod)`.
 
-**Front ends are written against `hosts/client.Client`**, with an in-process and an HTTP implementation checked by
+**Front ends are written against `hosts/client.Client`**, with an in-process (`hosts/inproc`) and an HTTP implementation checked by
 the same conformance suite (`clienttest`). Operations a server may lack are `client.Extras`
 (`ErrNotSupported`).
 
@@ -91,6 +111,11 @@ keeps only the web-only shapes. Add a DTO by listing it in `types.go` and runnin
   `redisx.Options`, `backends.Settings`, `skills.DiscoverOptions`, `memory.Options`...) and the composition roots
   (the facade, `hosts/*`, `cmd/*`) map `config.Config` onto them. The names of the `.har` folders live in
   `core/layout` for packages that need a path but not the configuration.
+* `engine/agent` (the run loop that persists messages, emits events, gates tools on approvals and compacts) is
+  not built on `ai/agent`: it works on `store.Message` rows and an event log at every step, so only the sub-agent
+  loop of `features/explore` uses `ai/agent` today. Moving the run loop onto it means giving `ai/agent` the hooks
+  the run loop uses (persist-after-reply, streaming events, per-call gating, retry and watchdog) and keeping the
+  store-bound parts in `engine/agent`.
 * `store/Full` still holds the types of every capability. Moving a capability's port out of core would make adapters
   import features, so the types stay in core; a feature cannot yet bring its own tables without a `core/store` change.
 * The memory and profile pages are served by `product` only, not exposed through `client.Client`, so the TUI does not

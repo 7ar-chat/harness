@@ -50,6 +50,8 @@ jobs:
       - run: go vet ./...
       # includes ./bench and ./longtest (make bench-offline) and the pgstore tests
       - run: go test ./...
+      # the standalone modules (ai, core, modelinfo, hosts/client, hosts/tui, adapters/sandbox), each with GOWORK=off
+      - run: make test-modules
 
   web:
     runs-on: ubuntu-latest

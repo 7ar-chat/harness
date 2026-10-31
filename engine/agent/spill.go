@@ -8,8 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 )
 
@@ -41,7 +40,7 @@ func (a *Agent) spillChars() int {
 // it gains "spilled": true and "outputPath" ("spillPath" when it already has an
 // outputPath of its own). Without a spiller (or a running sandbox) the output
 // is cut with a note that the full text was not kept.
-func (st *runState) spill(ctx context.Context, tc schema.ToolCall, content string) string {
+func (st *runState) spill(ctx context.Context, tc ai.ToolCall, content string) string {
 	limit := st.a.spillChars()
 	n := utf8.RuneCountInString(content)
 	if n <= limit {

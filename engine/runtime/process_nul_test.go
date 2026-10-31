@@ -5,19 +5,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 func TestProcessPersistsToolOutputContainingNUL(t *testing.T) {
 	// Binary tool output (NUL bytes, invalid UTF-8) is sanitized so events and messages are still persisted.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.ToolCall(0, "c1", "execute_command", `{"command":"cat x.bin"}`)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.ToolCall(0, "c1", "execute_command", `{"command":"cat x.bin"}`)}},
 		llmtest.Turn{Chunks: llmtest.Text("binary file")},
 	)
 	r.backend.OnCreate = func(sb *sandboxtest.Sandbox) {

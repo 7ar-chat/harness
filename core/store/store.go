@@ -302,8 +302,6 @@ type Store interface {
 	LastEvent(ctx context.Context, runID string) (Event, bool, error)
 	// SetRunOutcome overwrites a run's terminal status (used when its log proves the outcome).
 	SetRunOutcome(ctx context.Context, id, status, errCode, errMsg string) error
-
-	SandboxStore
 }
 
 // Full is the persistence of a complete deployment: the core store and the
@@ -317,12 +315,4 @@ type Full interface {
 	ApprovalStore
 	MemoryStore
 	NotificationStore
-}
-
-// SandboxStore is the subset used by the sandbox manager.
-type SandboxStore interface {
-	ThreadSandbox(ctx context.Context, threadID string) (string, error)
-	// SetThreadSandbox sets sandbox_id when it currently equals expected.
-	SetThreadSandbox(ctx context.Context, threadID, expected, sandboxID string) error
-	CountUserSandboxes(ctx context.Context, login string) (int, error)
 }

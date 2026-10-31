@@ -2,16 +2,15 @@ package runtime_test
 
 import (
 	"encoding/json"
+	"github.com/GhaziBenDahmane/harness/ai/openai"
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-	goopenai "github.com/meguminnnnnnnnn/go-openai"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/features/verify"
 )
 
@@ -26,10 +25,10 @@ func TestProcessRunsTheLoopAndToolStreamsTogether(t *testing.T) {
 	writeReport := `{"path":"outputs/report.docx","content":"` + strings.Repeat("BROKEN draft line. ", 1700) + `"}`
 	r := verifyRig(t, false,
 		llmtest.Turn{Chunks: streamedCall("r1", "read_file", `{"path":"brief.docx"}`)},
-		llmtest.Turn{Chunks: []*schema.Message{{Role: schema.Assistant, Content: "Writing"}, llmtest.ToolCall(0, "w0", "write_file", `{"path":"outputs/rep`)},
-			FailAfter: &goopenai.APIError{HTTPStatusCode: 502, Message: "bad gateway"}},
+		llmtest.Turn{Chunks: []*ai.Message{{Role: ai.RoleAssistant, Content: "Writing"}, llmtest.ToolCall(0, "w0", "write_file", `{"path":"outputs/rep`)},
+			FailAfter: &openai.APIError{Status: 502, Message: "bad gateway"}},
 		llmtest.Turn{Chunks: streamedCall("w1", "write_file", writeReport)},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.ToolCall(0, "l1", "list_files", `{"path":"outputs"}`), 19500, 10)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(llmtest.ToolCall(0, "l1", "list_files", `{"path":"outputs"}`), 19500, 10)}},
 		llmtest.Turn{Chunks: llmtest.Text("## Goal\nWrite the quarterly report.")}, // the compaction summary
 		llmtest.Turn{Chunks: llmtest.Text("Done.")},
 		llmtest.Turn{Chunks: llmtest.Text("Done, but the heading levels could not be fixed.")},
@@ -86,7 +85,7 @@ func TestProcessRunsTheLoopAndToolStreamsTogether(t *testing.T) {
 	// Masking: in step 4 the document result is a stub (only the newest result is kept), the stored result is whole.
 	var masked string
 	for _, m := range calls[3].Messages {
-		if m.Role == schema.Tool && m.ToolCallID == "r1" {
+		if m.Role == ai.RoleTool && m.ToolCallID == "r1" {
 			masked = m.Content
 		}
 	}
@@ -100,7 +99,7 @@ func TestProcessRunsTheLoopAndToolStreamsTogether(t *testing.T) {
 	}
 	after := calls[5].Messages
 	ctxMsg := after[1]
-	if ctxMsg.Role != schema.User || !strings.Contains(ctxMsg.Content, "<"+agent.RehydrationTag+">") ||
+	if ctxMsg.Role != ai.RoleUser || !strings.Contains(ctxMsg.Content, "<"+agent.RehydrationTag+">") ||
 		!strings.Contains(ctxMsg.Content, "/workspace/outputs/report.docx: inspect_docx failed") {
 		t.Fatalf("context message after the compaction: %+v", ctxMsg)
 	}

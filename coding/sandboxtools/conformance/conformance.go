@@ -17,8 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudwego/eino/components/tool"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/store"
@@ -51,10 +50,10 @@ func Run(t *testing.T, newBackend func(t *testing.T) sandbox.Backend, st Store) 
 		t.Fatal(err)
 	}
 	defer cleanup()
-	byName := map[string]tool.InvokableTool{}
+	byName := map[string]ai.InvokableTool{}
 	for _, x := range list {
 		info, _ := x.Info(ctx)
-		byName[info.Name] = x.(tool.InvokableTool)
+		byName[info.Name] = x.(ai.InvokableTool)
 	}
 	t.Cleanup(func() {
 		if sb, err := mgr.Get(context.Background(), th.ID); err == nil {

@@ -6,14 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/components/tool/utils"
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/compaction"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/compaction"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 )
 
@@ -41,7 +38,7 @@ func TestProcessSummarizesOldContextMidRun(t *testing.T) {
 	// When the reported prompt passes the threshold, the head before a ~30% tail is summarized by a separate call, persisted, and replaces it for the next call.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.ToolCall(0, "p1", "update_plan", `{"items":[{"id":"1","title":"Plot","status":"completed"}]}`), 16000, 10)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(llmtest.ToolCall(0, "p1", "update_plan", `{"items":[{"id":"1","title":"Plot","status":"completed"}]}`), 16000, 10)}},
 		llmtest.Turn{Chunks: llmtest.Text("## Goal\nAnalyse the 2025 sales.")},
 		llmtest.Turn{Chunks: llmtest.Text("Here is the plot")},
 	)
@@ -106,7 +103,7 @@ func TestProcessDropsTheHeadWhenSummarizingFails(t *testing.T) {
 	// A failing summarizer drops the head with a marker (work.compaction failed); nothing is persisted.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.ToolCall(0, "p1", "update_plan", `{"items":[]}`), 16000, 10)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(llmtest.ToolCall(0, "p1", "update_plan", `{"items":[]}`), 16000, 10)}},
 		llmtest.Turn{Err: errors.New("summarizer down")},
 		llmtest.Turn{Chunks: llmtest.Text("ok")},
 	)
@@ -132,7 +129,7 @@ func TestProcessDropsTheHeadWhenSummarizingFails(t *testing.T) {
 
 func bigTool(t *testing.T) tools.Provider {
 	t.Helper()
-	big, err := utils.InferTool("fetch_report", "Returns a long report.", func(context.Context, struct{}) (string, error) {
+	big, err := ai.InferTool("fetch_report", "Returns a long report.", func(context.Context, struct{}) (string, error) {
 		return "HEAD" + strings.Repeat("y", 30000) + "TAIL", nil
 	})
 	if err != nil {
@@ -141,10 +138,10 @@ func bigTool(t *testing.T) tools.Provider {
 	return staticTools{big}
 }
 
-type staticTools []tool.BaseTool
+type staticTools []ai.BaseTool
 
 func (s staticTools) Name() string { return "static" }
-func (s staticTools) Tools(context.Context, tools.RunContext) ([]tool.BaseTool, func(), error) {
+func (s staticTools) Tools(context.Context, tools.RunContext) ([]ai.BaseTool, func(), error) {
 	return s, func() {}, nil
 }
 
@@ -152,9 +149,9 @@ func TestProcessShrinksOldToolResultsFirst(t *testing.T) {
 	// Pass 1: tool results older than the last two assistant turns become 1500-character previews; when that is enough nothing is summarized.
 	// Arrange
 	r := newRig(t,
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.ToolCall(0, "c1", "fetch_report", `{}`), 1000, 5)}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.ToolCall(0, "c2", "update_plan", `{"items":[]}`), 1000, 5)}},
-		llmtest.Turn{Chunks: []*schema.Message{llmtest.WithUsage(llmtest.ToolCall(0, "c3", "update_plan", `{"items":[]}`), 12000, 5)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(llmtest.ToolCall(0, "c1", "fetch_report", `{}`), 1000, 5)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(llmtest.ToolCall(0, "c2", "update_plan", `{"items":[]}`), 1000, 5)}},
+		llmtest.Turn{Chunks: []*ai.Message{llmtest.WithUsage(llmtest.ToolCall(0, "c3", "update_plan", `{"items":[]}`), 12000, 5)}},
 		llmtest.Turn{Chunks: llmtest.Text("done")},
 	)
 	r.window = 14000

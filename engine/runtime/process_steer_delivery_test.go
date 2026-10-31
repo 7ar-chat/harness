@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	goopenai "github.com/meguminnnnnnnnn/go-openai"
+	"github.com/GhaziBenDahmane/harness/ai/openai"
 
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/queue"
 )
 
@@ -41,7 +41,7 @@ func TestAcceptedSteerOfFailedRunIsKeptInThread(t *testing.T) {
 	// Arrange
 	var runID string
 	r := newRig(t)
-	r.model = llmtest.New(llmtest.Turn{Err: &goopenai.APIError{HTTPStatusCode: 400}, OnCall: func() {
+	r.model = llmtest.New(llmtest.Turn{Err: &openai.APIError{Status: 400}, OnCall: func() {
 		_ = r.q.PushSteer(context.Background(), runID, queue.Steer{ID: "s-9", Text: "also check B"})
 	}})
 	r.agent.Models = llmtest.Factory{M: r.model}

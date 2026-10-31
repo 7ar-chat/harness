@@ -4,16 +4,16 @@ import (
 	"strings"
 	"testing"
 
-	goopenai "github.com/meguminnnnnnnnn/go-openai"
+	"github.com/GhaziBenDahmane/harness/ai/openai"
 
+	"github.com/GhaziBenDahmane/harness/ai/compaction"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/compaction"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 func overflowErr() error {
-	return &goopenai.APIError{HTTPStatusCode: 400, Code: "context_length_exceeded", Message: "This model's maximum context length is 128000 tokens."}
+	return &openai.APIError{Status: 400, Code: "context_length_exceeded", Message: "This model's maximum context length is 128000 tokens."}
 }
 
 func TestProcessCompactsAndRetriesWhenContextOverflows(t *testing.T) {

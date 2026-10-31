@@ -5,14 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/schema"
-
 	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 	"github.com/GhaziBenDahmane/harness/features/explore"
 )
@@ -25,7 +23,7 @@ func TestExploreRunsReadOnlyToolsInItsOwnConversationAndReturnsTheReport(t *test
 	th, _ := st.CreateThread(context.Background(), "u", "")
 	mgr := sandbox.NewManager(be, st, nil, sandbox.ManagerOptions{MaxPerUser: 5})
 	fake := llmtest.New(
-		llmtest.Turn{Chunks: []*schema.Message{
+		llmtest.Turn{Chunks: []*ai.Message{
 			llmtest.Finish(llmtest.ToolCall(0, "c1", "read_file", `{"path":"/workspace/pkg/a.go"}`), "tool_calls"),
 			llmtest.Finish(llmtest.ToolCall(1, "c2", "write_file", `{"path":"/workspace/x","content":"no"}`), "tool_calls"),
 		}},
@@ -38,7 +36,7 @@ func TestExploreRunsReadOnlyToolsInItsOwnConversationAndReturnsTheReport(t *test
 	}
 
 	// Act
-	out, err := ts[0].(tool.InvokableTool).InvokableRun(context.Background(), `{"task":"where is Handle?"}`)
+	out, err := ts[0].(ai.InvokableTool).InvokableRun(context.Background(), `{"task":"where is Handle?"}`)
 
 	// Assert
 	if err != nil || out != "Handle is in pkg/a.go:3." {
@@ -57,7 +55,7 @@ func TestExploreRunsReadOnlyToolsInItsOwnConversationAndReturnsTheReport(t *test
 	}
 	results := ""
 	for _, m := range calls[1].Messages {
-		if m.Role == schema.Tool {
+		if m.Role == ai.RoleTool {
 			results += m.Content + "\n"
 		}
 	}

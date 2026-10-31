@@ -4,19 +4,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 // toolImageParts counts the image parts of a call's messages and returns the user message holding them.
-func toolImageParts(msgs []*schema.Message) (int, *schema.Message) {
+func toolImageParts(msgs []*ai.Message) (int, *ai.Message) {
 	n := 0
-	var holder *schema.Message
+	var holder *ai.Message
 	for _, m := range msgs {
-		for _, p := range m.UserInputMultiContent {
-			if p.Type == schema.ChatMessagePartTypeImageURL {
+		for _, p := range m.Parts {
+			if p.Type == ai.PartImage {
 				n++
 				holder = m
 			}
@@ -52,7 +51,7 @@ func TestImagesShownByToolsReachTheNextCallOnly(t *testing.T) {
 		t.Fatalf("image before the tool ran")
 	}
 	n, holder := toolImageParts(calls[1].Messages)
-	if n != 1 || holder.Role != schema.User || !strings.Contains(holder.UserInputMultiContent[0].Text, "/workspace/.work/renders/deck-") {
+	if n != 1 || holder.Role != ai.RoleUser || !strings.Contains(holder.Parts[0].Text, "/workspace/.work/renders/deck-") {
 		t.Fatalf("second call images %d holder %+v", n, holder)
 	}
 	if n, _ := toolImageParts(calls[2].Messages); n != 0 {
@@ -60,8 +59,8 @@ func TestImagesShownByToolsReachTheNextCallOnly(t *testing.T) {
 	}
 	stub := false
 	for _, m := range calls[2].Messages { // the image part became a text stub (images.go)
-		for _, p := range m.UserInputMultiContent {
-			if m.Role == schema.User && strings.HasPrefix(p.Text, "[image /workspace/.work/renders/deck-") && strings.HasSuffix(p.Text, " shown earlier]") {
+		for _, p := range m.Parts {
+			if m.Role == ai.RoleUser && strings.HasPrefix(p.Text, "[image /workspace/.work/renders/deck-") && strings.HasSuffix(p.Text, " shown earlier]") {
 				stub = true
 			}
 		}

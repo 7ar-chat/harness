@@ -7,9 +7,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/cloudwego/eino/schema"
-
-	"github.com/GhaziBenDahmane/harness/engine/compaction"
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/compaction"
 )
 
 // Harness v3 §5: in-run masking of old tool results (A-24).
@@ -35,15 +34,15 @@ var (
 // and images beyond 6 / 6 MiB are stubbed. The stored history is never
 // changed, and the masking of a result never changes again once applied, so
 // the prompt prefix stays byte-identical between steps until the next batch.
-func (st *runState) requestMessages() []*schema.Message {
-	out := make([]*schema.Message, 0, len(st.history)+2)
+func (st *runState) requestMessages() []*ai.Message {
+	out := make([]*ai.Message, 0, len(st.history)+2)
 	out = append(out, st.system())
 	if st.h.rehydration != nil {
 		out = append(out, st.h.rehydration)
 	}
 	out = capImages(append(out, st.masked(st.history)...))
 	if st.h.tail != "" {
-		out = append(out, schema.UserMessage(st.h.tail)) // per-run facts after the cacheable prefix
+		out = append(out, ai.UserMessage(st.h.tail)) // per-run facts after the cacheable prefix
 	}
 	return out
 }
@@ -112,14 +111,14 @@ func (st *runState) promptTokens() int {
 // is masked and the request prefix is byte-identical from step to step. With
 // MaskFromFraction < 0 (v3): of the n results the oldest ⌊(n − keep) / batch⌋
 // × batch are masked (batch = min(4, keep)).
-func (st *runState) masked(history []*schema.Message) []*schema.Message {
+func (st *runState) masked(history []*ai.Message) []*ai.Message {
 	keep := st.keepRecentToolResults()
 	if keep < 0 {
 		return history
 	}
 	var results []int
 	for i, m := range history {
-		if m.Role == schema.Tool {
+		if m.Role == ai.RoleTool {
 			results = append(results, i)
 		}
 	}
@@ -148,7 +147,7 @@ func (st *runState) masked(history []*schema.Message) []*schema.Message {
 		}
 		hide = func(i int) bool { return st.h.maskedCalls[history[i].ToolCallID] }
 	}
-	out := make([]*schema.Message, len(history))
+	out := make([]*ai.Message, len(history))
 	copy(out, history)
 	for _, i := range results {
 		m := out[i]

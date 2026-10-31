@@ -3,9 +3,9 @@ package runtime_test
 import (
 	"testing"
 
+	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/llm/llmtest"
 )
 
 // toolMessage returns the stored result of a tool call.

@@ -3,8 +3,7 @@ package approvals_test
 import (
 	"testing"
 
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/core/store"
 	"github.com/GhaziBenDahmane/harness/engine/approvals"
 )
@@ -98,11 +97,11 @@ func TestPreviewMatchesLikeWork(t *testing.T) {
 func TestMatchesCallChecksIDToolAndArguments(t *testing.T) {
 	// An approval matches only the same call id, tool and canonical arguments (key order does not matter).
 	a := &store.Approval{ToolCallID: "c1", ToolName: "write_file", ToolInputPreview: approvals.Preview(`{"path":"/a","content":"x"}`)}
-	call := func(id, name, args string) schema.ToolCall {
-		return schema.ToolCall{ID: id, Function: schema.FunctionCall{Name: name, Arguments: args}}
+	call := func(id, name, args string) ai.ToolCall {
+		return ai.ToolCall{ID: id, Function: ai.FunctionCall{Name: name, Arguments: args}}
 	}
 	cases := []struct {
-		tc   schema.ToolCall
+		tc   ai.ToolCall
 		want bool
 	}{
 		{call("c1", "write_file", `{"content":"x","path":"/a"}`), true},

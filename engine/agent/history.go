@@ -1,11 +1,10 @@
 package agent
 
 import (
-	"github.com/cloudwego/eino/schema"
-
+	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/GhaziBenDahmane/harness/ai/compaction"
+	"github.com/GhaziBenDahmane/harness/ai/llm"
 	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/compaction"
-	"github.com/GhaziBenDahmane/harness/engine/llm"
 )
 
 // BuildHistory turns persisted messages into a provider-valid model history:
@@ -14,7 +13,7 @@ import (
 // answer arrives after the steers of its run) or a synthetic "interrupted"
 // result, orphan results are dropped, and tool outputs older than the last two
 // assistant turns are cut to their head and tail. Each message carries its store position.
-func BuildHistory(msgs []*store.Message) []*schema.Message {
+func BuildHistory(msgs []*store.Message) []*ai.Message {
 	return BuildHistoryWith(msgs, HistoryOptions{})
 }
 
@@ -26,7 +25,7 @@ type HistoryOptions struct {
 }
 
 // BuildHistoryWith is BuildHistory with options.
-func BuildHistoryWith(msgs []*store.Message, opts HistoryOptions) []*schema.Message {
+func BuildHistoryWith(msgs []*store.Message, opts HistoryOptions) []*ai.Message {
 	var filtered []*store.Message
 	results := map[string]*store.Message{}
 	reasoningOf := map[string]string{} // assistant message id → reasoning of its step
@@ -62,8 +61,8 @@ func BuildHistoryWith(msgs []*store.Message, opts HistoryOptions) []*schema.Mess
 	}
 
 	multi := multiAuthor(filtered)
-	var out []*schema.Message
-	add := func(m *schema.Message, pos int64) {
+	var out []*ai.Message
+	add := func(m *ai.Message, pos int64) {
 		compaction.SetPosition(m, pos)
 		out = append(out, m)
 	}
@@ -89,12 +88,12 @@ func BuildHistoryWith(msgs []*store.Message, opts HistoryOptions) []*schema.Mess
 			if m.Content == "" && len(m.ToolCalls) == 0 {
 				continue
 			}
-			calls := make([]schema.ToolCall, 0, len(m.ToolCalls))
+			calls := make([]ai.ToolCall, 0, len(m.ToolCalls))
 			for _, c := range m.ToolCalls {
 				if answered[c.ID] {
 					continue // a reused id would make the history invalid
 				}
-				calls = append(calls, schema.ToolCall{ID: c.ID, Type: "function", Function: schema.FunctionCall{Name: c.Function.Name, Arguments: c.Function.Arguments}})
+				calls = append(calls, ai.ToolCall{ID: c.ID, Type: "function", Function: ai.FunctionCall{Name: c.Function.Name, Arguments: c.Function.Arguments}})
 			}
 			if len(calls) == 0 {
 				if m.Content == "" {
@@ -102,7 +101,7 @@ func BuildHistoryWith(msgs []*store.Message, opts HistoryOptions) []*schema.Mess
 				}
 				calls = nil
 			}
-			am := schema.AssistantMessage(m.Content, calls)
+			am := ai.AssistantMessage(m.Content, calls)
 			if opts.Reasoning {
 				am.ReasoningContent = reasoningOf[m.ID]
 			}
@@ -113,14 +112,14 @@ func BuildHistoryWith(msgs []*store.Message, opts HistoryOptions) []*schema.Mess
 				answered[c.ID] = true
 				r := results[c.ID]
 				if r == nil {
-					out = append(out, schema.ToolMessage(interruptedResult, c.ID, schema.WithToolName(c.Function.Name)))
+					out = append(out, ai.ToolMessage(interruptedResult, c.ID, ai.WithToolName(c.Function.Name)))
 					continue
 				}
 				content := r.Content
 				if i < cutoff {
 					content = truncateOld(content)
 				}
-				tm := schema.ToolMessage(content, c.ID, schema.WithToolName(c.Function.Name))
+				tm := ai.ToolMessage(content, c.ID, ai.WithToolName(c.Function.Name))
 				compaction.SetFiles(tm, store.ArtifactPaths(r.Metadata))
 				add(tm, r.Position)
 			}
