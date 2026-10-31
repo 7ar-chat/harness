@@ -1,0 +1,4 @@
+github.com/7ar-chat/harness/core v0.1.0 h1:OuI/9zVszJeCmIOERJvCqVsMysn9lt/EU+wyLdgqcY4=
+github.com/7ar-chat/harness/core v0.1.0/go.mod h1:lIDn854mZywhezzqzgqkHl2SPELNXZN1YYnJMTP7emA=
+github.com/7ar-chat/harness/modelinfo v0.1.0 h1:XMeAXbnQh/gGZiJxGJe/kcklntkiUKghRKEJTSGfuYU=
+github.com/7ar-chat/harness/modelinfo v0.1.0/go.mod h1:dgJ8v8ynNjaDAqdvsA1ytW+56W5GEkNbbP6MM01bNMc=

@@ -1,3 +1,5 @@
+github.com/7ar-chat/harness/core v0.1.0 h1:OuI/9zVszJeCmIOERJvCqVsMysn9lt/EU+wyLdgqcY4=
+github.com/7ar-chat/harness/core v0.1.0/go.mod h1:lIDn854mZywhezzqzgqkHl2SPELNXZN1YYnJMTP7emA=
 github.com/alibaba/OpenSandbox/sdks/sandbox/go v1.2.0 h1:v7RtBCO4cO2Xc60wcxhtjRJSjeZbTn2Bm8ql2GHXrpI=
 github.com/alibaba/OpenSandbox/sdks/sandbox/go v1.2.0/go.mod h1:c3C+dMDq0EdnZAgui4ot4hiZhQKUb57/tK97TQO5aHk=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=

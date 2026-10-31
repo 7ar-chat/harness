@@ -3,7 +3,6 @@ module github.com/7ar-chat/harness/hosts/tui
 go 1.26.0
 
 require (
-	github.com/7ar-chat/harness/core v0.0.0
 	github.com/7ar-chat/harness/hosts/client v0.0.0
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
@@ -13,6 +12,7 @@ require (
 )
 
 require (
+	github.com/7ar-chat/harness/core v0.1.0
 	github.com/7ar-chat/harness/modelinfo v0.0.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
@@ -33,8 +33,6 @@ require (
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.3.8 // indirect
 )
-
-replace github.com/7ar-chat/harness/core => ../../core
 
 replace github.com/7ar-chat/harness/modelinfo => ../../modelinfo
 
