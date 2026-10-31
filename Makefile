@@ -4,7 +4,7 @@ GOFLAGS_BUILD = -trimpath -ldflags='-s -w'
 # The standalone Go modules next to the root one (see go.work); each is also built and tested alone, with GOWORK=off.
 MODULES = ai core modelinfo hosts/client hosts/tui adapters/sandbox app
 
-.PHONY: build test test-modules check-embed bench-offline vet web ci gen
+.PHONY: build test test-modules coverage e2e check-embed bench-offline vet web ci gen
 build:
 	cd app && go build $(GOFLAGS_BUILD) -o ../bin/harness ./cmd/harness
 	cd app && go build $(GOFLAGS_BUILD) -o ../bin/harness-web ./cmd/harness-web
@@ -24,6 +24,18 @@ test-modules:
 # What .github/workflows/ci.yml runs; pgstore tests run when HARNESS_TEST_DATABASE_URL points at a Postgres.
 ci: vet test
 	cd web && npm ci && npm run typecheck && npm test && npm run build
+
+# Statement coverage of the production code over every module, failing below COVERAGE_MIN (default 80). Postgres tests count
+# when HARNESS_TEST_DATABASE_URL is set (CI sets it). Writes coverage.out; `go tool cover -html=coverage.out` shows the gaps.
+coverage:
+	bash scripts/coverage.sh $(COVERAGE_MIN)
+
+# End-to-end scenarios on the real stack with a scripted model: the HTTP conversation, tool runs and artifact versions, approvals,
+# cancel and steer, user isolation and auth, restart, the web+worker split over Postgres and Redis, the CLI, and the browser UI.
+# The Postgres suites run when HARNESS_TEST_DATABASE_URL is set, the browser run needs the built UI (make web) and Chromium.
+e2e:
+	cd app && go test -race -count=1 -timeout 5m ./integration/...
+	cd web && npm run e2e
 
 # Embeds the harness from an empty directory with a clean module cache and no replace directives, against the PUBLISHED
 # root module (default: the latest v* tag; make check-embed VERSION=main for the branch head), and runs a conversation.

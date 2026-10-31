@@ -68,6 +68,88 @@ jobs:
           go-version-file: go.mod
       - run: bash scripts/check-embed.sh "${GITHUB_REF_NAME}"
 
+  # Statement coverage of the production code over all modules (scripts/coverage.sh), failing below 80%. Postgres is up so the
+  # pgstore tests count. The merged profile is kept as an artifact: `go tool cover -html=coverage.out` shows the gaps.
+  coverage:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: harness
+          POSTGRES_USER: harness
+          POSTGRES_PASSWORD: harness
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U harness -d harness"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      HARNESS_TEST_DATABASE_URL: postgres://harness:harness@localhost:5432/harness?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: build the web UI
+        run: npm ci && npm run build
+        working-directory: web
+      - run: make coverage COVERAGE_MIN=80
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage.out
+
+  # The most important scenarios end to end, on the real stack with a scripted model and no network: HTTP conversation, tool runs,
+  # artifacts, approvals, cancel and steer, isolation, restart, the web+worker split over Postgres and Redis, the CLI, the browser UI.
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: harness
+          POSTGRES_USER: harness
+          POSTGRES_PASSWORD: harness
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U harness -d harness"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      HARNESS_TEST_DATABASE_URL: postgres://harness:harness@localhost:5432/harness?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: build the web UI
+        run: npm ci && npm run build
+        working-directory: web
+      - run: cd app && go test -race -count=1 -timeout 5m ./integration/...
+      # the browser run is skipped, not failed, when Chromium is missing: install it so it always runs here
+      - run: npx playwright install --with-deps chromium
+        working-directory: web
+      - run: npm run e2e
+        working-directory: web
+
   web:
     runs-on: ubuntu-latest
     defaults:
