@@ -1,3 +1,9 @@
+github.com/7ar-chat/harness/core v0.1.0 h1:OuI/9zVszJeCmIOERJvCqVsMysn9lt/EU+wyLdgqcY4=
+github.com/7ar-chat/harness/core v0.1.0/go.mod h1:lIDn854mZywhezzqzgqkHl2SPELNXZN1YYnJMTP7emA=
+github.com/7ar-chat/harness/hosts/client v0.1.0 h1:XM6mJsONZ/MRYg1jowjKUjXzlc+OdctT1p3bFapGSJ0=
+github.com/7ar-chat/harness/hosts/client v0.1.0/go.mod h1:t6o3SIOpDFhsd/rb2ycT5dH0kFJf8Ycwi5GKy0oWlao=
+github.com/7ar-chat/harness/modelinfo v0.1.0 h1:XMeAXbnQh/gGZiJxGJe/kcklntkiUKghRKEJTSGfuYU=
+github.com/7ar-chat/harness/modelinfo v0.1.0/go.mod h1:dgJ8v8ynNjaDAqdvsA1ytW+56W5GEkNbbP6MM01bNMc=
 github.com/MakeNowJust/heredoc v1.0.0 h1:cXCdzVdstXyiTqTvfqk9SDHpKNjxuom+DOlyEeQ4pzQ=
 github.com/MakeNowJust/heredoc v1.0.0/go.mod h1:mG5amYoWBHf8vpLOuehzbGGw0EHxpZZ6lCpQ4fNJ8LE=
 github.com/atotto/clipboard v0.1.4 h1:EH0zSVneZPSuFR11BlR9YppQTVDbh5+16AmcJi4g1z4=
