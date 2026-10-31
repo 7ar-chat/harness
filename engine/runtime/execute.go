@@ -38,6 +38,7 @@ func (r *Runtime) execute(parent context.Context, run *store.Run) {
 	}
 	hbDone := make(chan struct{})
 	defer close(hbDone)
+	r.redisHeartbeat(run.ID) // the first liveness signal exists before the run does any work
 	go r.heartbeat(run, cancel, hbDone)
 	if run.CancelRequested {
 		cancel(ErrCancelled)

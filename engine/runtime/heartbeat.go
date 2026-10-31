@@ -13,10 +13,12 @@ import (
 // outage longer than StaleAge does not get live runs interrupted.
 func heartbeatKey(runID string) string { return "work:run:" + runID + ":hb" }
 
+// heartbeat keeps the run's liveness signal fresh until done is closed, and removes it then. The first signal is written
+// by the caller before this goroutine starts (execute), so every run writes at least one however short it is: a run that
+// ended before the goroutine was first scheduled used to write none.
 func (r *Runtime) heartbeat(run *store.Run, cancel context.CancelCauseFunc, done <-chan struct{}) {
 	t := time.NewTimer(r.opts.Heartbeat)
 	defer t.Stop()
-	r.redisHeartbeat(run.ID)
 	defer r.clearHeartbeat(run.ID)
 	for {
 		select {
