@@ -14,12 +14,11 @@ The root module is the engine: `harness.New`, the HTTP API, the features and the
 (`ai`, `core`, `modelinfo`, `hosts/client`, `hosts/tui`, `adapters/sandbox`), all of which are released with it; you can also
 use those on their own. `make check-embed` (and the `embed` CI job on every release tag) builds a small application in an
 empty directory against the published versions and runs a conversation through it, so what is documented here is
-what a stranger gets. What a build links depends on what you import: the minimal embedding in that check pulls in 28
-modules and builds a 22 MB binary; Postgres, Redis, S3 and OIDC code is linked only when you import the packages that use it.
-
-Some tasks need a sandbox (run commands, create files), many do not (answer a
-question, call your API or MCP tools, search). The harness treats the sandbox as
-an optional, per-run resource, behind an adapter ([sandbox-adapters.md](sandbox-adapters.md)).
+what a stranger gets. What a build links depends on what you import. Measured on the minimal embedding in that check, against `v0.2.0`: the module
+graph holds 65 modules (59 third-party), code from 28 of them is linked, and the binary is 22 MB. The linked set includes
+the OpenSandbox SDK, the MCP SDK and go-redis, because the engine's own packages import them; Postgres, S3 and OIDC code is
+linked only when you import the packages that use it. The product and the commands are in the separate `app` module, so
+their dependencies (OIDC, JOSE, the terminal UI libraries) are not part of an embedding at all.
 
 ## 1. Pick a shape
 
