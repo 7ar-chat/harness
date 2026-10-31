@@ -53,6 +53,21 @@ jobs:
       # the standalone modules (ai, core, modelinfo, hosts/client, hosts/tui, adapters/sandbox), each with GOWORK=off
       - run: make test-modules
 
+  # Proves the harness can be embedded by another application: builds a program in an empty directory, with a clean
+  # module cache, no replace directive and GOWORK off, against the published modules, and runs a conversation through it.
+  # Tags only: a branch push may be ahead of what is published.
+  embed:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: bash scripts/check-embed.sh "${GITHUB_REF_NAME}"
+
   web:
     runs-on: ubuntu-latest
     defaults:

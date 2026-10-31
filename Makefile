@@ -4,7 +4,7 @@ GOFLAGS_BUILD = -trimpath -ldflags='-s -w'
 # The standalone Go modules next to the root one (see go.work); each is also built and tested alone, with GOWORK=off.
 MODULES = ai core modelinfo hosts/client hosts/tui adapters/sandbox
 
-.PHONY: build test test-modules bench-offline vet web ci gen
+.PHONY: build test test-modules check-embed bench-offline vet web ci gen
 build:
 	go build $(GOFLAGS_BUILD) -o bin/harness ./cmd/harness
 	go build $(GOFLAGS_BUILD) -o bin/harness-web ./cmd/harness-web
@@ -24,6 +24,11 @@ test-modules:
 # What .github/workflows/ci.yml runs; pgstore tests run when HARNESS_TEST_DATABASE_URL points at a Postgres.
 ci: vet test
 	cd web && npm ci && npm run typecheck && npm test && npm run build
+
+# Embeds the harness from an empty directory with a clean module cache and no replace directives, against the PUBLISHED
+# root module (default: the latest v* tag; make check-embed VERSION=main for the branch head), and runs a conversation.
+check-embed:
+	bash scripts/check-embed.sh $(VERSION)
 
 # Everything the benchmark proves without a model: fixtures fail untouched and pass with their solutions.
 bench-offline:

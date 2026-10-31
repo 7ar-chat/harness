@@ -4,6 +4,19 @@ How a website that runs agentic tasks for many users builds on the harness. A
 runnable ~250-line example is in [`examples/website`](../examples/website)
 (`go test ./examples/website`); this page explains the choices behind it.
 
+## 0. Add it to your application
+
+```sh
+go get github.com/7ar-chat/harness@v0.1.0
+```
+
+The root module is the engine: `harness.New`, the HTTP API, the features and the stores. It requires the smaller modules
+(`ai`, `core`, `modelinfo`, `hosts/client`, `hosts/tui`, `adapters/sandbox`), all of which are released with it; you can also
+use those on their own. `make check-embed` (and the `embed` CI job on every release tag) builds a small application in an
+empty directory against the published versions and runs a conversation through it, so what is documented here is
+what a stranger gets. What a build links depends on what you import: the minimal embedding in that check pulls in 28
+modules and builds a 22 MB binary; Postgres, Redis, S3 and OIDC code is linked only when you import the packages that use it.
+
 Some tasks need a sandbox (run commands, create files), many do not (answer a
 question, call your API or MCP tools, search). The harness treats the sandbox as
 an optional, per-run resource, behind an adapter ([sandbox-adapters.md](sandbox-adapters.md)).
