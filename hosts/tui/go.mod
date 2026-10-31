@@ -12,7 +12,7 @@ require (
 
 require (
 	github.com/7ar-chat/harness/core v0.1.0
-	github.com/7ar-chat/harness/hosts/client v0.1.0
+	github.com/7ar-chat/harness/hosts/client v0.1.1
 	github.com/7ar-chat/harness/modelinfo v0.1.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
