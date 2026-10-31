@@ -44,6 +44,13 @@ Go bottom-up, one layer at a time: a module can be verified only once everything
 
 `scripts/release-modules.sh check` lists the latest tag of each module and how many local `replace` lines it still has.
 
+**CI is red between a root API change and the matching `app` commit.** `app` requires the root by version, and `make test-modules`
+builds it with the workspace off, so a commit that removes or renames something `app` uses cannot pass that step until the
+root is tagged and `app` requires the new tag. Expect the `go` job to fail on the commit that changes the root's API and on
+its release tag, and to pass on the `app: require the root vX.Y.Z` commit that follows. Land them close together; a change
+that does not touch what `app` imports is unaffected. (The tag's `embed` job, which builds only from published
+versions, is the check that matters for the release itself.)
+
 Rules:
 
 - **A tag is permanent.** The module proxy caches it, so never move or delete a published tag. To fix a bad release, publish
