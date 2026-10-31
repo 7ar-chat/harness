@@ -3,7 +3,7 @@ module github.com/7ar-chat/harness/app
 go 1.26.0
 
 require (
-	github.com/7ar-chat/harness v0.2.0
+	github.com/7ar-chat/harness v0.3.0
 	github.com/7ar-chat/harness/adapters/sandbox v0.1.0
 	github.com/7ar-chat/harness/ai v0.1.1
 	github.com/7ar-chat/harness/core v0.1.0
