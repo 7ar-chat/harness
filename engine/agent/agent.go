@@ -12,9 +12,9 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/GhaziBenDahmane/harness/ai"
+	aiagent "github.com/GhaziBenDahmane/harness/ai/agent"
 	"github.com/GhaziBenDahmane/harness/ai/compaction"
 	"github.com/GhaziBenDahmane/harness/ai/llm"
 	"github.com/GhaziBenDahmane/harness/core/agui"
@@ -625,7 +625,7 @@ func (st *runState) invoke(ctx context.Context, tc ai.ToolCall, toolMap map[stri
 		return "Error: " + err.Error(), err
 	}
 	tctx := tools.WithCall(ctx, tc.ID, em)
-	out, err := safeInvoke(tctx, inv, args)
+	out, err := aiagent.SafeInvoke(tctx, inv, args)
 	if _, ok := asInterrupt(err); ok {
 		return "", err
 	}
@@ -640,34 +640,7 @@ func (st *runState) invoke(ctx context.Context, tc ai.ToolCall, toolMap map[stri
 	return out, nil
 }
 
-func safeInvoke(ctx context.Context, t ai.InvokableTool, args string) (out string, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("the tool crashed: %v", r)
-		}
-	}()
-	return t.InvokableRun(ctx, args)
-}
-
 // CapOutput keeps the head and tail of s within max characters with a marker.
-func CapOutput(s string, max int) string {
-	if max <= 0 || utf8.RuneCountInString(s) <= max {
-		return s
-	}
-	r := []rune(s)
-	marker := fmt.Sprintf("\n\n[... %d characters truncated ...]\n\n", len(r)-max)
-	keep := max - utf8.RuneCountInString(marker)
-	if keep < 0 {
-		keep = 0
-	}
-	head := keep * 2 / 3
-	tail := keep - head
-	return string(r[:head]) + marker + string(r[len(r)-tail:])
-}
+func CapOutput(s string, max int) string { return aiagent.CapOutput(s, max) }
 
-func truncate(s string, n int) string {
-	if utf8.RuneCountInString(s) <= n {
-		return s
-	}
-	return string([]rune(s)[:n]) + "…"
-}
+func truncate(s string, n int) string { return aiagent.Truncate(s, n) }

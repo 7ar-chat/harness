@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/GhaziBenDahmane/harness/ai"
 )
@@ -30,9 +29,17 @@ type Config struct {
 	LimitNudge string
 	// Options are passed to every model call.
 	Options []ai.Option
-	// Parallel runs the calls of one step at the same time when every one of them is ReadOnly; by default they
-	// run one after the other, in call order.
-	Parallel bool
+	// Parallel runs consecutive calls of ReadOnly tools at the same time; by default every call runs alone, in
+	// call order. MaxParallel bounds how many run at once (0: all of them).
+	Parallel    bool
+	MaxParallel int
+
+	// Caller, when set, makes each model call as a stream under its watchdog and retry policy instead of one
+	// Generate call; chunks are passed to OnChunk as they arrive and merged into the reply with ai.ConcatMessages.
+	// A retried attempt delivers its chunks again: Caller.OnRetry tells the observer to discard the failed one.
+	Caller *Caller
+	// OnChunk receives the chunks of a streamed call (Caller set).
+	OnChunk func(step int, chunk *ai.Message)
 
 	// OnStep is called before each model call with the step number (from 1).
 	OnStep func(step int)
@@ -102,7 +109,7 @@ func Run(ctx context.Context, cfg Config, msgs []*ai.Message) (Result, error) {
 		if cfg.OnStep != nil {
 			cfg.OnStep(step)
 		}
-		reply, err := cfg.Model.Generate(ctx, conv, opts...)
+		reply, err := cfg.reply(ctx, step, conv, opts)
 		res.Steps = step
 		if reply != nil && cfg.OnReply != nil {
 			cfg.OnReply(step, reply)
@@ -117,15 +124,46 @@ func Run(ctx context.Context, cfg Config, msgs []*ai.Message) (Result, error) {
 			return res, nil
 		}
 		conv = append(conv, reply)
-		results := runCalls(ctx, byName, reply.ToolCalls, invoke, cfg.Parallel)
-		for i, call := range reply.ToolCalls {
-			if cfg.OnTool != nil {
-				cfg.OnTool(call, results[i])
-			}
-			conv = append(conv, ai.ToolMessage(results[i], call.ID, ai.WithToolName(call.Function.Name)))
+		if err := runStep(ctx, &cfg, byName, invoke, reply.ToolCalls, &conv); err != nil {
+			res.Messages = conv
+			return res, err
 		}
 	}
 }
+
+// reply makes the model call of a step: one Generate, or a stream through Config.Caller.
+func (cfg *Config) reply(ctx context.Context, step int, conv []*ai.Message, opts []ai.Option) (*ai.Message, error) {
+	if cfg.Caller == nil {
+		return cfg.Model.Generate(ctx, conv, opts...)
+	}
+	stream, err := cfg.Caller.Call(ctx, cfg.Model, conv, opts, func() Attempt { return chunkObserver{step: step, on: cfg.OnChunk} })
+	if err != nil {
+		return nil, err
+	}
+	reply, err := ai.ConcatMessages(stream.Chunks)
+	if err != nil {
+		return nil, err
+	}
+	if reply.Role == "" {
+		reply.Role = ai.RoleAssistant
+	}
+	return reply, nil
+}
+
+// chunkObserver is the Attempt of a streamed step: it forwards the chunks and has nothing to settle or undo.
+type chunkObserver struct {
+	step int
+	on   func(step int, chunk *ai.Message)
+}
+
+func (o chunkObserver) Chunk(_ context.Context, c *ai.Message) error {
+	if o.on != nil {
+		o.on(o.step, c)
+	}
+	return nil
+}
+func (chunkObserver) Settle(context.Context, bool) error { return nil }
+func (chunkObserver) Abort(context.Context, bool) error  { return nil }
 
 func index(ctx context.Context, list []ai.InvokableTool) (map[string]ai.InvokableTool, error) {
 	byName := make(map[string]ai.InvokableTool, len(list))
@@ -142,33 +180,33 @@ func index(ctx context.Context, list []ai.InvokableTool) (map[string]ai.Invokabl
 	return byName, nil
 }
 
-// runCalls runs one step's calls, returning their results in call order. With parallel set and every call
-// read-only they run concurrently; otherwise one after the other.
-func runCalls(ctx context.Context, byName map[string]ai.InvokableTool, calls []ai.ToolCall, invoke func(context.Context, ai.ToolCall) string, parallel bool) []string {
-	out := make([]string, len(calls))
-	parallel = parallel && len(calls) > 1
-	for _, c := range calls {
-		if ro, ok := byName[c.Function.Name].(ReadOnly); !ok || !ro.ReadOnly() {
-			parallel = false
-			break
+// runStep runs one step's calls and appends their results to conv in call order. With Config.Parallel,
+// consecutive calls of ReadOnly tools run at the same time (at most MaxParallel), the rest one after the other.
+func runStep(ctx context.Context, cfg *Config, byName map[string]ai.InvokableTool,
+	invoke func(context.Context, ai.ToolCall) string, calls []ai.ToolCall, conv *[]*ai.Message) error {
+	record := func(call ai.ToolCall, result string) {
+		if cfg.OnTool != nil {
+			cfg.OnTool(call, result)
 		}
+		*conv = append(*conv, ai.ToolMessage(result, call.ID, ai.WithToolName(call.Function.Name)))
 	}
-	if !parallel {
-		for i, c := range calls {
-			out[i] = invoke(ctx, c)
-		}
-		return out
-	}
-	var wg sync.WaitGroup
-	for i, c := range calls {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			out[i] = invoke(ctx, c)
-		}()
-	}
-	wg.Wait()
-	return out
+	return Schedule(ctx, calls,
+		func(_ context.Context, c ai.ToolCall) bool {
+			ro, ok := byName[c.Function.Name].(ReadOnly)
+			return cfg.Parallel && ok && ro.ReadOnly()
+		},
+		func(ctx context.Context, c ai.ToolCall) error {
+			record(c, invoke(ctx, c))
+			return nil
+		},
+		func(ctx context.Context, batch []ai.ToolCall) error {
+			results := make([]string, len(batch))
+			Parallel(len(batch), cfg.MaxParallel, func(k int) { results[k] = invoke(ctx, batch[k]) })
+			for k, c := range batch {
+				record(c, results[k])
+			}
+			return nil
+		})
 }
 
 func defaultInvoke(ctx context.Context, byName map[string]ai.InvokableTool, call ai.ToolCall) string {

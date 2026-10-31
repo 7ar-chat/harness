@@ -3,10 +3,11 @@ package agent
 import (
 	"context"
 	"fmt"
+
 	"github.com/google/uuid"
-	"sync"
 
 	"github.com/GhaziBenDahmane/harness/ai"
+	aiagent "github.com/GhaziBenDahmane/harness/ai/agent"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/engine/tools"
 )
@@ -55,25 +56,12 @@ const maxParallelTools = 4
 // (tools.ReadOnly, not gated by an approval) run in parallel, the others alone,
 // and every result is emitted and recorded in the model's call order.
 func (st *runState) runTools(ctx context.Context, calls []ai.ToolCall, toolMap map[string]ai.BaseTool) error {
-	for i := 0; i < len(calls); {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		j := i
-		for j < len(calls) && st.parallelizable(ctx, calls[j], toolMap) {
-			j++
-		}
-		if j-i >= 2 {
-			if err := st.runParallel(ctx, calls[i:j], toolMap); err != nil {
-				return err
-			}
-			i = j
-			continue
-		}
-		if err := st.callTool(ctx, calls[i], toolMap); err != nil {
-			return err
-		}
-		i++
+	err := aiagent.Schedule(ctx, calls,
+		func(ctx context.Context, tc ai.ToolCall) bool { return st.parallelizable(ctx, tc, toolMap) },
+		func(ctx context.Context, tc ai.ToolCall) error { return st.callTool(ctx, tc, toolMap) },
+		func(ctx context.Context, batch []ai.ToolCall) error { return st.runParallel(ctx, batch, toolMap) })
+	if err != nil {
+		return err
 	}
 	st.addToolImages(st.takeToolImages())
 	return nil
@@ -99,18 +87,9 @@ func (st *runState) runParallel(ctx context.Context, calls []ai.ToolCall, toolMa
 		looping[k] = st.g.looping(tc) // in order, like sequential calls
 		results[k].em = &toolEmitter{st: st, ctx: ctx, buffered: true}
 	}
-	sem := make(chan struct{}, maxParallelTools)
-	var wg sync.WaitGroup
-	for k, tc := range calls {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-			results[k].content, results[k].err = st.execTool(ctx, tc, toolMap, results[k].em, looping[k])
-		}()
-	}
-	wg.Wait()
+	aiagent.Parallel(len(calls), maxParallelTools, func(k int) {
+		results[k].content, results[k].err = st.execTool(ctx, calls[k], toolMap, results[k].em, looping[k])
+	})
 	for k, tc := range calls {
 		if err := st.finishTool(ctx, tc, results[k].em, results[k].content, results[k].err); err != nil {
 			return err

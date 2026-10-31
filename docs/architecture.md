@@ -37,7 +37,7 @@ each may require.
 
 | Module | Requires | What a user gets |
 |---|---|---|
-| `ai` | – | `ai.Message`, `ai.Model`, tools (`InferTool`), the OpenAI Chat, Responses and Anthropic clients, `ai/agent` (a loop with no store), compaction |
+| `ai` | – | `ai.Message`, `ai.Model`, tools (`InferTool`), the OpenAI Chat, Responses and Anthropic clients, `ai/agent` (a loop with no store, plus the streaming/retry/scheduling pieces the run loop uses), compaction |
 | `core` | – | AG-UI events, the `store` and `blobs` ports, the sandbox contract and its manager |
 | `modelinfo` | – | prices and context windows by model id |
 | `hosts/client` | core, modelinfo | the `Client` contract and its HTTP implementation |
@@ -111,11 +111,13 @@ keeps only the web-only shapes. Add a DTO by listing it in `types.go` and runnin
   `redisx.Options`, `backends.Settings`, `skills.DiscoverOptions`, `memory.Options`...) and the composition roots
   (the facade, `hosts/*`, `cmd/*`) map `config.Config` onto them. The names of the `.har` folders live in
   `core/layout` for packages that need a path but not the configuration.
-* `engine/agent` (the run loop that persists messages, emits events, gates tools on approvals and compacts) is
-  not built on `ai/agent`: it works on `store.Message` rows and an event log at every step, so only the sub-agent
-  loop of `features/explore` uses `ai/agent` today. Moving the run loop onto it means giving `ai/agent` the hooks
-  the run loop uses (persist-after-reply, streaming events, per-call gating, retry and watchdog) and keeping the
-  store-bound parts in `engine/agent`.
+* `engine/agent` sequences a run step by step (steers, compaction, guards, verification, empty-answer and
+  length handling, approvals, persistence, events); that policy is the product and stays there. The mechanics it
+  used to own are in `ai/agent` and the run loop is built on them: `Caller` (a streamed call under a watchdog with
+  retry and backoff; the AG-UI translator is its `Attempt`), `Schedule` and `Parallel` (read-only calls batched,
+  the rest alone, results in call order), `SafeInvoke` and `CapOutput`. `ai/agent.Run` is the same loop without the
+  policy, and `features/explore` runs on it. Putting `engine/agent.step` itself behind a policy interface would
+  only move this code across a boundary nothing else crosses, so it was not done.
 * `store/Full` still holds the types of every capability. Moving a capability's port out of core would make adapters
   import features, so the types stay in core; a feature cannot yet bring its own tables without a `core/store` change.
 * The memory and profile pages are served by `product` only, not exposed through `client.Client`, so the TUI does not

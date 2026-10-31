@@ -10,6 +10,7 @@ import (
 
 	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/ai/agent"
+	"github.com/GhaziBenDahmane/harness/ai/llm"
 )
 
 // script answers each call with the next reply and records what it was asked.
@@ -166,5 +167,69 @@ func TestACancelledContextStopsBeforeTheNextCall(t *testing.T) {
 
 	if !errors.Is(err, context.Canceled) || len(m.calls) != 1 {
 		t.Fatalf("err %v after %d calls", err, len(m.calls))
+	}
+}
+
+// streaming adapts a script to a model that streams each reply as one chunk per rune group.
+type streaming struct {
+	*script
+	failFirst error
+	streams   int
+}
+
+func (s *streaming) Stream(ctx context.Context, msgs []*ai.Message, opts ...ai.Option) (*ai.StreamReader[*ai.Message], error) {
+	s.streams++
+	if s.failFirst != nil && s.streams == 1 {
+		return nil, s.failFirst
+	}
+	reply, err := s.script.Generate(ctx, msgs, opts...)
+	if err != nil {
+		return nil, err
+	}
+	sr, sw := ai.Pipe[*ai.Message](4)
+	go func() {
+		defer sw.Close()
+		if reply.Content != "" {
+			half := len(reply.Content) / 2
+			sw.Send(&ai.Message{Role: ai.RoleAssistant, Content: reply.Content[:half]}, nil)
+			sw.Send(&ai.Message{Content: reply.Content[half:]}, nil)
+		}
+		if len(reply.ToolCalls) > 0 {
+			idx := 0
+			for _, c := range reply.ToolCalls {
+				c.Index = &idx
+				idx++
+				sw.Send(&ai.Message{ToolCalls: []ai.ToolCall{c}}, nil)
+			}
+		}
+	}()
+	return sr, nil
+}
+
+func TestACallerMakesTheLoopStreamAndRetryEachStep(t *testing.T) {
+	m := &streaming{script: &script{replies: []*ai.Message{
+		ai.AssistantMessage("", []ai.ToolCall{call("1", "echo", `{"a":1}`)}),
+		ai.AssistantMessage("all done", nil),
+	}}, failFirst: errors.New("status code: 503, unavailable")}
+	var chunks []string
+	var retries int
+	res, err := agent.Run(context.Background(), agent.Config{
+		Model: m, Tools: []ai.InvokableTool{echo{}},
+		Caller: &agent.Caller{Retries: 2, Sleep: func(context.Context, time.Duration) error { return nil },
+			OnRetry: func(context.Context, int, llm.ErrorClass, error) error { retries++; return nil }},
+		OnChunk: func(step int, c *ai.Message) { chunks = append(chunks, c.Content) },
+	}, []*ai.Message{ai.UserMessage("go")})
+
+	if err != nil || res.Reply.Content != "all done" || res.Steps != 2 {
+		t.Fatalf("res %+v err %v", res, err)
+	}
+	if retries != 1 || m.streams != 3 {
+		t.Fatalf("retries %d streams %d, want the first call retried once", retries, m.streams)
+	}
+	if got := strings.Join(chunks, "|"); got != "|all |done" && got != "all |done" {
+		t.Fatalf("chunks %q", got)
+	}
+	if res.Messages[2].Role != ai.RoleTool || res.Messages[2].Content != `got {"a":1}` {
+		t.Fatalf("transcript %+v", res.Messages)
 	}
 }

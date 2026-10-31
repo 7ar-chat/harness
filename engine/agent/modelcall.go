@@ -4,16 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"io"
 	"log/slog"
-	"math/rand/v2"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/GhaziBenDahmane/harness/ai"
+	aiagent "github.com/GhaziBenDahmane/harness/ai/agent"
 	"github.com/GhaziBenDahmane/harness/ai/llm"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 )
@@ -36,9 +34,6 @@ const (
 	MsgContentFilter = "The AI provider's content filter stopped the answer. Rephrase the request and try again."
 	MsgEmptyAnswer   = "The AI model returned an empty answer. Please try again or rephrase the request."
 )
-
-// errStalled is the cause of an attempt cut by the watchdog.
-var errStalled = errors.New("the model stream was silent for too long")
 
 // stepOutput is the outcome of a successful model call.
 type stepOutput struct {
@@ -105,123 +100,72 @@ func (a *Agent) sleep(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// attemptResult is the outcome of one attempt of a model call.
-type attemptResult struct {
-	out *stepOutput
-	t   *translator
-	err error
-	// class sorts err (timeout when the watchdog cut the stream).
-	class      llm.ErrorClass
-	retryAfter time.Duration
-	// fatal is an event-log failure: the run ends without retry.
-	fatal error
-}
-
 // callModel is the model call of a step (harness v3 §1). A call that fails
 // before or during its stream with a retryable error (timeout, 429, 5xx,
 // connection reset) is re-issued with the same request, up to StepRetries
 // times: the failed attempt's events are closed (its tool calls get a
 // "retried" error result), nothing of it is persisted, and CUSTOM work.retry
 // precedes the new attempt. A cancelled call returns its partial output with
-// ctx.Err().
+// ctx.Err(). The streaming, watchdog and retry mechanics are aiagent.Caller;
+// this adds the AG-UI events (translator) and the run's budgets.
 func (st *runState) callModel(ctx context.Context, m ai.Model, msgs []*ai.Message, opts ...ai.Option) (*stepOutput, error) {
-	retries := st.a.stepRetries()
-	for attempt := 1; ; attempt++ {
-		res := st.attempt(ctx, m, msgs, opts...)
-		switch {
-		case res.fatal != nil:
-			return nil, res.fatal
-		case res.err == nil:
-			return res.out, nil
-		case ctx.Err() != nil:
-			return res.out, ctx.Err()
+	var t *translator
+	caller := &aiagent.Caller{
+		FirstChunk: st.firstChunkBudget(), Idle: st.a.streamIdle(), Ceiling: st.callCeiling(),
+		Retries: st.a.stepRetries(), Backoff: st.a.RetryBackoff, Sleep: st.a.Sleep,
+		OnRetry: func(ctx context.Context, attempt int, class llm.ErrorClass, err error) error {
+			slog.Warn("agent: model call failed, retrying the step", "run_id", st.in.Run.ID, "attempt", attempt, "class", class, "error", err)
+			return st.emit(ctx, agui.CustomEvent(agui.CustomRetry, map[string]any{"attempt": attempt + 1, "reason": string(class)}))
+		},
+	}
+	stream, err := caller.Call(ctx, m, msgs, opts, func() aiagent.Attempt {
+		t = &translator{st: st, assistantID: uuid.NewString(), calls: map[string]*liveCall{}, byIndex: map[int]string{}}
+		return t
+	})
+	var ce *aiagent.CallError
+	switch {
+	case errors.As(err, &ce):
+		return nil, modelFailure(ce)
+	case stream == nil:
+		return nil, err
+	}
+	// Tool calls are merged by the translator: concatenating them would fail on
+	// providers that reuse an Index for parallel calls with distinct ids (A-18).
+	final := &ai.Message{Role: ai.RoleAssistant}
+	if len(stream.Chunks) > 0 {
+		stripped := make([]*ai.Message, 0, len(stream.Chunks))
+		for _, c := range stream.Chunks {
+			cp := *c
+			cp.ToolCalls = nil
+			stripped = append(stripped, &cp)
 		}
-		retry := res.class.Retryable() && attempt <= retries
-		if res.t != nil {
-			if err := res.t.abort(ctx, retry); err != nil {
-				return nil, err
+		if merged, cerr := ai.ConcatMessages(stripped); cerr == nil {
+			final = merged
+		} else {
+			slog.Warn("agent: merging stream chunks failed", "run_id", st.in.Run.ID, "error", cerr)
+			var text strings.Builder
+			for _, c := range stream.Chunks {
+				text.WriteString(c.Content)
 			}
-		}
-		if !retry {
-			return nil, modelFailure(res)
-		}
-		slog.Warn("agent: model call failed, retrying the step", "run_id", st.in.Run.ID, "attempt", attempt, "class", res.class, "error", res.err)
-		if err := st.emit(ctx, agui.CustomEvent(agui.CustomRetry, map[string]any{"attempt": attempt + 1, "reason": string(res.class)})); err != nil {
-			return nil, err
-		}
-		if err := st.a.sleep(ctx, llm.Backoff(attempt, st.a.RetryBackoff, res.retryAfter, rand.Float64())); err != nil {
-			return nil, err
+			final.Content = text.String()
 		}
 	}
+	final.ToolCalls = t.merged
+	out := &stepOutput{msg: final, assistantID: t.assistantID, reasoningID: t.reasoningID, reasoning: t.reasoning.String(),
+		refusal: stream.Refusal, announced: t.announced()}
+	return out, err
 }
 
 // modelFailure is the run error of a model call that will not be retried.
-func modelFailure(res attemptResult) *Error {
-	detail := truncate("model call: "+res.err.Error(), 1000)
-	switch res.class {
+func modelFailure(ce *aiagent.CallError) *Error {
+	detail := aiagent.Truncate("model call: "+ce.Err.Error(), 1000)
+	switch ce.Class {
 	case llm.ClassTimeout:
-		return &Error{Code: agui.CodeModelTimeout, Message: MsgModelTimeout, Detail: detail, cause: res.err}
+		return &Error{Code: agui.CodeModelTimeout, Message: MsgModelTimeout, Detail: detail, cause: ce.Err}
 	case llm.ClassRateLimited:
-		return &Error{Code: agui.CodeRateLimited, Message: MsgRateLimited, Detail: detail, cause: res.err}
+		return &Error{Code: agui.CodeRateLimited, Message: MsgRateLimited, Detail: detail, cause: ce.Err}
 	}
-	return &Error{Code: agui.CodeModelError, Message: MsgModelError, Detail: detail, cause: res.err}
-}
-
-// watchdog cancels an attempt when the first chunk takes longer than first, a
-// later chunk longer than idle after the previous one, or the whole call
-// longer than its ceiling. A provider event the client does not forward
-// restarts the current budget (a model reasoning silently is not stalled);
-// SSE comment lines (keep-alives) do not (round 3, N3).
-type watchdog struct {
-	mu      sync.Mutex
-	timer   *time.Timer
-	ceiling *time.Timer
-	first   time.Duration
-	idle    time.Duration
-	started bool
-	fired   atomic.Bool
-}
-
-func startWatchdog(cancel context.CancelFunc, first, idle, ceiling time.Duration) *watchdog {
-	w := &watchdog{first: first, idle: idle}
-	fire := func() {
-		w.fired.Store(true)
-		cancel()
-	}
-	w.timer = time.AfterFunc(first, fire)
-	w.ceiling = time.AfterFunc(ceiling, fire) // whatever the stream sends (round 3, N3)
-	return w
-}
-
-// kick: a chunk arrived; the next one must follow within idle.
-func (w *watchdog) kick() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.started = true
-	if !w.fired.Load() {
-		w.timer.Reset(w.idle)
-	}
-}
-
-// activity: the stream is alive; its current budget starts again.
-func (w *watchdog) activity() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.fired.Load() {
-		return
-	}
-	if w.started {
-		w.timer.Reset(w.idle)
-	} else {
-		w.timer.Reset(w.first)
-	}
-}
-
-func (w *watchdog) stop() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.timer.Stop()
-	w.ceiling.Stop()
+	return &Error{Code: agui.CodeModelError, Message: MsgModelError, Detail: detail, cause: ce.Err}
 }
 
 // firstChunkBudget is LLM_TIMEOUT_SECONDS, ×2 at high and ×3 at xhigh
@@ -252,85 +196,6 @@ func (st *runState) effortScaled(d time.Duration) time.Duration {
 	return d
 }
 
-// attempt is one model call: it streams the answer as AG-UI events.
-func (st *runState) attempt(ctx context.Context, m ai.Model, msgs []*ai.Message, opts ...ai.Option) attemptResult {
-	actx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	actx, info := llm.WithCallInfo(actx)
-	actx = llm.WithSession(actx, st.in.Run.ThreadID)
-	wd := startWatchdog(cancel, st.firstChunkBudget(), st.a.streamIdle(), st.callCeiling())
-	defer wd.stop()
-	info.OnActivity(wd.activity)
-	fail := func(t *translator, err error) attemptResult {
-		class := llm.Classify(err)
-		if wd.fired.Load() && ctx.Err() == nil {
-			class, err = llm.ClassTimeout, fmt.Errorf("%w: %v", errStalled, err)
-		}
-		return attemptResult{t: t, err: err, class: class, retryAfter: info.RetryAfter()}
-	}
-
-	sr, err := m.Stream(actx, msgs, opts...)
-	if err != nil {
-		return fail(nil, err)
-	}
-	defer sr.Close()
-	t := &translator{st: st, assistantID: uuid.NewString(), calls: map[string]*liveCall{}, byIndex: map[int]string{}}
-	var chunks []*ai.Message
-	var streamErr error
-	for {
-		chunk, err := sr.Recv()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			streamErr = err
-			break
-		}
-		wd.kick()
-		chunks = append(chunks, chunk)
-		if err := t.handle(ctx, chunk); err != nil {
-			return attemptResult{fatal: err}
-		}
-	}
-	wd.stop()
-	if streamErr != nil && ctx.Err() == nil {
-		return fail(t, streamErr)
-	}
-
-	// Tool calls are merged by the translator: concatenating them would fail on
-	// providers that reuse an Index for parallel calls with distinct ids (A-18).
-	final := &ai.Message{Role: ai.RoleAssistant}
-	if len(chunks) > 0 {
-		stripped := make([]*ai.Message, 0, len(chunks))
-		for _, c := range chunks {
-			cp := *c
-			cp.ToolCalls = nil
-			stripped = append(stripped, &cp)
-		}
-		if merged, err := ai.ConcatMessages(stripped); err == nil {
-			final = merged
-		} else {
-			slog.Warn("agent: merging stream chunks failed", "run_id", st.in.Run.ID, "error", err)
-			var text strings.Builder
-			for _, c := range chunks {
-				text.WriteString(c.Content)
-			}
-			final.Content = text.String()
-		}
-	}
-	calls, err := t.finish(ctx, streamErr != nil)
-	if err != nil {
-		return attemptResult{fatal: err}
-	}
-	final.ToolCalls = calls
-	out := &stepOutput{msg: final, assistantID: t.assistantID, reasoningID: t.reasoningID, reasoning: t.reasoning.String(),
-		refusal: info.Refusal(), announced: t.announced()}
-	if streamErr != nil { // cancelled: the partial answer is kept
-		return attemptResult{out: out, err: ctx.Err()}
-	}
-	return attemptResult{out: out}
-}
-
 type liveCall struct {
 	id, name string
 	started  bool
@@ -355,7 +220,24 @@ type translator struct {
 	open          *liveCall // the started call that is not ended yet
 	lastKey       string
 	chunks        int
+	// merged are the tool calls the translator assembled once the stream ended (nil when it broke).
+	merged []ai.ToolCall
 }
+
+var _ aiagent.Attempt = (*translator)(nil)
+
+// Chunk implements aiagent.Attempt: a chunk becomes AG-UI events.
+func (t *translator) Chunk(ctx context.Context, chunk *ai.Message) error { return t.handle(ctx, chunk) }
+
+// Settle implements aiagent.Attempt: the stream is over; open messages end and the calls are merged.
+func (t *translator) Settle(ctx context.Context, broken bool) error {
+	calls, err := t.finish(ctx, broken)
+	t.merged = calls
+	return err
+}
+
+// Abort implements aiagent.Attempt.
+func (t *translator) Abort(ctx context.Context, retry bool) error { return t.abort(ctx, retry) }
 
 // callKey identifies the call a tool-call fragment belongs to: Index (a new
 // call when the fragment brings another id at the same Index), else ID.

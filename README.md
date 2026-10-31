@@ -568,7 +568,7 @@ modules it declares; the reasoning is in [docs/architecture.md](docs/architectur
 ```
 ai/                            module ai: how the agent talks to models and tools
   (root)      Message, ToolInfo, Model, options, streams, InferTool, ConcatMessages
-  agent/      a store-free tool-calling loop      openai/  Chat Completions client
+  agent/      a store-free tool-calling loop + Caller (stream, watchdog, retry), Schedule, Parallel   openai/  Chat Completions client
   llm/        provider factory, OpenAI Responses + Anthropic Messages clients, retry, test doubles (llm/llmtest)
   compaction/ context estimation and summarisation
 core/                          module core: the vocabulary, no dependencies on the rest
