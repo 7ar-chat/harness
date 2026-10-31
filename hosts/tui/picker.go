@@ -90,10 +90,7 @@ func (p *picker) key(k tea.KeyMsg) (done bool, chosen *pickItem) {
 		}
 	default:
 		if k.Type == tea.KeyRunes || k.Type == tea.KeySpace {
-			p.filter += string(k.Runes)
-			if k.Type == tea.KeySpace {
-				p.filter += " "
-			}
+			p.filter += string(k.Runes) // a KeySpace already carries its space in Runes
 			p.sel = 0
 		}
 	}

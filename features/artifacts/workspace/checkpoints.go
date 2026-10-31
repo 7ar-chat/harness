@@ -145,10 +145,14 @@ const (
 )
 
 // scriptHeader starts every script: strict mode, no hooks, no signing, no
-// pager or external diff (the agent may have configured the repository).
+// pager or external diff (the agent may have configured the repository), and no
+// automatic maintenance: a detached `git maintenance`/`gc` started by a commit
+// creates and removes files under .git/objects at arbitrary moments, which a
+// workspace sync that walks the tree races with (it is also wasted work in a
+// repository that is checkpointed, not served).
 const scriptHeader = `set -eu
 command -v git >/dev/null 2>&1 || { printf '` + markNoGit + `\n'; exit 0; }
-g() { git -c core.hooksPath=/dev/null -c commit.gpgsign=false -c core.pager=cat -c core.quotepath=false "$@"; }
+g() { git -c core.hooksPath=/dev/null -c commit.gpgsign=false -c core.pager=cat -c core.quotepath=false -c gc.auto=0 -c maintenance.auto=false "$@"; }
 `
 
 func excludeLines() string {

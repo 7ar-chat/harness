@@ -245,3 +245,143 @@ func TestNewRejectsAnEmptyOrMalformedDSN(t *testing.T) {
 		}
 	}
 }
+
+func TestAGroupedAttributeIsReportedUnderADottedKeyAndEmptyAttributesAreDropped(t *testing.T) {
+	// Group attributes are flattened to dotted keys (an unnamed group adds no prefix), empty attributes are omitted, and a group's "error" still names the exception.
+	// Arrange
+	tr := newTracker(t)
+	log, tk := logger(t, tr)
+
+	// Act
+	log.Error("run failed",
+		slog.Group("run", slog.String("id", "r-1"), slog.Group("model", slog.String("name", "gpt"))),
+		slog.Group("", slog.String("inline", "yes")),
+		slog.Attr{},
+		slog.Group("tool", slog.Any("error", errors.New("exit status 2"))),
+	)
+	tk.Flush(5 * time.Second)
+
+	// Assert
+	evs := tr.got()
+	if len(evs) != 1 {
+		t.Fatalf("events = %d, want 1", len(evs))
+	}
+	logCtx := evs[0]["contexts"].(map[string]any)["log"].(map[string]any)
+	if logCtx["run.id"] != "r-1" || logCtx["run.model.name"] != "gpt" || logCtx["inline"] != "yes" {
+		t.Errorf("log context = %v", logCtx)
+	}
+	if len(logCtx) != 3 {
+		t.Errorf("log context = %v, want only the three attributes with values", logCtx)
+	}
+	if exc := exception(evs[0]); exc["value"] != "exit status 2" {
+		t.Errorf("exception = %v, want the grouped error", exc)
+	}
+}
+
+func TestNonScalarAttributesAreReportedAsText(t *testing.T) {
+	// Durations, times, slices and errors under other keys never make the event unserialisable: they are sent as their text, while numbers and booleans keep their type.
+	// Arrange
+	tr := newTracker(t)
+	log, tk := logger(t, tr)
+
+	// Act
+	log.Error("sweep failed", "took", 1500*time.Millisecond, "ids", []string{"a", "b"}, "cause", errors.New("boom"),
+		"retries", uint64(2), "ratio", 0.5, "dry_run", true, "error", "not an error value")
+	tk.Flush(5 * time.Second)
+
+	// Assert
+	evs := tr.got()
+	if len(evs) != 1 {
+		t.Fatalf("events = %d, want 1", len(evs))
+	}
+	logCtx := evs[0]["contexts"].(map[string]any)["log"].(map[string]any)
+	if logCtx["took"] != "1.5s" || logCtx["ids"] != "[a b]" || logCtx["cause"] != "boom" ||
+		logCtx["retries"] != float64(2) || logCtx["ratio"] != 0.5 || logCtx["dry_run"] != true {
+		t.Errorf("log context = %v", logCtx)
+	}
+	if logCtx["error"] != "not an error value" {
+		t.Errorf("a non-error under the error key must be kept as an attribute: %v", logCtx)
+	}
+	if exc := exception(evs[0]); exc["value"] != "sweep failed" || exc["type"] != "log.Error" {
+		t.Errorf("exception = %v, want the message as the exception", exc)
+	}
+}
+
+func TestAnEmptyGroupNameLeavesTheHandlerUnchanged(t *testing.T) {
+	// WithGroup("") is a no-op, as slog requires: later attributes are not prefixed.
+	// Arrange
+	tr := newTracker(t)
+	_, tk := logger(t, tr)
+	inner := slog.NewTextHandler(io.Discard, nil)
+	h := tk.Handler(inner)
+
+	// Act
+	same := h.WithGroup("")
+	slog.New(same).Error("run failed", "id", "r-1")
+	tk.Flush(5 * time.Second)
+
+	// Assert
+	evs := tr.got()
+	if same != h || len(evs) != 1 {
+		t.Fatalf("same handler %v, events %d", same == h, len(evs))
+	}
+	if logCtx := evs[0]["contexts"].(map[string]any)["log"].(map[string]any); logCtx["id"] != "r-1" {
+		t.Errorf("log context = %v", logCtx)
+	}
+}
+
+func TestADisabledInnerHandlerIsNotCalledButErrorsAreStillReported(t *testing.T) {
+	// A record the inner handler would drop is not forwarded to it, while errors are always enabled and reported; the handler stays enabled for errors even if the inner one is not.
+	// Arrange
+	tr := newTracker(t)
+	tk, err := errtrack.New(errtrack.Options{DSN: tr.dsn()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inner := &recordingHandler{minLevel: slog.LevelError + 4}
+	h := tk.Handler(inner)
+
+	// Act
+	handleErr := slog.New(h).Handler().Handle(context.Background(), slog.NewRecord(time.Now(), slog.LevelError, "run failed", 0))
+	tk.Flush(5 * time.Second)
+
+	// Assert
+	if handleErr != nil || inner.handled != 0 {
+		t.Fatalf("handle error %v, inner handled %d records", handleErr, inner.handled)
+	}
+	if !h.Enabled(context.Background(), slog.LevelError) || h.Enabled(context.Background(), slog.LevelWarn) {
+		t.Error("errors must always be enabled, and lower levels follow the inner handler")
+	}
+	if len(tr.got()) != 1 {
+		t.Errorf("events = %d, want 1", len(tr.got()))
+	}
+}
+
+type recordingHandler struct {
+	minLevel slog.Level
+	handled  int
+}
+
+func (r *recordingHandler) Enabled(_ context.Context, l slog.Level) bool { return l >= r.minLevel }
+func (r *recordingHandler) Handle(context.Context, slog.Record) error    { r.handled++; return nil }
+func (r *recordingHandler) WithAttrs([]slog.Attr) slog.Handler           { return r }
+func (r *recordingHandler) WithGroup(string) slog.Handler                { return r }
+
+func TestAWrappedCancellationIsNotReported(t *testing.T) {
+	// A cancellation wrapped by other errors is still a cancellation, whether it comes as the plain error attribute or a grouped one.
+	// Arrange
+	tr := newTracker(t)
+	log, tk := logger(t, tr)
+
+	// Act
+	log.Error("run failed", "error", fmt.Errorf("stream: %w", context.Canceled))
+	log.Error("tool failed", slog.Group("tool", slog.Any("error", fmt.Errorf("wait: %w", context.Canceled))))
+	log.Error("run failed", "error", fmt.Errorf("stream: %w", context.DeadlineExceeded))
+	tk.Flush(5 * time.Second)
+
+	// Assert
+	evs := tr.got()
+	if len(evs) != 1 || exception(evs[0])["value"] != "stream: context deadline exceeded" {
+		t.Fatalf("events = %v, want only the deadline error", evs)
+	}
+}

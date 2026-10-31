@@ -103,6 +103,7 @@ func (p *parser) parse(src string, depth int) {
 		inWord   bool
 		quoted   bool // current word had quotes (so an empty word still counts)
 		pendRed  string
+		ampRed   bool // pendRed came from ">&": its target is a descriptor (>&2, >&-) or, otherwise, a file
 		pendHere []heredoc
 	)
 	flushWord := func() {
@@ -116,7 +117,9 @@ func (p *parser) parse(src string, depth int) {
 		if pendRed != "" {
 			op := pendRed
 			pendRed = ""
-			if !strings.HasPrefix(t, "&") && op != "<" && op != "<<<" && t != "" {
+			dup := ampRed && (isDigits(strings.TrimSuffix(t, "-")) || t == "-")
+			ampRed = false
+			if !dup && op != "<" && op != "<<<" && t != "" {
 				cur.redirects = append(cur.redirects, Redirect{Op: op, Target: t})
 			}
 			return
@@ -263,7 +266,7 @@ func (p *parser) parse(src string, depth int) {
 			if i+1 < len(rs) && rs[i+1] == '>' {
 				op, i = "&>>", i+1
 			}
-			pendRed = op
+			pendRed, ampRed = op, false
 		case c == '&':
 			endPipeline()
 		case c == '|' && i+1 < len(rs) && rs[i+1] == '|':
@@ -316,12 +319,10 @@ func (p *parser) parse(src string, depth int) {
 			}
 			if c == '>' && i+1 < len(rs) && rs[i+1] == '&' {
 				i++
-				pendRed = op
-				w.WriteString("&") // marks a descriptor duplication target
-				inWord = true
+				pendRed, ampRed = op, true
 				break
 			}
-			pendRed = op
+			pendRed, ampRed = op, false
 		default:
 			w.WriteRune(c)
 			inWord = true
@@ -609,7 +610,12 @@ func (p *parser) unwrap(s *Simple, words []word, extra *[]Simple, depth int) (ne
 	switch prog {
 	case "sudo", "doas":
 		s.Elevated = true
-		return skipOpts(sudoArgOpts), false
+		r := skipOpts(sudoArgOpts)
+		for len(r) > 0 && isAssign(r[0].text) { // sudo VAR=value cmd
+			s.Env = append(s.Env, r[0].text)
+			r = r[1:]
+		}
+		return r, false
 	case "env":
 		for len(rest) > 0 {
 			t := rest[0].text

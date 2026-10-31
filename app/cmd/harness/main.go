@@ -164,6 +164,9 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return listSessions(ctx, sessions, o.user, stdout, stderr)
 	}
 	if o.undo {
+		if st == nil && o.resume == "" {
+			return fail(stderr, errors.New("-undo needs -resume <id> when conversations are not saved (-ephemeral)"))
+		}
 		return undoRun(ctx, cfg, sessions, o, stdout, stderr)
 	}
 	h, err := mk(cfg, st)

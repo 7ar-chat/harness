@@ -83,6 +83,7 @@ func (s *Store) SetWorkspaceGitIssue(_ context.Context, i store.WorkspaceGitIssu
 	if x.wsGitIssues == nil {
 		x.wsGitIssues = map[string]store.WorkspaceGitIssue{}
 	}
+	i.Reason, i.Head = store.CleanText(i.Reason), store.CleanText(i.Head) // like Postgres
 	i.UpdatedAt = s.now()
 	x.wsGitIssues[i.ThreadID] = i
 	return nil

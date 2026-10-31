@@ -2,15 +2,11 @@
 package memstore
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -42,64 +38,6 @@ type thread struct {
 	store.Thread
 	deleted   bool
 	deletedAt time.Time
-}
-
-// ErrInvalidText mimics Postgres rejecting NUL in text (22021) and \u0000 in jsonb (22P05).
-var ErrInvalidText = fmt.Errorf("memstore: invalid byte sequence (NUL or invalid UTF-8), rejected like Postgres: %w", store.ErrInvalidData)
-
-func badText(ss ...string) bool {
-	for _, s := range ss {
-		if strings.ContainsRune(s, 0) || !utf8.ValidString(s) {
-			return true
-		}
-	}
-	return false
-}
-
-func badJSON(b []byte) bool {
-	if len(b) == 0 {
-		return false
-	}
-	if !utf8.Valid(b) {
-		return true
-	}
-	if !bytes.Contains(b, []byte(`\u0000`)) {
-		return false
-	}
-	var v any
-	if json.Unmarshal(b, &v) != nil {
-		return true
-	}
-	return hasNUL(v)
-}
-
-func hasNUL(v any) bool {
-	switch x := v.(type) {
-	case string:
-		return strings.ContainsRune(x, 0)
-	case map[string]any:
-		for k, val := range x {
-			if strings.ContainsRune(k, 0) || hasNUL(val) {
-				return true
-			}
-		}
-	case []any:
-		for _, val := range x {
-			if hasNUL(val) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func badMessage(m *store.Message) bool {
-	if badText(m.ID, m.Role, m.Content, m.ToolCallID, m.Error) {
-		return true
-	}
-	tc, _ := json.Marshal(m.ToolCalls)
-	md, _ := json.Marshal(m.Metadata)
-	return badJSON(tc) || badJSON(md)
 }
 
 // New returns an empty store.
@@ -138,9 +76,7 @@ func (s *Store) viewLocked(t *thread) *store.Thread {
 }
 
 func (s *Store) CreateThread(_ context.Context, login, title string) (*store.Thread, error) {
-	if badText(title) {
-		return nil, ErrInvalidText
-	}
+	title = store.CleanText(title) // like Postgres: NUL and invalid UTF-8 are replaced, never refused
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
@@ -194,10 +130,8 @@ func (s *Store) UpdateThread(_ context.Context, login, id string, patch store.Th
 		return nil, err
 	}
 	if patch.Title != nil {
-		if badText(*patch.Title) {
-			return nil, ErrInvalidText
-		}
-		t.Title = *patch.Title
+		title := store.CleanText(*patch.Title) // like Postgres: sanitized, never refused
+		t.Title = title
 		t.TitleSource = store.TitleUser
 		t.UpdatedAt = s.now()
 	}
@@ -226,9 +160,10 @@ func (s *Store) DeleteThread(_ context.Context, login, id string) (*store.Thread
 }
 
 func (s *Store) CreateRun(_ context.Context, in store.NewRun) (*store.Run, *store.Message, error) {
-	if badMessage(&in.Message) || badText(in.AutoTitle) {
-		return nil, nil, ErrInvalidText
-	}
+	// Like Postgres: NUL and invalid UTF-8 are replaced, never refused.
+	in.Message.Clean()
+	in.AutoTitle = store.CleanText(in.AutoTitle)
+	in.ReasoningEffort = store.CleanText(in.ReasoningEffort)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t, ok := s.threads[in.ThreadID]
@@ -375,7 +310,7 @@ func (s *Store) FinishRun(_ context.Context, id, runtimeID, status, errCode, err
 		return store.ErrNotOwned
 	}
 	now := s.now()
-	r.Status, r.Error, r.FinishedAt = status, errMsg, &now
+	r.Status, r.Error, r.FinishedAt = status, store.CleanText(errMsg), &now
 	r.ErrorCode = store.ErrorCodeFor(status, errCode)
 	return nil
 }
@@ -465,12 +400,25 @@ func (s *Store) ListMessages(_ context.Context, threadID string) ([]*store.Messa
 func (s *Store) AppendMessages(_ context.Context, msgs ...*store.Message) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	inBatch := map[string]bool{}
 	for _, m := range msgs {
-		if badMessage(m) {
-			return ErrInvalidText
+		m.Clean() // like Postgres: NUL and invalid UTF-8 are replaced, never refused
+		if !validRole(m.Role) {
+			return fmt.Errorf("memstore: message role %q: %w", m.Role, store.ErrInvalidData) // CHECK (role IN ...)
 		}
+		if _, ok := s.threads[m.ThreadID]; !ok {
+			return fmt.Errorf("memstore: message thread %q does not exist: %w", m.ThreadID, store.ErrInvalidData) // foreign key
+		}
+		if m.ID == "" {
+			continue
+		}
+		key := msgKey(m.ThreadID, m.ID)
+		if inBatch[key] {
+			return store.ErrConflict
+		}
+		inBatch[key] = true
 		for _, existing := range s.messages {
-			if m.ID != "" && existing.ID == m.ID && existing.ThreadID == m.ThreadID {
+			if existing.ID == m.ID && existing.ThreadID == m.ThreadID {
 				return store.ErrConflict
 			}
 		}
@@ -481,11 +429,21 @@ func (s *Store) AppendMessages(_ context.Context, msgs ...*store.Message) error 
 	return nil
 }
 
+// validRole mirrors the work_messages.role CHECK constraint.
+func validRole(role string) bool {
+	switch role {
+	case store.RoleUser, store.RoleAssistant, store.RoleTool, store.RoleReasoning:
+		return true
+	}
+	return false
+}
+
 func (s *Store) AppendEvents(_ context.Context, runID string, events []store.Event) error {
-	for _, e := range events {
-		if badJSON(e.Data) {
-			return ErrInvalidText
-		}
+	// Like Postgres: the event type and payload are sanitized, never refused.
+	events = append([]store.Event(nil), events...)
+	for i := range events {
+		events[i].Type = store.CleanText(events[i].Type)
+		events[i].Data = store.CleanJSON(events[i].Data)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -584,7 +542,7 @@ func (s *Store) SetRunOutcome(_ context.Context, id, status, errCode, errMsg str
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if r, ok := s.runs[id]; ok {
-		r.Status, r.ErrorCode, r.Error = status, store.ErrorCodeFor(status, errCode), errMsg
+		r.Status, r.ErrorCode, r.Error = status, store.ErrorCodeFor(status, errCode), store.CleanText(errMsg)
 		if r.FinishedAt == nil {
 			now := s.now()
 			r.FinishedAt = &now

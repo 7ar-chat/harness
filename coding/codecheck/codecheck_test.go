@@ -74,3 +74,48 @@ func TestParse(t *testing.T) {
 		t.Fatalf("%v %v %v", got, err, bad)
 	}
 }
+
+func TestParseIgnoresEmptyEntriesAndKeepsCommandEquals(t *testing.T) {
+	// Act
+	got, err := codecheck.Parse(" ; .py=python3 -c 'assert 1==1' {path};;")
+
+	// Assert: blank entries are skipped, only the first "=" splits.
+	if err != nil || len(got) != 1 || got[".py"] != "python3 -c 'assert 1==1' {path}" {
+		t.Fatalf("%v %v", got, err)
+	}
+}
+
+func TestLongComplaintIsTruncatedForTheModel(t *testing.T) {
+	// Arrange: a check that prints far more than the model should see.
+	s := sb(t)
+	ctx := context.Background()
+	_ = s.WriteFile(ctx, "/workspace/a.big", []byte("x"))
+	c := codecheck.New(map[string]string{".big": "sh -c 'yes ABCDEFGHIJ | head -c 20000; exit 3' {path}"})
+
+	// Act
+	got := c.Check(ctx, s, "/workspace/a.big")
+
+	// Assert: header with the exit code, bounded body marked as cut.
+	if !strings.Contains(got, "exit 3") || !strings.HasSuffix(got, "…") {
+		t.Fatalf("complaint = %q", got[:min(len(got), 200)])
+	}
+	if len(got) > 2500 {
+		t.Fatalf("complaint is %d bytes", len(got))
+	}
+}
+
+func TestCheckQuotesPathsWithShellMetacharacters(t *testing.T) {
+	// Arrange: a file name with a quote and a space must reach the checker as one argument.
+	s := sb(t)
+	ctx := context.Background()
+	const name = "/workspace/it's bad.sh"
+	_ = s.WriteFile(ctx, name, []byte("if then\n"))
+
+	// Act
+	got := codecheck.New(nil).Check(ctx, s, name)
+
+	// Assert
+	if !strings.Contains(got, "Syntax check failed") {
+		t.Fatalf("check: %q", got)
+	}
+}

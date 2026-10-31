@@ -566,7 +566,12 @@ func (m *Mem) SetThreadMeta(_ context.Context, t store.ThreadMeta) error {
 		t.Kind = store.ThreadChat
 	}
 	if t.CreatedAt.IsZero() {
-		t.CreatedAt = time.Now().UTC()
+		// Linking again keeps the thread's age (Postgres does too).
+		if cur := m.d.Threads[t.ThreadID]; cur != nil {
+			t.CreatedAt = cur.CreatedAt
+		} else {
+			t.CreatedAt = time.Now().UTC()
+		}
 	}
 	m.d.Threads[t.ThreadID] = &t
 	return m.save()

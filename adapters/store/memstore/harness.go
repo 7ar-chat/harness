@@ -99,14 +99,11 @@ func (s *Store) prepareRunLocked(t *thread, in store.NewRun) (func(runID string)
 			if in.Resume.InterruptID != p.InterruptID {
 				return nil, store.ErrNoPendingQuestion
 			}
-			result = &store.Message{Role: store.RoleTool, ToolCallID: p.ToolCallID, Content: in.Resume.Content}
+			result = &store.Message{Role: store.RoleTool, ToolCallID: p.ToolCallID, Content: store.CleanText(in.Resume.Content)}
 		case in.Message.Role == "":
 			return nil, store.ErrQuestionPending
 		default: // a new message (also an edit) implicitly cancels the question
 			result = &store.Message{Role: store.RoleTool, ToolCallID: p.ToolCallID, Content: store.ImplicitCancelResult}
-		}
-		if result != nil && badMessage(result) {
-			return nil, ErrInvalidText
 		}
 	}
 	var goal *store.Goal
@@ -183,7 +180,7 @@ func (s *Store) SearchThreads(_ context.Context, login, search string, limit int
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.h.init()
-	needle := strings.ToLower(search)
+	needle := strings.ToLower(store.CleanText(search))
 	var all []*store.Thread
 	for _, t := range s.threads {
 		if t.deleted || t.UserLogin != login {
@@ -229,9 +226,7 @@ func (s *Store) GetThreadSummary(_ context.Context, threadID string) (store.Thre
 }
 
 func (s *Store) SetThreadSummary(_ context.Context, threadID string, sum store.ThreadSummary) error {
-	if badText(sum.Text) {
-		return ErrInvalidText
-	}
+	sum.Text = store.CleanText(sum.Text)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.h.init()
@@ -244,11 +239,11 @@ func (s *Store) SetThreadSummary(_ context.Context, threadID string, sum store.T
 }
 
 func (s *Store) SetThreadPlan(_ context.Context, threadID string, items []store.PlanItem) error {
-	for _, it := range items {
-		if badText(it.ID, it.Title, it.Status) {
-			return ErrInvalidText
-		}
+	clean := make([]store.PlanItem, len(items))
+	for i, it := range items {
+		clean[i] = store.PlanItem{ID: store.CleanText(it.ID), Title: store.CleanText(it.Title), Status: store.CleanText(it.Status)}
 	}
+	items = clean
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if t, ok := s.threads[threadID]; ok {
@@ -259,14 +254,14 @@ func (s *Store) SetThreadPlan(_ context.Context, threadID string, items []store.
 
 func (s *Store) SetPendingQuestion(_ context.Context, threadID string, q *store.PendingQuestion) error {
 	if q != nil {
-		if badText(q.Question, q.InterruptID, q.ToolCallID) {
-			return ErrInvalidText
+		clean := *q
+		clean.InterruptID, clean.RunID, clean.ToolCallID, clean.Question =
+			store.CleanText(q.InterruptID), store.CleanText(q.RunID), store.CleanText(q.ToolCallID), store.CleanText(q.Question)
+		clean.Options = make([]store.QuestionOption, len(q.Options))
+		for i, o := range q.Options {
+			clean.Options[i] = store.QuestionOption{Label: store.CleanText(o.Label), Description: store.CleanText(o.Description)}
 		}
-		for _, o := range q.Options {
-			if badText(o.Label, o.Description) {
-				return ErrInvalidText
-			}
-		}
+		q = &clean
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -283,9 +278,7 @@ func (s *Store) SetPendingQuestion(_ context.Context, threadID string, q *store.
 }
 
 func (s *Store) SetGeneratedTitle(_ context.Context, threadID, title string) (bool, error) {
-	if badText(title) {
-		return false, ErrInvalidText
-	}
+	title = store.CleanText(title)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t, ok := s.threads[threadID]
@@ -297,9 +290,7 @@ func (s *Store) SetGeneratedTitle(_ context.Context, threadID, title string) (bo
 }
 
 func (s *Store) PutGoal(_ context.Context, login, threadID, text string, maxTurns int) (*store.Goal, error) {
-	if badText(text) {
-		return nil, ErrInvalidText
-	}
+	text = store.CleanText(text)
 	if maxTurns < 1 || maxTurns > 20 {
 		return nil, store.ErrInvalidData // CHECK (max_turns BETWEEN 1 AND 20)
 	}
@@ -352,9 +343,6 @@ func (s *Store) ThreadGoal(_ context.Context, threadID string) (*store.Goal, err
 }
 
 func (s *Store) UpdateGoal(_ context.Context, threadID string, u store.GoalUpdate) (*store.Goal, error) {
-	if badText(u.Verdict.Reason) {
-		return nil, ErrInvalidText
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.h.init()
@@ -363,6 +351,13 @@ func (s *Store) UpdateGoal(_ context.Context, threadID string, u store.GoalUpdat
 		return copyGoal(g), nil
 	}
 	v := u.Verdict
+	v.Reason = store.CleanText(v.Reason)
+	if v.Blockers != nil {
+		v.Blockers = make([]string, len(u.Verdict.Blockers))
+		for i, b := range u.Verdict.Blockers {
+			v.Blockers[i] = store.CleanText(b)
+		}
+	}
 	g.LastVerdict = &v
 	if u.EvalFailed {
 		g.EvalFailures++
@@ -389,12 +384,10 @@ func (s *Store) feedbackTargetLocked(login, messageID string) (*store.Message, b
 }
 
 func (s *Store) SetFeedback(_ context.Context, login, messageID string, f store.Feedback) error {
-	if badText(f.Sentiment, f.Comment) {
-		return ErrInvalidText
-	}
 	if f.Sentiment != "like" && f.Sentiment != "dislike" {
 		return store.ErrInvalidData // CHECK (sentiment IN ('like', 'dislike'))
 	}
+	f.Comment = store.CleanText(f.Comment)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.h.init()
@@ -430,14 +423,6 @@ func (s *Store) ListFeedback(_ context.Context, threadID string) (map[string]sto
 		out[id] = f
 	}
 	return out, nil
-}
-
-// Superseded reports whether a message was hidden by an edit (tests).
-func (s *Store) Superseded(threadID, messageID string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.h.init()
-	return s.h.superseded[msgKey(threadID, messageID)]
 }
 
 // RecordCompaction implements store.HarnessStore.

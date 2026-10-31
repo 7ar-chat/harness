@@ -17,9 +17,10 @@ type block struct {
 	Type string `json:"type"`
 	Text string `json:"text,omitempty"`
 	// tool_use
-	ID    string         `json:"id,omitempty"`
-	Name  string         `json:"name,omitempty"`
-	Input map[string]any `json:"input,omitempty"`
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+	// Input is the arguments object; the API requires it on every tool_use, even when empty.
+	Input json.RawMessage `json:"input,omitempty"`
 	// tool_result
 	ToolUseID string `json:"tool_use_id,omitempty"`
 	Content   string `json:"content,omitempty"`
@@ -169,11 +170,10 @@ func (m *Model) convert(msgs []*ai.Message) ([]block, []message) {
 				bs = append(bs, block{Type: "text", Text: msg.Content})
 			}
 			for _, tc := range msg.ToolCalls {
-				input := map[string]any{}
-				if a := strings.TrimSpace(tc.Function.Arguments); a != "" {
-					if json.Unmarshal([]byte(a), &input) != nil || input == nil {
-						input = map[string]any{}
-					}
+				input := json.RawMessage("{}")
+				var obj map[string]any
+				if a := strings.TrimSpace(tc.Function.Arguments); json.Unmarshal([]byte(a), &obj) == nil && obj != nil {
+					input = json.RawMessage(a)
 				}
 				bs = append(bs, block{Type: "tool_use", ID: tc.ID, Name: tc.Function.Name, Input: input})
 			}

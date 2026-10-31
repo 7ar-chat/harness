@@ -3,6 +3,7 @@ package runtime_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -97,14 +98,25 @@ func TestChaosPostgresOutageDoesNotGetLiveRunsInterrupted(t *testing.T) {
 
 // killSwitch is the Postgres view of a runtime process: after kill, every
 // write fails (the process is gone); after revive, it finds its run lost.
+// kill waits for the writes already in flight, so once it returns nothing of the dead process can still reach the store
+// (a heartbeat that passed the check just before the flip would otherwise refresh a run the test has just aged).
 type killSwitch struct {
 	*memstore.Store
+	mu              sync.RWMutex
 	killed, revived atomic.Bool
+}
+
+func (k *killSwitch) kill() {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.killed.Store(true)
 }
 
 var errKilled = errors.New("runtime process killed")
 
 func (k *killSwitch) Heartbeat(ctx context.Context, id, rt string) (bool, bool, error) {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
 	switch {
 	case k.revived.Load():
 		return false, false, nil
@@ -115,6 +127,8 @@ func (k *killSwitch) Heartbeat(ctx context.Context, id, rt string) (bool, bool, 
 }
 
 func (k *killSwitch) AppendEvents(ctx context.Context, id string, evs []store.Event) error {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
 	if k.killed.Load() {
 		return errKilled
 	}
@@ -122,6 +136,8 @@ func (k *killSwitch) AppendEvents(ctx context.Context, id string, evs []store.Ev
 }
 
 func (k *killSwitch) FinishRun(ctx context.Context, id, rt, status, code, msg string) error {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
 	if k.killed.Load() {
 		return errKilled
 	}
@@ -148,7 +164,7 @@ func TestChaosRuntimeKilledMidRunIsRecoveredByTheSweeper(t *testing.T) {
 	deadDone := make(chan struct{})
 	go func() { defer close(deadDone); _ = deadRT.Process(context.Background(), run.ID) }()
 	<-streaming
-	dead.killed.Store(true)
+	dead.kill()
 	_ = deadRdb.Close() // its Redis heartbeat stops and expires after StaleAge
 	r.mr.FastForward(stale + 100*time.Millisecond)
 	r.st.SetHeartbeat(run.ID, time.Now().Add(-time.Minute))

@@ -75,7 +75,7 @@ func mapErr(err error) error {
 		return err
 	case errors.Is(err, store.ErrNotFound):
 		return client.ErrNotFound
-	case errors.Is(err, store.ErrConflict), errors.Is(err, store.ErrRunActive):
+	case errors.Is(err, store.ErrConflict), errors.Is(err, store.ErrRunActive), errors.Is(err, store.ErrNoPendingQuestion):
 		return client.ErrConflict
 	case errors.Is(err, harness.ErrInvalidRequest):
 		return client.Wrap(client.ErrInvalidRequest, err.Error(), err)

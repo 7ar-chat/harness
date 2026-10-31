@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -294,5 +295,78 @@ func TestBlobGCSparesTheBlobOfAPurgedThreadAConcurrentUploadReuses(t *testing.T)
 	data, err := r.svc.Blobs.Get(r.ctx, a.SHA256)
 	if gcErr != nil || purged != 1 || err != nil || string(data) != "shared bytes" {
 		t.Fatalf("gc %v purged %d content %q %v", gcErr, purged, data, err)
+	}
+}
+
+func TestPurgeReportsStoreFailuresWithTheirStage(t *testing.T) {
+	// A failing thread purge or candidate listing aborts the retention job with an error naming the stage.
+	// Arrange
+	boom := errors.New("db down")
+	r := newGCRig(t, nil)
+
+	// Act
+	_, _, purgeErr := artifacts.New(&faultStore{Store: r.st, purgeErr: boom}, artifacts.PGBlobs{S: r.st}, nil, artifacts.Options{}).Purge(r.ctx, time.Hour)
+	_, _, listErr := artifacts.New(&faultStore{Store: r.st, candidatesErr: boom}, artifacts.PGBlobs{S: r.st}, nil, artifacts.Options{}).Purge(r.ctx, time.Hour)
+
+	// Assert
+	if !errors.Is(purgeErr, boom) || !strings.Contains(purgeErr.Error(), "purging deleted threads") {
+		t.Fatalf("purge error %v", purgeErr)
+	}
+	if !errors.Is(listErr, boom) || !strings.Contains(listErr.Error(), "listing unreferenced blobs") {
+		t.Fatalf("list error %v", listErr)
+	}
+}
+
+func TestBlobGCKeepsTheBlobQueuedWhenItsDeletionFails(t *testing.T) {
+	// A blob the backend cannot delete stays in the queue (and in the backend) and is collected by a later purge; a failing preview delete does not keep the content.
+	// Arrange
+	boom := errors.New("bucket unavailable")
+	blobs := &failBlobs{hookBlobs: newHookBlobs(), deleteErr: boom}
+	r := newGCRig(t, blobs)
+	key := sumOf("stuck content")
+	r.unreferenced("stuck content")
+	r.advance(25 * time.Hour)
+
+	// Act
+	failed := r.purgeBlobs()
+	stillStored := blobs.has(key)
+	blobs.deleteErr = nil
+	blobs.previewDeleteErr = boom
+	retried := r.purgeBlobs()
+
+	// Assert
+	if failed != 0 || !stillStored {
+		t.Fatalf("a failed delete reported %d collected, stored %v", failed, stillStored)
+	}
+	if retried != 1 || blobs.has(key) {
+		t.Fatalf("retry collected %d, stored %v", retried, blobs.has(key))
+	}
+}
+
+// brokenCollector is a database-style blob backend whose collection fails.
+type brokenCollector struct {
+	artifacts.PGBlobs
+	err error
+}
+
+func (b brokenCollector) CollectUnreferenced(context.Context, []string, time.Duration) ([]string, error) {
+	return nil, b.err
+}
+
+func TestPurgeReportsAFailingDatabaseCollection(t *testing.T) {
+	// A one-statement collection that fails is returned with the thread count already purged.
+	// Arrange
+	boom := errors.New("statement failed")
+	r := newGCRig(t, nil)
+	r.unreferenced("some content")
+	r.advance(25 * time.Hour)
+	svc := artifacts.New(r.st, brokenCollector{PGBlobs: artifacts.PGBlobs{S: r.st}, err: boom}, nil, artifacts.Options{BlobGCGrace: 24 * time.Hour})
+
+	// Act
+	_, blobs, err := svc.Purge(r.ctx, 24*time.Hour)
+
+	// Assert
+	if !errors.Is(err, boom) || !strings.Contains(err.Error(), "collecting unreferenced blobs") || blobs != 0 {
+		t.Fatalf("blobs %d err %v", blobs, err)
 	}
 }

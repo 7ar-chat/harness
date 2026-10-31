@@ -213,9 +213,15 @@ func (s *Service) embedAsync(key string, e *store.MemoryEntry) {
 		return
 	}
 	cp := e.Clone()
+	s.embedding.Add(1)
 	go func() {
+		defer s.embedding.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		s.vectors(ctx, key, []*store.MemoryEntry{cp})
 	}()
 }
+
+// WaitEmbeddings blocks until the background embeddings started by writes so far have finished. A host may call it before
+// shutting down; tests use it to observe a settled state.
+func (s *Service) WaitEmbeddings() { s.embedding.Wait() }

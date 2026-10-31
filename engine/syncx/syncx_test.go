@@ -84,3 +84,76 @@ func TestKeyedMutexWaitHonoursTheContextAndTheWait(t *testing.T) {
 		t.Fatalf("entries left %d", k.Len())
 	}
 }
+
+func TestLRUAddingAnExistingKeyReplacesItsValueAndRefreshesItsRecency(t *testing.T) {
+	// Re-adding a key overwrites the value in place (no second entry) and makes it the most recently used, so the next eviction hits another key.
+	// Arrange
+	c := syncx.LRU[string, int]{Size: 2}
+	c.Add("a", 1)
+	c.Add("b", 2)
+
+	// Act
+	c.Add("a", 10)
+	c.Add("c", 3)
+
+	// Assert
+	a, hasA := c.Get("a")
+	_, hasB := c.Get("b")
+	if !hasA || a != 10 || hasB || c.Len() != 2 {
+		t.Fatalf("a %d/%v b %v len %d", a, hasA, hasB, c.Len())
+	}
+}
+
+func TestLRUEmptyCacheMissesAndHoldsNothing(t *testing.T) {
+	// A cache that was never written to misses every key and reports no entries.
+	// Arrange
+	var c syncx.LRU[string, int]
+
+	// Act
+	v, ok := c.Get("a")
+
+	// Assert
+	if ok || v != 0 || c.Len() != 0 {
+		t.Fatalf("value %d found %v len %d", v, ok, c.Len())
+	}
+}
+
+func TestLRUWithoutASizeIsBoundedByTheDefault(t *testing.T) {
+	// An LRU whose Size is unset still evicts: it never grows beyond DefaultLRUSize, and the oldest key goes first.
+	// Arrange
+	var c syncx.LRU[int, int]
+
+	// Act
+	for i := 0; i <= syncx.DefaultLRUSize; i++ {
+		c.Add(i, i)
+	}
+
+	// Assert
+	_, hasOldest := c.Get(0)
+	_, hasNewest := c.Get(syncx.DefaultLRUSize)
+	if c.Len() != syncx.DefaultLRUSize || hasOldest || !hasNewest {
+		t.Fatalf("len %d oldest %v newest %v", c.Len(), hasOldest, hasNewest)
+	}
+}
+
+func TestKeyedMutexReleaseIsIdempotent(t *testing.T) {
+	// Calling a release func twice must not unlock a lock someone else has since taken.
+	// Arrange
+	var k syncx.KeyedMutex
+	release := k.Lock("t")
+	release()
+	second := k.Lock("t")
+
+	// Act
+	release()
+	_, err := k.LockWait(context.Background(), "t", 20*time.Millisecond)
+
+	// Assert
+	if !errors.Is(err, syncx.ErrLockTimeout) {
+		t.Fatalf("stale release freed the new holder's lock: %v", err)
+	}
+	second()
+	if k.Len() != 0 {
+		t.Fatalf("entries left %d", k.Len())
+	}
+}

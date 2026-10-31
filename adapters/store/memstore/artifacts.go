@@ -70,9 +70,13 @@ func (s *Store) recordRunSkills(runID string, skills []string) {
 	if len(skills) == 0 {
 		return
 	}
+	clean := make([]string, len(skills))
+	for i, sk := range skills {
+		clean[i] = store.CleanText(sk) // like Postgres: NUL and invalid UTF-8 are replaced
+	}
 	x := s.x()
 	x.mu.Lock()
-	x.runSkills[runID] = append([]string(nil), skills...)
+	x.runSkills[runID] = clean
 	x.mu.Unlock()
 }
 
@@ -91,11 +95,10 @@ func validKind(k string) bool { return k == store.ArtifactOutput || k == store.A
 
 // PutArtifactVersion implements store.ArtifactStore.
 func (s *Store) PutArtifactVersion(_ context.Context, in store.PutArtifact) (*store.Artifact, string, error) {
-	if badText(in.Path, in.Name, in.MimeType) {
-		return nil, "", ErrInvalidText
-	}
-	if !s.threadAlive(in.ThreadID) {
-		return nil, "", store.ErrNotFound // FK violation in Postgres
+	// Like Postgres: NUL and invalid UTF-8 are replaced, never refused.
+	in.Path, in.Name, in.MimeType, in.SandboxID = store.CleanText(in.Path), store.CleanText(in.Name), store.CleanText(in.MimeType), store.CleanText(in.SandboxID)
+	if !s.threadExists(in.ThreadID) {
+		return nil, "", store.ErrNotFound // FK violation in Postgres (a soft-deleted thread keeps its row)
 	}
 	runID := in.RunID
 	if runID != "" && !s.runExists(runID) {
@@ -154,7 +157,7 @@ func (s *Store) MarkArtifactDeleted(_ context.Context, artifactID, runID, sandbo
 	defer x.mu.Unlock()
 	a, ok := x.artifacts[artifactID]
 	if !ok {
-		return nil, store.ErrNotFound
+		return nil, store.ErrConflict // like Postgres: the conditional UPDATE matches no row
 	}
 	if a.Deleted || a.SandboxID == "" || a.SandboxID != sandboxID || !a.UpdatedAt.Before(unchangedSince) {
 		return nil, store.ErrConflict
@@ -172,6 +175,7 @@ func (s *Store) MarkArtifactsMaterialized(_ context.Context, sandboxID string, a
 	if sandboxID == "" {
 		return nil
 	}
+	sandboxID = store.CleanText(sandboxID) // like Postgres
 	x := s.x()
 	x.mu.Lock()
 	defer x.mu.Unlock()
@@ -331,19 +335,12 @@ func (s *Store) DeleteBlob(_ context.Context, key string) error {
 	return nil
 }
 
-// BlobCount returns how many blobs are stored (tests).
-func (s *Store) BlobCount() int {
-	x := s.x()
-	x.mu.Lock()
-	defer x.mu.Unlock()
-	return len(x.blobs)
-}
-
 // AppendRunArtifacts implements store.ArtifactStore.
 func (s *Store) AppendRunArtifacts(_ context.Context, runID string, items []any) error {
 	if len(items) == 0 {
 		return nil
 	}
+	items = store.CleanValue(items).([]any) // like Postgres: NUL and invalid UTF-8 are replaced
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.h.init()
@@ -384,6 +381,7 @@ func (s *Store) AppendToolVerification(_ context.Context, threadID, toolCallID s
 	if toolCallID == "" || len(items) == 0 {
 		return nil
 	}
+	items = store.CleanValue(items).([]any) // like Postgres: NUL and invalid UTF-8 are replaced
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.h.init()

@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -186,6 +187,8 @@ type Service struct {
 	Messages func(ctx context.Context, threadID string) ([]*store.Message, error)
 
 	stats serviceStats
+	// embedding counts the background embeddings in flight (embedAsync), so a test can wait for them.
+	embedding sync.WaitGroup
 }
 
 // Layer is one memory a run sees: the shared or personal one (Key), or the user's own inside a project.

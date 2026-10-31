@@ -9,7 +9,7 @@ import (
 func (c *httpClient) Commands(ctx context.Context) ([]Command, error) {
 	var out []Command
 	if err := c.call(ctx, "GET", "/commands", nil, nil, &out); err != nil {
-		if errors.Is(err, ErrNotFound) {
+		if errors.Is(err, ErrNotFound) || missingRoute(err) {
 			return nil, ErrNotSupported // a server without the route
 		}
 		return nil, err

@@ -78,7 +78,7 @@ func (s *PG) PutArtifactVersion(ctx context.Context, in store.PutArtifact) (*sto
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $10, $11, nullif($12, ''))
 			ON CONFLICT (thread_id, path) DO NOTHING
 			RETURNING `+artifactCols,
-			id, in.ThreadID, in.UserLogin, store.CleanText(in.Path), store.CleanText(in.Name), in.MimeType, in.Kind, in.SizeBytes, in.SHA256, runID, in.Mtime,
+			id, in.ThreadID, in.UserLogin, store.CleanText(in.Path), store.CleanText(in.Name), store.CleanText(in.MimeType), in.Kind, in.SizeBytes, in.SHA256, runID, in.Mtime,
 			store.CleanText(in.SandboxID)))
 		if errors.Is(err, store.ErrNotFound) {
 			return nil, "", store.ErrConflict // concurrent creation of the same path; the caller retries
@@ -102,7 +102,7 @@ func (s *PG) PutArtifactVersion(ctx context.Context, in store.PutArtifact) (*sto
 		out, err = scanArtifact(tx.QueryRow(ctx, `UPDATE work_artifacts SET version = version + 1, size_bytes = $2, sha256 = $3,
 				run_id = $4, source_mtime = $5, mime_type = $6, deleted_at = NULL, updated_at = now(),
 				sandbox_id = nullif($7, ''), restore_skipped_at = NULL
-			WHERE id = $1 RETURNING `+artifactCols, cur.ID, in.SizeBytes, in.SHA256, runID, in.Mtime, in.MimeType, store.CleanText(in.SandboxID)))
+			WHERE id = $1 RETURNING `+artifactCols, cur.ID, in.SizeBytes, in.SHA256, runID, in.Mtime, store.CleanText(in.MimeType), store.CleanText(in.SandboxID)))
 		if err != nil {
 			return nil, "", err
 		}
@@ -248,6 +248,9 @@ func (s *PG) GetArtifactVersion(ctx context.Context, artifactID string, version 
 
 // PutBlob implements BlobStore.
 func (s *PG) PutBlob(ctx context.Context, key string, data []byte) error {
+	if data == nil {
+		data = []byte{} // pgx sends a nil slice as NULL, which the NOT NULL column refuses: an empty file is a valid blob
+	}
 	_, err := s.pool.Exec(ctx, `INSERT INTO work_blobs (key, bytes, size) VALUES ($1, $2, $3) ON CONFLICT (key) DO NOTHING`,
 		key, data, len(data))
 	return err

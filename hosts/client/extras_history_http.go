@@ -5,11 +5,17 @@ import (
 	"net/url"
 )
 
+// missingRoute reports a 404 outside the error envelope: the server does not know the route.
+func missingRoute(err error) bool {
+	e := AsError(err)
+	return e != nil && e.Status == 404 && e.Code == "http_404"
+}
+
 // historyCall posts to a thread's history route; a server without the route (a 404 outside the error
 // envelope) is an older server: ErrNotSupported.
 func (c *httpClient) historyCall(ctx context.Context, threadID, op string, body, out any) error {
 	err := c.call(ctx, "POST", "/threads/"+url.PathEscape(threadID)+"/"+op, nil, body, out)
-	if e := AsError(err); e != nil && e.Status == 404 && e.Code == "http_404" {
+	if missingRoute(err) {
 		return ErrNotSupported
 	}
 	return err

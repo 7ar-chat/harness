@@ -180,6 +180,11 @@ func (l *MemoryLog) Replay(ctx context.Context, runID string, afterSeq int64) <-
 				}
 			}
 		}
+		if !inMemory && l.st != nil { // reconnecting after the end of a run of a previous process: nothing is left
+			if end, ok, err := l.st.LastEvent(ctx, runID); err == nil && ok && agui.IsTerminal(end.Type) && end.Seq <= cursor {
+				return
+			}
+		}
 		for {
 			l.mu.Lock()
 			var batch []store.Event
@@ -188,8 +193,12 @@ func (l *MemoryLog) Replay(ctx context.Context, runID string, afterSeq int64) <-
 					batch = append(batch, e)
 				}
 			}
+			ended := len(batch) == 0 && len(r.events) > 0 && agui.IsTerminal(r.events[len(r.events)-1].Type) // reconnecting after the end
 			changed := r.changed
 			l.mu.Unlock()
+			if ended {
+				return
+			}
 			for _, e := range batch {
 				if !send(e) {
 					return

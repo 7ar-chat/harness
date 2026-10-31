@@ -95,12 +95,13 @@ func (rc *RepoCheckout) token(ctx context.Context, p *store.Project) string {
 	if rc.GitHub == nil || p.GitHubInstallation == 0 {
 		return ""
 	}
-	// Limited to the project's repository: the installation may cover many others.
-	var repos []string
-	if _, repo, ok := ParseRepo(p.RepoURL); ok {
-		repos = []string{repo}
+	// Only a github.com repository gets a token, and one limited to that repository: the installation may cover
+	// many others, and a project whose URL was changed to another host must never receive GitHub credentials.
+	_, repo, ok := ParseRepo(p.RepoURL)
+	if !ok {
+		return ""
 	}
-	t, err := rc.GitHub.InstallationToken(ctx, p.GitHubInstallation, repos...)
+	t, err := rc.GitHub.InstallationToken(ctx, p.GitHubInstallation, repo)
 	if err != nil {
 		slog.Warn("project repo: GitHub token failed", "project", p.ID, "error", err)
 		return ""

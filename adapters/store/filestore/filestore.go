@@ -26,9 +26,10 @@
 // # What persists
 //
 // Threads (title, pin, plan, pending question, interaction mode), messages,
-// runs, event logs, approvals, goals, feedback, summaries and compactions.
-// Artifacts, blobs, skills catalog, memories, workspace git archives and
-// sandbox ids stay in memory (they are rebuilt or recreated on demand).
+// runs, event logs, approvals, goals, feedback, summaries, compactions and
+// memory entries (with each user's memory on/off switch). Artifacts, blobs,
+// workspace git archives and sandbox ids stay in memory (they are rebuilt or
+// recreated on demand).
 //
 // # Crash recovery
 //

@@ -305,7 +305,9 @@ func (m *Model) key(k tea.KeyMsg) (tea.Cmd, bool) {
 			m.in.CursorEnd()
 			return nil, true
 		case "enter":
-			return m.sugg[m.suggSel].run(m, ""), m.clearInput()
+			c := m.sugg[m.suggSel]
+			m.in.Reset() // the command acts on the draft, not on the "/name" that picked it
+			return c.run(m, ""), true
 		case "esc":
 			m.in.Reset()
 			return nil, true
@@ -745,6 +747,3 @@ func (m *Model) overlay(w int) string {
 	}
 	return m.extraOverlay(w)
 }
-
-// clearInput empties the input box (the command being run replaces what was typed); it reports true.
-func (m *Model) clearInput() bool { m.in.Reset(); return true }

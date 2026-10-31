@@ -86,3 +86,20 @@ func TestCheckOrderJSONAcceptsAnInProgressLogAndRawEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCheckOrderJSONReportsTheOrderViolationOfValidJSON(t *testing.T) {
+	// Arrange
+	var raw []json.RawMessage
+	for _, e := range []agui.Event{ev(agui.RunStarted), ev(agui.RunFinished), ev(agui.Custom, "name", "late")} {
+		b, _ := json.Marshal(e)
+		raw = append(raw, b)
+	}
+
+	// Act
+	err := agui.CheckOrderJSON(raw)
+
+	// Assert
+	if err == nil || !strings.Contains(err.Error(), "after the terminal") {
+		t.Fatalf("err = %v", err)
+	}
+}

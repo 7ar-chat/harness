@@ -24,12 +24,23 @@ func (s *Store) PutMemoryEmbeddings(_ context.Context, login string, items []sto
 	return nil
 }
 
+// GetMemoryEmbeddings returns the vectors of the user's active and pending entries, like Postgres (the vector of a deleted or
+// unknown entry is not returned). The vectors are copies.
 func (s *Store) GetMemoryEmbeddings(_ context.Context, login string) (map[string]store.EntryEmbedding, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	live := map[string]bool{}
+	for _, e := range s.mem.entries {
+		if e.UserLogin == login && e.Status != store.MemoryDeleted {
+			live[e.ID] = true
+		}
+	}
 	out := make(map[string]store.EntryEmbedding, len(s.mem.vectors[login]))
 	for id, it := range s.mem.vectors[login] {
-		out[id] = it
+		if live[id] {
+			it.Vec = append([]float32(nil), it.Vec...)
+			out[id] = it
+		}
 	}
 	return out, nil
 }

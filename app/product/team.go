@@ -335,7 +335,7 @@ func outcomeOf(ev store.Event) string {
 			return "waiting_input"
 		}
 		return "waiting_approval"
-	case "":
+	case "", "success": // a finished run is "completed" on the feed (RUN_FINISHED says success)
 		return "completed"
 	}
 	return d.Outcome.Type

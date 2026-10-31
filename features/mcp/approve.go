@@ -2,6 +2,8 @@ package mcptools
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -31,10 +33,18 @@ var invalidName = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
 // approveToolName is the name of the approval tool of a pending server.
 func approveToolName(s config.MCPServer) string {
 	name := invalidName.ReplaceAllString(s.Name, "_")
-	if room := 64 - len(approvals.TrustMCPToolPrefix) - 9; len(name) > room {
+	fp := config.MCPFingerprint(s)
+	room := 64 - len(approvals.TrustMCPToolPrefix) - 9
+	if name != s.Name || len(name) > room {
+		// Sanitizing or cutting the name can make two servers look alike, and the fingerprint does not cover the
+		// name: two servers with the same command must still get two tools, or one approval would stand for both.
+		sum := sha256.Sum256([]byte(s.Name + "\x00" + fp))
+		fp = hex.EncodeToString(sum[:])
+	}
+	if len(name) > room {
 		name = name[:room]
 	}
-	return approvals.TrustMCPToolPrefix + name + "_" + config.MCPFingerprint(s)[:8]
+	return approvals.TrustMCPToolPrefix + name + "_" + fp[:8]
 }
 
 // Describe is the text the approval of a pending server's tool shows: the project, the server, its exact command

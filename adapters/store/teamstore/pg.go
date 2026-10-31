@@ -31,6 +31,12 @@ func notFound(err error) error {
 	return err
 }
 
+// pgCode reports whether err is a Postgres error with the given SQLSTATE.
+func pgCode(err error, code string) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == code
+}
+
 func (s *PG) UpsertUser(ctx context.Context, u store.User) (*store.User, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -104,17 +110,9 @@ func (s *PG) SetAvatar(ctx context.Context, login, mime string, data []byte) (st
 	}
 	defer tx.Rollback(ctx)
 	version := ""
-	if len(data) == 0 {
-		if _, err := tx.Exec(ctx, `DELETE FROM work_user_avatars WHERE login = $1`, login); err != nil {
-			return "", err
-		}
-	} else {
+	if len(data) > 0 {
 		sum := sha256.Sum256(data)
 		version = hex.EncodeToString(sum[:4])
-		if _, err := tx.Exec(ctx, `INSERT INTO work_user_avatars (login, mime, data) VALUES ($1, $2, $3)
-			ON CONFLICT (login) DO UPDATE SET mime = $2, data = $3`, login, mime, data); err != nil {
-			return "", err
-		}
 	}
 	tag, err := tx.Exec(ctx, `UPDATE work_users SET avatar_version = $2 WHERE login = $1`, login, version)
 	if err != nil {
@@ -122,6 +120,15 @@ func (s *PG) SetAvatar(ctx context.Context, login, mime string, data []byte) (st
 	}
 	if tag.RowsAffected() == 0 {
 		return "", store.ErrNotFound
+	}
+	if len(data) == 0 {
+		_, err = tx.Exec(ctx, `DELETE FROM work_user_avatars WHERE login = $1`, login)
+	} else {
+		_, err = tx.Exec(ctx, `INSERT INTO work_user_avatars (login, mime, data) VALUES ($1, $2, $3)
+			ON CONFLICT (login) DO UPDATE SET mime = $2, data = $3`, login, mime, data)
+	}
+	if err != nil {
+		return "", err
 	}
 	return version, tx.Commit(ctx)
 }
@@ -147,9 +154,11 @@ func (s *PG) SetConnector(ctx context.Context, c store.Connector) error {
 	_, err := s.pool.Exec(ctx, `INSERT INTO work_connectors (login, kind, account, label, data) VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (login, kind) DO UPDATE SET account = $3, label = $4, data = $5, created_at = now()`,
 		c.Login, c.Kind, c.Account, c.Label, c.Data)
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" { // the account belongs to another user
+	switch {
+	case pgCode(err, "23505"): // the account belongs to another user
 		return store.ErrConflict
+	case pgCode(err, "23503"): // no such user
+		return store.ErrNotFound
 	}
 	return err
 }
@@ -200,8 +209,9 @@ func (s *PG) UserPrefs(ctx context.Context, login string) (map[string]any, error
 	if err != nil {
 		return nil, err
 	}
-	if len(raw) > 0 {
-		_ = json.Unmarshal(raw, &out)
+	var stored map[string]any
+	if len(raw) > 0 && json.Unmarshal(raw, &stored) == nil && stored != nil { // a JSON null (prefs cleared) stays the empty map
+		out = stored
 	}
 	return out, nil
 }
@@ -283,6 +293,9 @@ func (s *PG) CreateProject(ctx context.Context, p store.Project, owner string) (
 	out, err := scanProject(tx.QueryRow(ctx, `INSERT INTO work_projects (id, name, description, repo_url, default_branch, github_installation, created_by)
 		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING `+projectCols,
 		p.ID, p.Name, p.Description, p.RepoURL, p.DefaultBranch, p.GitHubInstallation, owner))
+	if pgCode(err, "23505") {
+		return nil, store.ErrConflict
+	}
 	if err != nil {
 		return nil, err
 	}

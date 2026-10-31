@@ -122,6 +122,8 @@ func (s *server) supervisorThread(ctx context.Context, login string) (string, er
 			}
 			return m.ThreadID, nil
 		}
+		// The thread is gone: drop its link, or the lookup could return it again next to the new one.
+		_ = s.team.DeleteThreadMeta(ctx, m.ThreadID)
 	}
 	th, err := s.H.Store.CreateThread(ctx, login, assistantTitle)
 	if err != nil {

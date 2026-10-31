@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -62,5 +64,89 @@ func TestImportingThePackageGivesTheModelTheToolsOfTheConfiguredServer(t *testin
 	}
 	if !strings.Contains(strings.Join(names, ","), "docs__search") {
 		t.Fatalf("tools %v, want docs__search from the MCP server", names)
+	}
+}
+
+func TestAPendingProjectServerIsOfferedForApprovalEvenBehindThePermissionLayer(t *testing.T) {
+	// Arrange: the project's .mcp.json defines a local (stdio) server nobody approved yet; the local backend puts the
+	// permission layer in front of the approvals gate
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	ws, user := t.TempDir(), t.TempDir()
+	if err := os.MkdirAll(filepath.Join(ws, ".har"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ws, ".mcp.json"), []byte(`{"mcpServers":{"notes":{"command":"notes-server","args":["--stdio"]}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HAR_HOME", user)
+	t.Setenv("HARNESS_NO_USER_DIR", "")
+	t.Setenv("LLM_PROVIDER", "openai")
+	t.Setenv("LLM_MODELS", "gpt-test")
+	t.Setenv("SANDBOX_BACKEND", "local")
+	t.Setenv("LOCAL_WORKSPACE", ws)
+	t.Setenv("LOCAL_STATE_DIR", t.TempDir())
+	t.Setenv("HARNESS_MCP_STDIO", "1")
+	t.Setenv("HARNESS_TRUST_PROJECT", "1")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Layers == nil || len(cfg.Layers.MCPPending) != 1 {
+		t.Fatalf("the project's stdio server should be pending approval: %+v", cfg.Layers)
+	}
+
+	// Act
+	h, err := harness.New(harness.Options{
+		Config: cfg, Models: llmtest.Factory{M: llmtest.New()},
+		Features: []harness.Feature{harness.Sandbox(), harness.Permissions(false), harness.MCP()}, // the layer wraps the gate before MCP looks for it
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, cleanup, err := h.Agent.Tools.Tools(context.Background(), tools.RunContext{ThreadID: "t", RunID: "r", Login: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	// Assert
+	var offered string
+	for _, tl := range list {
+		if info, _ := tl.Info(context.Background()); strings.HasPrefix(info.Name, "mcp_approve__notes_") {
+			offered = info.Name
+		}
+	}
+	if offered == "" {
+		t.Fatal("the model must be offered the approval tool of the pending server")
+	}
+}
+
+func TestWithoutServersTheMCPFeatureAddsNoTools(t *testing.T) {
+	// Arrange
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	t.Setenv("LLM_PROVIDER", "openai")
+	t.Setenv("LLM_MODELS", "gpt-test")
+	t.Setenv("MCP_SERVERS", "")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Act
+	h, err := harness.New(harness.Options{
+		Config: cfg, Models: llmtest.Factory{M: llmtest.New()}, Backend: sandboxtest.NewBackend(),
+		Features: []harness.Feature{harness.Sandbox(), harness.MCP()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, cleanup, _ := h.Agent.Tools.Tools(context.Background(), tools.RunContext{ThreadID: "t", RunID: "r", Login: "alice"})
+	defer cleanup()
+
+	// Assert
+	for _, tl := range list {
+		if info, _ := tl.Info(context.Background()); strings.Contains(info.Name, "__") {
+			t.Fatalf("unexpected MCP tool %s", info.Name)
+		}
 	}
 }

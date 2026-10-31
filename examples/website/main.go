@@ -18,7 +18,7 @@
 //
 // One process (this file) uses the in-memory queue and event log. To scale out,
 // keep the same code but give harness.Options a Postgres store
-// (store/pgstore) and Redis (Options.Redis); the web processes then never call
+// (store/pgstore) and Redis (redisinfra.Infra as Options.Infra); the web processes then never call
 // h.Run (they only Send and stream events) and the agent processes run
 // hosts/worker; see docs/embedding.md.
 package main
@@ -218,7 +218,7 @@ func main() {
 		log.Fatal(err)
 	}
 	// Durable single-node storage: threads and runs survive restarts. For several
-	// processes use store/pgstore + Options.Redis instead (docs/embedding.md).
+	// processes use store/pgstore + redisinfra.Infra (Options.Infra) instead (docs/embedding.md).
 	var st harness.Store
 	if dir := os.Getenv("WEBSITE_DATA_DIR"); dir != "" {
 		fs, err := filestore.Open(dir)

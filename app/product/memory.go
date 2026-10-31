@@ -172,14 +172,14 @@ func entryView(e *store.MemoryEntry) memoryEntryView {
 func memoryFail(w http.ResponseWriter, e *memory.Error) {
 	status := http.StatusBadRequest
 	switch e.Code {
-	case "memory_not_found":
+	case "memory_not_found", "memory_deleted":
 		status = http.StatusNotFound
-	case "memory_conflict", "memory_not_pending", "memory_path_exists", "memory_limit_reached":
+	case "memory_conflict", "memory_not_pending", "path_exists", "memory_limit":
 		status = http.StatusConflict
 	case "memory_store_failed":
 		status = http.StatusInternalServerError
 	}
-	writeJSON(w, status, map[string]any{"error": e.Payload()})
+	writeJSON(w, status, e.Payload())
 }
 
 func (s *server) listMemory(w http.ResponseWriter, r *http.Request, c Caller) {

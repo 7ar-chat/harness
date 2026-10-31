@@ -23,7 +23,7 @@ const (
 var unmaskedTools = map[string]bool{"load_skill": true, "ask_user": true, "update_plan": true}
 
 var (
-	spillPathRe = regexp.MustCompile(`/workspace/\.work/tool-output/[^\s"'\]]+`)
+	spillPathRe = regexp.MustCompile(`/workspace/\.work/tool-output/[^\s"'\]:]+`)
 	exitCodeRe  = regexp.MustCompile(`"exitCode"\s*:\s*(-?\d+)`)
 )
 

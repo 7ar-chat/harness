@@ -114,10 +114,7 @@ func (m *Model) openSessionPickerX(list []client.Session) {
 					text = string(r[:len(r)-1])
 				}
 			case k.Type == tea.KeyRunes || k.Type == tea.KeySpace:
-				text += string(k.Runes)
-				if k.Type == tea.KeySpace {
-					text += " "
-				}
+				text += string(k.Runes) // a KeySpace already carries its space in Runes
 			}
 			if mode == "rename" {
 				p.footer = styleBold.Render("rename: ") + text + "▏" + styleDim.Render("  enter saves · esc cancels")

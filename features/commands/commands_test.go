@@ -2,6 +2,7 @@ package commands
 
 import (
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -160,5 +161,137 @@ func TestFieldsGroupsQuotedWords(t *testing.T) {
 	// Assert
 	if want := []string{"a", "b c", "", "d"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("Fields = %q, want %q", got, want)
+	}
+}
+
+func TestASkillWithAnInvalidNameIsNotOfferedAsACommand(t *testing.T) {
+	// Arrange
+	skills := []Skill{{Name: "good-skill", Description: "ok"}, {Name: "bad name", Description: "x"}, {Name: "-lead", Description: "x"}, {Name: "a:b", Description: "ns"}}
+
+	// Act
+	s := Load(Options{Skills: skills})
+
+	// Assert
+	var names []string
+	for _, c := range s.List() {
+		names = append(names, c.Name)
+	}
+	if want := []string{"a:b", "good-skill", "init"}; !reflect.DeepEqual(names, want) {
+		t.Fatalf("commands = %q, want %q", names, want)
+	}
+	if got, _ := s.Expand("/good-skill", "make it"); got != `Use the "good-skill" skill (load it with load_skill) for this task: make it` {
+		t.Errorf("skill command expands to %q", got)
+	}
+}
+
+func TestAFrontmatterClosedWithTrailingTextIsRejected(t *testing.T) {
+	// Arrange: the closing --- must be alone on its line.
+	dir := t.TempDir()
+	write(t, dir, "glued.md", "---\ndescription: x\n---body text")
+	write(t, dir, "ends.md", "---\ndescription: only head\n---")
+	var warns []string
+
+	// Act
+	s := Load(Options{ProjectDir: dir, Warn: func(m string) { warns = append(warns, m) }})
+
+	// Assert
+	if _, ok := byName(s, "glued"); ok {
+		t.Error("a frontmatter closed with text after --- was accepted")
+	}
+	all := strings.Join(warns, "\n")
+	if len(warns) != 2 || !strings.Contains(all, "glued.md: frontmatter is not closed") || !strings.Contains(all, "ends.md: empty prompt") {
+		t.Errorf("warnings = %q", warns)
+	}
+}
+
+func TestAWindowsFileWithABOMAndCRLFParses(t *testing.T) {
+	// Arrange
+	dir := t.TempDir()
+	write(t, dir, "win.md", "\xef\xbb\xbf---\r\ndescription: Windows made\r\nargument-hint: <x>\r\n---\r\nDo $1\r\n")
+
+	// Act
+	c, ok := byName(Load(Options{UserDir: dir}), "win")
+
+	// Assert
+	if !ok || c.Description != "Windows made" || c.ArgHint != "<x>" || c.Template != "Do $1" || c.Source != SourceUser {
+		t.Fatalf("win = %+v", c)
+	}
+}
+
+func TestADescriptionDefaultsToTheFirstLineCutAt80Runes(t *testing.T) {
+	// Arrange
+	dir := t.TempDir()
+	write(t, dir, "long.md", strings.Repeat("é", 100)+"\nsecond line")
+
+	// Act
+	c, _ := byName(Load(Options{ProjectDir: dir}), "long")
+
+	// Assert
+	if want := strings.Repeat("é", 79) + "…"; c.Description != want {
+		t.Fatalf("description = %q, want %q", c.Description, want)
+	}
+}
+
+func TestAMissingCommandDirectoryIsNotAProblem(t *testing.T) {
+	// Arrange
+	var warns []string
+
+	// Act
+	s := Load(Options{ProjectDir: filepath.Join(t.TempDir(), "absent"), Warn: func(m string) { warns = append(warns, m) }})
+
+	// Assert
+	if len(warns) != 0 || len(s.List()) != 1 {
+		t.Fatalf("warnings %q commands %+v", warns, s.List())
+	}
+}
+
+func TestUnreadableEntriesAreWarnedAboutAndTheRestStillLoads(t *testing.T) {
+	// Arrange
+	if os.Geteuid() == 0 {
+		t.Skip("permission bits do not stop root")
+	}
+	dir := t.TempDir()
+	write(t, dir, "ok.md", "fine")
+	write(t, dir, "locked.md", "secret")
+	write(t, dir, "closed/inner.md", "hidden")
+	if err := os.Chmod(filepath.Join(dir, "locked.md"), 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(dir, "closed"), 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(filepath.Join(dir, "closed"), 0o755) })
+	var warns []string
+
+	// Act
+	s := Load(Options{ProjectDir: dir, Warn: func(m string) { warns = append(warns, m) }})
+
+	// Assert
+	if _, ok := byName(s, "ok"); !ok {
+		t.Error("the readable command was lost")
+	}
+	if _, ok := byName(s, "locked"); ok {
+		t.Error("an unreadable file produced a command")
+	}
+	if len(warns) != 2 {
+		t.Fatalf("warnings = %q, want one for the file and one for the folder", warns)
+	}
+}
+
+func TestWithoutAWarnFuncProblemsGoToTheLog(t *testing.T) {
+	// Arrange
+	var buf strings.Builder
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	dir := t.TempDir()
+	write(t, dir, "empty.md", "")
+
+	// Act
+	Load(Options{ProjectDir: dir})
+
+	// Assert
+	if got := buf.String(); !strings.Contains(got, "commands: ") || !strings.Contains(got, "empty prompt") {
+		t.Fatalf("log = %q", got)
 	}
 }

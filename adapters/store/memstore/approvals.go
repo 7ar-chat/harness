@@ -48,9 +48,6 @@ func (s *Store) pendingApprovalLocked(threadID string) *store.Approval {
 }
 
 func (s *Store) CreateApproval(_ context.Context, a *store.Approval) error {
-	if badText(a.ToolCallID, a.ToolName, a.ToolInputPreview) {
-		return ErrInvalidText
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.threads[a.ThreadID]; !ok {
@@ -72,7 +69,9 @@ func (s *Store) CreateApproval(_ context.Context, a *store.Approval) error {
 	}
 	a.Status = store.ApprovalPending
 	a.CreatedAt = s.now()
-	s.approvalsLocked()[a.ID] = copyApproval(a)
+	cp := copyApproval(a)
+	cp.ToolCallID, cp.ToolName, cp.ToolInputPreview = store.CleanText(a.ToolCallID), store.CleanText(a.ToolName), store.CleanText(a.ToolInputPreview)
+	s.approvalsLocked()[a.ID] = cp
 	return nil
 }
 
@@ -111,9 +110,7 @@ func (s *Store) CancelRunApprovals(_ context.Context, runID string) error {
 }
 
 func (s *Store) CancelPendingApproval(_ context.Context, runID, result string) (*store.Approval, error) {
-	if badText(result) {
-		return nil, ErrInvalidText
-	}
+	result = store.CleanText(result)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r := s.runs[runID]
@@ -209,10 +206,7 @@ func (s *Store) prepareApprovalLocked(t *thread, in store.NewRun) (apply func(ru
 		if decision == "" {
 			decision = store.DecisionDeny
 		}
-		resp = in.Resume.Response
-		if badText(resp.SelectedChoice, resp.ResponseText) {
-			return nil, false, ErrInvalidText
-		}
+		resp = store.ApprovalResponse{SelectedChoice: store.CleanText(in.Resume.Response.SelectedChoice), ResponseText: store.CleanText(in.Resume.Response.ResponseText)}
 		handled, status, content = true, store.ApprovalResolved, store.ApprovalResult(decision, resp)
 		if in.Resume.Scope == store.ApprovalScopeRun && decision == store.DecisionApprove {
 			scope = store.ApprovalScopeRun

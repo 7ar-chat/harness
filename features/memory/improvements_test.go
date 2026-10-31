@@ -36,6 +36,13 @@ var topics = [][]string{
 	{"cache", "cached", "redis", "invalidate"},
 }
 
+// textCount is the number of texts embedded so far (the service also embeds in the background).
+func (e *topicEmbedder) textCount() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.texts
+}
+
 func (e *topicEmbedder) Model() string { return "topics-v1" }
 func (e *topicEmbedder) Embed(_ context.Context, texts []string) ([][]float32, error) {
 	e.mu.Lock()
@@ -145,20 +152,26 @@ func TestEmbeddingsFindWhatWordsMiss(t *testing.T) {
 		t.Fatalf("embeddings: %+v\n%s", info, text)
 	}
 	// Vectors are stored once: asking again embeds only the query.
-	before := emb.texts
+	before := emb.textCount()
 	f.svc.RecallBlock(context.Background(), layers, q)
-	if emb.texts-before != 1 {
-		t.Fatalf("entries were embedded again: %d texts", emb.texts-before)
+	if n := emb.textCount() - before; n != 1 {
+		t.Fatalf("entries were embedded again: %d texts", n)
 	}
 	// A changed entry is re-embedded.
 	id := newEntry(t, f, f.w, memory.CreateInput{Content: "Database schema lives in db/schema.sql."})
+	f.svc.WaitEmbeddings() // the new entry's background embedding is done: nothing in flight can add texts below
 	f.svc.RecallBlock(context.Background(), layers, "postgres migration")
 	body := "Database migrations are checked in CI."
 	f.svc.Update(context.Background(), f.w, memory.UpdateInput{ID: id, Content: &body})
-	before = emb.texts
+	f.svc.WaitEmbeddings() // the update's background embedding is done
+	changed, _ := f.st.GetMemoryEntry(context.Background(), "alice", id)
+	if v, _ := f.st.GetMemoryEmbeddings(context.Background(), "alice"); v[id].ContentHash != changed.ContentHash {
+		t.Fatal("the changed entry kept a stale vector")
+	}
+	before = emb.textCount()
 	f.svc.RecallBlock(context.Background(), layers, "postgres migration")
-	if emb.texts-before < 2 { // the query and the changed entry (the other two are unchanged)
-		t.Fatalf("the changed entry kept a stale vector: %d texts", emb.texts-before)
+	if n := emb.textCount() - before; n != 1 {
+		t.Fatalf("after the update only the query should be embedded, got %d texts", n)
 	}
 }
 

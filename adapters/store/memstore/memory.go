@@ -101,27 +101,63 @@ func (s *Store) GetMemoryEntryByPath(_ context.Context, login, path string) (*st
 	return best.Clone(), nil
 }
 
-// checkEntry mimics the Postgres constraints of work_memory_entries.
-func checkEntry(e *store.MemoryEntry) error {
-	if badText(e.Path, e.Title, e.Content) {
-		return ErrInvalidText
+// cleanEntry returns the copy of e that Postgres would store: text sanitized like store.CleanText, and tags, metadata and
+// proposal passed through the same JSON (jsonb) round trip, so a numeric metadata value comes back as float64 from every backend.
+// It fails with store.ErrInvalidData on what the work_memory_entries constraints reject.
+func cleanEntry(e *store.MemoryEntry) (*store.MemoryEntry, error) {
+	cp := e.Clone()
+	cp.Path, cp.Title, cp.Content = store.CleanText(cp.Path), store.CleanText(cp.Title), store.CleanText(cp.Content)
+	for i, t := range cp.Tags {
+		cp.Tags[i] = store.CleanText(t)
 	}
-	meta, _ := json.Marshal(e.Metadata)
-	if badJSON(meta) {
-		return ErrInvalidText
-	}
-	switch e.Status {
+	cp.Metadata = cleanMetadata(cp.Metadata)
+	cp.Proposal = cleanProposal(cp.Proposal)
+	switch cp.Status {
 	case store.MemoryActive, store.MemoryPending, store.MemoryDeleted:
 	default:
-		return store.ErrInvalidData
+		return nil, store.ErrInvalidData
 	}
-	if n := len([]rune(e.Path)); n < 1 || n > 512 {
-		return store.ErrInvalidData
+	if n := len([]rune(cp.Path)); n < 1 || n > 512 {
+		return nil, store.ErrInvalidData
 	}
-	if e.Importance != nil && (*e.Importance < 0 || *e.Importance > 1) {
-		return store.ErrInvalidData
+	if cp.Importance != nil && (*cp.Importance < 0 || *cp.Importance > 1) {
+		return nil, store.ErrInvalidData
 	}
-	return nil
+	return cp, nil
+}
+
+// cleanMetadata is m as a jsonb column stores and returns it.
+func cleanMetadata(m map[string]any) map[string]any {
+	b, _ := json.Marshal(store.CleanValue(m))
+	var out map[string]any
+	if json.Unmarshal(store.CleanJSON(b), &out) != nil || out == nil {
+		return map[string]any{}
+	}
+	return out
+}
+
+// cleanProposal is p as the proposal jsonb column stores and returns it.
+func cleanProposal(p *store.MemoryProposal) *store.MemoryProposal {
+	if p == nil {
+		return nil
+	}
+	b, _ := json.Marshal(p)
+	var v any
+	if json.Unmarshal(b, &v) != nil {
+		return nil
+	}
+	b, _ = json.Marshal(store.CleanValue(v))
+	var out store.MemoryProposal
+	if json.Unmarshal(store.CleanJSON(b), &out) != nil {
+		return nil
+	}
+	if out.Tags == nil {
+		out.Tags = []string{}
+	}
+	if out.Metadata == nil {
+		out.Metadata = map[string]any{}
+	}
+	return &out
 }
 
 func (s *Store) pathClashLocked(e *store.MemoryEntry) bool {
@@ -151,23 +187,23 @@ func (s *Store) fullLocked(login, status string, max int) bool {
 }
 
 func (s *Store) CreateMemoryEntry(_ context.Context, e *store.MemoryEntry, limits store.MemoryLimits) (*store.MemoryEntry, error) {
-	if err := checkEntry(e); err != nil {
+	cp, err := cleanEntry(e)
+	if err != nil {
 		return nil, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.fullLocked(e.UserLogin, e.Status, limits.Of(e.Status)) {
+	if s.fullLocked(cp.UserLogin, cp.Status, limits.Of(cp.Status)) {
 		return nil, store.ErrMemoryLimit
 	}
 	for _, o := range s.mem.entries {
-		if o.ID == e.ID {
+		if o.ID == cp.ID {
 			return nil, store.ErrInvalidData // primary key
 		}
 	}
-	if s.pathClashLocked(e) {
+	if s.pathClashLocked(cp) {
 		return nil, store.ErrMemoryPathExists
 	}
-	cp := e.Clone()
 	if _, err := uuid.Parse(cp.SourceThreadID); err != nil {
 		cp.SourceThreadID = ""
 	}
@@ -181,25 +217,25 @@ func (s *Store) CreateMemoryEntry(_ context.Context, e *store.MemoryEntry, limit
 }
 
 func (s *Store) UpdateMemoryEntry(_ context.Context, e *store.MemoryEntry, limits store.MemoryLimits) (*store.MemoryEntry, error) {
-	if err := checkEntry(e); err != nil {
+	cp, err := cleanEntry(e)
+	if err != nil {
 		return nil, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, o := range s.mem.entries {
-		if o.UserLogin != e.UserLogin || o.ID != e.ID {
+		if o.UserLogin != cp.UserLogin || o.ID != cp.ID {
 			continue
 		}
-		if o.Version != e.Version {
+		if o.Version != cp.Version {
 			return nil, store.ErrMemoryConflict
 		}
-		if o.Status != e.Status && s.fullLocked(e.UserLogin, e.Status, limits.Of(e.Status)) {
+		if o.Status != cp.Status && s.fullLocked(cp.UserLogin, cp.Status, limits.Of(cp.Status)) {
 			return nil, store.ErrMemoryLimit
 		}
-		if s.pathClashLocked(e) {
+		if s.pathClashLocked(cp) {
 			return nil, store.ErrMemoryPathExists
 		}
-		cp := e.Clone()
 		o.Path, o.Title, o.Content, o.Tags, o.Importance = cp.Path, cp.Title, cp.Content, cp.Tags, cp.Importance
 		o.Metadata, o.Status, o.ContentHash = cp.Metadata, cp.Status, cp.ContentHash
 		o.UpdatedAt, o.ContentUpdatedAt, o.DeletedAt, o.Proposal = cp.UpdatedAt, cp.ContentUpdatedAt, cp.DeletedAt, cp.Proposal
