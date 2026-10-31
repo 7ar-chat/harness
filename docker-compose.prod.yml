@@ -7,6 +7,7 @@
 #   OIDC_SESSION_KEY        openssl rand -hex 32   (signs the login cookie)
 #   HARNESS_SECRET_KEY      openssl rand -hex 32   (encrypts connector tokens)
 #   LLM_BASE_URL / LLM_API_KEY / LLM_MODELS / LLM_DEFAULT_MODEL
+#   LLM_DISCOVER_MODELS     (optional, default true) add the provider's model list to LLM_MODELS at startup; false: LLM_MODELS only
 #   TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_USERNAME   (optional; run one replica only: the bot long-polls)
 #   GITHUB_APP_ID / GITHUB_APP_SLUG / GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET / GITHUB_APP_PRIVATE_KEY
 #                           (optional GitHub App: private repositories and project import. The PEM goes on one
@@ -42,6 +43,8 @@ services:
       LLM_API_KEY: ${LLM_API_KEY}
       LLM_MODELS: ${LLM_MODELS}
       LLM_DEFAULT_MODEL: ${LLM_DEFAULT_MODEL}
+      # offer every model the provider's GET /models reports (not only LLM_MODELS) in the UI and allow runs on them
+      LLM_DISCOVER_MODELS: ${LLM_DISCOVER_MODELS:-true}
 
       SANDBOX_BACKEND: opensandbox
       OPENSANDBOX_URL: ${OPENSANDBOX_URL}

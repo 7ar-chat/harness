@@ -23,6 +23,8 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
+	"net/http"
 	"os"
 	"time"
 
@@ -140,6 +142,15 @@ func New(o Options) (*Harness, error) {
 	st := o.Store
 	if st == nil {
 		st = memstore.New()
+	}
+	if cfg.LLMDiscoverModels {
+		// Before the factory is built: it copies the allow-list. A provider that cannot be asked is not fatal,
+		// the configured list stands.
+		if ids, err := llm.Discover(context.Background(), http.DefaultClient, llmOptions(cfg)); err != nil {
+			slog.Warn("model discovery failed; using LLM_MODELS only", "error", err)
+		} else {
+			cfg.AddModels(ids...)
+		}
 	}
 	models := o.Models
 	if models == nil {

@@ -269,6 +269,7 @@ var schema = map[string]any{
 	"base_url":        f("LLM_BASE_URL", kStr),
 	"models":          f("LLM_MODELS", kList),
 	"default_model":   f("LLM_DEFAULT_MODEL", kStr),
+	"discover_models": f("LLM_DISCOVER_MODELS", kBool),
 	"explore_model":   f("EXPLORE_MODEL", kStr),
 	"session_header":  f("LLM_SESSION_HEADER", kStr),
 	"cache_ttl":       f("LLM_CACHE_TTL", kStr),
@@ -550,7 +551,7 @@ func projectForbidden(path string) (why string, bad bool) {
 	switch top {
 	case "providers", "base_url", "api_key_env", "api_key", "session_header", "cache_ttl":
 		return "a repository must not choose where your requests and API key are sent", true
-	case "models", "presets", "default_preset":
+	case "models", "presets", "default_preset", "discover_models":
 		return "a repository must not decide which models exist", true
 	case "timeout_seconds":
 		return "it tunes the connection to your provider, which is yours to configure", true

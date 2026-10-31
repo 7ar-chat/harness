@@ -96,6 +96,13 @@ Chat Completions, or `{LLM_BASE_URL}/responses` for the models in `LLM_RESPONSES
 Model ids (`LLM_MODELS`) are sent to the provider verbatim. A user is just a login string; the harness
 forwards no identity to the model or to MCP servers.
 
+`LLM_DISCOVER_MODELS=true` makes every host (`harness-web`, the worker, the TUI) ask the provider at startup which
+models it serves (`GET {base}/models`; Anthropic `/v1/models`, 8 s timeout) and append them to `LLM_MODELS`, so
+`GET /api/models` and the web model picker list them and runs may use them. The configured ids stay first and
+the default is unchanged; a provider that cannot be asked logs a warning and the configured list stands. It is off
+by default because `LLM_MODELS` is an allow-list and discovery widens it to everything the key can reach; a project
+file cannot set it. The list is read once per process start.
+
 ## Providers that route by session
 
 `LLM_SESSION_HEADER=x-opencode-session` sends the thread id in that header on every model call. OpenCode Go
@@ -751,6 +758,7 @@ This table is the schema of the **user file**; a project file accepts the subset
 | `api_key_env` | `LLM_API_KEY` | the NAME of the environment variable that holds the key; unset is an error |
 | `models` | `LLM_MODELS` | list |
 | `default_model` | `LLM_DEFAULT_MODEL` | |
+| `discover_models` | `LLM_DISCOVER_MODELS` | `true`: at startup add the provider's `GET {base}/models` to `models` (user file only) |
 | `explore_model` | `EXPLORE_MODEL` | |
 | `session_header` | `LLM_SESSION_HEADER` | |
 | `cache_ttl` | `LLM_CACHE_TTL` | `5m` or `1h` |

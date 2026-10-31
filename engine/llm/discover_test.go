@@ -1,4 +1,4 @@
-package main
+package llm_test
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+
+	"github.com/GhaziBenDahmane/harness/engine/llm"
 )
 
 func TestDiscoverModelsOpenAIAndAnthropic(t *testing.T) {
@@ -20,15 +22,15 @@ func TestDiscoverModelsOpenAIAndAnthropic(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ids, err := discoverModels(context.Background(), srv.Client(), "openai", srv.URL+"/v1/", "sk")
+	ids, err := llm.Discover(context.Background(), srv.Client(), llm.Options{Provider: "openai", BaseURL: srv.URL + "/v1/", APIKey: "sk"})
 	if err != nil || !reflect.DeepEqual(ids, []string{"a", "b"}) || gotPath != "/v1/models" || gotAuth != "Bearer sk" {
 		t.Fatalf("openai: %v %v %q %q", ids, err, gotPath, gotAuth)
 	}
-	ids, err = discoverModels(context.Background(), srv.Client(), "anthropic", srv.URL, "ak")
+	ids, err = llm.Discover(context.Background(), srv.Client(), llm.Options{Provider: "anthropic", BaseURL: srv.URL, APIKey: "ak"})
 	if err != nil || len(ids) != 2 || gotPath != "/v1/models" || gotKey != "ak" {
 		t.Fatalf("anthropic: %v %v %q %q", ids, err, gotPath, gotKey)
 	}
-	if _, err = discoverModels(context.Background(), srv.Client(), "openai", srv.URL+"/bad", "sk"); err == nil {
+	if _, err = llm.Discover(context.Background(), srv.Client(), llm.Options{Provider: "openai", BaseURL: srv.URL + "/bad", APIKey: "sk"}); err == nil {
 		t.Fatal("a 401 must be an error")
 	}
 }

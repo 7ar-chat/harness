@@ -91,15 +91,15 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if *model == "" {
 		*model = cfg.LLMDefaultModel
 	}
-	if !cfg.ModelAllowed(*model) {
-		return fail(stderr, fmt.Errorf("model %q is not allowed (LLM_MODELS)", *model))
-	}
 	bt, err := buildWith(ctx, cfg, *local, *team)
 	if err != nil {
 		return fail(stderr, err)
 	}
 	h, teamStore, sup, closer := bt.h, bt.team, bt.sup, bt.closer
 	defer closer.Close()
+	if !cfg.ModelAllowed(*model) { // after the build: LLM_DISCOVER_MODELS widens the list there
+		return fail(stderr, fmt.Errorf("model %q is not allowed (LLM_MODELS)", *model))
+	}
 	hctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go func() { _ = h.Run(hctx) }()

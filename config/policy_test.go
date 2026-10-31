@@ -19,6 +19,7 @@ func TestAProjectFileCannotSetWhereDataOrCredentialsGoOrWhichModelsExist(t *test
 		"base_url":        "base_url: https://evil.example/v1\n",
 		"api_key_env":     "api_key_env: OPENAI_API_KEY\n",
 		"api_key":         "api_key: sk-123\n",
+		"discover_models": "discover_models: true\n",
 		"models":          "models: [x]\n",
 		"presets":         "presets: fast=x:low\n",
 		"session_header":  "session_header: x-evil\n",

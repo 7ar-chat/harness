@@ -62,6 +62,10 @@ type Config struct {
 	LLMCacheTTL     string   `env:"LLM_CACHE_TTL"`
 	LLMDefaultModel string   `env:"LLM_DEFAULT_MODEL" envDefault:"gpt-5.6-terra"`
 	LLMModels       []string `env:"LLM_MODELS" envDefault:"gpt-5.6-sol,gpt-5.6-terra" envSeparator:","`
+	// LLMDiscoverModels is LLM_DISCOVER_MODELS: at startup the harness asks the provider which models it serves
+	// (GET {base}/models) and adds them to LLMModels, so the UI offers them and runs may use them. Off by default:
+	// LLM_MODELS is an allow-list and discovery widens it to everything the key can reach.
+	LLMDiscoverModels bool `env:"LLM_DISCOVER_MODELS"`
 	LLMTimeout      int      `env:"LLM_TIMEOUT_SECONDS" envDefault:"300"`
 
 	AgentMaxSteps           int `env:"AGENT_MAX_STEPS" envDefault:"60"`
@@ -289,6 +293,16 @@ func (c *Config) ModelAllowed(model string) bool {
 		}
 	}
 	return false
+}
+
+// AddModels appends the ids missing from the LLM_MODELS allow-list, keeping the configured ones first. Call it
+// before the configuration is shared (the harness does so in New); it is not safe against concurrent readers.
+func (c *Config) AddModels(ids ...string) {
+	for _, id := range ids {
+		if id = strings.TrimSpace(id); id != "" && !c.ModelAllowed(id) {
+			c.LLMModels = append(c.LLMModels, id)
+		}
+	}
 }
 
 // Names of the built-in sandbox backends (SANDBOX_BACKEND).
