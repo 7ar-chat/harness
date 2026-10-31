@@ -44,6 +44,13 @@ Go bottom-up, one layer at a time: a module can be verified only once everything
 
 `scripts/release-modules.sh check` lists the latest tag of each module and how many local `replace` lines it still has.
 
+**Release the root and `app` in the order that keeps the tag's `go` job green.** The `go` job runs `app` with the workspace off,
+against the root version `app/go.mod` names. A root tag is cut from a commit where `app` still names the previous root tag, so a
+root tag whose release changes anything `app`'s tests exercise is red on its own `go` job until `app` is moved onto it.
+If a root release carries test-only or app-invisible changes, that does not happen. Otherwise tag the root, move `app` onto the
+tag in the next commit, tag `app/vX.Y.Z` there, and expect the root tag's `go` job to show the older `app` result; the
+`app` tag's run is the one that proves the pair.
+
 **CI is red between a root API change and the matching `app` commit.** `app` requires the root by version, and `make test-modules`
 builds it with the workspace off, so a commit that removes or renames something `app` uses cannot pass that step until the
 root is tagged and `app` requires the new tag. Expect the `go` job to fail on the commit that changes the root's API and on

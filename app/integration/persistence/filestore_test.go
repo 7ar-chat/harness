@@ -3,24 +3,40 @@
 package persistence_test
 
 import (
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/adapters/store/filestore"
 	"github.com/7ar-chat/harness/ai"
 	"github.com/7ar-chat/harness/ai/llm/llmtest"
 )
 
 // startFileProcess is a process over the durable local store of dir: what a CLI, a desktop app or a single-user web
 // server is. Stopping it closes the store, which releases the directory lock.
+//
+// A restart here happens inside one test process, and a command another goroutine is spawning at that moment (a sandbox
+// shell) holds a copy of every open descriptor, the closed lock file included, until it execs: the flock then stays held
+// for a few milliseconds after Close. A real restart is a new process and never sees this, so the open retries on lock
+// contention, and only on that, for a bounded time.
 func startFileProcess(t *testing.T, dir string, model *llmtest.Model) *process {
 	t.Helper()
 	t.Setenv("LOCAL_STATE_DIR", dir)
-	st, err := harness.OpenLocalStore(dir)
+	var st *filestore.Store
+	var err error
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {
+		st, err = harness.OpenLocalStore(dir)
+		if err == nil || !errors.Is(err, syscall.EWOULDBLOCK) || time.Now().After(deadline) {
+			break
+		}
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
