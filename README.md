@@ -568,7 +568,7 @@ modules it declares; the reasoning is in [docs/architecture.md](docs/architectur
 ```
 ai/                            module ai: how the agent talks to models and tools
   (root)      Message, ToolInfo, Model, options, streams, InferTool, ConcatMessages
-  agent/      a store-free tool-calling loop + Caller (stream, watchdog, retry), Schedule, Parallel   openai/  Chat Completions client
+  agent/      the one agent loop (Loop + Policy; Run = a policy over a slice) + Caller (stream, watchdog, retry), Schedule, Parallel   openai/  Chat Completions client
   llm/        provider factory, OpenAI Responses + Anthropic Messages clients, retry, test doubles (llm/llmtest)
   compaction/ context estimation and summarisation
 core/                          module core: the vocabulary, no dependencies on the rest
@@ -576,7 +576,7 @@ core/                          module core: the vocabulary, no dependencies on t
   sandbox/    sandbox contract, manager, background-job port, sandboxtest (fake)   blobs/   content-store port
 config/ modelinfo/ engine/syncx prompts    settings, model table (module modelinfo), small helpers, prompt text
 engine/                        the reusable intelligence
-  agent/      the run loop: steps, streaming, retries, steering, hooks, spill, masking, persistence
+  agent/      the policy of a persisted run over ai/agent.Loop: steering, hooks, spill, masking, guards, approvals, persistence
   tools/      tool interfaces and the registry
   runtime/    run claiming, heartbeat, sweeper, end-of-run hooks
   eventlog/ queue/ approvals/   (interfaces and in-memory implementations only)

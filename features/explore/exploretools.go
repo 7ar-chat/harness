@@ -26,6 +26,8 @@ const (
 	DefaultMaxSteps = 12
 	maxResultChars  = 8000
 	maxReportChars  = 6000
+	// maxParallel bounds the read-only calls of one step that run at once.
+	maxParallel = 4
 
 	// Limits of the work.subagent events of one explorer run.
 	maxSubagentEvents = 200
@@ -52,6 +54,9 @@ type Provider struct {
 	// Model is the model id of the explorer.
 	Model    string
 	MaxSteps int
+	// Caller bounds and retries each model call of the explorer (first-chunk, idle and total budgets, step retries): the
+	// same watchdog the main loop gives its calls. Nil: the default budgets, no retry.
+	Caller *agent.Caller
 }
 
 // Name implements tools.Provider.
@@ -113,10 +118,15 @@ func (p *Provider) explore(ctx context.Context, rc tools.RunContext, task string
 	if steps <= 0 {
 		steps = DefaultMaxSteps
 	}
+	names := byName(list)
 	rep := newReporter(ctx, p.Model)
 	rep.emit(agui.SubagentStart, map[string]any{"task": clipText(task, 400)})
+	caller := p.Caller
+	if caller == nil {
+		caller = &agent.Caller{}
+	}
 	res, err := agent.Run(ctx, agent.Config{
-		Model: m, Tools: list, MaxSteps: steps,
+		Model: m, Tools: list, MaxSteps: steps, Caller: caller, Parallel: true, MaxParallel: maxParallel,
 		LimitNudge: "Step limit reached: write your report now from what you found.",
 		OnStep: func(step int) {
 			rep.step = step
@@ -130,11 +140,9 @@ func (p *Provider) explore(ctx context.Context, rc tools.RunContext, task string
 				}
 			}
 		},
-		Invoke: func(ctx context.Context, tc ai.ToolCall) string {
-			res := runTool(ctx, byName(list), tc)
-			rep.tool(tc, res)
-			return res
-		},
+		// The reporter is not safe for concurrent use: events are written in call order, after a batch ran.
+		OnTool: rep.tool,
+		Invoke: func(ctx context.Context, tc ai.ToolCall) string { return runTool(ctx, names, tc) },
 	}, []*ai.Message{ai.SystemMessage(systemPrompt), ai.UserMessage(task)})
 	if err != nil {
 		rep.finish(0, true)

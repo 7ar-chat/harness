@@ -111,13 +111,14 @@ keeps only the web-only shapes. Add a DTO by listing it in `types.go` and runnin
   `redisx.Options`, `backends.Settings`, `skills.DiscoverOptions`, `memory.Options`...) and the composition roots
   (the facade, `hosts/*`, `cmd/*`) map `config.Config` onto them. The names of the `.har` folders live in
   `core/layout` for packages that need a path but not the configuration.
-* `engine/agent` sequences a run step by step (steers, compaction, guards, verification, empty-answer and
-  length handling, approvals, persistence, events); that policy is the product and stays there. The mechanics it
-  used to own are in `ai/agent` and the run loop is built on them: `Caller` (a streamed call under a watchdog with
-  retry and backoff; the AG-UI translator is its `Attempt`), `Schedule` and `Parallel` (read-only calls batched,
-  the rest alone, results in call order), `SafeInvoke` and `CapOutput`. `ai/agent.Run` is the same loop without the
-  policy, and `features/explore` runs on it. Putting `engine/agent.step` itself behind a policy interface would
-  only move this code across a boundary nothing else crosses, so it was not done.
+* There is one agent loop, `ai/agent.Loop`. It owns the shape of a run (steps, the budget, the order of the phases,
+  one recovery attempt when a call fails with no answer, `EndStep` after every started step) and asks a `Policy`
+  for everything else. `engine/agent` is the policy of a persisted run (`runPolicy`: AG-UI step events, steering,
+  compaction, guards, verification, approvals, storing each answer and result, the rules for when a run is over);
+  `features/explore` runs the same loop through `ai/agent.Run`, whose policy keeps the conversation in a slice.
+  The mechanics are shared too: `Caller` (a streamed call under a watchdog with retry and backoff; the AG-UI
+  translator is its `Attempt`), `Schedule` and `Parallel` (read-only calls batched, the rest alone, results in call
+  order), `SafeInvoke`, `CapOutput`.
 * `store/Full` still holds the types of every capability. Moving a capability's port out of core would make adapters
   import features, so the types stay in core; a feature cannot yet bring its own tables without a `core/store` change.
 * The memory and profile pages are served by `product` only, not exposed through `client.Client`, so the TUI does not

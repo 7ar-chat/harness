@@ -70,15 +70,11 @@ var ErrNoModel = errors.New("agent: no model")
 // ReadOnly marks a tool that has no side effects, so several calls of one step may run at the same time (Config.Parallel).
 type ReadOnly interface{ ReadOnly() bool }
 
-// Run executes the loop over the conversation msgs (not modified). A failed model call returns the
-// conversation so far with the error; a cancelled context returns ctx.Err().
+// Run executes the loop over the conversation msgs (not modified): the Loop with the policy Config describes. A
+// failed model call returns the conversation so far with the error; a cancelled context returns ctx.Err().
 func Run(ctx context.Context, cfg Config, msgs []*ai.Message) (Result, error) {
 	if cfg.Model == nil {
 		return Result{}, ErrNoModel
-	}
-	steps := cfg.MaxSteps
-	if steps <= 0 {
-		steps = DefaultMaxSteps
 	}
 	byName, err := index(ctx, cfg.Tools)
 	if err != nil {
@@ -88,48 +84,72 @@ func Run(ctx context.Context, cfg Config, msgs []*ai.Message) (Result, error) {
 	if invoke == nil {
 		invoke = func(ctx context.Context, call ai.ToolCall) string { return defaultInvoke(ctx, byName, call) }
 	}
-	conv := append([]*ai.Message(nil), msgs...)
-	res := Result{}
-	for step := 1; ; step++ {
-		if err := ctx.Err(); err != nil {
-			res.Messages = conv
-			return res, err
-		}
-		if cfg.Steer != nil {
-			conv = append(conv, cfg.Steer(ctx, step)...)
-		}
-		opts := append([]ai.Option(nil), cfg.Options...)
-		last := step >= steps
-		if last {
-			if cfg.LimitNudge != "" {
-				conv = append(conv, ai.UserMessage(cfg.LimitNudge))
-			}
-			opts = append(opts, ai.WithToolChoice(ai.ToolChoiceForbidden))
-		}
-		if cfg.OnStep != nil {
-			cfg.OnStep(step)
-		}
-		reply, err := cfg.reply(ctx, step, conv, opts)
-		res.Steps = step
-		if reply != nil && cfg.OnReply != nil {
-			cfg.OnReply(step, reply)
-		}
-		if err != nil {
-			res.Messages = conv
-			return res, err
-		}
-		res.Reply = reply
-		if len(reply.ToolCalls) == 0 || last {
-			res.Messages = append(conv, reply)
-			return res, nil
-		}
-		conv = append(conv, reply)
-		if err := runStep(ctx, &cfg, byName, invoke, reply.ToolCalls, &conv); err != nil {
-			res.Messages = conv
-			return res, err
-		}
+	steps := cfg.MaxSteps
+	if steps <= 0 {
+		steps = DefaultMaxSteps
 	}
+	p := &configPolicy{cfg: &cfg, byName: byName, invoke: invoke, conv: append([]*ai.Message(nil), msgs...)}
+	n, err := Loop(ctx, steps, p)
+	return Result{Messages: p.conv, Reply: p.reply, Steps: n}, err
 }
+
+// configPolicy is the Policy of Run: the conversation is a slice, the hooks are Config's.
+type configPolicy struct {
+	cfg    *Config
+	byName map[string]ai.InvokableTool
+	invoke func(context.Context, ai.ToolCall) string
+	conv   []*ai.Message
+	reply  *ai.Message
+}
+
+func (p *configPolicy) BeginStep(ctx context.Context, s *Step) error {
+	if p.cfg.Steer != nil {
+		p.conv = append(p.conv, p.cfg.Steer(ctx, s.N)...)
+	}
+	if s.Last && p.cfg.LimitNudge != "" {
+		p.conv = append(p.conv, ai.UserMessage(p.cfg.LimitNudge))
+	}
+	if p.cfg.OnStep != nil {
+		p.cfg.OnStep(s.N)
+	}
+	return nil
+}
+
+func (p *configPolicy) Request(_ context.Context, s *Step) ([]*ai.Message, []ai.Option) {
+	opts := append([]ai.Option(nil), p.cfg.Options...)
+	if s.Last {
+		opts = append(opts, ai.WithToolChoice(ai.ToolChoiceForbidden))
+	}
+	return p.conv, opts
+}
+
+func (p *configPolicy) Call(ctx context.Context, s *Step) (*ai.Message, error) {
+	return p.cfg.reply(ctx, s.N, s.Messages, s.Options)
+}
+
+func (p *configPolicy) Recover(context.Context, *Step, error) (bool, error) { return false, nil }
+
+func (p *configPolicy) Replied(_ context.Context, s *Step, reply *ai.Message, _ error) error {
+	if reply != nil && p.cfg.OnReply != nil {
+		p.cfg.OnReply(s.N, reply)
+	}
+	return nil
+}
+
+func (p *configPolicy) Next(_ context.Context, s *Step, reply *ai.Message) (Action, error) {
+	p.reply = reply
+	p.conv = append(p.conv, reply)
+	if len(reply.ToolCalls) == 0 || s.Last {
+		return Finish, nil
+	}
+	return RunTools, nil
+}
+
+func (p *configPolicy) Tools(ctx context.Context, _ *Step, calls []ai.ToolCall) (bool, error) {
+	return false, runToolCalls(ctx, p.cfg, p.byName, p.invoke, calls, &p.conv)
+}
+
+func (p *configPolicy) EndStep(context.Context, *Step) {}
 
 // reply makes the model call of a step: one Generate, or a stream through Config.Caller.
 func (cfg *Config) reply(ctx context.Context, step int, conv []*ai.Message, opts []ai.Option) (*ai.Message, error) {
@@ -180,9 +200,9 @@ func index(ctx context.Context, list []ai.InvokableTool) (map[string]ai.Invokabl
 	return byName, nil
 }
 
-// runStep runs one step's calls and appends their results to conv in call order. With Config.Parallel,
+// runToolCalls runs one step's calls and appends their results to conv in call order. With Config.Parallel,
 // consecutive calls of ReadOnly tools run at the same time (at most MaxParallel), the rest one after the other.
-func runStep(ctx context.Context, cfg *Config, byName map[string]ai.InvokableTool,
+func runToolCalls(ctx context.Context, cfg *Config, byName map[string]ai.InvokableTool,
 	invoke func(context.Context, ai.ToolCall) string, calls []ai.ToolCall, conv *[]*ai.Message) error {
 	record := func(call ai.ToolCall, result string) {
 		if cfg.OnTool != nil {

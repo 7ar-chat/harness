@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	aiagent "github.com/GhaziBenDahmane/harness/ai/agent"
 	"github.com/GhaziBenDahmane/harness/coding/codecheck"
 	"github.com/GhaziBenDahmane/harness/coding/gitsafe"
 	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
@@ -119,7 +120,10 @@ func Explore() Feature {
 			return nil
 		}
 		if m := cmp.Or(b.Config.ExploreModel, b.Config.LLMDefaultModel); m != "" {
-			b.AddTools(&exploretools.Provider{Source: b.sandboxTools, Models: b.Models, Model: m})
+			b.AddTools(&exploretools.Provider{Source: b.sandboxTools, Models: b.Models, Model: m, Caller: &aiagent.Caller{
+				FirstChunk: time.Duration(b.Config.LLMTimeout) * time.Second, Idle: b.Config.StreamIdle(), Ceiling: b.Config.CallCeiling(),
+				Retries: agent.StepRetriesSetting(b.Config.LLMStepRetries),
+			}})
 		}
 		return nil
 	}}
