@@ -1,4 +1,10 @@
-// Package agui builds AG-UI v1.0 events emitted by the runtime.
+// Package agui is the event vocabulary a run streams to its front ends: the AG-UI events (run, step, text, reasoning, tool
+// call, interrupt and custom events), the usage record, the error codes, and the checks that a recorded stream is well
+// ordered.
+//
+// An Event is a JSON object (map[string]any) with a "type". The constructors build the events an agent emits, and
+// CheckOrder verifies a stream: a text message ends before the next tool call starts, and a run ends with exactly one
+// terminal event.
 package agui
 
 // Event type names.

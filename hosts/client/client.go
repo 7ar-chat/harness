@@ -8,14 +8,14 @@
 // implementations satisfy it and behave the same (clienttest.Run checks both):
 //
 //   - hosts/inproc drives a harness.Harness living in the same process;
-//   - HTTP speaks the JSON + Server-Sent Events API served by hosts/web, so a
+//   - HTTP speaks the JSON + Server-Sent Events API served by hosts/httpapi, so a
 //     front end can attach to a remote harness-web.
 //
 // A Client acts for one user: the in-process one is built for a login, the HTTP
 // one authenticates with a bearer token. Threads and runs of other users are
 // reported as ErrNotFound.
 //
-// The DTOs below are the wire format of hosts/web, which serves exactly these
+// The DTOs below are the wire format of hosts/httpapi, which serves exactly these
 // types; changing a JSON tag changes the HTTP API.
 package client
 

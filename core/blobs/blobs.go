@@ -1,4 +1,5 @@
-// Package blobs is the port of the content store: keys to bytes (artifact contents, previews, archives).
+// Package blobs is the port for storing content by key outside the database: artifact contents, previews, archives.
+// Implement Blobs over S3, a disk or memory; the engine depends on the interface only.
 package blobs
 
 import (

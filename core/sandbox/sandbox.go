@@ -1,4 +1,10 @@
-// Package sandbox manages one OpenSandbox container per thread.
+// Package sandbox is the contract between an agent and the place its commands run: a directory on this machine or a
+// container elsewhere.
+//
+// A Backend creates and reconnects Sandboxes (Exec, ReadFile, WriteFile, List, Stat, Healthy). A Manager owns the
+// lifecycle for a conversation: one sandbox per thread, created on first use, a quota per user, health checks, and the
+// replacement of a dead one. Implement Backend to add a new kind of sandbox and prove it with the conformance suite in
+// package sandboxtest; adapters/sandbox has the local and OpenSandbox implementations.
 package sandbox
 
 import (
