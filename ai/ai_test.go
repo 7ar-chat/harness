@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/7ar-chat/harness/ai"
 )
 
 func idx(i int) *int { return &i }

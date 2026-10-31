@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
-	"github.com/GhaziBenDahmane/harness/features/skills"
-	skillsfs "github.com/GhaziBenDahmane/harness/features/skills/skillsfs"
+	"github.com/7ar-chat/harness/adapters/store/memstore"
+	"github.com/7ar-chat/harness/features/skills"
+	skillsfs "github.com/7ar-chat/harness/features/skills/skillsfs"
 )
 
 // rawDescription is the description as written on its SKILL.md line (quotes removed).

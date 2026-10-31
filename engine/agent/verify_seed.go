@@ -5,8 +5,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // seedVerification rebuilds the turn's verification state from its stored

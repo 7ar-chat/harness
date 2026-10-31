@@ -13,10 +13,10 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/hosts/client"
-	"github.com/GhaziBenDahmane/harness/hosts/httpapi"
+	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/hosts/client"
+	"github.com/7ar-chat/harness/hosts/httpapi"
 )
 
 // Options configures the product.

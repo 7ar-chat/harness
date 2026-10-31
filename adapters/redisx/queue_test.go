@@ -8,8 +8,8 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/GhaziBenDahmane/harness/adapters/redisx"
-	"github.com/GhaziBenDahmane/harness/engine/queue"
+	"github.com/7ar-chat/harness/adapters/redisx"
+	"github.com/7ar-chat/harness/engine/queue"
 )
 
 func TestReadRecreatesALostGroupAtTheStreamEnd(t *testing.T) {

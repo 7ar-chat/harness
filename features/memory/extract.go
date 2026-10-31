@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/runtime"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/runtime"
 )
 
 // Extraction. When a run completes, a model reads it and proposes the durable knowledge it contains:

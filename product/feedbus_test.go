@@ -10,9 +10,9 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/GhaziBenDahmane/harness/adapters/redisx"
-	"github.com/GhaziBenDahmane/harness/adapters/store/teamstore"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/adapters/redisx"
+	"github.com/7ar-chat/harness/adapters/store/teamstore"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // replicas starts two web servers over one team store and one bus: two replicas of one deployment.

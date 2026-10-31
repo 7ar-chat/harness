@@ -13,8 +13,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/hosts/client"
 )
 
 // Messages the model handles besides key and window messages.

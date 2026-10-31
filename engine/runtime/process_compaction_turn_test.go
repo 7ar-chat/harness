@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/compaction"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/agent"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/compaction"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/agent"
 )
 
 // fetchTool returns size characters per call ({"n": k} keeps the calls distinct for the loop guard).

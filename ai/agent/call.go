@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm"
 )
 
 // Budgets of a Caller whose fields are not set.

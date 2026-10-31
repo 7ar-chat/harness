@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/local"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/examples/sandbox-adapter"
+	"github.com/7ar-chat/harness/adapters/sandbox/local"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/examples/sandbox-adapter"
 )
 
 // fakeService is a tiny in-process implementation of the REST service the

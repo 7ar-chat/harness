@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/agent"
-	"github.com/GhaziBenDahmane/harness/ai/llm"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/agent"
+	"github.com/7ar-chat/harness/ai/llm"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
 )
 
 type cityArgs struct {

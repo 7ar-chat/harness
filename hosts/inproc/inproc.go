@@ -8,12 +8,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/adapters/store/filestore"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/queue"
-	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/adapters/store/filestore"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/queue"
+	"github.com/7ar-chat/harness/hosts/client"
 )
 
 // maxDownload is the largest file DownloadFile returns.

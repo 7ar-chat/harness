@@ -6,10 +6,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/eventlog"
-	"github.com/GhaziBenDahmane/harness/engine/queue"
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/eventlog"
+	"github.com/7ar-chat/harness/engine/queue"
 )
 
 func (r *Runtime) sweepLoop(ctx context.Context) {

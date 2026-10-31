@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/core/layout"
+	"github.com/7ar-chat/harness/core/layout"
 )
 
 // Folder names other agent tools keep their skills in (the Agent Skills

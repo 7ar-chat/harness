@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // MemoryLog is a Log that needs no Redis: the live events of a run are held in

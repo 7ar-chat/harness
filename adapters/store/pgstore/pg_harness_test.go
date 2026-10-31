@@ -3,12 +3,12 @@ package pgstore_test
 import (
 	"context"
 	"errors"
-	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore"
+	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"testing"
 
 	"github.com/google/uuid"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 func finish(t *testing.T, s *pgstore.PG, runID string) {

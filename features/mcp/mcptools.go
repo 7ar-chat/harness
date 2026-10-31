@@ -16,10 +16,10 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 // Provider connects every configured MCP server per run (identity is per user).

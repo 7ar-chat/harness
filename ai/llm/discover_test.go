@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai/llm"
+	"github.com/7ar-chat/harness/ai/llm"
 )
 
 func TestDiscoverModelsOpenAIAndAnthropic(t *testing.T) {

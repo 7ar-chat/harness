@@ -14,8 +14,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 var controlChars = regexp.MustCompile(`[\x00-\x1f\x7f]+`)

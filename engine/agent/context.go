@@ -7,8 +7,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/compaction"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/compaction"
 )
 
 // Harness v3 §5: in-run masking of old tool results (A-24).

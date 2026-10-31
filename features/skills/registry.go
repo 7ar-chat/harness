@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // Skill sources, from lowest to highest precedence: a skill of a later source

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/7ar-chat/harness/config"
 )
 
 func writeAuthFile(t *testing.T, dir, body string, mode os.FileMode) string {

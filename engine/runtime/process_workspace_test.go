@@ -7,17 +7,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/adapters/redisx"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/runtime"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/features/artifacts/workspace"
-	"github.com/GhaziBenDahmane/harness/features/plan"
+	"github.com/7ar-chat/harness/adapters/redisx"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/coding/sandboxtools"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/agent"
+	"github.com/7ar-chat/harness/engine/runtime"
+	"github.com/7ar-chat/harness/engine/tools"
+	"github.com/7ar-chat/harness/features/artifacts/workspace"
+	"github.com/7ar-chat/harness/features/plan"
 )
 
 // wsRig is the v2 rig with the workspace checkpoints wired like cmd/work

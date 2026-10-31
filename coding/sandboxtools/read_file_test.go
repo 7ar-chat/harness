@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 func TestReadFileReturnsNumberedLines(t *testing.T) {

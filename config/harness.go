@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/modelinfo"
+	"github.com/7ar-chat/harness/modelinfo"
 )
 
 // DefaultContextWindow is the context window of models missing from LLM_CONTEXT_WINDOWS.

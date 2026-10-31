@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // Artifacts, blobs and skills, mimicking the Postgres constraints of 0003:

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/7ar-chat/harness/ai"
 )
 
 // SandboxOff is RunContext.Sandbox of a run without sandbox.

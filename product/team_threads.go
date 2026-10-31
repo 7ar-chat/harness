@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/hosts/client"
 )
 
 func (s *server) CreateThread(w http.ResponseWriter, r *http.Request, c Caller) bool {

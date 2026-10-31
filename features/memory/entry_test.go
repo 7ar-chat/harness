@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/features/memory"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/features/memory"
 )
 
 // The "memory" object of the tool results and the memory pages used to be a map; these are the bytes that map

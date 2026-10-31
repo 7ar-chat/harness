@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // The in-memory Sandbox emulates the sandbox-side scripts of the sandbox tools

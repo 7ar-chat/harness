@@ -12,11 +12,11 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/GhaziBenDahmane/harness/adapters/redisx"
-	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
-	_ "github.com/GhaziBenDahmane/harness/adapters/store/pgstore" // registers the Postgres data-error classifier
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/adapters/redisx"
+	"github.com/7ar-chat/harness/adapters/store/memstore"
+	_ "github.com/7ar-chat/harness/adapters/store/pgstore" // registers the Postgres data-error classifier
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 const runID = "11111111-1111-1111-1111-111111111111"

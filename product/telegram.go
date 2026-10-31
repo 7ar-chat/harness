@@ -15,10 +15,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/hosts/client"
-	"github.com/GhaziBenDahmane/harness/hosts/inproc"
+	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/hosts/client"
+	"github.com/7ar-chat/harness/hosts/inproc"
 )
 
 // Telegram lets a user talk to their assistant from Telegram, and tells them

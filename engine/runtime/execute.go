@@ -9,10 +9,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/eventlog"
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/agent"
+	"github.com/7ar-chat/harness/engine/eventlog"
 )
 
 func (r *Runtime) execute(parent context.Context, run *store.Run) {

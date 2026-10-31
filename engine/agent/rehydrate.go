@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/compaction"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/compaction"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // Deliverable is a file the run produced with its last checker result

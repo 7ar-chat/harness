@@ -8,11 +8,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/approvals"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/approvals"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 // A stdio server a project defines runs a program, so it needs the user's approval of its exact command

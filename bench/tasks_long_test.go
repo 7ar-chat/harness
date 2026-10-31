@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/bench"
+	"github.com/7ar-chat/harness/bench"
 )
 
 func TestEveryLongTaskFailsBeforeTheFixAndPassesWithTheReferenceSolution(t *testing.T) {

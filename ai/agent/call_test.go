@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/agent"
-	"github.com/GhaziBenDahmane/harness/ai/llm"
-	"github.com/GhaziBenDahmane/harness/ai/openai"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/agent"
+	"github.com/7ar-chat/harness/ai/llm"
+	"github.com/7ar-chat/harness/ai/openai"
 )
 
 // streamModel plays one scripted stream per Stream call.

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/features/skills"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/features/skills"
 )
 
 func skillFS(name, description, body string) fstest.MapFS {

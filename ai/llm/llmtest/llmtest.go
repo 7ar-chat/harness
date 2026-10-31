@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm"
 )
 
 // Turn is one scripted model response.

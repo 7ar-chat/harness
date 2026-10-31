@@ -13,8 +13,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/GhaziBenDahmane/harness/core/layout"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/layout"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // Checkpoint kinds (the commit subject prefix, like Work).

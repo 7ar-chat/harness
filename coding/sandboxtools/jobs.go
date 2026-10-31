@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 // Background jobs keep their sandbox alive (harness v3 §2, stream A's

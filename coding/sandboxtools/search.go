@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 const searchDesc = `Search file contents with a regular expression (ripgrep) and get the matching lines with their line numbers.

@@ -13,10 +13,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/syncx"
-	"github.com/GhaziBenDahmane/harness/features/artifacts"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/syncx"
+	"github.com/7ar-chat/harness/features/artifacts"
 )
 
 // Options configure the service.

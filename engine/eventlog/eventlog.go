@@ -10,8 +10,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // Writer appends events of one run. There is a single writer per run.

@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/hosts/client"
 )
 
 // historyErr turns the errors of the history operations into the API errors.

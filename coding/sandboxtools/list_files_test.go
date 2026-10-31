@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
 )
 
 type listResult struct {

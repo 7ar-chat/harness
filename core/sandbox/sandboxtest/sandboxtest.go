@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // ExecFunc scripts command execution.

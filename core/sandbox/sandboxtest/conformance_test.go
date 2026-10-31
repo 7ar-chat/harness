@@ -3,8 +3,8 @@ package sandboxtest_test
 import (
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
 )
 
 // The in-memory fake is the double the rest of the repository tests against:

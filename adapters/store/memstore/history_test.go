@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/adapters/store/memstore"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // twoTurns returns a store with a thread of two answered turns.

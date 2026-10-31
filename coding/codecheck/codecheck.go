@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // Timeout bounds one check.

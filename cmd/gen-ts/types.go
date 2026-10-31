@@ -4,10 +4,10 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/features/memory"
-	"github.com/GhaziBenDahmane/harness/hosts/client"
-	"github.com/GhaziBenDahmane/harness/product"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/features/memory"
+	"github.com/7ar-chat/harness/hosts/client"
+	"github.com/7ar-chat/harness/product"
 )
 
 // roots are the Go types the web app reads or sends, under their TypeScript names. The ones of product are

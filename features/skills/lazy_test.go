@@ -11,13 +11,13 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/GhaziBenDahmane/harness/adapters/redisx"
-	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/features/skills"
-	skillsfs "github.com/GhaziBenDahmane/harness/features/skills/skillsfs"
+	"github.com/7ar-chat/harness/adapters/redisx"
+	"github.com/7ar-chat/harness/adapters/store/memstore"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/tools"
+	"github.com/7ar-chat/harness/features/skills"
+	skillsfs "github.com/7ar-chat/harness/features/skills/skillsfs"
 )
 
 func TestReferencedFindsOnlyKnownSkillFoldersAtTheStartOfAWord(t *testing.T) {

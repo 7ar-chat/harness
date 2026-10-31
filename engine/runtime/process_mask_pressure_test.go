@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // dumpCallUsing is dumpCall whose model call reports prompt tokens of its request.

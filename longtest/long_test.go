@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/longtest"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/engine/agent"
+	"github.com/7ar-chat/harness/longtest"
 )
 
 func steerTexts(o *longtest.Outcome) []string {

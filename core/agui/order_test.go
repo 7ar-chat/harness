@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/core/agui"
+	"github.com/7ar-chat/harness/core/agui"
 )
 
 func ev(typ string, kv ...string) agui.Event {

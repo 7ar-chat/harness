@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/adapters/redisx"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/eventlog"
-	"github.com/GhaziBenDahmane/harness/engine/runtime"
+	"github.com/7ar-chat/harness/adapters/redisx"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/eventlog"
+	"github.com/7ar-chat/harness/engine/runtime"
 )
 
 // racingLog lets a still-alive runtime write one more event right after the sweeper resumed the log.

@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/runtime"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/runtime"
 )
 
 // metrics counts what the worker can see without instrumenting the engine: runs starting (an agent

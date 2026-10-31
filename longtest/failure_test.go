@@ -4,17 +4,17 @@ package longtest_test
 
 import (
 	"context"
-	"github.com/GhaziBenDahmane/harness/ai/openai"
+	"github.com/7ar-chat/harness/ai/openai"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/longtest"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/engine/agent"
+	"github.com/7ar-chat/harness/engine/tools"
+	"github.com/7ar-chat/harness/longtest"
 )
 
 func customEvents(o *longtest.Outcome, name string) int {

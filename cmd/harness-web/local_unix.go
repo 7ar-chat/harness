@@ -3,9 +3,9 @@
 package main
 
 import (
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/local"
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/adapters/sandbox/local"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // teamLocalBackend is the local sandbox with a directory of its own per thread

@@ -3,7 +3,7 @@ package tui
 import (
 	"context"
 
-	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/7ar-chat/harness/hosts/client"
 )
 
 // Optional capabilities of a Backend, each checked by type assertion so a

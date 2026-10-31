@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/adapters/redisx"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/adapters/redisx"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 func replica(f *fixture, opts sandbox.ManagerOptions) *sandbox.DefaultManager {

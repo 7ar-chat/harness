@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/adapters/store/teamstore"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/adapters/store/teamstore"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 func newPNG(t *testing.T) []byte {

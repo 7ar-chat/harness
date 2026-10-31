@@ -17,11 +17,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/syncx"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/syncx"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 // CustomArtifact is the CUSTOM event announcing an artifact change.

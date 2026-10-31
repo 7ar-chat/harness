@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // Consolidation of the memory (deduplication strategy and the cleanup task), run periodically by the runtime sweeper. The other

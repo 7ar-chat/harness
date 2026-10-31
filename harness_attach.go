@@ -7,9 +7,9 @@ import (
 	"path"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/features/artifacts"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/agent"
+	"github.com/7ar-chat/harness/features/artifacts"
 )
 
 // RunMode is RunOptions.Mode.

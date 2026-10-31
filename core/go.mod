@@ -1,4 +1,4 @@
-module github.com/GhaziBenDahmane/harness/core
+module github.com/7ar-chat/harness/core
 
 go 1.26.0
 

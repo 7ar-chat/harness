@@ -4,7 +4,7 @@ import (
 	"context"
 	"sort"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // SwapThreadSandbox implements the sandbox manager's compare-and-set.

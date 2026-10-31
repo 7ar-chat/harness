@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
 )
 
 func TestOnlySandboxPathsAreMappedNotAHostPathHoldingWorkspace(t *testing.T) {

@@ -1,6 +1,6 @@
 package product
 
-import "github.com/GhaziBenDahmane/harness/hosts/httpapi"
+import "github.com/7ar-chat/harness/hosts/httpapi"
 
 // The vocabulary of the HTTP API this package builds on.
 type (

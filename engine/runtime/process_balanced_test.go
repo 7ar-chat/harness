@@ -2,16 +2,16 @@ package runtime_test
 
 import (
 	"context"
-	"github.com/GhaziBenDahmane/harness/ai/openai"
+	"github.com/7ar-chat/harness/ai/openai"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // assertBalanced checks that every START has its END before the terminal event (strict AG-UI order).

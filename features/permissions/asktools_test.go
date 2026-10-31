@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/approvals"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/approvals"
 )
 
 func TestAskToolsAskOncePerRunUnlessARuleOrModeSaysOtherwise(t *testing.T) {

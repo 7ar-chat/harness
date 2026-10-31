@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 // fakeSoffice puts a soffice on PATH that logs its arguments (one line per

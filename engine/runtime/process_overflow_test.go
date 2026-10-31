@@ -4,12 +4,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai/openai"
+	"github.com/7ar-chat/harness/ai/openai"
 
-	"github.com/GhaziBenDahmane/harness/ai/compaction"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/agent"
+	"github.com/7ar-chat/harness/ai/compaction"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/agent"
 )
 
 func overflowErr() error {

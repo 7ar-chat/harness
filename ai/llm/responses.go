@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm/responses"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm/responses"
 )
 
 // responsesModel is the Responses API client of a model in Options.ResponsesModels:

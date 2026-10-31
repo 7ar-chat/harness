@@ -8,7 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/GhaziBenDahmane/harness/core/agui"
+	"github.com/7ar-chat/harness/core/agui"
 )
 
 func finishRunOutput(t *testing.T, m *Model, out *bytes.Buffer, ev agui.Event) string {

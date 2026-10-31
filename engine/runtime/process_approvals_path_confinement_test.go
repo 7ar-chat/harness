@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 func TestProcessInteractiveCaseVariantPathKeyStillAsks(t *testing.T) {

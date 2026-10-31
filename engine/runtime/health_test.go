@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/adapters/redisx"
-	"github.com/GhaziBenDahmane/harness/engine/queue"
-	"github.com/GhaziBenDahmane/harness/engine/runtime"
+	"github.com/7ar-chat/harness/adapters/redisx"
+	"github.com/7ar-chat/harness/engine/queue"
+	"github.com/7ar-chat/harness/engine/runtime"
 )
 
 // brokenQueue fails EnsureGroup or blocks Read past its block time (a stuck connection).

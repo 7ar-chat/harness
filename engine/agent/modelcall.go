@@ -10,10 +10,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	aiagent "github.com/GhaziBenDahmane/harness/ai/agent"
-	"github.com/GhaziBenDahmane/harness/ai/llm"
-	"github.com/GhaziBenDahmane/harness/core/agui"
+	"github.com/7ar-chat/harness/ai"
+	aiagent "github.com/7ar-chat/harness/ai/agent"
+	"github.com/7ar-chat/harness/ai/llm"
+	"github.com/7ar-chat/harness/core/agui"
 )
 
 // Harness v3 §1: model call budgets, retries and the texts of their outcomes.

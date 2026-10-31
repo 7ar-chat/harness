@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 const askArgs = `{"question":"Which format do you want?","options":[{"label":"PDF","description":"For printing"},{"label":"Word"}],"allowFreeText":false}`

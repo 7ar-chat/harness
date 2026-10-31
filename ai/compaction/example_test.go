@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/compaction"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/compaction"
 )
 
 // Compact leaves a conversation alone while it fits the window, and shrinks it when it does not: first old tool

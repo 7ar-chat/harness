@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai/llm"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/bench"
-	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/7ar-chat/harness/ai/llm"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/bench"
+	"github.com/7ar-chat/harness/config"
 )
 
 func TestTiersSplitTheBuiltinTasks(t *testing.T) {

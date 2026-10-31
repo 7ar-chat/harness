@@ -1,4 +1,4 @@
-module github.com/GhaziBenDahmane/harness
+module github.com/7ar-chat/harness
 
 go 1.26.0
 
@@ -37,12 +37,12 @@ require (
 )
 
 require (
-	github.com/GhaziBenDahmane/harness/adapters/sandbox v0.0.0
-	github.com/GhaziBenDahmane/harness/ai v0.0.0
-	github.com/GhaziBenDahmane/harness/core v0.0.0
-	github.com/GhaziBenDahmane/harness/hosts/client v0.0.0
-	github.com/GhaziBenDahmane/harness/hosts/tui v0.0.0
-	github.com/GhaziBenDahmane/harness/modelinfo v0.0.0
+	github.com/7ar-chat/harness/adapters/sandbox v0.0.0
+	github.com/7ar-chat/harness/ai v0.0.0
+	github.com/7ar-chat/harness/core v0.0.0
+	github.com/7ar-chat/harness/hosts/client v0.0.0
+	github.com/7ar-chat/harness/hosts/tui v0.0.0
+	github.com/7ar-chat/harness/modelinfo v0.0.0
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.20 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.4 // indirect
@@ -86,14 +86,14 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 )
 
-replace github.com/GhaziBenDahmane/harness/ai => ./ai
+replace github.com/7ar-chat/harness/ai => ./ai
 
-replace github.com/GhaziBenDahmane/harness/core => ./core
+replace github.com/7ar-chat/harness/core => ./core
 
-replace github.com/GhaziBenDahmane/harness/modelinfo => ./modelinfo
+replace github.com/7ar-chat/harness/modelinfo => ./modelinfo
 
-replace github.com/GhaziBenDahmane/harness/hosts/client => ./hosts/client
+replace github.com/7ar-chat/harness/hosts/client => ./hosts/client
 
-replace github.com/GhaziBenDahmane/harness/hosts/tui => ./hosts/tui
+replace github.com/7ar-chat/harness/hosts/tui => ./hosts/tui
 
-replace github.com/GhaziBenDahmane/harness/adapters/sandbox => ./adapters/sandbox
+replace github.com/7ar-chat/harness/adapters/sandbox => ./adapters/sandbox

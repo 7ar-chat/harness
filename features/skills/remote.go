@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/core/layout"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/core/layout"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/engine/agent"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 // Project skills of a remote sandbox: the sandbox keeps its own repository checkout in /workspace, so its

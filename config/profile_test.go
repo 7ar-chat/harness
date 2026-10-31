@@ -3,8 +3,8 @@ package config_test
 import (
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/prompts"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/prompts"
 )
 
 func TestAgentProfileCodingSelectsTheCodingPromptUnlessVariantsAreSetExplicitly(t *testing.T) {

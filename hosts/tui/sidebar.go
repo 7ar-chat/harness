@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/GhaziBenDahmane/harness/core/agui"
+	"github.com/7ar-chat/harness/core/agui"
 )
 
 // SidebarInfo is what a backend can tell the sidebar beyond the events of the

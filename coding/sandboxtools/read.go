@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 const readDesc = `Read a file from the sandbox. path is absolute or relative to /workspace.

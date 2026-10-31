@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 func TestSendAndResumeRefuseAThreadOfAnotherUser(t *testing.T) {

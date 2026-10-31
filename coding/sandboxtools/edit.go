@@ -9,8 +9,8 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 const editDesc = `Replace text in an existing file. oldText is matched exactly first; when it is not found, a match that ignores

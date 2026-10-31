@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
 )
 
 // A scripted model answers each call with the next Turn and records the calls, so a test can check what the code under

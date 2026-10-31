@@ -3,8 +3,8 @@ package skills_test
 import (
 	"context"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
 )
 
 // staticManager hands out one running sandbox (none when empty) and never creates one.

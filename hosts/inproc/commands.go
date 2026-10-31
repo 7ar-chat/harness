@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"path/filepath"
 
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/features/commands"
-	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/features/commands"
+	"github.com/7ar-chat/harness/hosts/client"
 )
 
 // WithProjectDir sets the directory Commands looks for the project's

@@ -17,11 +17,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/coding/sandboxtools"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 // Store is what Run needs from the store: a sandbox.Store that also creates threads.

@@ -11,14 +11,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/hosts/inproc"
-	"github.com/GhaziBenDahmane/harness/hosts/tui"
+	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/hosts/inproc"
+	"github.com/7ar-chat/harness/hosts/tui"
 )
 
 func newBackend(t *testing.T, interactive bool, turns ...llmtest.Turn) (*tui.ClientBackend, context.Context) {

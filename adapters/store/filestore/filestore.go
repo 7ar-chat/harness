@@ -53,10 +53,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/eventlog"
+	"github.com/7ar-chat/harness/adapters/store/memstore"
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/eventlog"
 )
 
 // ErrClosed is returned by mutations after Close.

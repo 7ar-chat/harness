@@ -1,10 +1,10 @@
 package agent
 
 import (
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/compaction"
-	"github.com/GhaziBenDahmane/harness/ai/llm/responses"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/compaction"
+	"github.com/7ar-chat/harness/ai/llm/responses"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // BuildHistory turns persisted messages into a provider-valid model history:

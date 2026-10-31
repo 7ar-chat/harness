@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
-	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore"
-	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore/migrate"
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/engine/queue"
+	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/adapters/store/memstore"
+	"github.com/7ar-chat/harness/adapters/store/pgstore"
+	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/engine/queue"
 )
 
 // Wiring says what the harness of a worker is connected to.

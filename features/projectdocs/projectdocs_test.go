@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/features/projectdocs"
-	"github.com/GhaziBenDahmane/harness/prompts"
+	"github.com/7ar-chat/harness/adapters/store/memstore"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/agent"
+	"github.com/7ar-chat/harness/features/projectdocs"
+	"github.com/7ar-chat/harness/prompts"
 )
 
 func manager(t *testing.T, files map[string]string) (sandbox.Manager, string) {

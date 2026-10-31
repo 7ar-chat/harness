@@ -16,7 +16,7 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 
-	"github.com/GhaziBenDahmane/harness/adapters/store/teamstore"
+	"github.com/7ar-chat/harness/adapters/store/teamstore"
 )
 
 // fakeIdP is the smallest OIDC provider the login flow needs: discovery, JWKS,

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/prompts"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/agent"
+	"github.com/7ar-chat/harness/prompts"
 )
 
 // MaxRecallChars bounds the whole recall block (heading and fences included):

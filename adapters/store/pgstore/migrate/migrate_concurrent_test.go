@@ -10,7 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore/migrate"
+	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
 )
 
 func TestTwoConcurrentMigrateRunsBothSucceed(t *testing.T) {

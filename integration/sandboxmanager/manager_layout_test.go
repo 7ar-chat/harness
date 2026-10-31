@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/adapters/redisx"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/adapters/redisx"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // layoutDirs is the /workspace skeleton the prompts and skills advertise.

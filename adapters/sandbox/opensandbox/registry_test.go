@@ -3,8 +3,8 @@ package opensandbox_test
 import (
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/backends"
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/opensandbox"
+	"github.com/7ar-chat/harness/adapters/sandbox/backends"
+	"github.com/7ar-chat/harness/adapters/sandbox/opensandbox"
 )
 
 var _ = opensandbox.BackendFromSettings // importing the package registers the backend

@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // ThreadState is the durable part of one thread, without its messages and

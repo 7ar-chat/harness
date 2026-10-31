@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/GhaziBenDahmane/harness/ai/llm"
-	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/7ar-chat/harness/ai/llm"
+	"github.com/7ar-chat/harness/config"
 )
 
 // Suite runs tasks, N times each, optionally several at once.

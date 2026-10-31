@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 func TestASilentStreamThatSendsKeepAlivesIsNotCut(t *testing.T) {

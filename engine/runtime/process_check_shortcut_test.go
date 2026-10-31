@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/features/verify"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/features/verify"
 )
 
 // Final review of round 3 (F1, F5): a command whose last step is the file's

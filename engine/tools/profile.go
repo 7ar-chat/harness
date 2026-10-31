@@ -3,7 +3,7 @@ package tools
 import (
 	"context"
 
-	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/7ar-chat/harness/ai"
 )
 
 // Filter is a Provider that offers only the tools of Inner that Allow accepts

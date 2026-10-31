@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	skillsfs "github.com/GhaziBenDahmane/harness/features/skills/skillsfs"
-	"github.com/GhaziBenDahmane/harness/features/verify"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/core/store"
+	skillsfs "github.com/7ar-chat/harness/features/skills/skillsfs"
+	"github.com/7ar-chat/harness/features/verify"
 )
 
 // Lazy skills: skill text never needs a sandbox, and a sandbox only gets the

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 func TestUnhealthySandboxIsNotDestroyed(t *testing.T) {

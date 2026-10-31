@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/7ar-chat/harness/config"
 )
 
 // repo makes <tmp>/repo (a git root) with the given project config.yml and a

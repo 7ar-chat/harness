@@ -3,7 +3,7 @@ package harness
 import (
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/7ar-chat/harness/config"
 )
 
 // ProfileWork is the full feature set: the sandbox tools, skills, MCP, plan

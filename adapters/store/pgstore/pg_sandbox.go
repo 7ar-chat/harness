@@ -3,7 +3,7 @@ package pgstore
 import (
 	"context"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // SwapThreadSandbox sets sandbox_id to sandboxID when it currently equals

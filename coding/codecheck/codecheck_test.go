@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/local"
-	"github.com/GhaziBenDahmane/harness/coding/codecheck"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/adapters/sandbox/local"
+	"github.com/7ar-chat/harness/coding/codecheck"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 func sb(t *testing.T) sandbox.Sandbox {

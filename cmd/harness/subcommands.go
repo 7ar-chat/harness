@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/7ar-chat/harness/config"
 )
 
 // subcommand runs `harness auth ...` and `harness config ...` (handled

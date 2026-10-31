@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // heartbeatKey is the Redis liveness signal of a run (value: its runtime id),

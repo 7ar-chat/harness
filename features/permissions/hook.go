@@ -5,11 +5,11 @@ import (
 	"log/slog"
 	"slices"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/approvals"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/approvals"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 // Hook is the agent's BeforeToolHook for the local/coding profile. Calls the

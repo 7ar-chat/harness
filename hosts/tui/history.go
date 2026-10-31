@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/7ar-chat/harness/hosts/client"
 )
 
 // /undo, /redo, /compact and /fork: edits of the conversation. Each refuses

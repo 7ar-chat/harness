@@ -3,8 +3,8 @@
 package main
 
 import (
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 func teamLocalBackend(*config.Config) (sandbox.Backend, error) { return nil, nil }

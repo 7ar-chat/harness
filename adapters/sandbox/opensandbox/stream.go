@@ -8,7 +8,7 @@ import (
 
 	sdk "github.com/alibaba/OpenSandbox/sdks/sandbox/go"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 var _ sandbox.StreamWriter = (*osbInstance)(nil)

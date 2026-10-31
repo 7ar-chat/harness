@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/7ar-chat/harness/config"
 )
 
 // project makes a git repository with a .har directory and moves the test into it.

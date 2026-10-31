@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // Availability values of the workspace status (Work's vocabulary).

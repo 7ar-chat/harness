@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/hosts/tui"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/hosts/tui"
 )
 
 // statusFunc describes the configuration in effect for /status and /mcp: the

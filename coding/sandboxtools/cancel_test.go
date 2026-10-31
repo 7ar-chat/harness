@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
 )
 
 // cancellableJob reports when it started and whether it was stopped by job_kill (its context).

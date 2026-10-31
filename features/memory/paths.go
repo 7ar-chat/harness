@@ -7,7 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/GhaziBenDahmane/harness/core/layout"
+	"github.com/7ar-chat/harness/core/layout"
 )
 
 // pathPrefix is the memory root of Work's file layout; paths given with it are accepted.

@@ -4,8 +4,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/hosts/tui"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/hosts/tui"
 )
 
 // tuiConfigFile is the user's TUI configuration inside the user directory.

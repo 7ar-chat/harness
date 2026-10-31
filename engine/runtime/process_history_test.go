@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 func TestProcessRebuildsProviderValidHistory(t *testing.T) {

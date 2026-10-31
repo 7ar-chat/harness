@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // FindExec answers the artifacts snapshot listing (a "find /workspace …

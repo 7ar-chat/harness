@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 func userMsg(pos int64, text, author string) *store.Message {

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai/compaction"
+	"github.com/7ar-chat/harness/ai/compaction"
 )
 
 // providerTokens are the prompt tokens an o200k model reported for each sample, minus the 6-token request overhead.

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/7ar-chat/harness/ai"
 )
 
 type cacheControl struct {

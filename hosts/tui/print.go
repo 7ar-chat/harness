@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/core/agui"
+	"github.com/7ar-chat/harness/core/agui"
 )
 
 // Exit statuses of print mode.

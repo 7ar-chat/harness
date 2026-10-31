@@ -10,7 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/7ar-chat/harness/hosts/client"
 )
 
 // StatusItem is one line of the read-only dialogs /status and /mcp: a fact

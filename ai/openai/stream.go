@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/7ar-chat/harness/ai"
 )
 
 type chunk struct {

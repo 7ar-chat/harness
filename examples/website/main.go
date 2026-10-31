@@ -36,15 +36,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/adapters/store/filestore"
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm"
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/hosts/httpapi"
+	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/adapters/store/filestore"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/tools"
+	"github.com/7ar-chat/harness/hosts/httpapi"
 )
 
 // Orders is the site's own data the agent may read: in a real site this is

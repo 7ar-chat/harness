@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/hosts/httpapi"
+	"github.com/7ar-chat/harness/hosts/httpapi"
 )
 
 func TestStaticTokenIsRequiredForTheAPIButNotForTheUIOrHealth(t *testing.T) {

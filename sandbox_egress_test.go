@@ -11,10 +11,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/opensandbox"
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/adapters/sandbox/opensandbox"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // fakeCreateServer emulates the OpenSandbox lifecycle API and execd for one

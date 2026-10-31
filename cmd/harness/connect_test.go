@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/7ar-chat/harness/config"
 )
 
 func TestConnectorSavesTheKeyInAuthJSONWithMode0600AndListsProviders(t *testing.T) {

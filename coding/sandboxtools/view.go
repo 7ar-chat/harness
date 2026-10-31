@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 const viewDesc = `Look at a document the way the user will see it: renders pages of a PDF, DOCX, PPTX or XLSX (LibreOffice, then PNG at

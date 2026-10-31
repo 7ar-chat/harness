@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/approvals"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/features/mcp"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/approvals"
+	"github.com/7ar-chat/harness/engine/tools"
+	"github.com/7ar-chat/harness/features/mcp"
 )
 
 type fakeApprovals struct {

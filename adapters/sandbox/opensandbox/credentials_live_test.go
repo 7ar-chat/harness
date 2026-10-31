@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/opensandbox"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/adapters/sandbox/opensandbox"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // TestCredentialVaultLive proves against a real OpenSandbox server that a credential handed to the egress sidecar

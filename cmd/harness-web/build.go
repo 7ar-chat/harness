@@ -7,14 +7,14 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/adapters/redisx"
-	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore"
-	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore/migrate"
-	"github.com/GhaziBenDahmane/harness/adapters/store/teamstore"
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/product"
+	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/adapters/redisx"
+	"github.com/7ar-chat/harness/adapters/store/pgstore"
+	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
+	"github.com/7ar-chat/harness/adapters/store/teamstore"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/product"
 )
 
 // buildHarness is the only place this command constructs the harness; the rest of

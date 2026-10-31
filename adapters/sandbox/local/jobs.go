@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // Background jobs: the files are those of the job scripts the tools run in a

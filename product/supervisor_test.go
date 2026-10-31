@@ -7,10 +7,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/adapters/store/teamstore"
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/adapters/store/teamstore"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // supModel plays the supervisor: it calls one tool once (the one named by next()), then says done.

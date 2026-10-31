@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/engine/syncx"
+	"github.com/7ar-chat/harness/engine/syncx"
 )
 
 func TestKeyedMutexSerializesPerKeyAndForgetsReleasedKeys(t *testing.T) {

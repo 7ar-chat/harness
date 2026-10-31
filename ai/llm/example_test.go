@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai/llm"
+	"github.com/7ar-chat/harness/ai/llm"
 )
 
 // Classify turns a provider error into a decision. Only transient, rate-limited and timed-out calls are worth

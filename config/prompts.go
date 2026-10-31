@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/prompts"
+	"github.com/7ar-chat/harness/prompts"
 )
 
 // ---- harness v3, stream C2 (prompt variants, reasoning efforts per model) ----

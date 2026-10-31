@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/7ar-chat/harness/config"
 )
 
 // A repository you clone must never decide where data or credentials go, nor which models and providers exist.

@@ -18,7 +18,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/7ar-chat/harness/ai"
 )
 
 // Tuning (see the contract).

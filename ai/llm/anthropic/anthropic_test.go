@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm"
-	"github.com/GhaziBenDahmane/harness/ai/llm/anthropic"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm"
+	"github.com/7ar-chat/harness/ai/llm/anthropic"
 )
 
 const sse = `event: message_start

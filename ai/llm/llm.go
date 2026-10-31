@@ -17,9 +17,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm/anthropic"
-	"github.com/GhaziBenDahmane/harness/ai/openai"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm/anthropic"
+	"github.com/7ar-chat/harness/ai/openai"
 )
 
 // Factory returns a chat model by id. A Provider is the real one; llmtest.Factory is a scripted fake.

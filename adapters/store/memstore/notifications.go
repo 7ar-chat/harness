@@ -3,7 +3,7 @@ package memstore
 import (
 	"context"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // notifyViewLocked sets LastRun and Unread (harness v3 §8) like the PG query.

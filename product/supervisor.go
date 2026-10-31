@@ -10,14 +10,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/approvals"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/hosts/client"
-	"github.com/GhaziBenDahmane/harness/hosts/inproc"
+	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/agent"
+	"github.com/7ar-chat/harness/engine/approvals"
+	"github.com/7ar-chat/harness/engine/tools"
+	"github.com/7ar-chat/harness/hosts/client"
+	"github.com/7ar-chat/harness/hosts/inproc"
 )
 
 // The supervisor is the user's global agent: a personal thread (kind

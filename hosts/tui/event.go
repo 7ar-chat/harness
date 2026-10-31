@@ -9,8 +9,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/hosts/client"
 )
 
 // Ev is a decoded AG-UI event: only the fields the terminal client uses.

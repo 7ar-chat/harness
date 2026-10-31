@@ -3,7 +3,7 @@ package pgstore_test
 import (
 	"context"
 	"fmt"
-	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore"
+	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"os"
 	"testing"
 	"time"
@@ -11,8 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore/migrate"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 func TestPGMigrateUpgradesDatabaseAtTheSecondMigration(t *testing.T) {

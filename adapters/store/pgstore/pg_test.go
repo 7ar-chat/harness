@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore"
+	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"os"
 	"testing"
 	"time"
@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore/migrate"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // newPG migrates a fresh schema of HARNESS_TEST_DATABASE_URL; skipped when unset.

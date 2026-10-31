@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/features/memory"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/features/memory"
 )
 
 // A small retrieval benchmark in the spirit of LongMemEval: memories that a team would keep, and

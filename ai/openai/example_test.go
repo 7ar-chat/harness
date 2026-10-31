@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/openai"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/openai"
 )
 
 // New returns a model for any server that speaks the Chat Completions protocol: OpenAI, Azure, OpenRouter, vLLM,

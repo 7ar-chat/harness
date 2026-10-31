@@ -16,9 +16,9 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/eventlog"
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/eventlog"
 )
 
 // Writer appends events of one run. There is a single writer per run.

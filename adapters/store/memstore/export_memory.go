@@ -1,6 +1,6 @@
 package memstore
 
-import "github.com/GhaziBenDahmane/harness/core/store"
+import "github.com/7ar-chat/harness/core/store"
 
 // ExportMemory returns every memory entry (clones) and the users whose memory
 // is disabled; a persistent store (store/filestore) journals them.

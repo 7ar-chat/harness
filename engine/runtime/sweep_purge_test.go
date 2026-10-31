@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/features/artifacts"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/features/artifacts"
 )
 
 func shaOf(s string) string {

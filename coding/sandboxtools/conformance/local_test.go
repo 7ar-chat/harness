@@ -5,10 +5,10 @@ package conformance_test
 import (
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/local"
-	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
-	"github.com/GhaziBenDahmane/harness/coding/sandboxtools/conformance"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/adapters/sandbox/local"
+	"github.com/7ar-chat/harness/adapters/store/memstore"
+	"github.com/7ar-chat/harness/coding/sandboxtools/conformance"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // The local backend answers the job scripts natively and runs search_files'

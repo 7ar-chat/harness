@@ -11,8 +11,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/blobs"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/blobs"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // The blob store port lives in core/blobs; these aliases keep the names this package has always had.

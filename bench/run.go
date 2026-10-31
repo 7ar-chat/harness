@@ -16,10 +16,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/ai/llm"
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/core/agui"
+	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/ai/llm"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/agui"
 )
 
 // Missing returns the programs of t that are not on PATH.

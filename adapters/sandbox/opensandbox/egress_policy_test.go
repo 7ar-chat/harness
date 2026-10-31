@@ -1,7 +1,7 @@
 package opensandbox_test
 
 import (
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/opensandbox"
+	"github.com/7ar-chat/harness/adapters/sandbox/opensandbox"
 	"testing"
 )
 

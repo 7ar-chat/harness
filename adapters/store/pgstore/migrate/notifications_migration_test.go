@@ -3,7 +3,7 @@ package migrate
 import (
 	"context"
 	"fmt"
-	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore"
+	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"os"
 	"testing"
 	"time"

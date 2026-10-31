@@ -14,10 +14,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 
-	"github.com/GhaziBenDahmane/harness/adapters/blobs/s3blobs"
-	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/features/artifacts"
+	"github.com/7ar-chat/harness/adapters/blobs/s3blobs"
+	"github.com/7ar-chat/harness/adapters/store/memstore"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/features/artifacts"
 )
 
 // s3Blobs returns the S3 backend on a fresh bucket of HARNESS_TEST_S3_ENDPOINT (e.g. local RustFS); skipped when unset.

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/features/skills"
+	"github.com/7ar-chat/harness/features/skills"
 )
 
 func writeSkill(t *testing.T, base, name, description string) {

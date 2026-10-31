@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // Unread state is kept per user on the server, so it follows the user across

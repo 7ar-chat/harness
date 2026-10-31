@@ -4,7 +4,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // visualTypes need a view_file of their pages, for vision models.

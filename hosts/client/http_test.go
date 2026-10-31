@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/7ar-chat/harness/hosts/client"
 )
 
 func sseEvent(w http.ResponseWriter, seq int, typ string) {

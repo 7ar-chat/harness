@@ -15,8 +15,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 const execDesc = `Run a bash command in this conversation's isolated Linux sandbox (cwd /workspace; python3, node, LibreOffice and

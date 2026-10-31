@@ -4,8 +4,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/GhaziBenDahmane/harness/adapters/store/filestore"
-	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/7ar-chat/harness/adapters/store/filestore"
+	"github.com/7ar-chat/harness/config"
 )
 
 // OpenLocalStore opens the durable single-process store for local hosts (CLI,

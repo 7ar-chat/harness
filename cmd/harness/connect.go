@@ -4,8 +4,8 @@ import (
 	"errors"
 	"sort"
 
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/hosts/tui"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/hosts/tui"
 )
 
 // authConnector backs /connect in the terminal UI: it stores the key through

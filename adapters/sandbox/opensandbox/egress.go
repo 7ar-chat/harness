@@ -3,8 +3,8 @@ package opensandbox
 import (
 	"errors"
 
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/backends"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/adapters/sandbox/backends"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // Name is the name this backend registers under (SANDBOX_BACKEND=opensandbox).

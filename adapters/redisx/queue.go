@@ -9,7 +9,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/GhaziBenDahmane/harness/engine/queue"
+	"github.com/7ar-chat/harness/engine/queue"
 )
 
 // Queue implements queue.Queue, queue.Bus and the runtime consumer on Redis streams, lists and pub/sub.

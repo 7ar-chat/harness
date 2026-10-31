@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness"
+	"github.com/7ar-chat/harness"
 )
 
 func TestDefaultDirIsTheSessionsFolderOfTheUserDirectory(t *testing.T) {

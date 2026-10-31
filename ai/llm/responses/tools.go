@@ -3,7 +3,7 @@ package responses
 import (
 	"encoding/json"
 
-	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/7ar-chat/harness/ai"
 )
 
 // functionTool is a function tool of a Responses request.

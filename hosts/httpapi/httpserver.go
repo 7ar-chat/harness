@@ -46,9 +46,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/hosts/client"
-	"github.com/GhaziBenDahmane/harness/hosts/inproc"
+	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/hosts/client"
+	"github.com/7ar-chat/harness/hosts/inproc"
 )
 
 // Caller is an authenticated user.

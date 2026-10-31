@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/hosts/httpapi"
+	"github.com/7ar-chat/harness/hosts/httpapi"
 )
 
 const rustrakDSN = "https://abc123@rustrak.example.com/7"

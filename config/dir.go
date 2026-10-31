@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/core/layout"
+	"github.com/7ar-chat/harness/core/layout"
 )
 
 // DirName is the name of the configuration directory of a project

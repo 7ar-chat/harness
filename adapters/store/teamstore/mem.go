@@ -16,7 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // Mem is a TeamStore in memory. With a path, every change is written to it

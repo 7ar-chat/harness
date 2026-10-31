@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/features/memory"
-	"github.com/GhaziBenDahmane/harness/features/memory/memorytools"
+	"github.com/7ar-chat/harness/adapters/store/memstore"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/engine/tools"
+	"github.com/7ar-chat/harness/features/memory"
+	"github.com/7ar-chat/harness/features/memory/memorytools"
 )
 
 func provider(t *testing.T) (*memstore.Store, map[string]ai.InvokableTool) {

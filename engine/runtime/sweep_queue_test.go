@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/engine/queue"
+	"github.com/7ar-chat/harness/engine/queue"
 )
 
 func TestSweepReclaimsEntriesOfDeadConsumersAndDeletesThem(t *testing.T) {

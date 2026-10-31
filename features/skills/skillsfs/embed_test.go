@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	skillsfs "github.com/GhaziBenDahmane/harness/features/skills/skillsfs"
+	skillsfs "github.com/7ar-chat/harness/features/skills/skillsfs"
 )
 
 func TestOnlySkillFoldersAreEmbedded(t *testing.T) {

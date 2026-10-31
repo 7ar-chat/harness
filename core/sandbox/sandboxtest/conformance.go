@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // ConformanceOptions tunes RunConformanceWith for an adapter.

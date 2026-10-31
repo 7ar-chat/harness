@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // The memory pages' answers used to be built from maps; these are the bytes those maps encoded to (keys sorted),

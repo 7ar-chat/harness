@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/bench"
-	"github.com/GhaziBenDahmane/harness/config"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/bench"
+	"github.com/7ar-chat/harness/config"
 )
 
 func needs(t *testing.T, task bench.Task) {

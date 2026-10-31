@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/7ar-chat/harness/ai"
 )
 
 // ErrStreamEnded is the cause of a stream that ended before its terminal event

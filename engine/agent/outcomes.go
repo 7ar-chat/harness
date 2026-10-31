@@ -6,10 +6,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	aiagent "github.com/GhaziBenDahmane/harness/ai/agent"
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/ai"
+	aiagent "github.com/7ar-chat/harness/ai/agent"
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 // Harness v3 §1: finish_reason handling.

@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/7ar-chat/harness/ai"
 )
 
 // DefaultMaxSteps bounds a loop whose Config.MaxSteps is not set.

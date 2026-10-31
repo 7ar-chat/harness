@@ -18,10 +18,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/adapters/blobs/s3blobs"
-	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/features/artifacts"
+	"github.com/7ar-chat/harness/adapters/blobs/s3blobs"
+	"github.com/7ar-chat/harness/adapters/store/memstore"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/features/artifacts"
 )
 
 // streamBlobs records how content reaches it: PutStream (streamed) or Put (in memory).

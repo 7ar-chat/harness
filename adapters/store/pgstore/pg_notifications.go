@@ -2,7 +2,7 @@ package pgstore
 
 import (
 	"context"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 	"time"
 )
 

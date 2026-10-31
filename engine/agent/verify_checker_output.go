@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/7ar-chat/harness/ai"
 )
 
 // checkerOutput is the checker contract's stdout (also when the model runs a checker itself).

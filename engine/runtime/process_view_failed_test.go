@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
 )
 
 func TestAViewThatFailedAfterTheLastChangeDoesNotBlockTheStop(t *testing.T) {

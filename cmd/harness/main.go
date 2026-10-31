@@ -36,15 +36,15 @@ import (
 	"os/signal"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/adapters/store/filestore"
-	"github.com/GhaziBenDahmane/harness/coding/gitsafe"
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/features/permissions"
-	"github.com/GhaziBenDahmane/harness/hosts/client"
-	"github.com/GhaziBenDahmane/harness/hosts/inproc"
-	"github.com/GhaziBenDahmane/harness/hosts/tui"
-	"github.com/GhaziBenDahmane/harness/modelinfo"
+	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/adapters/store/filestore"
+	"github.com/7ar-chat/harness/coding/gitsafe"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/features/permissions"
+	"github.com/7ar-chat/harness/hosts/client"
+	"github.com/7ar-chat/harness/hosts/inproc"
+	"github.com/7ar-chat/harness/hosts/tui"
+	"github.com/7ar-chat/harness/modelinfo"
 )
 
 func main() {

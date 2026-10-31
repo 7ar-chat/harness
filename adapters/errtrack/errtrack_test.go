@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/adapters/errtrack"
+	"github.com/7ar-chat/harness/adapters/errtrack"
 )
 
 // tracker is a stand-in Sentry server: it records the events posted to /api/1/envelope/.

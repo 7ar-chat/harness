@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/adapters/store/memstore"
-	"github.com/GhaziBenDahmane/harness/features/artifacts"
+	"github.com/7ar-chat/harness/adapters/store/memstore"
+	"github.com/7ar-chat/harness/features/artifacts"
 )
 
 func TestFallbackBlobsReadPostgresContentAfterTheSwitchToS3(t *testing.T) {

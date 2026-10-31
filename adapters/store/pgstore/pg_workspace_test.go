@@ -3,13 +3,13 @@ package pgstore_test
 import (
 	"context"
 	"errors"
-	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore"
+	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 func TestPGDeletionOnlyForArtifactsMaterializedInTheSandboxAndUnchanged(t *testing.T) {

@@ -28,9 +28,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/prompts"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/engine/agent"
+	"github.com/7ar-chat/harness/prompts"
 )
 
 // Limits.

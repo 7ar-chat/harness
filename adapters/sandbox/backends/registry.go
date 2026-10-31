@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // None is the name of the backend that provides no sandbox.

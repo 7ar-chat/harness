@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/prompts"
+	"github.com/7ar-chat/harness/prompts"
 )
 
 // PromptSection adds a section to a run's system prompt ("" adds nothing).

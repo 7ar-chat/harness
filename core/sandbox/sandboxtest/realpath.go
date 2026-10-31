@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // realpathStub is the `realpath` the fake's realpath script runs: it prints

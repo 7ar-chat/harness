@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // Every mutating store.Full method is applied to memstore first and the

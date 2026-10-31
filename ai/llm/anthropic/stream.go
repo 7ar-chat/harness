@@ -7,7 +7,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/7ar-chat/harness/ai"
 )
 
 type usage struct {

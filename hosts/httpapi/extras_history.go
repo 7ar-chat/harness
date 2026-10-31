@@ -3,7 +3,7 @@ package httpapi
 import (
 	"net/http"
 
-	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/7ar-chat/harness/hosts/client"
 )
 
 // routeHistory registers the history operations of client.Extras.

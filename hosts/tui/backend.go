@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/hosts/client"
 )
 
 // Decision kinds of a Resume.

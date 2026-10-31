@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // Deliverable verification (harness v3 §4): after a tool call changed files

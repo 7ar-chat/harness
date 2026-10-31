@@ -4,12 +4,12 @@ import (
 	"context"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
-	"github.com/GhaziBenDahmane/harness/features/memory/memorytools"
-	"github.com/GhaziBenDahmane/harness/features/skills"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/agent"
+	"github.com/7ar-chat/harness/engine/tools"
+	"github.com/7ar-chat/harness/features/memory/memorytools"
+	"github.com/7ar-chat/harness/features/skills"
 )
 
 // builtinTools are the tools a profile governs; any other tool (MCP, web

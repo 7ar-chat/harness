@@ -5,9 +5,9 @@ package local_test
 import (
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/local"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/adapters/sandbox/local"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
 )
 
 // The local backend must pass the adapter conformance suite. (The Protocol

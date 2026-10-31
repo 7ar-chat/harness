@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/hosts/client"
-	"github.com/GhaziBenDahmane/harness/modelinfo"
+	"github.com/7ar-chat/harness/hosts/client"
+	"github.com/7ar-chat/harness/modelinfo"
 )
 
 func TestModelListInfoSurvivesJSONAndIsOmittedWhenEmpty(t *testing.T) {

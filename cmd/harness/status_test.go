@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/hosts/tui"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/hosts/tui"
 )
 
 func TestStatusItemsNameTheLayersAndNeverShowSecrets(t *testing.T) {

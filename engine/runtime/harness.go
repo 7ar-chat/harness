@@ -5,11 +5,11 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai/llm"
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/engine/eventlog"
+	"github.com/7ar-chat/harness/ai/llm"
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/agent"
+	"github.com/7ar-chat/harness/engine/eventlog"
 )
 
 // Hook runs at the end of every run whose log this runtime still owns

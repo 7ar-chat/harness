@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/hosts/client"
 )
 
 // ResourceKind says what {id} names in a route path.

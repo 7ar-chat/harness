@@ -3,14 +3,14 @@ package opensandbox_test
 import (
 	"context"
 	"errors"
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/opensandbox"
+	"github.com/7ar-chat/harness/adapters/sandbox/opensandbox"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // fakeOpenSandbox emulates the OpenSandbox server (lifecycle API + proxied

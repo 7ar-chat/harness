@@ -13,15 +13,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	aiagent "github.com/GhaziBenDahmane/harness/ai/agent"
-	"github.com/GhaziBenDahmane/harness/ai/compaction"
-	"github.com/GhaziBenDahmane/harness/ai/llm"
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/eventlog"
-	"github.com/GhaziBenDahmane/harness/engine/queue"
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/ai"
+	aiagent "github.com/7ar-chat/harness/ai/agent"
+	"github.com/7ar-chat/harness/ai/compaction"
+	"github.com/7ar-chat/harness/ai/llm"
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/eventlog"
+	"github.com/7ar-chat/harness/engine/queue"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 // SteerPrefix prefixes steer messages in the model history.

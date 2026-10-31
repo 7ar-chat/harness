@@ -8,8 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/GhaziBenDahmane/harness/core/agui"
-	"github.com/GhaziBenDahmane/harness/hosts/client"
+	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/hosts/client"
 )
 
 // Model metadata and cost: the window and prices of a model come from the

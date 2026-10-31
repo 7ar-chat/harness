@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/engine/approvals"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/engine/approvals"
 )
 
 type fakeStore struct{ created []*store.Approval }

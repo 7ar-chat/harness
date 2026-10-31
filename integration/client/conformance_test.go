@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness"
-	"github.com/GhaziBenDahmane/harness/hosts/client"
-	"github.com/GhaziBenDahmane/harness/hosts/clienttest"
-	"github.com/GhaziBenDahmane/harness/hosts/httpapi"
-	"github.com/GhaziBenDahmane/harness/hosts/inproc"
+	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/hosts/client"
+	"github.com/7ar-chat/harness/hosts/clienttest"
+	"github.com/7ar-chat/harness/hosts/httpapi"
+	"github.com/7ar-chat/harness/hosts/inproc"
 )
 
 func TestInProcessConformance(t *testing.T) {

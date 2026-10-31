@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/engine/tools"
 
-	"github.com/GhaziBenDahmane/harness/longtest"
+	"github.com/7ar-chat/harness/longtest"
 )
 
 const (

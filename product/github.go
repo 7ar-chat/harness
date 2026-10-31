@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // GitHubApp talks to GitHub as a GitHub App: it finds where the App is

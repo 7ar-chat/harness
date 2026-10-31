@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/agent"
-	"github.com/GhaziBenDahmane/harness/ai/llm"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/agent"
+	"github.com/7ar-chat/harness/ai/llm"
 )
 
 // script answers each call with the next reply and records what it was asked.

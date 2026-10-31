@@ -9,8 +9,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
 )
 
 // lineSandbox delivers the output of the wrapped sandbox's commands the way

@@ -5,14 +5,14 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/GhaziBenDahmane/harness/adapters/redisx"
-	"github.com/GhaziBenDahmane/harness/coding/sandboxtools"
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/engine/eventlog"
-	"github.com/GhaziBenDahmane/harness/engine/queue"
-	"github.com/GhaziBenDahmane/harness/engine/runtime"
-	"github.com/GhaziBenDahmane/harness/features/skills"
+	"github.com/7ar-chat/harness/adapters/redisx"
+	"github.com/7ar-chat/harness/coding/sandboxtools"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/engine/eventlog"
+	"github.com/7ar-chat/harness/engine/queue"
+	"github.com/7ar-chat/harness/engine/runtime"
+	"github.com/7ar-chat/harness/features/skills"
 )
 
 // Broker is the run queue and the per-run control bus (cancel, steers). The

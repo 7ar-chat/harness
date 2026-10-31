@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/7ar-chat/harness/ai"
 )
 
 // Config configures a Model.

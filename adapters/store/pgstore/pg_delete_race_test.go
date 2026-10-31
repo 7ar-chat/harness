@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 func TestPGDeletedThreadsNeverGetARunExecuted(t *testing.T) {

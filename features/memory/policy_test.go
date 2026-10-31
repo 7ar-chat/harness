@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/features/memory"
+	"github.com/7ar-chat/harness/features/memory"
 )
 
 func TestRedactTextReplacesWorkSecretPatterns(t *testing.T) {

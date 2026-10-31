@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/features/memory"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/features/memory"
 )
 
 // Memory routes. Without ?project the memory is the user's own global one;

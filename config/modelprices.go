@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/modelinfo"
+	"github.com/7ar-chat/harness/modelinfo"
 )
 
 // Names of the files in the user directory that belong to the model price table.

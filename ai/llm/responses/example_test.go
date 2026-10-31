@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm/responses"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm/responses"
 )
 
 // New returns a model over the OpenAI Responses API. Calls are stateless (store:false) and ask for the encrypted

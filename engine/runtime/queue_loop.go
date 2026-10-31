@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // Process claims a run and executes it synchronously. A run that is no longer

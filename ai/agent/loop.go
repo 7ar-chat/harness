@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/7ar-chat/harness/ai"
 )
 
 // ErrStepLimit is returned by Loop when the step budget ended without a policy finishing the run.

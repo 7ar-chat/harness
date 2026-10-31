@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm/anthropic"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm/anthropic"
 )
 
 // New returns a model over the Anthropic Messages API. It sets prompt-cache breakpoints on the tools, the system

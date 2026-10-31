@@ -3,7 +3,7 @@ package openai
 import (
 	"encoding/json"
 
-	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/7ar-chat/harness/ai"
 )
 
 type wireMessage struct {

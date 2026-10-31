@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/core/store"
-	"github.com/GhaziBenDahmane/harness/features/goals"
-	"github.com/GhaziBenDahmane/harness/features/titles"
-	"github.com/GhaziBenDahmane/harness/features/verify"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/features/goals"
+	"github.com/7ar-chat/harness/features/titles"
+	"github.com/7ar-chat/harness/features/verify"
 )
 
 // judgeRig is a verification rig whose goal judge gets the verifier's evidence.

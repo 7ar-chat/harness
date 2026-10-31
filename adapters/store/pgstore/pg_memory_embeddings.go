@@ -5,7 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 var _ store.MemoryEmbeddingStore = (*PG)(nil)

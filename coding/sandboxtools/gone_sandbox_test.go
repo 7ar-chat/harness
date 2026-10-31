@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
 )
 
 func TestEveryToolRetriesOnceOnANewSandboxWhenTheCachedOneIsGone(t *testing.T) {

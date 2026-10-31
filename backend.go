@@ -3,10 +3,10 @@ package harness
 import (
 	"strings"
 
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/backends"
-	"github.com/GhaziBenDahmane/harness/ai/llm"
-	"github.com/GhaziBenDahmane/harness/config"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/adapters/sandbox/backends"
+	"github.com/7ar-chat/harness/ai/llm"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // llmOptions maps the configuration (LLM_*) to the options of the default chat-model factory.

@@ -5,9 +5,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/backends"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/adapters/sandbox/backends"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
 )
 
 func TestRegisteredBackendsAreSelectedBySandboxBackend(t *testing.T) {

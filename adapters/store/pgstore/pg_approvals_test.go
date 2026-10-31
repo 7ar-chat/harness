@@ -3,10 +3,10 @@ package pgstore_test
 import (
 	"context"
 	"errors"
-	"github.com/GhaziBenDahmane/harness/adapters/store/pgstore"
+	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 )
 
 // pausedRun creates an interactive run that ended waiting for an approval of call "c1".

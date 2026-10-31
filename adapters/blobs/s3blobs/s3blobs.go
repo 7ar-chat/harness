@@ -17,7 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 
-	"github.com/GhaziBenDahmane/harness/core/blobs"
+	"github.com/7ar-chat/harness/core/blobs"
 )
 
 // Options configures the S3-compatible backend (Dell ECS, RustFS, AWS).

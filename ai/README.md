@@ -4,7 +4,7 @@ A small Go library for building LLM agents: messages and tools, clients for the 
 loop, and context compaction. The root package is the shared vocabulary; everything else is optional and builds on it.
 
 ```
-go get github.com/GhaziBenDahmane/harness/ai
+go get github.com/7ar-chat/harness/ai
 ```
 
 - **Few dependencies.** The standard library and one JSON-schema reflector. No framework, no code generation.

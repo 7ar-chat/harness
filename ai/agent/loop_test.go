@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/agent"
+	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/ai/agent"
 )
 
 // trace is a Policy that logs each phase and answers from a script.

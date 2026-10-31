@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-const module = "github.com/GhaziBenDahmane/harness"
+const module = "github.com/7ar-chat/harness"
 
 // layer says where a package of this module sits. A package may import only packages of its own layer or a
 // lower one; the rules below tighten that further.

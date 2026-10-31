@@ -1,13 +1,13 @@
 package opensandbox_test
 
 import (
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/opensandbox"
+	"github.com/7ar-chat/harness/adapters/sandbox/opensandbox"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
-	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
 )
 
 // TestOpenSandboxConformance runs the adapter conformance suite against a real

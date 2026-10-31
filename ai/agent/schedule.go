@@ -6,7 +6,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/GhaziBenDahmane/harness/ai"
+	"github.com/7ar-chat/harness/ai"
 )
 
 // Schedule runs the tool calls of one step in the model's order. A run of two or more consecutive calls for which

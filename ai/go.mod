@@ -1,4 +1,4 @@
-module github.com/GhaziBenDahmane/harness/ai
+module github.com/7ar-chat/harness/ai
 
 go 1.26.0
 
@@ -11,3 +11,6 @@ require (
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+// v0.1.0 was published under the previous module path and cannot be fetched under this one.
+retract v0.1.0

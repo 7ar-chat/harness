@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/engine/tools"
+	"github.com/7ar-chat/harness/engine/tools"
 )
 
 // renderSoffice puts on PATH a soffice that behaves like LibreOffice for the

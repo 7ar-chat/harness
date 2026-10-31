@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/adapters/sandbox/opensandbox"
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/adapters/sandbox/opensandbox"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // fakeVault emulates the lifecycle API and the egress sidecar's Credential Vault for one sandbox.

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/engine/agent"
+	"github.com/7ar-chat/harness/engine/agent"
 )
 
 func TestFenceDataEscapesTagVariants(t *testing.T) {

@@ -29,7 +29,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/GhaziBenDahmane/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/sandbox"
 )
 
 // Backend is the sandbox.Backend of the REST service at BaseURL.

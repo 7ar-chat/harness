@@ -3,7 +3,7 @@ package pgstore
 import (
 	"context"
 	"errors"
-	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/7ar-chat/harness/core/store"
 
 	"github.com/jackc/pgx/v5"
 )

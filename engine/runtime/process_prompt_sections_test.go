@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
-	"github.com/GhaziBenDahmane/harness/engine/agent"
-	"github.com/GhaziBenDahmane/harness/prompts"
+	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/engine/agent"
+	"github.com/7ar-chat/harness/prompts"
 )
 
 func TestDeepSeekVariantKeepsMemoryGitAndWebSections(t *testing.T) {
