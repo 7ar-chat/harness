@@ -8,9 +8,9 @@ import (
 type sessionKey struct{}
 
 // WithSession returns a context whose model calls carry id in the header named by
-// LLM_SESSION_HEADER (e.g. x-opencode-session): providers that route on a session
-// send every call of a conversation to the same backend, which is what keeps their
-// prompt cache warm.
+// Options.SessionHeader (for example x-session-id): gateways that route on a session
+// send every call of a conversation to the same backend, which keeps that backend's
+// prompt cache warm. Without a configured header the id is ignored.
 func WithSession(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, sessionKey{}, id)
 }

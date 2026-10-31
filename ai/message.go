@@ -1,7 +1,14 @@
-// Package ai is the vocabulary the agent speaks with language models and tools: messages, tool
-// descriptions, call options, streams and the helpers to build tools from Go functions. It depends
-// on nothing outside the standard library and one JSON-schema reflector, so a provider client or a
-// tool set can be written against it without pulling in the rest of the harness.
+// Package ai is the vocabulary an agent speaks with language models and tools: messages, tool
+// descriptions, call options, streams and the helpers to build tools from Go functions.
+//
+// It depends on nothing outside the standard library and one JSON-schema reflector, so a provider
+// client or a tool set can be written against it alone. The sub-packages build on it:
+//
+//	ai/openai     OpenAI Chat Completions client (and compatible gateways)
+//	ai/llm        provider factory, error classification, retry delays; llm/anthropic, llm/responses clients
+//	ai/agent      the tool-calling loop, streaming under a watchdog, parallel tool scheduling
+//	ai/compaction keeping a conversation inside a context window
+//	ai/llm/llmtest a scripted fake model for tests
 package ai
 
 // Role is who wrote a Message.

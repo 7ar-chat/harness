@@ -12,11 +12,11 @@ import (
 	"time"
 )
 
-// ErrorClass is how the agent reacts to a failed model call.
+// ErrorClass sorts a failed model call by what a caller should do about it.
 type ErrorClass string
 
-// Error classes: only transient, rate-limited and timed-out calls are retried;
-// an overflow compacts the context and retries once; fatal errors fail the run.
+// Error classes: only transient, rate-limited and timed-out calls are worth retrying as they are;
+// an overflow needs a smaller request; a fatal error will not go away.
 const (
 	ClassFatal       ErrorClass = "fatal"
 	ClassTransient   ErrorClass = "transient"
@@ -119,7 +119,8 @@ func Classify(err error) ErrorClass {
 func IsTransient(err error) bool { return Classify(err).Retryable() }
 
 // IsContextOverflow reports whether a model error says the request does not fit
-// the model's context window (never transient: the agent compacts and retries once).
+// the model's context window. It is never transient: retrying the same request cannot help, the caller has to
+// shrink it first (see package compaction).
 func IsContextOverflow(err error) bool { return Classify(err) == ClassOverflow }
 
 // Backoff is the delay before retry n (1 = first retry): base·2^(n-1), capped

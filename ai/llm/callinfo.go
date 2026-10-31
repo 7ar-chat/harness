@@ -12,10 +12,9 @@ import (
 	"time"
 )
 
-// CallInfo collects what the HTTP layer learns about one model call that eino
-// does not surface: the provider's Retry-After hint of a failed call, the
-// refusal text of a streamed answer (delta.refusal, dropped by eino-ext) and
-// the stream's activity (every SSE event, also one that is not a chunk; not
+// CallInfo collects what the HTTP layer learns about one model call that the
+// message stream does not carry: the provider's Retry-After hint of a failed call, the
+// refusal text of a streamed answer (delta.refusal) and the stream's activity (every SSE event, also one that is not a chunk; not
 // comment lines).
 type CallInfo struct {
 	mu         sync.Mutex
@@ -179,7 +178,7 @@ func (r *refusalScanner) line(line []byte) {
 	line = bytes.TrimSpace(line)
 	if bytes.HasPrefix(line, []byte("data:")) || bytes.HasPrefix(line, []byte("event:")) {
 		// A provider event (also one the client does not forward): the call is
-		// alive. Comment lines (": keep-alive") are not (round 3, N3).
+		// alive. Comment lines (": keep-alive") are not.
 		RecordActivity(r.ctx)
 	}
 	if !bytes.HasPrefix(line, []byte("data:")) || !bytes.Contains(bytes.ReplaceAll(line, []byte(" "), nil), refusalField) {

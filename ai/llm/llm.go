@@ -1,9 +1,15 @@
-// Package llm builds chat models for the configured provider.
+// Package llm builds chat models for a provider and classifies their failures.
+//
+// A Provider is an ai-level factory: given Options it returns the right client for a model id (OpenAI Chat
+// Completions, OpenAI Responses or Anthropic Messages) over one shared HTTP client, so connection timeouts, a session
+// header and the per-call CallInfo apply to all of them. Classify, Backoff and ParseRetryAfter turn a provider
+// error into a decision (retry, wait how long, shrink the request, give up).
 package llm
 
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"slices"
@@ -16,13 +22,12 @@ import (
 	"github.com/GhaziBenDahmane/harness/ai/openai"
 )
 
-// Factory returns a chat model by id. Tests inject a fake.
+// Factory returns a chat model by id. A Provider is the real one; llmtest.Factory is a scripted fake.
 type Factory interface {
 	Model(ctx context.Context, name string) (ai.Model, error)
 }
 
-// Options are the settings of a Provider; the composition root fills them
-// from its configuration.
+// Options are the settings of a Provider.
 type Options struct {
 	// Provider selects the wire protocol: "anthropic", else OpenAI-compatible.
 	Provider string
@@ -42,6 +47,8 @@ type Options struct {
 	SessionHeader string
 	// CacheTTL is the prompt-cache lifetime of the anthropic provider ("5m" or "1h").
 	CacheTTL string
+	// Logger receives the clients' warnings (nil: silent).
+	Logger *slog.Logger
 }
 
 // modelAllowed reports whether a model id is in the allow-list.
@@ -57,7 +64,8 @@ func (o Options) usesResponses(name string) bool {
 	return false
 }
 
-// Provider is the eino-ext/openai backed Factory.
+// Provider is a Factory over the OpenAI-compatible, OpenAI Responses and Anthropic clients: Options picks the wire
+// protocol per model, and every model shares one HTTP client (timeouts, CallInfo, the session header).
 type Provider struct {
 	cfg    Options
 	client *http.Client
@@ -89,6 +97,7 @@ func NewWithTransport(cfg Options, base http.RoundTripper) *Provider {
 	return &Provider{cfg: cfg, client: &http.Client{Transport: rt}, models: map[string]ai.Model{}}
 }
 
+// Model returns the client of the model name, building it on first use. A name outside Options.Models is an error.
 func (p *Provider) Model(ctx context.Context, name string) (ai.Model, error) {
 	if !p.cfg.modelAllowed(name) {
 		return nil, fmt.Errorf("model %q is not allowed", name)

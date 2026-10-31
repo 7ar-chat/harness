@@ -20,7 +20,7 @@ type ReasoningItem struct {
 	ID               string        `json:"id"`
 	EncryptedContent string        `json:"encrypted_content"`
 	Summary          []SummaryPart `json:"summary,omitempty"`
-	// Model is the Work model id that produced the item: it is only sent back to that model.
+	// Model is the id of the model that produced the item: it is only sent back to that model.
 	Model string `json:"model,omitempty"`
 }
 

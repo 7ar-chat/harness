@@ -1,6 +1,6 @@
-// Package responses is a ai.Model over the OpenAI Responses
+// Package responses is an ai.Model over the OpenAI Responses
 // API (POST …/responses, streamed), as served by the OpenAI-compatible endpoint
-// (docs/spike-responses-api.md). Calls are stateless (store:false) and ask for
+// Calls are stateless (store:false) and ask for
 // the encrypted reasoning (include reasoning.encrypted_content): the reasoning
 // items of an answer travel on its ai.Message (ExtraReasoningItems) and
 // are sent back, in order, before the answer's own items, so the model keeps
@@ -27,16 +27,19 @@ type Config struct {
 	URL string
 	// Model is the model sent in the body (verbatim).
 	Model string
-	// Name is the Work model id: reasoning items are tagged with it and only sent back to it.
+	// Name identifies the model for reasoning items: they are tagged with it and only sent back to it (default Model).
 	Name string
-	// HTTPClient sends the requests (the llm provider's client: timeouts, CallInfo).
+	// HTTPClient sends the requests (default http.DefaultClient). llm.Provider passes its own, which records CallInfo.
 	HTTPClient *http.Client
 	// Header is added to every request (api-key or Authorization).
 	Header http.Header
-	// OnRefusal receives streamed refusal text (the agent treats a refusal like an empty answer).
+	// OnRefusal receives streamed refusal text, which a stream carries outside the message chunks.
 	OnRefusal func(ctx context.Context, text string)
 	// ReasoningSummary is reasoning.summary ("": none sent).
 	ReasoningSummary string
+	// Logger receives the warning that the provider rejected the reasoning items and the call was re-sent without
+	// them (nil: silent).
+	Logger *slog.Logger
 }
 
 // Model is a Responses-backed ai.Model.
@@ -106,8 +109,10 @@ func (m *Model) Stream(ctx context.Context, msgs []*ai.Message, opts ...ai.Optio
 	resp, err := m.post(ctx, body)
 	var apiErr *APIError
 	if err != nil && len(sent) > 0 && errors.As(err, &apiErr) && apiErr.rejectsReasoning() {
-		slog.Warn("llm: the provider rejected the reasoning items; retrying once without them",
-			"model", m.cfg.Name, "items", len(sent), "error", apiErr.Message)
+		if m.cfg.Logger != nil {
+			m.cfg.Logger.Warn("responses: the provider rejected the reasoning items; retrying once without them",
+				"model", m.cfg.Name, "items", len(sent), "error", apiErr.Message)
+		}
 		m.rejected.add(sent)
 		if body, _, err = m.request(msgs, opts, false); err != nil {
 			return nil, err

@@ -21,13 +21,12 @@ import (
 )
 
 // The Responses backend plays the scripted turns through a fake Responses API
-// server (the event shapes of docs/spike-responses-api.md) and the real
-// Responses client (llm.Provider with LLM_RESPONSES_MODELS): the calls are
+// server and the real Responses client (llm.Provider with Options.ResponsesModels): the calls are
 // recorded as usual, every turn starts with an encrypted reasoning item (as
-// gpt-5.6 answers do), and the server checks each request like the provider
+// reasoning models do), and the server checks each request like the provider
 // would (store:false, every function_call answered by a later
 // function_call_output and every output after its call, unknown encrypted
-// content refused with invalid_encrypted_content) plus Work's own invariant:
+// content refused with invalid_encrypted_content) plus one invariant of this library:
 // a reasoning item is sent right before the output it produced.
 
 var responsesBackend atomic.Bool
@@ -535,7 +534,7 @@ func (f *fakeResponses) play(w http.ResponseWriter, r *http.Request, p *pendingT
 			hasReasoning = true
 		}
 	}
-	if !hasReasoning { // gpt-5.6 answers start with an (encrypted) reasoning item
+	if !hasReasoning { // reasoning-model answers start with an (encrypted) reasoning item
 		s.add(s.reasoning())
 		s.closeOpen()
 	}

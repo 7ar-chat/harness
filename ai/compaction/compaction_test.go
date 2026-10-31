@@ -67,7 +67,7 @@ func TestSummaryListsArtifactFilesOfSummarizedMessages(t *testing.T) {
 	if err != nil || res.Action != compaction.ActionSummarized {
 		t.Fatalf("result %+v err %v", res, err)
 	}
-	if !strings.Contains(res.Summary, compaction.FilesHeading+"\n- /workspace/report.docx\n- /workspace/old.csv (deleted)") {
+	if !strings.Contains(res.Summary, compaction.DefaultFilesHeading+"\n- /workspace/report.docx\n- /workspace/old.csv (deleted)") {
 		t.Fatalf("summary %q", res.Summary)
 	}
 }
@@ -76,7 +76,7 @@ func TestSetFilesKeepsPosition(t *testing.T) {
 	// Files and position share Extra without overwriting each other.
 	// Arrange
 	m := ai.ToolMessage("x", "c1")
-	m.Extra = map[string]any{"work.attachments": "kept"}
+	m.Extra = map[string]any{"app.attachments": "kept"}
 
 	// Act
 	compaction.SetPosition(m, 7)
@@ -84,7 +84,7 @@ func TestSetFilesKeepsPosition(t *testing.T) {
 	compaction.SetFiles(m, nil)
 
 	// Assert
-	if compaction.Position(m) != 7 || m.Extra["work.attachments"] != "kept" || len(compaction.Files(m)) != 1 {
+	if compaction.Position(m) != 7 || m.Extra["app.attachments"] != "kept" || len(compaction.Files(m)) != 1 {
 		t.Fatalf("extra %+v", m.Extra)
 	}
 }

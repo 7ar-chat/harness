@@ -1,4 +1,4 @@
-// Package anthropic is a ai.Model over the Anthropic Messages
+// Package anthropic is an ai.Model over the Anthropic Messages
 // API (POST /v1/messages, streamed). It sets prompt-cache breakpoints on the
 // tools, the system prompt and the last message, so a long agent history is
 // read from the cache on every step, and reports cache reads and writes in the
@@ -143,6 +143,7 @@ type APIError struct {
 	Message string
 }
 
+// Error implements error.
 func (e *APIError) Error() string {
 	return fmt.Sprintf("anthropic: status code: %d, type: %s, message: %s", e.Status, e.Type, e.Message)
 }

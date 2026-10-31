@@ -31,7 +31,10 @@ type CallError struct {
 	Class llm.ErrorClass
 }
 
+// Error implements error.
 func (e *CallError) Error() string { return e.Err.Error() }
+
+// Unwrap returns the provider's error.
 func (e *CallError) Unwrap() error { return e.Err }
 
 // Attempt is the caller's view of one streamed call. A new one is made for every attempt that got as far as a

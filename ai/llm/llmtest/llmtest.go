@@ -1,4 +1,8 @@
-// Package llmtest provides a scripted fake chat model for tests.
+// Package llmtest provides a scripted fake chat model for tests of code that talks to an ai.Model.
+//
+// A Model plays a list of Turns, one per call, streaming each turn's chunks the way a provider would, and records
+// every call (messages, tools, options) for assertions. A Turn can also fail, stall, send keep-alives, report
+// a refusal or a Retry-After hint, so the retry and watchdog paths of a caller can be exercised without a network.
 package llmtest
 
 import (

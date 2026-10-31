@@ -10,6 +10,7 @@ import (
 	aiagent "github.com/GhaziBenDahmane/harness/ai/agent"
 	"github.com/GhaziBenDahmane/harness/ai/compaction"
 	"github.com/GhaziBenDahmane/harness/ai/llm"
+	"github.com/GhaziBenDahmane/harness/ai/llm/responses"
 	"github.com/GhaziBenDahmane/harness/core/agui"
 	"github.com/GhaziBenDahmane/harness/core/store"
 )
@@ -124,7 +125,7 @@ func (p *runPolicy) Replied(ctx context.Context, s *aiagent.Step, _ *ai.Message,
 	var row *store.Message
 	if out.msg.Content != "" || len(out.msg.ToolCalls) > 0 {
 		row = &store.Message{ID: out.assistantID, Role: store.RoleAssistant, Content: out.msg.Content, ToolCalls: toStoreCalls(out.msg.ToolCalls),
-			Metadata: st.answerMetadata(out.msg), ReasoningItems: llm.ReasoningItems(out.msg)}
+			Metadata: st.answerMetadata(out.msg), ReasoningItems: responses.MarshalItems(responses.ItemsOf(out.msg))}
 		rows = append(rows, row)
 	}
 	st.persist(ctx, rows...)
@@ -139,7 +140,7 @@ func (p *runPolicy) Replied(ctx context.Context, s *aiagent.Step, _ *ai.Message,
 			hm.ReasoningContent = out.reasoning
 		}
 		// Responses API: the encrypted reasoning goes back with its message (stream R).
-		llm.CopyReasoningItems(hm, out.msg)
+		responses.SetItems(hm, responses.ItemsOf(out.msg))
 		compaction.SetPosition(hm, row.Position)
 		st.history = append(st.history, hm)
 	}

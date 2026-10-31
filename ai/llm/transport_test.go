@@ -18,7 +18,7 @@ func openaiConfig(url string, timeout int, models ...string) llm.Options {
 }
 
 func TestModelCallTimesOutWhenTheGatewayNeverAnswers(t *testing.T) {
-	// LLM_TIMEOUT_SECONDS bounds the wait for the endpoint's response headers even though eino ignores Timeout with an injected client.
+	// Options.TimeoutSeconds bounds the wait for the endpoint's response headers.
 	// Arrange
 	release := make(chan struct{})
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -69,7 +69,7 @@ func TestRateLimitedCallRecordsRetryAfter(t *testing.T) {
 }
 
 func TestStreamedRefusalIsRecorded(t *testing.T) {
-	// delta.refusal chunks (dropped by eino-ext) reach the caller's CallInfo.
+	// delta.refusal chunks reach the caller's CallInfo.
 	// Arrange
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -103,7 +103,7 @@ func TestStreamedRefusalIsRecorded(t *testing.T) {
 }
 
 func TestModelIDIsSentVerbatim(t *testing.T) {
-	// A model id with a slash (OpenRouter style) reaches {LLM_BASE_URL}/chat/completions unchanged, with the bearer key.
+	// A model id with a slash (OpenRouter style) reaches {BaseURL}/chat/completions unchanged, with the bearer key.
 	// Arrange
 	var path, auth, body string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

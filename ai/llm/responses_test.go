@@ -70,7 +70,7 @@ func drain(t *testing.T, sr *ai.StreamReader[*ai.Message]) ([]*ai.Message, error
 }
 
 func TestResponsesModelStreamsToolCalls(t *testing.T) {
-	// A model in LLM_RESPONSES_MODELS calls {LLM_BASE_URL}/responses with the bearer key, and the recorded stream becomes two parallel tool calls, the usage and the reasoning item of output_item.done.
+	// A model in Options.ResponsesModels calls {BaseURL}/responses with the bearer key, and the recorded stream becomes two parallel tool calls, the usage and the reasoning item of output_item.done.
 	// Arrange
 	ts, got := responsesServer(t, "tool_calls.sse", nil)
 	m, err := llm.New(responsesConfig(ts.URL, "gpt-5.6-terra")).Model(context.Background(), "gpt-5.6-terra")
@@ -275,7 +275,7 @@ func TestResponsesToolsAreStrictOnlyWhenTheirSchemaAllows(t *testing.T) {
 }
 
 func TestOtherModelsStayOnChatCompletions(t *testing.T) {
-	// Models outside LLM_RESPONSES_MODELS keep the Chat Completions path.
+	// Models outside Options.ResponsesModels keep the Chat Completions path.
 	// Arrange
 	var paths []string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

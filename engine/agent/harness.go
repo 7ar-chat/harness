@@ -115,6 +115,9 @@ const (
 	// TriggerAuto / TriggerManual are work.compaction triggers.
 	TriggerAuto   = "auto"
 	TriggerManual = "manual"
+	// FilesHeading introduces the list of files written so far at the end of a summary. Summaries already stored
+	// carry it, so it must not change.
+	FilesHeading = "Files written or edited so far (still in /workspace unless deleted later):"
 	// OneQuestionResult answers a second ask_user call of the same step.
 	OneQuestionResult = "Error: ask only one question at a time; wait for the answer to the first one."
 )
@@ -478,6 +481,7 @@ func (st *runState) compact(ctx context.Context, base ai.ChatModel, mode int) er
 		Previous:      st.h.summary,
 		Summarize:     st.summarize(base),
 		SummaryBudget: st.summaryBudget(),
+		FilesHeading:  FilesHeading,
 		Manual:        mode == compactManual,
 		Force:         mode == compactOverflow,
 		OnStart: func(before int) {

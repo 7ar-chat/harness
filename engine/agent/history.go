@@ -3,7 +3,7 @@ package agent
 import (
 	"github.com/GhaziBenDahmane/harness/ai"
 	"github.com/GhaziBenDahmane/harness/ai/compaction"
-	"github.com/GhaziBenDahmane/harness/ai/llm"
+	"github.com/GhaziBenDahmane/harness/ai/llm/responses"
 	"github.com/GhaziBenDahmane/harness/core/store"
 )
 
@@ -105,8 +105,8 @@ func BuildHistoryWith(msgs []*store.Message, opts HistoryOptions) []*ai.Message 
 			if opts.Reasoning {
 				am.ReasoningContent = reasoningOf[m.ID]
 			}
-			llm.SetReasoningItems(am, m.ReasoningItems)              // Responses API reasoning items, dropped with the message
-			compaction.SetFiles(am, store.ArtifactPaths(m.Metadata)) // end-of-run changes
+			responses.SetItems(am, responses.UnmarshalItems(m.ReasoningItems)) // Responses API reasoning items, dropped with the message
+			compaction.SetFiles(am, store.ArtifactPaths(m.Metadata))           // end-of-run changes
 			add(am, m.Position)
 			for _, c := range calls {
 				answered[c.ID] = true

@@ -555,7 +555,7 @@ modules it declares; the reasoning is in [docs/architecture.md](docs/architectur
 
 | Module | Holds | Needs |
 |---|---|---|
-| `ai` | messages, tools, model contract, the OpenAI / Anthropic / Responses clients, a tool-calling loop (`ai/agent`), context compaction | the standard library, a JSON-schema reflector |
+| [`ai`](ai) | messages, tools, model contract, the OpenAI / Anthropic / Responses clients, a tool-calling loop (`ai/agent`), context compaction. A library on its own: see its [README](ai/README.md) | the standard library, a JSON-schema reflector |
 | `core` | AG-UI events, domain types and ports (`store`, `sandbox`, `blobs`) | uuid |
 | `modelinfo` | the model price and context-window table | nothing |
 | `hosts/client` | the `Client` contract front ends are written against, with its HTTP implementation | `core`, `modelinfo` |
@@ -1010,3 +1010,7 @@ validation. `make ci` runs the Go and web steps locally. After changing a DTO of
   in a note before its next model call, once per run, because the prompt never starts a sandbox just to list them.
 * Web search is not built in: configure any web-search MCP server in `MCP_SERVERS`.
 * The sandbox image (`sandbox-image/Dockerfile`) was built and smoke-tested on 2026-10-30 for linux/arm64 and linux/amd64 (see `sandbox-image/README.md`); it has not yet been run under a live OpenSandbox lifecycle server.
+
+## License
+
+MIT, see [LICENSE](LICENSE). The standalone modules (`ai`, `core`, `modelinfo`, `hosts/client`, `hosts/tui`, `adapters/sandbox`) carry the same license.

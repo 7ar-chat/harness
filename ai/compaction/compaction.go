@@ -1,7 +1,11 @@
-// Package compaction keeps an agent's prompt inside the model's context window
-// (harness v2 §4): old tool results shrink to previews first; if that is not
-// enough, everything before a recent tail is folded into a model-written
-// summary. A tool call and its result are never split.
+// Package compaction keeps an agent's prompt inside the model's context window.
+// Old tool results shrink to previews first; if that is not enough, everything
+// before a recent tail is folded into a model-written summary. A tool call and
+// its result are never split.
+//
+// Compact is a pure function over a conversation: it estimates the prompt, and
+// when it is too large returns a smaller one. The caller supplies the model call
+// that writes the summary (Summarizer) and decides when to check.
 package compaction
 
 import (
@@ -9,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -32,8 +37,9 @@ const (
 	SummaryMaxChars = 7000
 	// ImageTokens is the estimate of one image part (providers bill a few hundred to ~1600 tokens).
 	ImageTokens = 1000
-	// FilesHeading introduces the deterministic list of files written so far, appended to summaries.
-	FilesHeading = "Files written or edited so far (still in /workspace unless deleted later):"
+	// DefaultFilesHeading introduces the list of files written so far that is appended to summaries
+	// (Options.FilesHeading overrides it).
+	DefaultFilesHeading = "Files written or edited so far:"
 
 	// SummaryOutputTokens is left free for the summary in the summarizer's window.
 	SummaryOutputTokens = 3000
@@ -54,7 +60,7 @@ const (
 )
 
 // Instructions is the system prompt of the summarization call.
-const Instructions = `You compress the earlier part of a conversation between a user and Work, an AI agent that works in a Linux sandbox with tools, so that the agent can continue the task with less context. The agent will NOT see the original messages again: everything it needs must be in your summary.
+const Instructions = `You compress the earlier part of a conversation between a user and an AI agent that works with tools, so that the agent can continue the task with less context. The agent will NOT see the original messages again: everything it needs must be in your summary.
 
 Write a dense, factual summary in the user's language, as structured Markdown with these sections (omit a section only when it would be empty):
 
@@ -111,6 +117,27 @@ type Options struct {
 	SummaryBudget int
 	// OnStart is called once when the prompt will change, before summarizing.
 	OnStart func(tokensBefore int)
+	// FilesHeading introduces the list of files the conversation wrote, appended to the summary and read back from
+	// Previous so the list survives repeated compactions (default DefaultFilesHeading). Keep it stable: a summary
+	// made under another heading loses its list.
+	FilesHeading string
+	// FileTools are the names of the tools whose calls write the file named by their "path" argument
+	// (default write_file and edit_file). Files recorded with SetFiles are listed too.
+	FileTools []string
+}
+
+func (o Options) filesHeading() string {
+	if o.FilesHeading != "" {
+		return o.FilesHeading
+	}
+	return DefaultFilesHeading
+}
+
+func (o Options) isFileTool(name string) bool {
+	if o.FileTools == nil {
+		return name == "write_file" || name == "edit_file"
+	}
+	return slices.Contains(o.FileTools, name)
 }
 
 // Result of a compaction check.
@@ -121,7 +148,7 @@ type Result struct {
 	Summary string
 	// Folded is the number of messages summarized (or dropped).
 	Folded int
-	// Through is the highest store position covered by Summary (0: unknown).
+	// Through is the highest position covered by Summary, as recorded with SetPosition (0: unknown).
 	Through      int64
 	TokensBefore int
 	TokensAfter  int
@@ -129,10 +156,11 @@ type Result struct {
 	Err error
 }
 
+// Keys this package keeps in Message.Extra (in memory only).
 const (
-	positionKey = "work.position"
-	filesKey    = "work.files"
-	userKey     = "work.user"
+	positionKey = "compaction.position"
+	filesKey    = "compaction.files"
+	userKey     = "compaction.user"
 )
 
 // MarkRequest flags a user message that starts a turn (the user's request);
@@ -164,7 +192,8 @@ func KeepRecent(window int, threshold float64) int {
 	return int(math.Min(TailShare*float64(window), threshold*float64(window)/2))
 }
 
-// SetPosition records the store position of the message a model message comes from.
+// SetPosition records the position, in the caller's own log of the conversation, of the message m comes from. A
+// compaction reports the highest position it folded (Result.Through) so the caller can tell what a summary covers.
 func SetPosition(m *ai.Message, pos int64) {
 	if pos <= 0 {
 		return
@@ -175,14 +204,14 @@ func SetPosition(m *ai.Message, pos int64) {
 	m.Extra[positionKey] = pos
 }
 
-// Position is the store position recorded with SetPosition (0: unknown).
+// Position is the position recorded with SetPosition (0: unknown).
 func Position(m *ai.Message) int64 {
 	p, _ := m.Extra[positionKey].(int64)
 	return p
 }
 
-// SetFiles records the workspace files a message's tool call (or run end)
-// changed (metadata.artifacts); summaries list them with the written files.
+// SetFiles records the files a message's tool call changed, for the list at the end of a summary
+// (see Options.FilesHeading).
 func SetFiles(m *ai.Message, paths []string) {
 	if len(paths) == 0 {
 		return
@@ -229,10 +258,9 @@ func Images(m *ai.Message) int {
 	return n
 }
 
-// Token estimate (A-30), calibrated on gpt-5.6 (o200k) counts reported through
-// the llm-gateway for English, French, Russian, Greek, Chinese, JSON, Python
-// and emoji samples (testdata/tokens, docs/spike-responses-api.md): within 10 %
-// of the provider on each. A Latin word is about one token (+1 per 4 letters
+// Token estimate, calibrated on o200k token counts reported by a provider
+// for English, French, Russian, Greek, Chinese, JSON, Python and emoji samples
+// (testdata/tokens): within 10 % of the provider on each. A Latin word is about one token (+1 per 4 letters
 // beyond 8, +0.1 per accented letter), Cyrillic 4 and Greek 2.45 letters per
 // token, other alphabets 2.5, digits 3 per token, a run of ASCII punctuation
 // 3 per token, a newline or indentation run 1, a CJK character 0.7 and any
@@ -450,7 +478,7 @@ func Compact(ctx context.Context, msgs []*ai.Message, o Options) (Result, error)
 		res.Summary = strings.TrimSpace(o.Previous + "\n\n" + note)
 	} else {
 		res.Action = ActionSummarized
-		res.Summary = withFiles(capChars(summary, SummaryMaxChars), files(o.Previous, head))
+		res.Summary = withFiles(capChars(summary, SummaryMaxChars), files(o, head), o.filesHeading())
 		res.Through = through(head, tail)
 	}
 	res.TokensAfter = o.Reserved + EstimateText(res.Summary) + EstimateMessages(res.Messages)
@@ -495,7 +523,7 @@ func chunkBudget(o Options) int {
 // summarizeChunks folds head into a summary: its transcript is cut into
 // chunks that fit the summarizer (map-reduce with the summary as accumulator:
 // each call merges the previous summary with the next chunk), so every folded
-// message reaches a summary (A-07).
+// message reaches a summary.
 func summarizeChunks(ctx context.Context, o Options, head []*ai.Message, inTurn bool) (string, error) {
 	chunks := chunkLines(transcriptLines(head), chunkBudget(o))
 	summary := o.Previous
@@ -720,7 +748,7 @@ func clipTokens(s string, maxTokens int) string {
 }
 
 // files lists the paths written or edited in msgs, after those of previous's list.
-func files(previous string, msgs []*ai.Message) []string {
+func files(o Options, msgs []*ai.Message) []string {
 	var out []string
 	seen := map[string]bool{}
 	add := func(p string) {
@@ -729,8 +757,9 @@ func files(previous string, msgs []*ai.Message) []string {
 			out = append(out, p)
 		}
 	}
-	if at := strings.LastIndex(previous, FilesHeading); at >= 0 {
-		for _, line := range strings.Split(previous[at+len(FilesHeading):], "\n")[1:] {
+	heading := o.filesHeading()
+	if at := strings.LastIndex(o.Previous, heading); at >= 0 {
+		for _, line := range strings.Split(o.Previous[at+len(heading):], "\n")[1:] {
 			if !strings.HasPrefix(line, "- ") {
 				break
 			}
@@ -742,7 +771,7 @@ func files(previous string, msgs []*ai.Message) []string {
 			add(p)
 		}
 		for _, tc := range m.ToolCalls {
-			if tc.Function.Name != "write_file" && tc.Function.Name != "edit_file" {
+			if !o.isFileTool(tc.Function.Name) {
 				continue
 			}
 			var args struct {
@@ -760,12 +789,12 @@ func files(previous string, msgs []*ai.Message) []string {
 }
 
 // withFiles appends the file list to a summary (replacing a list the model copied).
-func withFiles(summary string, paths []string) string {
-	if at := strings.LastIndex(summary, FilesHeading); at >= 0 {
+func withFiles(summary string, paths []string, heading string) string {
+	if at := strings.LastIndex(summary, heading); at >= 0 {
 		summary = strings.TrimSpace(summary[:at])
 	}
 	if len(paths) == 0 {
 		return summary
 	}
-	return summary + "\n\n" + FilesHeading + "\n- " + strings.Join(paths, "\n- ")
+	return summary + "\n\n" + heading + "\n- " + strings.Join(paths, "\n- ")
 }

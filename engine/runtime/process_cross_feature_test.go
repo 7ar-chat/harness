@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	"github.com/GhaziBenDahmane/harness/ai"
-	"github.com/GhaziBenDahmane/harness/ai/compaction"
 	"github.com/GhaziBenDahmane/harness/ai/llm/llmtest"
 	"github.com/GhaziBenDahmane/harness/core/sandbox"
 	"github.com/GhaziBenDahmane/harness/core/sandbox/sandboxtest"
 	"github.com/GhaziBenDahmane/harness/core/store"
+	"github.com/GhaziBenDahmane/harness/engine/agent"
 )
 
 // Cross-feature behaviour of the merged harness v2 (artifacts × goals, compaction, ask_user).
@@ -94,7 +94,7 @@ func TestCompactionKeepsAttachmentsImagesAndArtifacts(t *testing.T) {
 		t.Fatalf("transcript %q", transcript)
 	}
 	sum, _ := r.st.GetThreadSummary(context.Background(), th.ID)
-	if !strings.Contains(sum.Text, compaction.FilesHeading+"\n- /workspace/report.docx") {
+	if !strings.Contains(sum.Text, agent.FilesHeading+"\n- /workspace/report.docx") {
 		t.Fatalf("summary %q", sum.Text)
 	}
 	for _, m := range r.messages(th.ID) {
