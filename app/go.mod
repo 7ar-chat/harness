@@ -3,17 +3,18 @@ module github.com/7ar-chat/harness/app
 go 1.26.0
 
 require (
-	github.com/7ar-chat/harness v0.3.0
+	github.com/7ar-chat/harness v0.3.2
 	github.com/7ar-chat/harness/adapters/sandbox v0.1.0
-	github.com/7ar-chat/harness/ai v0.1.1
+	github.com/7ar-chat/harness/ai v0.1.2
 	github.com/7ar-chat/harness/core v0.1.0
-	github.com/7ar-chat/harness/hosts/client v0.1.0
-	github.com/7ar-chat/harness/hosts/tui v0.1.0
+	github.com/7ar-chat/harness/hosts/client v0.1.1
+	github.com/7ar-chat/harness/hosts/tui v0.1.1
 	github.com/7ar-chat/harness/modelinfo v0.1.0
 	github.com/alicebob/miniredis/v2 v2.37.0
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/google/uuid v1.6.0
+	github.com/jackc/pgx/v5 v5.8.0
 	github.com/redis/go-redis/v9 v9.23.0
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/sys v0.48.0
@@ -42,7 +43,6 @@ require (
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/pgx/v5 v5.8.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
