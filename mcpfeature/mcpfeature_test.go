@@ -150,3 +150,81 @@ func TestWithoutServersTheMCPFeatureAddsNoTools(t *testing.T) {
 		}
 	}
 }
+
+func TestADynamicSourceAloneInstallsTheProviderAndIsAskedPerRun(t *testing.T) {
+	// Arrange: no configured server, only the source of the marketplace
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	t.Setenv("LLM_PROVIDER", "openai")
+	t.Setenv("LLM_MODELS", "gpt-test")
+	t.Setenv("MCP_SERVERS", "")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var asked [][2]string
+	h, err := harness.New(harness.Options{
+		Config: cfg, Models: llmtest.Factory{M: llmtest.New()}, Backend: sandboxtest.NewBackend(),
+		Features: []harness.Feature{harness.Sandbox(), harness.MCP()},
+		MCPServers: func(_ context.Context, threadID, login string) ([]config.MCPServer, error) {
+			asked = append(asked, [2]string{threadID, login})
+			return nil, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Act
+	_, cleanup, err := h.Agent.Tools.Tools(context.Background(), tools.RunContext{ThreadID: "th", RunID: "r", Login: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleanup()
+
+	// Assert
+	if len(asked) != 1 || asked[0] != [2]string{"th", "alice"} {
+		t.Fatalf("source asked %v", asked)
+	}
+}
+
+func TestAServerFromTheDynamicSourceCannotReachALoopbackAddress(t *testing.T) {
+	// Arrange: a database-supplied server that points at a service on the host itself
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	hit := false
+	ts := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hit = true }))
+	t.Cleanup(ts.Close)
+	t.Setenv("LLM_PROVIDER", "openai")
+	t.Setenv("LLM_MODELS", "gpt-test")
+	t.Setenv("MCP_SERVERS", "")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := harness.New(harness.Options{
+		Config: cfg, Models: llmtest.Factory{M: llmtest.New()}, Backend: sandboxtest.NewBackend(),
+		Features: []harness.Feature{harness.Sandbox(), harness.MCP()},
+		MCPServers: func(context.Context, string, string) ([]config.MCPServer, error) {
+			return []config.MCPServer{{Name: "internal", URL: ts.URL}}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Act
+	list, cleanup, err := h.Agent.Tools.Tools(context.Background(), tools.RunContext{ThreadID: "th", RunID: "r", Login: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	// Assert
+	for _, tl := range list {
+		if info, _ := tl.Info(context.Background()); strings.HasPrefix(info.Name, "internal__") {
+			t.Fatalf("tool %s from a loopback server", info.Name)
+		}
+	}
+	if hit {
+		t.Fatal("the loopback server received a request")
+	}
+}

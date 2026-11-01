@@ -13,11 +13,15 @@ import (
 // from Options.SecretKey; the nonce prefixes the ciphertext.
 type secretBox struct{ aead cipher.AEAD }
 
-func newSecretBox(key []byte) (*secretBox, error) {
+func newSecretBox(key []byte) (*secretBox, error) { return newSecretBoxFor("harness-connectors:", key) }
+
+// newSecretBoxFor derives the box of one kind of secret from the server key. The prefix separates the kinds:
+// what was sealed for one (a connector token) can never be opened as another (a marketplace credential).
+func newSecretBoxFor(domain string, key []byte) (*secretBox, error) {
 	if len(key) == 0 {
 		return nil, errors.New("no secret key")
 	}
-	sum := sha256.Sum256(append([]byte("harness-connectors:"), key...))
+	sum := sha256.Sum256(append([]byte(domain), key...))
 	block, err := aes.NewCipher(sum[:])
 	if err != nil {
 		return nil, err

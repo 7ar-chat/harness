@@ -2,11 +2,13 @@ package product
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/7ar-chat/harness/core/capabilities"
 	"github.com/7ar-chat/harness/core/store"
 )
 
@@ -176,6 +178,13 @@ func (s *server) deleteProject(w http.ResponseWriter, r *http.Request, c Caller)
 	if err := s.team.DeleteProject(r.Context(), p.ID); err != nil {
 		fail(w, err)
 		return
+	}
+	// The project's marketplace installs (and their sealed keys) go with it; the project is already gone, so a
+	// failure here is logged and leaves rows nobody can reach.
+	if s.opt.Capabilities != nil {
+		if err := s.opt.Capabilities.DeleteInstalls(r.Context(), capabilities.ScopeProject, p.ID); err != nil {
+			slog.Warn("project deleted but its marketplace installs were not", "project", p.ID, "error", err)
+		}
 	}
 	for _, m := range members {
 		s.hub.publish(FeedEvent{Type: "project.changed", ProjectID: p.ID, Actor: c.Actor, affects: m.Login})

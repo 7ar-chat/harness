@@ -276,6 +276,49 @@ func TestFeaturesOptionReplacesTheProfileAndItsCleanupRunsWhenTheWorkerStops(t *
 	}
 }
 
+func TestMCPServersOptionIsBuiltOverTheWorkersStoreAndReleasedOnStopAndOnFailure(t *testing.T) {
+	// Arrange
+	quietEnv(t)
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotStore harness.Store
+	released := 0
+	o := Options{
+		Standalone: true, Backend: sandboxtest.NewBackend(), Models: llmtest.Factory{M: llmtest.New()},
+		MCPServers: func(_ context.Context, _ *config.Config, st harness.Store) (harness.MCPServersFunc, func(), error) {
+			gotStore = st
+			return func(context.Context, string, string) ([]config.MCPServer, error) { return nil, nil }, func() { released++ }, nil
+		},
+	}
+
+	// Act
+	b, err := buildHarness(context.Background(), cfg, o, newMetrics())
+	if err != nil {
+		t.Fatal(err)
+	}
+	whileRunning := released
+	b.close()
+
+	// Assert
+	if gotStore == nil || gotStore != b.h.Store {
+		t.Errorf("the source got store %v, the harness uses %v", gotStore, b.h.Store)
+	}
+	if whileRunning != 0 || released != 1 {
+		t.Errorf("released %d while running, %d after close; want 0 and 1", whileRunning, released)
+	}
+
+	// A source that fails to build stops the worker, and what it opened is still released.
+	released = 0
+	o.MCPServers = func(context.Context, *config.Config, harness.Store) (harness.MCPServersFunc, func(), error) {
+		return nil, func() { released++ }, errors.New("no database")
+	}
+	if _, err := buildHarness(context.Background(), cfg, o, newMetrics()); err == nil || released != 1 {
+		t.Errorf("a failing source: err %v, released %d", err, released)
+	}
+}
+
 func TestWithoutFeaturesTheWorkerBuildsTheProfileOfTheConfiguration(t *testing.T) {
 	// Arrange
 	quietEnv(t)

@@ -26,8 +26,14 @@ func install(b *harness.Builder) error {
 		pending = b.Config.Layers.MCPPending
 	}
 	p := mcptools.NewWithPending(b.Config.MCPServers, pending, b.Options.Version, mcptools.MaxResultChars)
+	if p == nil && b.Options.MCPServers != nil {
+		p = mcptools.NewDynamic(nil, b.Options.Version, mcptools.MaxResultChars)
+	}
 	if p == nil {
 		return nil
+	}
+	if b.Options.MCPServers != nil {
+		p.Dynamic = b.Options.MCPServers
 	}
 	p.CallTimeout = b.Config.MCPCallTimeout()
 	if b.Config.Layers != nil {

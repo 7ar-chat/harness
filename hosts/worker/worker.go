@@ -57,6 +57,10 @@ type Options struct {
 	// worker stops. A worker has to install the features whose end-of-run hooks, tools or policies must apply to
 	// the runs it executes (the agent factory is one): a run is finished by the process that ran it.
 	Features func(ctx context.Context, cfg *config.Config, st harness.Store) ([]harness.Feature, func(), error)
+	// MCPServers supplies the MCP servers of the marketplace for each run (harness.Options.MCPServers), built once
+	// the worker's store is known; nil adds none. The returned func releases what it opened and runs when the worker
+	// stops, or when building the harness fails.
+	MCPServers func(ctx context.Context, cfg *config.Config, st harness.Store) (harness.MCPServersFunc, func(), error)
 
 	// OnListening is called with the admin address once the server accepts connections.
 	OnListening func(addr string)

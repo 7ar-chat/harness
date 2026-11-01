@@ -106,7 +106,15 @@ type Options struct {
 	// says whether a key is a memory shared between people (a project's).
 	MemoryUserKey func(ctx context.Context, login, threadID string) string
 	MemoryShared  func(key string) bool
+	// MCPServers, when set, supplies more MCP servers for each run of login on threadID (a marketplace kept in
+	// a database: the servers of the thread's project or of the user). They are merged after the configured
+	// ones, are treated as untrusted (config.MCPServer.Untrusted) and need package mcpfeature to be imported.
+	MCPServers MCPServersFunc
 }
+
+// MCPServersFunc returns the MCP servers a run may use besides the configured ones. An error is logged and the run
+// continues without them.
+type MCPServersFunc func(ctx context.Context, threadID, login string) ([]config.MCPServer, error)
 
 // Harness runs agent runs for any number of users and threads.
 type Harness struct {

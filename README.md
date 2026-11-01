@@ -932,6 +932,9 @@ only one read from the host, and only with the local backend or the explicit `HA
 
 ### MCP servers
 
+The sources below are fixed at start-up. Servers that a project or a user adds at run time come from the **marketplace**
+(a catalog the product ships plus custom servers kept in the database, with their keys sealed): see [docs/marketplace.md](docs/marketplace.md).
+
 Sources, lowest to highest (a later one replaces a server of the same name): `~/.har/config.yml` `mcp.servers`, `~/.har/mcp.json`,
 `<repo>/.mcp.json`, `<repo>/.har/mcp.json`, `<repo>/.har/config.yml` `mcp.servers`, `MCP_SERVERS`. Files use the shared format:
 
@@ -1026,7 +1029,7 @@ validation. `make ci` runs the Go and web steps locally. After changing a DTO of
   one is already running), so a skill added to `/workspace` mid-run is seen by the next run. When the run itself
   starts the sandbox, the project skills it holds (fenced as untrusted, like the prompt's) are announced to the model
   in a note before its next model call, once per run, because the prompt never starts a sandbox just to list them.
-* Web search is not built in: configure any web-search MCP server in `MCP_SERVERS`.
+* Web search is not built in: enable one from the MCP marketplace (Exa ships in the catalog and is on by default, see [docs/marketplace.md](docs/marketplace.md)) or configure any web-search MCP server in `MCP_SERVERS`.
 * The sandbox image (`sandbox-image/Dockerfile`) was built and smoke-tested on 2026-10-30 for linux/arm64 and linux/amd64 (see `sandbox-image/README.md`); it has not yet been run under a live OpenSandbox lifecycle server.
 
 ## License

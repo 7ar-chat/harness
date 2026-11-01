@@ -36,6 +36,46 @@ export interface Author {
 
 export type AuthorKind = "user" | "supervisor" | "system";
 
+export interface CapabilityFieldView {
+  key: string;
+  label: string;
+  help?: string;
+  secret: boolean;
+  required: boolean;
+  set: boolean;
+}
+
+export interface CapabilityTestResult {
+  ok: boolean;
+  error?: string;
+  tools?: CapabilityTool[];
+}
+
+export interface CapabilityTool {
+  name: string;
+  description: string;
+  readOnly: boolean;
+}
+
+export interface CapabilityView {
+  name: string;
+  kind: string;
+  title: string;
+  description: string;
+  category?: string;
+  homepage?: string;
+  url: string;
+  transport: string;
+  enabled: boolean;
+  defaultEnabled: boolean;
+  installed: boolean;
+  orphan?: boolean;
+  fields?: CapabilityFieldView[];
+  headerNames?: string[];
+  missing?: string[];
+  tools?: string[];
+}
+
 export interface Command {
   name: string;
   description?: string;

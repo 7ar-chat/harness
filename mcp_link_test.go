@@ -1,11 +1,13 @@
 package harness_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/ai/llm/llmtest"
+	"github.com/7ar-chat/harness/config"
 	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
 )
 
@@ -39,5 +41,19 @@ func TestWithoutMCPServersTheMCPFeatureIsANoOp(t *testing.T) {
 
 	if err != nil || h == nil {
 		t.Fatalf("New: %v", err)
+	}
+}
+
+func TestADynamicMCPSourceWithoutTheMCPPackageFailsNew(t *testing.T) {
+	cfg := featureConfig(t, nil)
+
+	_, err := harness.New(harness.Options{
+		Config: cfg, Models: llmtest.Factory{M: llmtest.New()}, Backend: sandboxtest.NewBackend(),
+		Features:   []harness.Feature{harness.Sandbox(), harness.MCP()},
+		MCPServers: func(context.Context, string, string) ([]config.MCPServer, error) { return nil, nil },
+	})
+
+	if err == nil || !strings.Contains(err.Error(), "mcpfeature") {
+		t.Fatalf("err %v, want an error naming the mcpfeature package", err)
 	}
 }

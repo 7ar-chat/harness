@@ -45,6 +45,10 @@ type MCPServer struct {
 	// ProjectRoot is set on a server a project file defines (.mcp.json, .har/mcp.json, the project config.yml):
 	// a stdio one needs the user's approval for this exact command before it is started (MCPApproved).
 	ProjectRoot string `json:"-"`
+	// Untrusted marks a server that came from the database (a catalog entry or a custom server a user added):
+	// it is dialled through the SSRF-guarded transport, never started as a process, and, with no Tools list,
+	// offers only the tools its own annotations declare readOnlyHint. It is never read from a file or JSON.
+	Untrusted bool `json:"-"`
 }
 
 // IsStdio reports a server started as a local child process.

@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useGithubConnector } from "@/components/app/github-import";
+import { CapabilitiesPanel } from "@/components/app/capabilities";
 import { toast } from "sonner";
 import { Download, FileText } from "lucide-react";
 import { MemoryManager } from "./Memory";
@@ -306,6 +307,7 @@ export function ProjectPage() {
               Memory
               {stats.data?.pending ? <span className="rounded-full bg-warning px-1.5 text-[10px] text-black" aria-label={`${stats.data.pending} to review`}>{stats.data.pending}</span> : null}
             </TabsTrigger>
+            <TabsTrigger value="capabilities">Capabilities</TabsTrigger>
             <TabsTrigger value="audit">Audit</TabsTrigger>
             {owner ? <TabsTrigger value="settings">Settings</TabsTrigger> : null}
           </TabsList>
@@ -333,6 +335,9 @@ export function ProjectPage() {
           </TabsContent>
           <TabsContent value="memory" className="mt-4">
             <MemoryManager project={projectId} compact readOnly={!canWrite(p.role)} />
+          </TabsContent>
+          <TabsContent value="capabilities" className="mt-4">
+            <CapabilitiesPanel scope={{ kind: "project", projectId, canEdit: owner }} />
           </TabsContent>
           <TabsContent value="audit" className="mt-4">
             <Audit pid={projectId} />

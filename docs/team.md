@@ -125,6 +125,11 @@ GIF up to 512 KB, type checked from the bytes; no SVG), shown on every message, 
   a user with Telegram linked produce a short note (unless the watcher is on, which hands them to the assistant).
   The bot long-polls, so no public webhook is needed; run it in one replica only.
 
+**Capabilities.** The Capabilities tab of a project (owners edit, members read) and the profile card manage the MCP servers a
+run may use: a shipped catalog (Exa is on by default) plus custom servers, per project and per user. A project thread uses only the
+project's servers, a personal thread only the user's own. Keys are sealed with the same `HARNESS_SECRET_KEY`. See
+[marketplace.md](marketplace.md).
+
 ## Wiring it yourself
 
 `harness.Options` gains `MemoryKey` (which memory a run uses) and `Tools`/`Features` for the supervisor and
