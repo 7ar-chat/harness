@@ -126,6 +126,7 @@ type Harness struct {
 
 	sandboxTools bool
 	redo         redoStacks
+	factory      *Factory
 }
 
 // New wires the harness: the core (store, models, sandboxes, infrastructure,
@@ -231,6 +232,9 @@ func New(o Options) (*Harness, error) {
 		Purger: b.purger,
 		Jobs:   jobs,
 	}, st, h.Log, infra.Broker, h.Bus, h.Agent, locks)
+	for _, f := range b.ready {
+		f(h)
+	}
 	for _, f := range b.starts {
 		go f(context.Background())
 	}
@@ -387,6 +391,26 @@ func (h *Harness) sandboxMode(m SandboxMode) (string, error) {
 // without going through them must make that check itself.
 func (h *Harness) Events(ctx context.Context, runID string, after int64) <-chan store.Event {
 	return h.Log.Replay(ctx, runID, after)
+}
+
+// ReleaseSandbox destroys the sandbox of a thread that is finished for good and forgets it, so it stops counting
+// against its owner's MAX_SANDBOXES_PER_USER at once instead of when the provider expires it. A thread without a
+// sandbox is a no-op; a thread that is used again later simply gets a new one.
+func (h *Harness) ReleaseSandbox(ctx context.Context, threadID string) {
+	if h.Sandboxes == nil || !h.Sandboxes.Enabled() {
+		return
+	}
+	id, err := h.Store.ThreadSandbox(ctx, threadID)
+	if err != nil || id == "" {
+		return
+	}
+	swapped, err := h.Store.SwapThreadSandbox(ctx, threadID, id, "")
+	if err != nil || !swapped {
+		return // another process recorded a different sandbox meanwhile: it is not ours to kill
+	}
+	if err := h.Sandboxes.Kill(ctx, id); err != nil {
+		slog.Warn("releasing a sandbox failed", "thread_id", threadID, "sandbox_id", id, "error", err)
+	}
 }
 
 // Cancel stops a run: a queued one is cancelled at once, a running one gets a

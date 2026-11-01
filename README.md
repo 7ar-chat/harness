@@ -521,6 +521,13 @@ ping := harness.FeatureFunc("ping", func(b *harness.Builder) error {
 h, err := harness.New(harness.Options{Config: cfg, Features: append(harness.ProfileMinimal(), ping)})
 ```
 
+## Agent factory
+
+`harness.FactoryFeature` turns the harness into a factory that takes work from GitHub webhooks and cron, runs agents on
+it unattended, delivers pull requests, and merges them only after CI and an independent reviewer model agree, under
+per-task budgets, loop guards and autonomy policies. `harness-web` enables it with `FACTORY=1`. See
+[docs/factory.md](docs/factory.md).
+
 ## Sandbox per run
 
 The sandbox is optional for each run: `RunOptions.Sandbox` (JSON `sandbox` on `POST /api/threads/{id}/runs`) is
@@ -581,7 +588,7 @@ ai/                            module ai: how the agent talks to models and tool
   llm/        provider factory, OpenAI Responses + Anthropic Messages clients, retry, test doubles (llm/llmtest)
   compaction/ context estimation and summarisation
 core/                          module core: the vocabulary, no dependencies on the rest
-  agui/       AG-UI events           store/     domain types + persistence ports (Store, Full, TeamStore…)
+  agui/       AG-UI events           store/     domain types + persistence ports (Store, Full, TeamStore…)   factory/   factory tasks, triggers and ports
   sandbox/    sandbox contract, manager, background-job port, sandboxtest (fake)   blobs/   content-store port
 config/ modelinfo/ engine/syncx prompts    settings, model table (module modelinfo), small helpers, prompt text
 engine/                        the reusable intelligence
@@ -591,12 +598,13 @@ engine/                        the reusable intelligence
   eventlog/ queue/ approvals/   (interfaces and in-memory implementations only)
 coding/                        the coding toolset: sandboxtools (read/write/edit/search/exec/jobs), gitsafe, codecheck
 adapters/                      implementations of the ports
-  store/{memstore,filestore,pgstore,teamstore}   memory, durable local files, Postgres
+  store/{memstore,filestore,pgstore,teamstore,factorystore}   memory, durable local files, Postgres
   redisx/                      Redis: queue + bus, event log, coordinator, job list, skill installs
   sandbox/{local,opensandbox,backends}   your machine (trusted), OpenSandbox (remote), the SANDBOX_BACKEND registry
   blobs/s3blobs/               S3-compatible blob store
 features/                      optional capabilities a host switches on (never import each other)
   permissions/ projectdocs/ explore/ plan/ mcp/ memory/ skills/ goals/ titles/ verify/ artifacts/ (+ artifacts/workspace)
+  factory/{tasks,triggers,delegate,forge,review,budget,policy,lessons}   the agent factory (one unit; see docs/factory.md)
 harness.go feature*.go profiles.go infra.go   the facade: New / Send / Events / Steer / Cancel / Resume, Feature + Builder, profiles, Infra
 hosts/                         ways to drive the engine, and the contract front ends are written against
   client/ (the Client contract + HTTP implementation)   inproc/ (Client over a harness in this process)   clienttest/ (conformance suite)

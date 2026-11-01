@@ -52,6 +52,7 @@ type GitHubApp struct {
 type cachedToken struct {
 	token   string
 	expires time.Time
+	grant   InstallationGrant
 }
 
 // NewGitHubApp parses the App's private key (PEM, PKCS#1 or PKCS#8).
@@ -166,32 +167,55 @@ func (g *GitHubApp) RepoInstallation(ctx context.Context, owner, repo string) (i
 // (repository names, without the owner) the token is limited to those repositories of the installation; without,
 // it covers every repository the App is installed on.
 func (g *GitHubApp) InstallationToken(ctx context.Context, installation int64, repos ...string) (string, error) {
+	tok, _, err := g.installationToken(ctx, installation, repos...)
+	return tok, err
+}
+
+// InstallationGrant is what an installation token may do: the permissions GitHub put in the token, such as
+// {"contents": "write", "pull_requests": "write"}. It is the grant of the token, not of any person, which is
+// why a repository's own "permissions" field (a user's collaborator rights) is no answer to "can this push".
+type InstallationGrant map[string]string
+
+// Can reports whether the grant gives at least level ("read", "write" or "admin") on a permission.
+func (g InstallationGrant) Can(permission, level string) bool {
+	rank := map[string]int{"read": 1, "write": 2, "admin": 3}
+	return rank[g[permission]] >= rank[level] && rank[level] > 0
+}
+
+// InstallationGrant mints (or reuses) a token like InstallationToken and returns its grant too.
+func (g *GitHubApp) InstallationGrant(ctx context.Context, installation int64, repos ...string) (string, InstallationGrant, error) {
+	return g.installationToken(ctx, installation, repos...)
+}
+
+func (g *GitHubApp) installationToken(ctx context.Context, installation int64, repos ...string) (string, InstallationGrant, error) {
 	key := strconv.FormatInt(installation, 10) + "/" + strings.Join(repos, ",")
 	g.mu.Lock()
 	if c, ok := g.tokens[key]; ok && time.Until(c.expires) > 2*time.Minute {
 		g.mu.Unlock()
-		return c.token, nil
+		return c.token, c.grant, nil
 	}
 	g.mu.Unlock()
 	jwt, err := g.jwt()
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	var out struct {
-		Token     string    `json:"token"`
-		ExpiresAt time.Time `json:"expires_at"`
+		Token       string            `json:"token"`
+		ExpiresAt   time.Time         `json:"expires_at"`
+		Permissions map[string]string `json:"permissions"`
 	}
 	body := map[string]any{}
 	if len(repos) > 0 {
 		body["repositories"] = repos
 	}
 	if _, err := g.do(ctx, http.MethodPost, "/app/installations/"+strconv.FormatInt(installation, 10)+"/access_tokens", jwt, body, &out); err != nil {
-		return "", err
+		return "", nil, err
 	}
+	grant := InstallationGrant(out.Permissions)
 	g.mu.Lock()
-	g.tokens[key] = cachedToken{out.Token, out.ExpiresAt}
+	g.tokens[key] = cachedToken{out.Token, out.ExpiresAt, grant}
 	g.mu.Unlock()
-	return out.Token, nil
+	return out.Token, grant, nil
 }
 
 // ParseRepo extracts owner and repository from a GitHub URL
@@ -320,4 +344,95 @@ func (g *GitHubApp) FileContent(ctx context.Context, installation int64, owner, 
 		return nil, fmt.Errorf("github: reading %s: %d", path, resp.StatusCode)
 	}
 	return io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+}
+
+// AppInfo is what GitHub says about the App itself: the permissions it was granted and the webhook events it
+// is subscribed to.
+type AppInfo struct {
+	Slug, Name string
+	// Permissions maps a permission ("contents", "pull_requests"…) to its level ("read", "write", "admin").
+	Permissions map[string]string
+	Events      []string
+}
+
+// Info asks GitHub about the App (GET /app, authenticated as the App).
+func (g *GitHubApp) Info(ctx context.Context) (*AppInfo, error) {
+	tok, err := g.jwt()
+	if err != nil {
+		return nil, err
+	}
+	var out struct {
+		Slug        string            `json:"slug"`
+		Name        string            `json:"name"`
+		Permissions map[string]string `json:"permissions"`
+		Events      []string          `json:"events"`
+	}
+	if _, err := g.do(ctx, http.MethodGet, "/app", tok, nil, &out); err != nil {
+		return nil, err
+	}
+	return &AppInfo{Slug: out.Slug, Name: out.Name, Permissions: out.Permissions, Events: out.Events}, nil
+}
+
+// RepoDetails is a repository as the installation sees it.
+type RepoDetails struct {
+	FullName, DefaultBranch string
+	Private                 bool
+	// CanPush and CanAdmin are what the installation token may do to the repository's contents (its grant:
+	// contents write/admin), not the "permissions" field of the repository, which describes a user.
+	CanPush, CanAdmin bool
+}
+
+// RepoDetails reads owner/repo with an installation token limited to that repository.
+func (g *GitHubApp) RepoDetails(ctx context.Context, installation int64, owner, repo string) (*RepoDetails, error) {
+	tok, grant, err := g.InstallationGrant(ctx, installation, repo)
+	if err != nil {
+		return nil, err
+	}
+	var out struct {
+		FullName      string `json:"full_name"`
+		DefaultBranch string `json:"default_branch"`
+		Private       bool   `json:"private"`
+	}
+	if _, err := g.do(ctx, http.MethodGet, "/repos/"+url.PathEscape(owner)+"/"+url.PathEscape(repo), tok, nil, &out); err != nil {
+		return nil, err
+	}
+	return &RepoDetails{FullName: out.FullName, DefaultBranch: out.DefaultBranch, Private: out.Private,
+		CanPush: grant.Can("contents", "write"), CanAdmin: grant.Can("administration", "write")}, nil
+}
+
+// BranchInfo is a branch of a repository.
+type BranchInfo struct {
+	Name      string
+	Protected bool
+	SHA       string
+}
+
+// ErrBranchNotFound means the repository has no such branch.
+var ErrBranchNotFound = errors.New("the repository has no such branch")
+
+// Branch reads a branch of owner/repo with an installation token limited to that repository.
+func (g *GitHubApp) Branch(ctx context.Context, installation int64, owner, repo, branch string) (*BranchInfo, error) {
+	tok, err := g.InstallationToken(ctx, installation, repo)
+	if err != nil {
+		return nil, err
+	}
+	segs := strings.Split(branch, "/")
+	for i, s := range segs {
+		segs[i] = url.PathEscape(s)
+	}
+	var out struct {
+		Name      string `json:"name"`
+		Protected bool   `json:"protected"`
+		Commit    struct {
+			SHA string `json:"sha"`
+		} `json:"commit"`
+	}
+	status, err := g.do(ctx, http.MethodGet, "/repos/"+url.PathEscape(owner)+"/"+url.PathEscape(repo)+"/branches/"+strings.Join(segs, "/"), tok, nil, &out)
+	if status == http.StatusNotFound {
+		return nil, ErrBranchNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &BranchInfo{Name: out.Name, Protected: out.Protected, SHA: out.Commit.SHA}, nil
 }

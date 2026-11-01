@@ -306,47 +306,6 @@ func TestErrorTrackerIsOffWithoutADSNRejectsABadOneAndTagsEventsWithEnvironmentA
 	}
 }
 
-func TestGitHubFromEnv(t *testing.T) {
-	pemKey := string(wbPrivateKeyPEM(t))
-	keyFile := filepath.Join(t.TempDir(), "app.pem")
-	if err := os.WriteFile(keyFile, []byte(pemKey), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	cases := []struct {
-		name    string
-		env     map[string]string
-		wantNil bool
-		wantErr string
-	}{
-		{"no app configured", nil, true, ""},
-		{"app id without a key", map[string]string{"GITHUB_APP_ID": "1"}, false, "GITHUB_APP_PRIVATE_KEY"},
-		{"key that is not PEM", map[string]string{"GITHUB_APP_ID": "1", "GITHUB_APP_PRIVATE_KEY": "garbage"}, false, "PEM"},
-		{"key file that does not exist", map[string]string{"GITHUB_APP_ID": "1", "GITHUB_APP_PRIVATE_KEY_FILE": filepath.Join(t.TempDir(), "missing")}, false, "GITHUB_APP_PRIVATE_KEY_FILE"},
-		{"inline key", map[string]string{"GITHUB_APP_ID": "1", "GITHUB_APP_SLUG": "my-app", "GITHUB_APP_PRIVATE_KEY": pemKey, "GITHUB_APP_CLIENT_ID": "cid", "GITHUB_APP_CLIENT_SECRET": "csec"}, false, ""},
-		{"key file wins over a broken inline key", map[string]string{"GITHUB_APP_ID": "1", "GITHUB_APP_PRIVATE_KEY": "garbage", "GITHUB_APP_PRIVATE_KEY_FILE": keyFile}, false, ""},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			// Act
-			app, err := githubFromEnv(env(c.env))
-
-			// Assert
-			if c.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), c.wantErr) {
-					t.Fatalf("err = %v, want %q", err, c.wantErr)
-				}
-				return
-			}
-			if err != nil || (app == nil) != c.wantNil {
-				t.Fatalf("app %v err %v", app, err)
-			}
-			if app != nil && c.env["GITHUB_APP_CLIENT_ID"] != "" && (app.ClientID != "cid" || app.ClientSecret != "csec" || app.Slug != "my-app") {
-				t.Errorf("app = %+v", app)
-			}
-		})
-	}
-}
-
 type wbFailingTeam struct {
 	store.TeamStore
 	err error

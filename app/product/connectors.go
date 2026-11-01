@@ -102,7 +102,9 @@ func (s *server) listConnectors(w http.ResponseWriter, r *http.Request, c Caller
 
 // ---- GitHub ----
 
-func (s *server) publicBase(r *http.Request) string {
+// configuredBase is the public address from the configuration ("" when none says): what a message sent outside
+// any request (a Telegram escalation) can link to.
+func (s *server) configuredBase() string {
 	if s.opt.PublicURL != "" {
 		return strings.TrimRight(s.opt.PublicURL, "/")
 	}
@@ -110,6 +112,13 @@ func (s *server) publicBase(r *http.Request) string {
 		if u, err := url.Parse(s.opt.OIDC.RedirectURL); err == nil && u.Host != "" {
 			return u.Scheme + "://" + u.Host
 		}
+	}
+	return ""
+}
+
+func (s *server) publicBase(r *http.Request) string {
+	if base := s.configuredBase(); base != "" {
+		return base
 	}
 	scheme := "http"
 	if r.TLS != nil {

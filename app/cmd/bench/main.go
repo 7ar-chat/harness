@@ -36,6 +36,8 @@ func main() {
 	priceIn := flag.Float64("price-in", 0, "USD per 1M uncached input tokens (enables the cost estimate)")
 	priceCached := flag.Float64("price-cached", 0, "USD per 1M cached input tokens")
 	priceOut := flag.Float64("price-out", 0, "USD per 1M output tokens")
+	sweFile := flag.String("swebench", "", "run the instances of this SWE-bench style JSONL file (cloned from GitHub) instead of the built-in tasks")
+	sweIDs := flag.String("swebench-ids", "", "with -swebench: only these instance ids (comma-separated)")
 	pprofAddr := flag.String("pprof", "", "serve net/http/pprof on this address (e.g. 127.0.0.1:6060) to profile memory and CPU of a run")
 	flag.Parse()
 	if *pprofAddr != "" {
@@ -70,11 +72,20 @@ func main() {
 			names = append(names, s)
 		}
 	}
-	selected, missing := bench.Select(names)
-	if len(missing) > 0 {
-		fatal(fmt.Errorf("unknown tasks %v (have: %s)", missing, bench.Names()))
+	var selected []bench.Task
+	if *sweFile != "" {
+		var err error
+		if selected, err = swebenchTasks(*sweFile, *sweIDs); err != nil {
+			fatal(err)
+		}
+	} else {
+		var missing []string
+		selected, missing = bench.Select(names)
+		if len(missing) > 0 {
+			fatal(fmt.Errorf("unknown tasks %v (have: %s)", missing, bench.Names()))
+		}
+		selected = bench.FilterTier(selected, *tier)
 	}
-	selected = bench.FilterTier(selected, *tier)
 	cfg, err := config.Load()
 	if err != nil {
 		fatal(err)

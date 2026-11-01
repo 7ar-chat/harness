@@ -38,6 +38,9 @@ type Options struct {
 	// replica reach the subscribers connected to the others. Nil keeps the feed in the process.
 	// harness-web uses redisx.NewFeedBus when REDIS_HOST is set.
 	Bus FeedBus
+	// Factory configures the routes of the agent factory (tasks, triggers, the GitHub webhook), which are
+	// served when the harness was built with harness.FactoryFeature.
+	Factory FactoryOptions
 	// SecretKey encrypts the connector tokens kept in the store (HARNESS_SECRET_KEY, else the OIDC
 	// session key). Without it, connectors are unavailable.
 	SecretKey []byte
@@ -97,6 +100,7 @@ func (s *server) Install(hs *httpapi.Server) error {
 		s.hub.attach(context.Background(), s.opt.Bus)
 	}
 	s.routeTeam()
+	s.routeFactory()
 	if s.opt.Supervisor != nil {
 		s.sup = s.opt.Supervisor
 		s.routeSupervisor()
