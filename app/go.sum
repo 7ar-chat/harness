@@ -1,11 +1,11 @@
-github.com/7ar-chat/harness v0.4.0 h1:KbKn3XTTY6irYmfU49SpiEqkUf1GU5zPkq4qRvM9gfM=
-github.com/7ar-chat/harness v0.4.0/go.mod h1:19NnS8WrrAvvQNhOX+gsVsXO6pSt9WshHodVLWxT228=
+github.com/7ar-chat/harness v0.5.0 h1:mrREIqsJ5+PpXgdvJkipyI7yk+FxXVCBzoUQ304gs1U=
+github.com/7ar-chat/harness v0.5.0/go.mod h1:P8f9/6IUCU/rgnKEzXySCfqyW+VFzEtMPBQaWr+qxP4=
 github.com/7ar-chat/harness/adapters/sandbox v0.1.1 h1:2sQyCOZEc1lEueTuTxi4EU0V/40yj9Aa7n848G3YI7I=
 github.com/7ar-chat/harness/adapters/sandbox v0.1.1/go.mod h1:gw7mvMpmpyDQK67sWsIUE0KHfITnRsGtmibdrsq7wDo=
 github.com/7ar-chat/harness/ai v0.1.2 h1:DHYzK4+heBopjY52rIQ0ThHALQUdARgNPhW0tikqZYA=
 github.com/7ar-chat/harness/ai v0.1.2/go.mod h1:KKP6+8k3+IT75WhkKilPEsCUOq8nhMxgxC0tBhw43t8=
-github.com/7ar-chat/harness/core v0.2.0 h1:KUKKDL7kbhu3MPmu+gpBaDYGK5WY1uvtfaG6AN7vOGA=
-github.com/7ar-chat/harness/core v0.2.0/go.mod h1:lIDn854mZywhezzqzgqkHl2SPELNXZN1YYnJMTP7emA=
+github.com/7ar-chat/harness/core v0.3.0 h1:D/ZksfV5PXl6xkI3STaiBliog5RPubMTzibO86zI8l0=
+github.com/7ar-chat/harness/core v0.3.0/go.mod h1:lIDn854mZywhezzqzgqkHl2SPELNXZN1YYnJMTP7emA=
 github.com/7ar-chat/harness/hosts/client v0.1.1 h1:q6bKJnxRgrtGWSRrfqYbjXebU6yC9bkvJj0p971DOBQ=
 github.com/7ar-chat/harness/hosts/client v0.1.1/go.mod h1:t6o3SIOpDFhsd/rb2ycT5dH0kFJf8Ycwi5GKy0oWlao=
 github.com/7ar-chat/harness/hosts/tui v0.1.1 h1:1zQxqWdbJHf5gjKnsAsXC+FwsJM0WHb4fYDsrLo2PoI=
