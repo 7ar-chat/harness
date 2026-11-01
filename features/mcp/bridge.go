@@ -28,6 +28,8 @@ type bridgeConfig struct {
 	ServerName string
 	// Only, when not empty, restricts the tools to these (raw) names.
 	Only []string
+	// ReadOnlyOnly keeps only the tools annotated readOnlyHint (an unannotated tool is not read-only).
+	ReadOnlyOnly bool
 	// Expose maps a server tool to the name the model sees (must be non-empty and unique).
 	Expose func(server string, t *mcp.Tool) string
 	// MaxChars caps a result (0: no cap), keeping PreserveTail characters of its end.
@@ -49,6 +51,9 @@ func listBridgeTools(ctx context.Context, c bridgeConfig) ([]ai.BaseTool, error)
 	out := make([]ai.BaseTool, 0, len(raw))
 	for _, t := range raw {
 		if len(only) > 0 && !only[t.Name] {
+			continue
+		}
+		if c.ReadOnlyOnly && (t.Annotations == nil || !t.Annotations.ReadOnlyHint) {
 			continue
 		}
 		exposed := c.Expose(c.ServerName, t)

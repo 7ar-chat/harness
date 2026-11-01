@@ -34,3 +34,24 @@ export interface MemoryInput {
   content: string;
   tags: string[];
 }
+
+/** The bodies the capabilities (MCP marketplace) endpoints take; the handlers decode them from unnamed structs, so they have no generated type. */
+export type CapabilityTransport = "http" | "sse";
+/** PUT .../capabilities/{name}: `fields` and `headers` merge into what is stored (an empty value removes the key); `tools` replaces the allow-list (empty = read-only tools). */
+export interface CapabilityPut {
+  enabled?: boolean;
+  fields?: Record<string, string>;
+  headers?: Record<string, string>;
+  tools?: string[];
+  url?: string;
+  transport?: CapabilityTransport;
+}
+/** POST .../capabilities: a custom server. */
+export interface CapabilityAdd {
+  name: string;
+  url: string;
+  transport?: CapabilityTransport;
+  headers?: Record<string, string>;
+  tools?: string[];
+  enabled?: boolean;
+}

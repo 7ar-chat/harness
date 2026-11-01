@@ -14,6 +14,7 @@ import (
 	"net/http"
 
 	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/core/capabilities"
 	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/hosts/client"
 	"github.com/7ar-chat/harness/hosts/httpapi"
@@ -47,6 +48,12 @@ type Options struct {
 	// PublicURL is the address users reach the server at (https://harness.example.com); OAuth callbacks
 	// are built from it. Default: derived from the OIDC redirect URL, else from the request.
 	PublicURL string
+	// Capabilities, with Team, serves the MCP marketplace routes (see capabilities.go); the store holds the
+	// catalog (seeded by the command from Catalog) and the installs of projects and users. Nil: no routes.
+	// Credentials a user fills in are sealed with SecretKey; without it a server that needs one cannot be set up.
+	Capabilities capabilities.Store
+	// MCPTester lists a server's tools for the marketplace's "test" action (nil: the action answers 501).
+	MCPTester MCPTester
 }
 
 type server struct {
@@ -55,9 +62,11 @@ type server struct {
 	team store.TeamStore
 	sup  *Supervisor
 	box  *secretBox
-	tg   *telegramBridge
-	hub  *hub
-	oidc *oidcAuth
+	// capBox seals the marketplace credentials (nil without a SecretKey).
+	capBox *secretBox
+	tg     *telegramBridge
+	hub    *hub
+	oidc   *oidcAuth
 }
 
 // New returns the HTTP handler: the API of h with the product on top.
@@ -96,10 +105,17 @@ func (s *server) Install(hs *httpapi.Server) error {
 			return err
 		}
 	}
+	if len(s.opt.SecretKey) > 0 && s.opt.Capabilities != nil {
+		var err error
+		if s.capBox, err = newSecretBoxFor(capabilitiesDomain, s.opt.SecretKey); err != nil {
+			return err
+		}
+	}
 	if s.opt.Bus != nil {
 		s.hub.attach(context.Background(), s.opt.Bus)
 	}
 	s.routeTeam()
+	s.routeCapabilities()
 	s.routeFactory()
 	if s.opt.Supervisor != nil {
 		s.sup = s.opt.Supervisor

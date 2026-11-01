@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bell, CheckCircle2, ExternalLink, Send, Upload, User as UserIcon, Volume2 } from "lucide-react";
+import { Bell, CheckCircle2, ExternalLink, Plug, Send, Upload, User as UserIcon, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import QRCode from "qrcode";
 import {
@@ -7,6 +7,7 @@ import {
 } from "@/api/queries";
 import type { Connector } from "@/api/types";
 import { Spinner, UserAvatar } from "@/components/app/common";
+import { CapabilitiesPanel } from "@/components/app/capabilities";
 import { GithubMark, ImportGithubDialog } from "@/components/app/github-import";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -376,6 +377,17 @@ export function ProfilePage() {
         <h1 className="text-xl font-semibold">Profile</h1>
         <ProfileCard />
         <Connectors />
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Plug className="size-4" /> Capabilities
+            </CardTitle>
+            <CardDescription>MCP servers that give your assistant more tools in your personal sessions.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CapabilitiesPanel scope={{ kind: "user" }} />
+          </CardContent>
+        </Card>
         <Preferences />
       </div>
     </ScrollArea>

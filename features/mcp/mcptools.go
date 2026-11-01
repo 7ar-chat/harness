@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"slices"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -42,7 +44,19 @@ type Provider struct {
 	Pending []config.MCPServer
 	Ask     bool
 	History func(ctx context.Context, threadID string) ([]*store.Message, error)
+	// Dynamic, when set, supplies more servers for each run (the marketplace: servers from the database for the
+	// run's project or user). Every server it returns is treated as Untrusted. A failure is logged and the run
+	// goes on with the other servers; a server whose tool prefix is already taken is skipped.
+	Dynamic func(ctx context.Context, threadID, login string) ([]config.MCPServer, error)
+
+	// transport is the base round tripper of Untrusted servers (nil: one SafeTransport shared by the provider).
+	// Tests inject a loopback-capable one; production never sets it.
+	transport http.RoundTripper
+	once      sync.Once
 }
+
+// errUntrustedStdio refuses a stdio server that did not come from the user's own configuration.
+var errUntrustedStdio = errors.New("a database-supplied MCP server cannot run a local command")
 
 // ErrNotApproved means a project's stdio server was not spawned: its command has no approval (or a changed one).
 var ErrNotApproved = errors.New("the project's stdio MCP server is not approved: approve it when asked, or run `harness trust mcp <name>`")
@@ -67,6 +81,24 @@ func NewWithPending(servers, pending []config.MCPServer, version string, maxResu
 	}
 	return &Provider{servers: servers, Pending: pending, version: version, ConnectTimeout: 15 * time.Second, MaxResultChars: maxResultChars}
 }
+
+// NewDynamic is a provider with no configured server, only the ones dynamic returns for each run.
+func NewDynamic(dynamic func(ctx context.Context, threadID, login string) ([]config.MCPServer, error), version string, maxResultChars int) *Provider {
+	return &Provider{Dynamic: dynamic, version: version, ConnectTimeout: 15 * time.Second, MaxResultChars: maxResultChars}
+}
+
+// untrustedTransport is the round tripper of the servers that came from the database.
+func (p *Provider) untrustedTransport() http.RoundTripper {
+	p.once.Do(func() {
+		if p.transport == nil {
+			p.transport = SafeTransport()
+		}
+	})
+	return p.transport
+}
+
+// toolPrefix is what every tool name of a server starts with.
+func toolPrefix(server string) string { return strings.TrimSuffix(ToolName(server, "x"), "x") }
 
 func (p *Provider) Name() string { return "mcp" }
 
@@ -110,7 +142,12 @@ func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]ai.BaseToo
 	taken := map[string]bool{} // exposed names are unique across the servers
 	offer, approved := p.pendingTools(ctx, rc)
 	all = append(all, offer...)
-	for _, s := range append(slices.Clone(p.servers), approved...) {
+	prefixes := map[string]bool{}
+	static := append(slices.Clone(p.servers), approved...)
+	for _, s := range static {
+		prefixes[toolPrefix(s.Name)] = true
+	}
+	for _, s := range static {
 		ts, sess, err := p.connect(ctx, s, rc, taken)
 		if err != nil {
 			slog.Warn("mcp server unavailable, skipping", "server", s.Name, "run_id", rc.RunID, "error", err)
@@ -118,6 +155,28 @@ func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]ai.BaseToo
 		}
 		sessions = append(sessions, sess)
 		all = append(all, ts...)
+	}
+	if p.Dynamic != nil {
+		dyn, err := p.Dynamic(ctx, rc.ThreadID, rc.Login)
+		if err != nil {
+			slog.Warn("mcp servers of the marketplace unavailable, continuing without them", "run_id", rc.RunID, "error", err)
+		}
+		for _, s := range dyn {
+			s.Untrusted = true // whatever the source says: these are user-supplied
+			prefix := toolPrefix(s.Name)
+			if prefixes[prefix] {
+				slog.Warn("mcp server skipped: its tool prefix is taken by another server", "server", s.Name, "run_id", rc.RunID)
+				continue
+			}
+			prefixes[prefix] = true
+			ts, sess, err := p.connect(ctx, s, rc, taken)
+			if err != nil {
+				slog.Warn("mcp server unavailable, skipping", "server", s.Name, "run_id", rc.RunID, "error", err)
+				continue
+			}
+			sessions = append(sessions, sess)
+			all = append(all, ts...)
+		}
 	}
 	return all, func() {
 		for _, s := range sessions {
@@ -127,7 +186,14 @@ func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]ai.BaseToo
 }
 
 func (p *Provider) connect(ctx context.Context, s config.MCPServer, rc tools.RunContext, taken map[string]bool) ([]ai.BaseTool, *mcp.ClientSession, error) {
-	tr := &headerTransport{base: http.DefaultTransport, headers: s.Headers}
+	if s.Untrusted && s.IsStdio() {
+		return nil, nil, errUntrustedStdio
+	}
+	var base http.RoundTripper = http.DefaultTransport
+	if s.Untrusted {
+		base = p.untrustedTransport()
+	}
+	tr := &headerTransport{base: base, headers: s.Headers}
 	if s.IsStdio() && s.ProjectRoot != "" {
 		ok, err := config.MCPApproved(p.TrustDir, s.ProjectRoot, s)
 		if err != nil {
@@ -137,7 +203,7 @@ func (p *Provider) connect(ctx context.Context, s config.MCPServer, rc tools.Run
 			return nil, nil, ErrNotApproved
 		}
 	}
-	srv := Server{Name: s.Name, URL: s.URL, Tools: s.Tools, Transport: tr, CallTimeout: p.CallTimeout, SSE: s.Type == "sse", taken: taken}
+	srv := Server{Name: s.Name, URL: s.URL, Tools: s.Tools, Transport: tr, CallTimeout: p.CallTimeout, SSE: s.Type == "sse", taken: taken, Untrusted: s.Untrusted}
 	if s.IsStdio() {
 		srv.ClientTransport = &mcp.CommandTransport{Command: StdioCommand(s)}
 	}
@@ -173,6 +239,9 @@ type Server struct {
 	Transport http.RoundTripper
 	// CallTimeout bounds one tool call (0: DefaultCallTimeout).
 	CallTimeout time.Duration
+	// Untrusted says the server was supplied by a user: redirects are limited (SafeCheckRedirect) and, without a
+	// Tools allow-list, only the tools annotated readOnlyHint are offered. The caller supplies the guarded Transport.
+	Untrusted bool
 	// SSE connects with the legacy HTTP+SSE transport instead of streamable HTTP.
 	SSE bool
 	// ClientTransport, when set, replaces the HTTP transports (a child process, an in-memory pipe in tests).
@@ -185,36 +254,11 @@ type Server struct {
 // ToolName(server, tool) with results capped at maxResultChars. connectTimeout
 // bounds connect + list tools; the session (closed by the caller) outlives it.
 func Connect(ctx context.Context, s Server, version string, connectTimeout time.Duration, maxResultChars int) ([]ai.BaseTool, *mcp.ClientSession, error) {
-	tr := s.Transport
-	if tr == nil {
-		tr = http.DefaultTransport
-	}
-	client := mcp.NewClient(&mcp.Implementation{Name: "harness", Version: version}, nil)
-	cctx, cancel := context.WithTimeout(ctx, connectTimeout)
-	defer cancel()
-	// The session outlives the connect timeout: it is bound to the transport, not cctx.
-	var transport mcp.Transport
-	switch {
-	case s.ClientTransport != nil:
-		transport = s.ClientTransport
-	case s.SSE:
-		transport = &mcp.SSEClientTransport{Endpoint: s.URL, HTTPClient: &http.Client{Transport: tr}}
-	default:
-		transport = &mcp.StreamableClientTransport{Endpoint: s.URL, HTTPClient: &http.Client{Transport: tr}, DisableStandaloneSSE: true}
-	}
-	connectCtx := cctx
-	if s.SSE || s.ClientTransport != nil {
-		// The SSE stream and a child process live as long as the context given to Connect:
-		// it must outlive the connect timeout, which only bounds the handshake.
-		var stop context.CancelFunc
-		connectCtx, stop = context.WithCancel(context.WithoutCancel(ctx))
-		timer := time.AfterFunc(connectTimeout, stop)
-		defer timer.Stop()
-	}
-	sess, err := client.Connect(connectCtx, transport, nil)
+	sess, cctx, release, err := dial(ctx, s, version, connectTimeout)
 	if err != nil {
 		return nil, nil, err
 	}
+	defer release()
 	// Original "{server}__{tool}" names per exposed name: the approval gate
 	// decides riskiness from them, not from the sanitized/truncated name.
 	originals := map[string][]string{}
@@ -225,7 +269,7 @@ func Connect(ctx context.Context, s Server, version string, connectTimeout time.
 	}
 	exposedOf := map[string]string{} // original tool name → exposed
 	ts, err := listBridgeTools(cctx, bridgeConfig{
-		Session: sess, ServerName: s.Name, Only: s.Tools, MaxChars: maxResultChars, PreserveTail: 2000,
+		Session: sess, ServerName: s.Name, Only: s.Tools, ReadOnlyOnly: s.Untrusted && len(s.Tools) == 0, MaxChars: maxResultChars, PreserveTail: 2000,
 		Expose: func(server string, t *mcp.Tool) string {
 			exposed, ok := exposedOf[t.Name]
 			if !ok {
@@ -262,6 +306,47 @@ func Connect(ctx context.Context, s Server, version string, connectTimeout time.
 		}
 	}
 	return ts, sess, nil
+}
+
+// dial opens a session to s. The returned context carries the connect timeout (use it for the calls that finish the
+// handshake, e.g. listing tools) and release frees its timer; the session itself outlives both.
+func dial(ctx context.Context, s Server, version string, connectTimeout time.Duration) (*mcp.ClientSession, context.Context, func(), error) {
+	tr := s.Transport
+	if tr == nil {
+		tr = http.DefaultTransport
+	}
+	httpClient := &http.Client{Transport: tr}
+	if s.Untrusted {
+		httpClient.CheckRedirect = SafeCheckRedirect
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "harness", Version: version}, nil)
+	cctx, cancel := context.WithTimeout(ctx, connectTimeout)
+	release := cancel
+	// The session outlives the connect timeout: it is bound to the transport, not cctx.
+	var transport mcp.Transport
+	switch {
+	case s.ClientTransport != nil:
+		transport = s.ClientTransport
+	case s.SSE:
+		transport = &mcp.SSEClientTransport{Endpoint: s.URL, HTTPClient: httpClient}
+	default:
+		transport = &mcp.StreamableClientTransport{Endpoint: s.URL, HTTPClient: httpClient, DisableStandaloneSSE: true}
+	}
+	connectCtx := cctx
+	if s.SSE || s.ClientTransport != nil {
+		// The SSE stream and a child process live as long as the context given to Connect:
+		// it must outlive the connect timeout, which only bounds the handshake.
+		var stop context.CancelFunc
+		connectCtx, stop = context.WithCancel(context.WithoutCancel(ctx))
+		timer := time.AfterFunc(connectTimeout, stop)
+		release = func() { timer.Stop(); cancel() }
+	}
+	sess, err := client.Connect(connectCtx, transport, nil)
+	if err != nil {
+		release()
+		return nil, nil, nil, err
+	}
+	return sess, cctx, release, nil
 }
 
 // namedTool is an MCP tool that also reports its original names

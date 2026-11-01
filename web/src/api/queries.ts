@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { api, ApiError, isUnsupported, putBytes } from "./client";
 import { isNewerVisit, loadLocalSeen, saveLocalSeen } from "@/lib/unread";
 import type {
-  AuditEntry, Connector, GithubRepos, KnownUser, User, Command, GithubStatus, Invite, Me, Member, MemoryEntry, MemoryInput, MemoryList, MemoryStats, ModelList, Overview,
+  AuditEntry, CapabilityAdd, CapabilityPut, CapabilityTestResult, CapabilityView, Connector, GithubRepos, KnownUser, User, Command, GithubStatus, Invite, Me, Member, MemoryEntry, MemoryInput, MemoryList, MemoryStats, ModelList, Overview,
   Project, ProjectWithRole, Role, Thread, WorkspaceFile,
 } from "./types";
 
@@ -22,6 +22,7 @@ export const qk = {
   github: (id: string) => ["project", id, "github"] as const,
   files: (thread: string, path: string) => ["files", thread, path] as const,
   seen: ["seen"] as const,
+  capabilities: (pid?: string) => ["capabilities", pid ?? "user"] as const,
 };
 
 export const meQuery = queryOptions({ queryKey: qk.me, queryFn: () => api.get<Me>("/me"), staleTime: 60_000, retry: (n, e) => !(e instanceof ApiError && e.status < 500) && n < 2 });
@@ -268,3 +269,29 @@ export function useUserDirectory(): Map<string, KnownUser> {
     return m;
   }, [members, me]);
 }
+
+// ---- capabilities (the MCP marketplace) ----
+/** Where capabilities live: a project (pid) or the caller's own personal sessions (no pid). */
+const capPath = (pid?: string, name?: string, suffix = "") => `${pid ? `/projects/${pid}` : "/me"}/capabilities${name ? `/${encodeURIComponent(name)}` : ""}${suffix}`;
+/** The scope's capabilities, or null when this server has no marketplace (404/501). */
+export const useCapabilities = (pid?: string, enabled = true) =>
+  useQuery({
+    queryKey: qk.capabilities(pid),
+    queryFn: async () => {
+      try {
+        return await api.get<CapabilityView[]>(capPath(pid));
+      } catch (e) {
+        if (isUnsupported(e)) return null;
+        throw e;
+      }
+    },
+    enabled,
+    retry: false,
+  });
+export const useProjectCapabilities = (pid: string) => useCapabilities(pid, !!pid);
+export const useMyCapabilities = () => useCapabilities();
+export const usePutCapability = (pid?: string) =>
+  useAction((v: { name: string; body: CapabilityPut }) => api.put<CapabilityView>(capPath(pid, v.name), v.body), () => [qk.capabilities(pid)]);
+export const useAddCapability = (pid?: string) => useAction((b: CapabilityAdd) => api.post<CapabilityView>(capPath(pid), b), () => [qk.capabilities(pid)], "Server added");
+export const useDeleteCapability = (pid?: string) => useAction((name: string) => api.del(capPath(pid, name)), () => [qk.capabilities(pid)]);
+export const useTestCapability = (pid?: string) => useAction((name: string) => api.post<CapabilityTestResult>(capPath(pid, name, "/test")), () => []);

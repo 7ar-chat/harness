@@ -145,7 +145,7 @@ func MCP() Feature {
 			return mcpInstall(b)
 		}
 		pending := b.Config.Layers != nil && len(b.Config.Layers.MCPPending) > 0
-		if len(b.Config.MCPServers) > 0 || pending {
+		if len(b.Config.MCPServers) > 0 || pending || b.Options.MCPServers != nil {
 			return errors.New(`harness: MCP servers are configured but MCP support is not linked: import _ "github.com/7ar-chat/harness/mcpfeature"`)
 		}
 		return nil
