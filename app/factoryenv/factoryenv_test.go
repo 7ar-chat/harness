@@ -1,11 +1,13 @@
 package factoryenv
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -110,7 +112,6 @@ func TestFactoryFromEnvReadsEveryVariable(t *testing.T) {
 		"FACTORY": "1", "FACTORY_RUN": "0", "FACTORY_WEBHOOK_SECRET": "whsec", "FACTORY_REVIEW_MODEL": "reviewer-model",
 		"FACTORY_NO_REVIEW": "1", "FACTORY_REQUIRE_TESTS": "1", "FACTORY_PROTECTED": "infra/**, *.pem ,,",
 		"FACTORY_MAX_CONCURRENT": "7", "FACTORY_MAX_ATTEMPTS": "5", "FACTORY_POLICY": "supervised",
-		"FACTORY_TASK_BUDGET_USD": "2.5", "FACTORY_TASK_BUDGET_TOKENS": "100000",
 		"FACTORY_DAILY_BUDGET_USD": "40", "FACTORY_DAILY_BUDGET_TOKENS": "9000000", "FACTORY_DAILY_PER_PROJECT": "1",
 		"FACTORY_LESSONS": "1",
 	}
@@ -135,8 +136,8 @@ func TestFactoryFromEnvReadsEveryVariable(t *testing.T) {
 	if o.MaxConcurrent != 7 || o.MaxAttempts != 5 {
 		t.Errorf("limits: %d, %d", o.MaxConcurrent, o.MaxAttempts)
 	}
-	if o.DefaultBudget != (factory.Budget{MaxUSD: 2.5, MaxTokens: 100000}) || o.DailyBudget != (factory.Budget{MaxUSD: 40, MaxTokens: 9000000}) {
-		t.Errorf("budgets: task %+v daily %+v", o.DefaultBudget, o.DailyBudget)
+	if o.DefaultBudget != (factory.Budget{}) || o.DailyBudget != (factory.Budget{MaxUSD: 40, MaxTokens: 9000000}) {
+		t.Errorf("budgets: task %+v daily %+v; only the daily cap is global", o.DefaultBudget, o.DailyBudget)
 	}
 	if o.PollEvery != 5*time.Second || o.Escalator != factory.Escalator(w.Escalator) || w.Escalator == nil || w.Hooks == nil || o.OnSpawn == nil {
 		t.Errorf("wiring: poll %v escalator %v hooks %v", o.PollEvery, o.Escalator, w.Hooks)
@@ -194,11 +195,7 @@ func TestFactoryFromEnvRejectsBadValuesNamingTheVariable(t *testing.T) {
 	fxEnv(t)
 	for name, tc := range map[string]struct{ key, value string }{
 		"policy":                 {"FACTORY_POLICY", "anarchy"},
-		"task usd not a number":  {"FACTORY_TASK_BUDGET_USD", "five"},
-		"task usd negative":      {"FACTORY_TASK_BUDGET_USD", "-1"},
 		"daily usd not a number": {"FACTORY_DAILY_BUDGET_USD", "lots"},
-		"task tokens":            {"FACTORY_TASK_BUDGET_TOKENS", "1e3x"},
-		"task tokens negative":   {"FACTORY_TASK_BUDGET_TOKENS", "-5"},
 		"daily tokens":           {"FACTORY_DAILY_BUDGET_TOKENS", "many"},
 		"max concurrent":         {"FACTORY_MAX_CONCURRENT", "four"},
 		"max attempts negative":  {"FACTORY_MAX_ATTEMPTS", "-3"},
@@ -215,77 +212,52 @@ func TestFactoryFromEnvRejectsBadValuesNamingTheVariable(t *testing.T) {
 	}
 }
 
-func TestFactoryWithAGitHubAppNeedsAReviewerOrADeliberateOptOut(t *testing.T) {
+func TestFactoryWithAGitHubAppStartsWithoutAReviewerModelAndFallsBackOnTheDefaultOne(t *testing.T) {
 	fxEnv(t)
 	app := fxApp(t)
-	for name, tc := range map[string]struct {
-		vars    map[string]string
-		wantErr string
-	}{
-		"no reviewer":           {map[string]string{"FACTORY": "1"}, "FACTORY_REVIEW_MODEL"},
-		"empty reviewer":        {map[string]string{"FACTORY": "1", "FACTORY_REVIEW_MODEL": ""}, "FACTORY_NO_REVIEW"},
-		"a reviewer":            {map[string]string{"FACTORY": "1", "FACTORY_REVIEW_MODEL": "reviewer"}, ""},
-		"the explicit opt out":  {map[string]string{"FACTORY": "1", "FACTORY_NO_REVIEW": "1"}, ""},
-		"opt out is only for 1": {map[string]string{"FACTORY": "1", "FACTORY_NO_REVIEW": "yes"}, "FACTORY_REVIEW_MODEL"},
+	for name, vars := range map[string]map[string]string{
+		"no reviewer model":    {"FACTORY": "1"},
+		"empty reviewer model": {"FACTORY": "1", "FACTORY_REVIEW_MODEL": ""},
+		"a reviewer model":     {"FACTORY": "1", "FACTORY_REVIEW_MODEL": "reviewer"},
+		"the explicit opt out": {"FACTORY": "1", "FACTORY_NO_REVIEW": "1"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			// Act
-			w, on, err := FromEnv(env(tc.vars), fxConfig(t), nil, app, nil)
+			w, on, err := FromEnv(env(vars), fxConfig(t), nil, app, nil)
 
-			// Assert
-			if tc.wantErr != "" {
-				if err == nil || on || !strings.Contains(err.Error(), tc.wantErr) {
-					t.Errorf("on=%v err=%v, want an error naming %s", on, err, tc.wantErr)
-				}
-				return
-			}
+			// Assert: never an error. The model is resolved by the facade: empty means the default model reviews.
 			if err != nil || !on {
 				t.Fatalf("on=%v err=%v", on, err)
 			}
-			if w.Options.Forge == nil || w.Options.Auth == nil {
-				t.Error("a GitHub App must give the factory a forge and the auth to clone and push")
-			}
-			if _, ok := w.Options.Auth.(product.FactoryAuth); !ok {
-				t.Errorf("Auth = %T, want the GitHub App adapter", w.Options.Auth)
+			if w.Options.Forge == nil || w.Options.Auth == nil || w.Options.ReviewModel != vars["FACTORY_REVIEW_MODEL"] {
+				t.Errorf("options = %+v", w.Options)
 			}
 		})
 	}
 }
 
-func TestFactoryPricesComeFromTheModelTableOnceItHasLoaded(t *testing.T) {
-	// Arrange: a local price table, as HARNESS_MODEL_PRICES=<file> gives.
+func TestTheRemovedGlobalTaskBudgetIsIgnoredAndSaidSo(t *testing.T) {
+	// Arrange
 	fxEnv(t)
-	table := filepath.Join(t.TempDir(), "prices.json")
-	if err := os.WriteFile(table, []byte(`{"gpt-test":{"litellm_provider":"openai","mode":"chat","input_cost_per_token":1e-6,"output_cost_per_token":2e-6}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("HARNESS_MODEL_PRICES", table)
+	var logs bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(old) })
 
 	// Act
-	w, _, err := FromEnv(env(map[string]string{"FACTORY": "1"}), fxConfig(t), nil, nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	w, on, err := FromEnv(env(map[string]string{"FACTORY": "1", "FACTORY_TASK_BUDGET_USD": "5", "FACTORY_TASK_BUDGET_TOKENS": "100"}), fxConfig(t), nil, nil, nil)
 
-	// Assert: the table loads in the background, then the model is priced; an unknown one never is.
-	if w.Options.Price == nil {
-		t.Fatal("no price function although a table is configured")
+	// Assert: no default budget reaches the tasks, and the operator is told why their setting did nothing.
+	if err != nil || !on {
+		t.Fatalf("on=%v err=%v", on, err)
 	}
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		if info, ok := w.Options.Price("gpt-test"); ok {
-			if !info.Priced || info.InputPerToken != 1e-6 || info.OutputPerToken != 2e-6 {
-				t.Fatalf("info = %+v", info)
-			}
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the model was never priced")
-		}
-		time.Sleep(10 * time.Millisecond)
+	if w.Options.DefaultBudget != (factory.Budget{}) {
+		t.Errorf("DefaultBudget = %+v, want none", w.Options.DefaultBudget)
 	}
-	if _, ok := w.Options.Price("no-such-model"); ok {
-		t.Error("an unknown model was priced")
+	for _, name := range []string{"FACTORY_TASK_BUDGET_USD", "FACTORY_TASK_BUDGET_TOKENS"} {
+		if !strings.Contains(logs.String(), name+" is no longer read") {
+			t.Errorf("no warning for %s in %q", name, logs.String())
+		}
 	}
 }
 

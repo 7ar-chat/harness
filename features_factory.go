@@ -37,9 +37,10 @@ type FactoryOptions struct {
 	Forge factory.Forge
 	// Auth mints repository tokens for cloning and pushing and for the forge client (required with Forge).
 	Auth factory.RepoAuth
-	// ReviewModel is the model of the independent reviewer that gates every
-	// merge. It should differ from the models that write code. Required with
-	// Forge unless NoReview is set.
+	// ReviewModel is the model of the reviewer that gates every merge. Set, it
+	// must differ from the model that wrote the change (the gate refuses to approve
+	// its own author's work). Empty, the default model reviews: weaker, because a
+	// model grades its own work, and every approval says so (review.SelfReviewNote).
 	ReviewModel string
 	// NoReview merges on green CI alone. It is a deliberate opt-out.
 	NoReview bool
@@ -156,9 +157,6 @@ func FactoryFeature(o FactoryOptions) Feature {
 		if o.Forge != nil {
 			if o.Auth == nil {
 				return errors.New("factory: a Forge needs Auth to clone and push")
-			}
-			if o.ReviewModel == "" && !o.NoReview {
-				return errors.New("factory: set ReviewModel (an independent reviewer gates every merge) or NoReview")
 			}
 			if err := b.RequireSandbox(); err != nil {
 				return fmt.Errorf("factory: pull requests need a sandbox: %w", err)
@@ -308,8 +306,12 @@ func FactoryFeature(o FactoryOptions) Feature {
 		if o.Forge != nil {
 			var gate factory.Gate
 			if !o.NoReview {
+				reviewer := o.ReviewModel
+				if reviewer == "" {
+					reviewer = cfg.LLMDefaultModel
+				}
 				gate = review.New(review.Options{
-					Forge: o.Forge, Models: b.Models, Model: o.ReviewModel, RequireDifferentModel: true,
+					Forge: o.Forge, Models: b.Models, Model: reviewer, RequireDifferentModel: o.ReviewModel != "",
 					SupportsReasoning: cfg.SupportsReasoning, Protected: o.Protected,
 					RequireTests: o.RequireTests, Rubric: o.ReviewRubric,
 				})

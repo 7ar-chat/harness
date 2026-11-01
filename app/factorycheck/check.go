@@ -483,19 +483,21 @@ func (r *run) reviewer() {
 	}
 	model := strings.TrimSpace(r.getenv("FACTORY_REVIEW_MODEL"))
 	noReview := r.getenv("FACTORY_NO_REVIEW") == "1"
+	author := r.cfg.LLMDefaultModel
 	var fs []finding
-	if noReview {
-		fs = append(fs, finding{Warn, "FACTORY_NO_REVIEW=1: merges rest on CI alone",
-			"set FACTORY_REVIEW_MODEL to a different model to have an independent reviewer gate merges"})
-	}
 	switch {
-	case model == "" && !noReview:
-		fs = append(fs, finding{Fail, "no reviewer: every merge needs an independent review",
-			"set FACTORY_REVIEW_MODEL to a model other than LLM_DEFAULT_MODEL, or FACTORY_NO_REVIEW=1 to opt out"})
-	case model != "":
-		if model == r.cfg.LLMDefaultModel {
+	case noReview:
+		fs = append(fs, finding{Warn, "FACTORY_NO_REVIEW=1: merges rest on CI alone",
+			"unset it to have a model review every pull request before it can merge"})
+	case model == "":
+		// Allowed: the default model reviews. It grades its own work, so the review is weaker than an independent one,
+		// and every approval it posts says so.
+		fs = append(fs, finding{Warn, fmt.Sprintf("no FACTORY_REVIEW_MODEL: %q reviews the changes it wrote itself, so the review is not independent", author),
+			"set FACTORY_REVIEW_MODEL to a different model on your router for an independent review"})
+	default:
+		if model == author {
 			fs = append(fs, finding{Fail, fmt.Sprintf("the reviewer %q is the author's model: the gate refuses to approve its own author's work", model),
-				"set FACTORY_REVIEW_MODEL to a model other than LLM_DEFAULT_MODEL"})
+				"leave FACTORY_REVIEW_MODEL unset to use the default model on purpose, or set a different one"})
 		}
 		if !r.cfg.ModelAllowed(model) {
 			fs = append(fs, finding{Fail, fmt.Sprintf("the reviewer %q is not in LLM_MODELS", model),
@@ -503,8 +505,8 @@ func (r *run) reviewer() {
 		}
 	}
 	okDetail := ""
-	if model != "" {
-		okDetail = fmt.Sprintf("%s reviews, %s writes", model, r.cfg.LLMDefaultModel)
+	if model != "" && !noReview {
+		okDetail = fmt.Sprintf("%s reviews, %s writes", model, author)
 	}
 	r.add(combine(NameReviewer, okDetail, fs...))
 }
@@ -568,14 +570,23 @@ func (r *run) sandboxQuota() {
 }
 
 func (r *run) budgets() {
-	for _, k := range []string{
-		"FACTORY_TASK_BUDGET_USD", "FACTORY_TASK_BUDGET_TOKENS", "FACTORY_DAILY_BUDGET_USD", "FACTORY_DAILY_BUDGET_TOKENS",
-	} {
+	// A task's budget is set by whoever creates the task or the trigger, so the deployment has only the day's cap.
+	var fs []finding
+	capped := false
+	for _, k := range []string{"FACTORY_DAILY_BUDGET_USD", "FACTORY_DAILY_BUDGET_TOKENS"} {
 		if f, err := strconv.ParseFloat(strings.TrimSpace(r.getenv(k)), 64); err == nil && f > 0 {
-			r.add(Check{Name: NameBudgets, Status: OK, Detail: "a spend cap is set (" + k + ")"})
-			return
+			capped = true
 		}
 	}
-	r.add(Check{Name: NameBudgets, Status: Warn, Detail: "no spend cap: tasks and the day are unlimited",
-		Fix: "set FACTORY_TASK_BUDGET_USD and FACTORY_DAILY_BUDGET_USD (or the _TOKENS variants)"})
+	if !capped {
+		fs = append(fs, finding{Warn, "no daily spend cap: the day's total is unlimited, and a task has a cap only if its creator sets one",
+			"set FACTORY_DAILY_BUDGET_USD or FACTORY_DAILY_BUDGET_TOKENS (tokens are counted for every model; dollars only for models with a known price)"})
+	}
+	for _, k := range []string{"FACTORY_TASK_BUDGET_USD", "FACTORY_TASK_BUDGET_TOKENS"} {
+		if strings.TrimSpace(r.getenv(k)) != "" {
+			fs = append(fs, finding{Warn, k + " is set but no longer read: a task's budget belongs to whoever creates the task",
+				"remove " + k + " from the environment"})
+		}
+	}
+	r.add(combine(NameBudgets, "a daily spend cap is set; a task's own budget is set by whoever creates it", fs...))
 }

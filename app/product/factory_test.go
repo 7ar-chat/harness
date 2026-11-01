@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -79,6 +80,13 @@ func (s *fxStore) ListEvents(ctx context.Context, id string, limit int) ([]facto
 		return nil, err
 	}
 	return s.Store.ListEvents(ctx, id, limit)
+}
+
+func (s *fxStore) AppendEvent(ctx context.Context, e factory.TaskEvent) error {
+	if err := s.err("AppendEvent"); err != nil {
+		return err
+	}
+	return s.Store.AppendEvent(ctx, e)
 }
 
 func (s *fxStore) ListTriggers(ctx context.Context, project string) ([]factory.Trigger, error) {
@@ -1145,5 +1153,301 @@ func TestFactoryWebhookEventsReachOnlyTheProjectOfTheirRepository(t *testing.T) 
 	}
 	if got := titles(b); len(got) != 1 {
 		t.Errorf("B's tasks = %v, want only the one for acme/beta", got)
+	}
+}
+
+// ---- budgets are chosen by whoever creates the task ----
+
+// budgetTask creates a task as bob with the given budget JSON, books spend on it and blocks it like the dispatcher
+// does when the cap is reached (spent: $1.20, 40000 tokens).
+func (e *fxEnv) budgetTask(budget string) string {
+	e.t.Helper()
+	id := e.json("POST", e.tasks(""), "bob", `{"title":"capped","spec":"do it","budget":`+budget+`}`, 201)["id"].(string)
+	if _, err := e.st.Store.AddSpend(e.ctx, id, factory.Spend{USD: 1.2, Tokens: 40000, Runs: 1}); err != nil {
+		e.t.Fatal(err)
+	}
+	e.block(id, "budget exhausted")
+	return id
+}
+
+func (e *fxEnv) taskOfID(id string) *factory.Task {
+	e.t.Helper()
+	tk, err := e.st.Store.GetTask(e.ctx, id)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return tk
+}
+
+func TestFactoryCreateTaskStoresTheCreatorsBudgetAndNeverInventsOne(t *testing.T) {
+	// Arrange
+	e := newFxEnv(t, fxOpts{})
+	cases := []struct {
+		name, body string
+		want       factory.Budget
+	}{
+		{"both caps", `"budget":{"maxUsd":2.5,"maxTokens":1000}`, factory.Budget{MaxUSD: 2.5, MaxTokens: 1000}},
+		{"dollars only", `"budget":{"maxUsd":3}`, factory.Budget{MaxUSD: 3}},
+		{"tokens only", `"budget":{"maxTokens":500}`, factory.Budget{MaxTokens: 500}},
+		{"explicit zeros", `"budget":{"maxUsd":0,"maxTokens":0}`, factory.Budget{}},
+		{"omitted", `"title":"x"`, factory.Budget{}},
+	}
+	for _, c := range cases {
+		// Act
+		got := e.json("POST", e.tasks(""), "bob", `{"title":"t","spec":"s",`+c.body+`}`, 201)
+
+		// Assert
+		if stored := e.taskOfID(got["id"].(string)).Budget; stored != c.want {
+			t.Errorf("%s: stored budget %+v, want %+v", c.name, stored, c.want)
+		}
+		returned, has := got["budget"].(map[string]any)
+		if c.want == (factory.Budget{}) && has && len(returned) != 0 {
+			t.Errorf("%s: an uncapped task came back with budget %v", c.name, returned)
+		}
+		if c.want.MaxUSD > 0 && returned["maxUsd"] != c.want.MaxUSD {
+			t.Errorf("%s: returned budget %v", c.name, returned)
+		}
+	}
+}
+
+func TestFactoryRejectsANegativeBudgetOnTasksAndTriggerTemplates(t *testing.T) {
+	// Arrange
+	e := newFxEnv(t, fxOpts{})
+	triggers := "/api/projects/" + e.project + "/triggers"
+	cases := []struct{ name, budget, field string }{
+		{"negative dollars", `{"maxUsd":-1}`, "budget.maxUsd must be a number >= 0"},
+		{"negative tokens", `{"maxTokens":-5}`, "budget.maxTokens must be a number >= 0"},
+		{"negative dollars beside valid tokens", `{"maxUsd":-0.01,"maxTokens":10}`, "budget.maxUsd must be a number >= 0"},
+	}
+	for _, c := range cases {
+		// Act
+		task := e.json("POST", e.tasks(""), "bob", `{"title":"t","budget":`+c.budget+`}`, 400)
+		trigger := e.json("POST", triggers, "alice", `{"name":"n","kind":"cron","schedule":"@every 1h","template":{"title":"t","budget":`+c.budget+`}}`, 400)
+
+		// Assert
+		for what, got := range map[string]map[string]any{"task": task, "trigger": trigger} {
+			msg, _ := got["error"].(map[string]any)["message"].(string)
+			if cnErrCode(got) != "invalid_budget" || !strings.Contains(msg, c.field) {
+				t.Errorf("%s %s: %v", c.name, what, got)
+			}
+		}
+	}
+	if got := e.list(e.tasks(""), "alice", 200); len(got) != 0 {
+		t.Errorf("a rejected task was stored: %v", got)
+	}
+	if got := e.list(triggers, "alice", 200); len(got) != 0 {
+		t.Errorf("a rejected trigger was stored: %v", got)
+	}
+}
+
+func TestFactoryTriggerTemplateKeepsItsBudgetAndDefaultsToNone(t *testing.T) {
+	// Arrange
+	e := newFxEnv(t, fxOpts{})
+	triggers := "/api/projects/" + e.project + "/triggers"
+
+	// Act
+	capped := e.json("POST", triggers, "alice", `{"name":"a","kind":"cron","schedule":"@every 1h","template":{"title":"t","budget":{"maxUsd":4,"maxTokens":9000}}}`, 201)
+	open := e.json("POST", triggers, "alice", `{"name":"b","kind":"cron","schedule":"@every 1h","template":{"title":"t"}}`, 201)
+
+	// Assert
+	tpl := func(tr map[string]any) factory.Budget {
+		b, _ := tr["template"].(map[string]any)["budget"].(map[string]any)
+		usd, _ := b["maxUsd"].(float64)
+		tokens, _ := b["maxTokens"].(float64)
+		return factory.Budget{MaxUSD: usd, MaxTokens: int64(tokens)}
+	}
+	if got := tpl(capped); got != (factory.Budget{MaxUSD: 4, MaxTokens: 9000}) {
+		t.Errorf("capped template budget = %+v", got)
+	}
+	if got := tpl(open); got != (factory.Budget{}) {
+		t.Errorf("a template without a budget got %+v", got)
+	}
+}
+
+func TestValidBudgetAcceptsZeroAndFiniteNonNegativeCaps(t *testing.T) {
+	// Arrange
+	cases := []struct {
+		name string
+		b    factory.Budget
+		ok   bool
+	}{
+		{"none", factory.Budget{}, true},
+		{"both", factory.Budget{MaxUSD: 1.5, MaxTokens: 1}, true},
+		{"negative usd", factory.Budget{MaxUSD: -1}, false},
+		{"negative tokens", factory.Budget{MaxTokens: -1}, false},
+		{"NaN", factory.Budget{MaxUSD: math.NaN()}, false},
+		{"+Inf", factory.Budget{MaxUSD: math.Inf(1)}, false},
+		{"-Inf", factory.Budget{MaxUSD: math.Inf(-1)}, false},
+	}
+	for _, c := range cases {
+		// Act
+		err := validBudget(c.b)
+
+		// Assert
+		if (err == nil) != c.ok {
+			t.Errorf("%s: validBudget(%+v) = %v", c.name, c.b, err)
+		}
+	}
+}
+
+func TestFactoryResumeBudgetIsChangedByTheCreatorOrAProjectOwnerOnly(t *testing.T) {
+	// Arrange: dave is a plain member, who neither created the tasks (bob did) nor owns the project (alice does).
+	e := newFxEnv(t, fxOpts{})
+	e.json("PUT", "/api/projects/"+e.project+"/members/dave", "alice", `{"role":"member"}`, 204)
+	old := factory.Budget{MaxUSD: 1, MaxTokens: 50000}
+	raised := `{"maxUsd":5,"maxTokens":100000}`
+	cases := []struct {
+		name, user, body string
+		want             int
+		budget           factory.Budget // after the request
+		state            factory.State
+	}{
+		{"the creator raises it", "bob", `{"budget":` + raised + `}`, 202, factory.Budget{MaxUSD: 5, MaxTokens: 100000}, factory.StateReady},
+		{"a project owner raises it", "alice", `{"budget":` + raised + `}`, 202, factory.Budget{MaxUSD: 5, MaxTokens: 100000}, factory.StateReady},
+		{"another member may not", "dave", `{"budget":` + raised + `}`, 403, old, factory.StateBlocked},
+		{"a viewer may not", "carol", `{"budget":` + raised + `}`, 403, old, factory.StateBlocked},
+		{"zero removes the caps", "bob", `{"budget":{}}`, 202, factory.Budget{}, factory.StateReady},
+		{"zero on one axis removes only that cap", "bob", `{"budget":{"maxUsd":5}}`, 202, factory.Budget{MaxUSD: 5}, factory.StateReady},
+		{"feedback alone leaves the budget", "bob", `{"feedback":"go on"}`, 202, old, factory.StateReady},
+		{"another member may resume without touching it", "dave", `{"feedback":"go on"}`, 202, old, factory.StateReady},
+		{"dollars at the amount spent", "bob", `{"budget":{"maxUsd":1.2}}`, 400, old, factory.StateBlocked},
+		{"dollars below the amount spent", "bob", `{"budget":{"maxUsd":0.5}}`, 400, old, factory.StateBlocked},
+		{"tokens at the amount spent", "bob", `{"budget":{"maxTokens":40000}}`, 400, old, factory.StateBlocked},
+		{"tokens below the amount spent", "alice", `{"budget":{"maxUsd":9,"maxTokens":39999}}`, 400, old, factory.StateBlocked},
+		{"negative dollars", "bob", `{"budget":{"maxUsd":-1}}`, 400, old, factory.StateBlocked},
+		{"negative tokens", "bob", `{"budget":{"maxTokens":-1}}`, 400, old, factory.StateBlocked},
+	}
+	for _, c := range cases {
+		id := e.budgetTask(`{"maxUsd":1,"maxTokens":50000}`)
+
+		// Act
+		got := e.json("POST", e.tasks("/"+id+"/resume"), c.user, c.body, c.want)
+
+		// Assert
+		tk := e.taskOfID(id)
+		if tk.Budget != c.budget || tk.State != c.state {
+			t.Errorf("%s: budget %+v state %s, want %+v %s", c.name, tk.Budget, tk.State, c.budget, c.state)
+		}
+		code := map[int]string{400: "invalid_budget", 403: "forbidden"}[c.want]
+		if cnErrCode(got) != code {
+			t.Errorf("%s: code %q, want %q", c.name, cnErrCode(got), code)
+		}
+	}
+}
+
+func TestFactoryResumeRefusesABudgetTheTaskAlreadySpentAndSaysWhy(t *testing.T) {
+	// Arrange
+	e := newFxEnv(t, fxOpts{})
+	id := e.budgetTask(`{"maxUsd":1}`)
+
+	// Act
+	got := e.json("POST", e.tasks("/"+id+"/resume"), "bob", `{"budget":{"maxUsd":1}}`, 400)
+
+	// Assert
+	msg, _ := got["error"].(map[string]any)["message"].(string)
+	if want := "the task already spent $1.20 and 40000 tokens; set a higher cap, or 0 to remove it"; !strings.Contains(msg, want) {
+		t.Errorf("message %q does not say %q", msg, want)
+	}
+}
+
+func TestFactoryResumeWithABudgetRecordsWhoChangedItAndFrom(t *testing.T) {
+	// Arrange
+	e := newFxEnv(t, fxOpts{})
+	raise := e.budgetTask(`{"maxUsd":1,"maxTokens":50000}`)
+	remove := e.budgetTask(`{"maxUsd":1}`)
+	refused := e.budgetTask(`{"maxUsd":1}`)
+
+	// Act
+	e.json("POST", e.tasks("/"+raise+"/resume"), "alice", `{"budget":{"maxUsd":5,"maxTokens":100000}}`, 202)
+	e.json("POST", e.tasks("/"+remove+"/resume"), "bob", `{"budget":{}}`, 202)
+	e.json("POST", e.tasks("/"+refused+"/resume"), "bob", `{"budget":{"maxUsd":0.1}}`, 400)
+
+	// Assert
+	texts := func(id string) []string {
+		var out []string
+		evs, err := e.f.Tasks.Events(e.ctx, id, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, ev := range evs {
+			if ev.Kind == factory.EventBudget {
+				out = append(out, ev.Text)
+			}
+		}
+		return out
+	}
+	if got := texts(raise); len(got) != 1 || got[0] != "budget changed by alice: $1.00, 50000 tokens -> $5.00, 100000 tokens" {
+		t.Errorf("raise events = %q", got)
+	}
+	if got := texts(remove); len(got) != 1 || got[0] != "budget changed by bob: $1.00, no token cap -> no $ cap, no token cap" {
+		t.Errorf("remove events = %q", got)
+	}
+	if got := texts(refused); len(got) != 0 {
+		t.Errorf("a refused change was recorded: %q", got)
+	}
+}
+
+func TestFactoryTaskBlockedOnItsBudgetRunsAgainOnlyAfterTheCapIsRaised(t *testing.T) {
+	// Arrange: two tasks blocked for budget exhaustion with the same spend; the dispatcher refuses an over-budget one.
+	e := newFxEnv(t, fxOpts{})
+	raised := e.budgetTask(`{"maxUsd":1}`)
+	untouched := e.budgetTask(`{"maxUsd":1}`)
+
+	// Act
+	e.json("POST", e.tasks("/"+raised+"/resume"), "bob", `{"budget":{"maxUsd":5}}`, 202)
+	e.json("POST", e.tasks("/"+untouched+"/resume"), "bob", `{}`, 202)
+	started, err := e.f.Tasks.Dispatch(e.ctx)
+
+	// Assert: only the one with room under its new cap started; the other went straight back to blocked.
+	if err != nil {
+		t.Fatal(err)
+	}
+	if started != 1 {
+		t.Errorf("dispatch started %d tasks, want 1", started)
+	}
+	if got := e.stateOf(untouched); got != factory.StateBlocked {
+		t.Errorf("the task resumed without a higher cap is %s, want blocked again", got)
+	}
+	if got := e.taskOfID(raised).Attempts; got != 1 {
+		t.Errorf("the task with the raised cap has %d attempts, want it started once", got)
+	}
+	if got := e.taskOfID(untouched).Attempts; got != 0 {
+		t.Errorf("the task still over its cap started anyway (%d attempts)", got)
+	}
+}
+
+func TestFactoryResumeBudgetFailuresAreReportedAndNeverStrandTheTask(t *testing.T) {
+	// Arrange
+	e := newFxEnv(t, fxOpts{})
+	body := `{"budget":{"maxUsd":5}}`
+	conflict := e.budgetTask(`{"maxUsd":1}`)
+	broken := e.budgetTask(`{"maxUsd":1}`)
+	noHistory := e.budgetTask(`{"maxUsd":1}`)
+	ready := e.newTask("not blocked")
+
+	// Act / Assert: the task left Blocked between the read and the update.
+	e.st.failOn("UpdateTask", factory.ErrConflict)
+	if got := cnErrCode(e.json("POST", e.tasks("/"+conflict+"/resume"), "bob", body, 409)); got != "conflict" {
+		t.Errorf("conflict code %q", got)
+	}
+	e.st.failOn("UpdateTask", errCnBoom)
+	e.json("POST", e.tasks("/"+broken+"/resume"), "bob", body, 500)
+	e.st.failOn("UpdateTask", nil)
+	if tk := e.taskOfID(broken); tk.Budget.MaxUSD != 1 || tk.State != factory.StateBlocked {
+		t.Errorf("a failed update changed the task: %+v %s", tk.Budget, tk.State)
+	}
+	// A history line that cannot be written does not undo the stored change nor keep the task blocked.
+	e.st.failOn("AppendEvent", errCnBoom)
+	e.json("POST", e.tasks("/"+noHistory+"/resume"), "bob", body, 202)
+	e.st.failOn("AppendEvent", nil)
+	if tk := e.taskOfID(noHistory); tk.Budget.MaxUSD != 5 || tk.State != factory.StateReady {
+		t.Errorf("after a lost history line: %+v %s", tk.Budget, tk.State)
+	}
+	// A task that is not blocked is a conflict whoever asks, and its budget stays.
+	for _, user := range []string{"bob", "alice"} {
+		e.json("POST", e.tasks("/"+ready+"/resume"), user, body, 409)
+	}
+	if tk := e.taskOfID(ready); tk.Budget != (factory.Budget{}) {
+		t.Errorf("a refused resume changed the budget to %+v", tk.Budget)
 	}
 }

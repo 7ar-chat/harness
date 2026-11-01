@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -25,7 +26,7 @@ import (
 //	POST   /api/projects/{pid}/tasks {title,spec,role?,model?,policy?,repo?,baseBranch?,budget?,maxAttempts?,autoMerge?,dependsOn?,priority?} → 201 Task
 //	GET    /api/projects/{pid}/tasks/{tid}                  → {task, events}
 //	POST   /api/projects/{pid}/tasks/{tid}/cancel           → 202
-//	POST   /api/projects/{pid}/tasks/{tid}/resume {feedback} → 202   (a blocked task goes back to work)
+//	POST   /api/projects/{pid}/tasks/{tid}/resume {feedback?,budget?} → 202   (a blocked task goes back to work; budget: its creator or a project owner replaces the cap)
 //	GET    /api/projects/{pid}/triggers                     → [Trigger]
 //	POST   /api/projects/{pid}/triggers {name,kind,schedule|event,match,template,enabled} → 201 Trigger   (owner)
 //	DELETE /api/projects/{pid}/triggers/{trid}              → 204   (owner)
@@ -251,6 +252,10 @@ func (s *server) createTask(w http.ResponseWriter, r *http.Request, c Caller) {
 	if !ok {
 		return
 	}
+	if err := validBudget(b.Budget); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_budget", err.Error())
+		return
+	}
 	// Merging without a human is the owner's decision.
 	if b.AutoMerge && !store.RoleAtLeast(role, store.RoleOwner) {
 		writeError(w, http.StatusForbidden, "forbidden", "only a project owner can allow automatic merging.")
@@ -321,7 +326,7 @@ func (s *server) cancelTask(w http.ResponseWriter, r *http.Request, c Caller) {
 }
 
 func (s *server) resumeTask(w http.ResponseWriter, r *http.Request, c Caller) {
-	p, _, ok := s.project(w, r, c, store.RoleMember)
+	p, role, ok := s.project(w, r, c, store.RoleMember)
 	if !ok {
 		return
 	}
@@ -330,13 +335,17 @@ func (s *server) resumeTask(w http.ResponseWriter, r *http.Request, c Caller) {
 		return
 	}
 	var b struct {
-		Feedback string `json:"feedback"`
+		Feedback string          `json:"feedback"`
+		Budget   *factory.Budget `json:"budget"`
 	}
 	if !decode(w, r, &b) {
 		return
 	}
 	if t.State != factory.StateBlocked {
 		writeError(w, http.StatusConflict, "conflict", "Only a blocked task can be resumed.")
+		return
+	}
+	if b.Budget != nil && !s.changeBudget(w, r, c, role, t, *b.Budget) {
 		return
 	}
 	feedback := strings.TrimSpace(b.Feedback)
@@ -352,6 +361,66 @@ func (s *server) resumeTask(w http.ResponseWriter, r *http.Request, c Caller) {
 	s.factory().Tasks.Kick()
 	s.note(inProject(c, p.ID), t.ThreadID, "task.resume", map[string]any{"task": t.ID}, FeedEvent{Type: "task.updated", Title: t.Title})
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// validBudget accepts a cap of zero (none) or more on each axis; the JSON decoder already refuses what is not a
+// number, so what is left to refuse is a negative or a non-finite one.
+func validBudget(b factory.Budget) error {
+	if math.IsNaN(b.MaxUSD) || math.IsInf(b.MaxUSD, 0) || b.MaxUSD < 0 {
+		return errors.New("budget.maxUsd must be a number >= 0")
+	}
+	if b.MaxTokens < 0 {
+		return errors.New("budget.maxTokens must be a number >= 0")
+	}
+	return nil
+}
+
+func describeBudget(b factory.Budget) string {
+	usd, tokens := "no $ cap", "no token cap"
+	if b.MaxUSD > 0 {
+		usd = fmt.Sprintf("$%.2f", b.MaxUSD)
+	}
+	if b.MaxTokens > 0 {
+		tokens = fmt.Sprintf("%d tokens", b.MaxTokens)
+	}
+	return usd + ", " + tokens
+}
+
+// changeBudget replaces the cap of a blocked task before it is resumed. The budget is the choice of whoever created
+// the task, so only that person or a project owner may move it; a cap the task has already reached would block it
+// again at once, so it is refused with what the task spent. It writes the failure response and returns false when
+// the task must not be resumed.
+func (s *server) changeBudget(w http.ResponseWriter, r *http.Request, c Caller, role string, t *factory.Task, b factory.Budget) bool {
+	if t.Owner != c.Actor && !store.RoleAtLeast(role, store.RoleOwner) {
+		writeError(w, http.StatusForbidden, "forbidden", "only the task's creator or a project owner can change its budget.")
+		return false
+	}
+	if err := validBudget(b); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_budget", err.Error())
+		return false
+	}
+	if b.MaxUSD > 0 && b.MaxUSD <= t.Spent.USD || b.MaxTokens > 0 && b.MaxTokens <= t.Spent.Tokens {
+		writeError(w, http.StatusBadRequest, "invalid_budget",
+			fmt.Sprintf("the task already spent $%.2f and %d tokens; set a higher cap, or 0 to remove it.", t.Spent.USD, t.Spent.Tokens))
+		return false
+	}
+	ctx := r.Context()
+	_, err := s.factory().Store.UpdateTask(ctx, t.ID, factory.Patch{IfState: []factory.State{factory.StateBlocked}, Budget: &b})
+	if errors.Is(err, factory.ErrConflict) {
+		writeError(w, http.StatusConflict, "conflict", "Only a blocked task can be resumed.")
+		return false
+	}
+	if err != nil {
+		fail(w, err)
+		return false
+	}
+	text := fmt.Sprintf("budget changed by %s: %s -> %s", c.Actor, describeBudget(t.Budget), describeBudget(b))
+	e := factory.TaskEvent{TaskID: t.ID, Kind: factory.EventBudget, Text: text, Data: map[string]any{"actor": c.Actor, "from": t.Budget, "to": b}, At: time.Now()}
+	// The cap is already stored; a lost history line must not leave the task blocked.
+	if err := s.factory().Store.AppendEvent(ctx, e); err != nil {
+		slog.Warn("product: recording a budget change failed", "task", t.ID, "error", err)
+	}
+	return true
 }
 
 func (s *server) listTriggers(w http.ResponseWriter, r *http.Request, c Caller) {
@@ -409,6 +478,10 @@ func (s *server) createTrigger(w http.ResponseWriter, r *http.Request, c Caller)
 	t.ID, t.ProjectID, t.Owner, t.Enabled = "", p.ID, c.Actor, body.Enabled == nil || *body.Enabled
 	if strings.TrimSpace(t.Name) == "" || strings.TrimSpace(t.Template.Title) == "" {
 		writeError(w, http.StatusBadRequest, "invalid_trigger", "name and template.title are required.")
+		return
+	}
+	if err := validBudget(t.Template.Budget); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_budget", "template."+err.Error())
 		return
 	}
 	// The trigger's tasks run in the project's repository and nowhere else (a template is rejected, not rendered).

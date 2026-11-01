@@ -634,3 +634,36 @@ func TestPostVerdict(t *testing.T) {
 		t.Error("headline does not follow the verdict")
 	}
 }
+
+func TestAReviewByTheAuthorsOwnModelSaysSoInTheVerdict(t *testing.T) {
+	cases := []struct {
+		name         string
+		author       string
+		reviewer     string
+		wantSelfNote bool
+	}{
+		{"the author reviews itself", "reviewer-1", "reviewer-1", true},
+		{"names are compared without case or padding", "  Reviewer-1 ", "reviewer-1", true},
+		{"another model reviews", "author-1", "reviewer-1", false},
+		{"an unknown author is not claimed to be the reviewer", "", "reviewer-1", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// Arrange: the host did not require a different model (the reviewer fell back on the default one).
+			r := newRig(t, sourceAndTest(), func(o *review.Options) { o.Model = c.reviewer }, reply(verdictOK))
+			tk := task()
+			tk.Model = c.author
+
+			// Act
+			v, err := r.judge(t, tk)
+
+			// Assert: it still approves, but a reader of the pull request is told the review is not independent.
+			if err != nil || !v.Approve {
+				t.Fatalf("verdict = %+v, err = %v", v, err)
+			}
+			if got := strings.Contains(v.Summary, review.SelfReviewNote); got != c.wantSelfNote {
+				t.Errorf("self-review note = %v, want %v; summary %q", got, c.wantSelfNote, v.Summary)
+			}
+		})
+	}
+}
