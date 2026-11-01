@@ -13,14 +13,14 @@ require (
 	github.com/caarlos0/env/v11 v11.4.0
 	github.com/eino-contrib/jsonschema v1.0.3 // indirect
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.8.0
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/redis/go-redis/v9 v9.23.0
 	golang.org/x/text v0.42.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require github.com/kr/text v0.1.0 // indirect
+require github.com/kr/text v0.2.0 // indirect
 
 require github.com/getsentry/sentry-go v0.50.0
 
