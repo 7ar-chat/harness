@@ -29,6 +29,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/adapters/store/factorystore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
 	"github.com/7ar-chat/harness/config"
@@ -111,7 +112,11 @@ type rig struct {
 	http *http.Client
 }
 
-func newRig(t *testing.T) *rig {
+func newRig(t *testing.T) *rig { return newRigWith(t, nil) }
+
+// newRigWith is newRig whose web tier also installs the agent factory over the test database (nil: no factory).
+// The web tier only dispatches tasks; it never consumes the queue, so every run executes in a worker.
+func newRigWith(t *testing.T, factoryOpts func(*harness.FactoryOptions)) *rig {
 	t.Helper()
 	base := os.Getenv("HARNESS_TEST_DATABASE_URL")
 	if base == "" {
@@ -151,7 +156,13 @@ func newRig(t *testing.T) *rig {
 	t.Cleanup(func() { _ = rdb.Close() })
 	st := pgstore.NewPG(pool)
 	infra := redisinfra.Infra(rdb, st)
-	r.web, err = harness.New(harness.Options{Config: cfg, Store: st, Infra: &infra, RuntimeID: "web"})
+	ho := harness.Options{Config: cfg, Store: st, Infra: &infra, RuntimeID: "web"}
+	if factoryOpts != nil {
+		fo := harness.FactoryOptions{Store: factorystore.NewPG(pool, nil), Run: true, PollEvery: 50 * time.Millisecond}
+		factoryOpts(&fo)
+		ho.Features = append(harness.ProfileNamed(cfg.AgentProfile), harness.FactoryFeature(fo))
+	}
+	r.web, err = harness.New(ho)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -418,7 +429,10 @@ func freePort(t *testing.T) int {
 
 // startWorker starts `harness-worker -id id -concurrency 1` on the rig's Postgres, Redis and fake LLM and returns
 // once /readyz answers 200.
-func (r *rig) startWorker(id string) *worker {
+func (r *rig) startWorker(id string) *worker { return r.startWorkerEnv(id) }
+
+// startWorkerEnv is startWorker with more environment variables ("NAME=value") for the process.
+func (r *rig) startWorkerEnv(id string, extraEnv ...string) *worker {
 	r.t.Helper()
 	t := r.t
 	w := &worker{t: t, id: id, workspace: t.TempDir(), stderr: &lockedBuffer{}, exited: make(chan struct{})}
@@ -440,6 +454,7 @@ func (r *rig) startWorker(id string) *worker {
 		"RUNTIME_SHUTDOWN_GRACE_SECONDS=1",
 		"HARNESS_WORKER_ADDR=" + w.admin,
 	}
+	w.cmd.Env = append(w.cmd.Env, extraEnv...)
 	w.cmd.Stderr = w.stderr
 	w.cmd.Stdout = w.stderr
 	if err := w.cmd.Start(); err != nil {

@@ -9,6 +9,8 @@
 #   LLM_BASE_URL / LLM_API_KEY / LLM_MODELS / LLM_DEFAULT_MODEL
 #   LLM_DISCOVER_MODELS     (optional, default true) add the provider's model list to LLM_MODELS at startup; false: LLM_MODELS only
 #   TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_USERNAME   (optional; run one replica only: the bot long-polls)
+#   FACTORY / FACTORY_*     (optional) the agent factory: tasks from GitHub webhooks and cron, pull requests gated by CI and an
+#                           independent reviewer model. See docs/factory.md; check the setup with `harness-web -factory-check`.
 #   GITHUB_APP_ID / GITHUB_APP_SLUG / GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET / GITHUB_APP_PRIVATE_KEY
 #                           (optional GitHub App: private repositories and project import. The PEM goes on one
 #                           line in double quotes with \n for the line breaks.)
@@ -66,6 +68,26 @@ services:
       GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:-}
       GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:-}
       GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+
+      # The agent factory (docs/factory.md). Off unless FACTORY=1; with the GitHub App above it needs a webhook secret
+      # and a reviewer model that is not the model that writes code. Run `harness-web -factory-check owner/name` first.
+      FACTORY: ${FACTORY:-}
+      FACTORY_WEBHOOK_SECRET: ${FACTORY_WEBHOOK_SECRET:-}
+      FACTORY_REVIEW_MODEL: ${FACTORY_REVIEW_MODEL:-}
+      FACTORY_NO_REVIEW: ${FACTORY_NO_REVIEW:-}
+      FACTORY_REQUIRE_TESTS: ${FACTORY_REQUIRE_TESTS:-}
+      FACTORY_PROTECTED: ${FACTORY_PROTECTED:-}
+      FACTORY_POLICY: ${FACTORY_POLICY:-}
+      FACTORY_MAX_CONCURRENT: ${FACTORY_MAX_CONCURRENT:-}
+      FACTORY_MAX_ATTEMPTS: ${FACTORY_MAX_ATTEMPTS:-}
+      FACTORY_TASK_BUDGET_USD: ${FACTORY_TASK_BUDGET_USD:-}
+      FACTORY_TASK_BUDGET_TOKENS: ${FACTORY_TASK_BUDGET_TOKENS:-}
+      FACTORY_DAILY_BUDGET_USD: ${FACTORY_DAILY_BUDGET_USD:-}
+      FACTORY_DAILY_BUDGET_TOKENS: ${FACTORY_DAILY_BUDGET_TOKENS:-}
+      FACTORY_DAILY_PER_PROJECT: ${FACTORY_DAILY_PER_PROJECT:-}
+      FACTORY_LESSONS: ${FACTORY_LESSONS:-}
+      FACTORY_RUN: ${FACTORY_RUN:-}
+      MAX_SANDBOXES_PER_USER: ${MAX_SANDBOXES_PER_USER:-}
 
       SENTRY_DSN: ${SENTRY_DSN:-}
       SENTRY_RELEASE: ${SENTRY_RELEASE:-}

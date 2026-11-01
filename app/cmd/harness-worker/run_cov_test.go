@@ -3,12 +3,21 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"net"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/7ar-chat/harness/adapters/store/factorystore"
+	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/factory"
 )
 
 // wkEnv gives the worker a loadable, self-contained configuration.
@@ -144,4 +153,144 @@ func TestRunFlagParsing(t *testing.T) {
 			}
 		})
 	}
+}
+
+func wkGetenv(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
+
+func TestTheFactoryIsInstalledOnlyWhenSwitchedOn(t *testing.T) {
+	// Arrange / Act
+	off := factoryFeatures(wkGetenv(map[string]string{"FACTORY": "true"}), true)
+	on := factoryFeatures(wkGetenv(map[string]string{"FACTORY": "1"}), true)
+
+	// Assert
+	if off != nil {
+		t.Error("the worker builds a factory without FACTORY=1")
+	}
+	if on == nil {
+		t.Fatal("the worker does not build a factory with FACTORY=1")
+	}
+}
+
+func TestAWorkerExecutesRunsAndLeavesTheDispatcherToTheWebTierUnlessToldOtherwise(t *testing.T) {
+	// Arrange
+	wkEnv(t)
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	vars := func(extra map[string]string) func(string) string {
+		m := map[string]string{"FACTORY": "1", "FACTORY_POLICY": "supervised", "FACTORY_MAX_ATTEMPTS": "5", "FACTORY_NO_REVIEW": "1"}
+		for k, v := range extra {
+			m[k] = v
+		}
+		return wkGetenv(m)
+	}
+
+	// Act
+	def, err1 := factoryOptions(vars(nil), cfg, factorystore.NewMem(nil), nil)
+	opted, err2 := factoryOptions(vars(map[string]string{"FACTORY_RUN": "1"}), cfg, factorystore.NewMem(nil), nil)
+	zero, err3 := factoryOptions(vars(map[string]string{"FACTORY_RUN": "0"}), cfg, factorystore.NewMem(nil), nil)
+
+	// Assert: the same settings as the web tier, a dispatcher only on request, no product attachments.
+	if err1 != nil || err2 != nil || err3 != nil {
+		t.Fatalf("errors: %v, %v, %v", err1, err2, err3)
+	}
+	if def.Run || zero.Run || !opted.Run {
+		t.Errorf("Run: default %v, FACTORY_RUN=0 %v, FACTORY_RUN=1 %v; want false, false, true", def.Run, zero.Run, opted.Run)
+	}
+	if !def.Policy || def.DefaultPolicy != factory.PolicySupervised || def.MaxAttempts != 5 {
+		t.Errorf("the FACTORY_* settings did not reach the options: %+v", def)
+	}
+	if def.OnSpawn == nil || def.Escalator == nil {
+		t.Error("the escalator and the spawn hook must exist (they only log without a team store)")
+	}
+}
+
+func TestAFactoryMisconfigurationIsReportedAtStartup(t *testing.T) {
+	cases := map[string]map[string]string{
+		"bad policy":             {"FACTORY": "1", "FACTORY_POLICY": "anarchy"},
+		"unusable GitHub App":    {"FACTORY": "1", "GITHUB_APP_ID": "1"},
+		"app without a reviewer": {"FACTORY": "1", "GITHUB_APP_ID": "1", "GITHUB_APP_PRIVATE_KEY": string(wkKeyPEM(t))},
+	}
+	for name, vars := range cases {
+		t.Run(name, func(t *testing.T) {
+			// Arrange
+			wkEnv(t)
+			cfg, err := config.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Act
+			fs, release, err := factoryFeatures(wkGetenv(vars), true)(context.Background(), cfg, nil)
+
+			// Assert
+			if err == nil || fs != nil || release != nil {
+				t.Errorf("features %v release %v err %v, want an error and nothing to release", fs, release != nil, err)
+			}
+		})
+	}
+}
+
+func TestTheFactoryOfAStandaloneWorkerLivesInMemoryAndOneWithAnUnreachablePostgresFailsToStart(t *testing.T) {
+	// Arrange
+	wkEnv(t)
+	t.Setenv("POSTGRES_HOST", "127.0.0.1")
+	t.Setenv("POSTGRES_PORT", "1")
+	t.Setenv("PING_DB_AT_STARTUP", "true")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	vars := wkGetenv(map[string]string{"FACTORY": "1"})
+
+	// Act
+	standalone, release, errStandalone := factoryFeatures(vars, true)(context.Background(), cfg, nil)
+	_, noRelease, errPG := factoryFeatures(vars, false)(context.Background(), cfg, nil)
+
+	// Assert
+	if errStandalone != nil || len(standalone) == 0 || release == nil {
+		t.Fatalf("standalone: %v features, err %v", len(standalone), errStandalone)
+	}
+	release()
+	if errPG == nil || !strings.Contains(errPG.Error(), "Postgres") || noRelease != nil {
+		t.Errorf("err = %v, want a Postgres connection error and nothing to release", errPG)
+	}
+}
+
+func TestAStandaloneWorkerWithTheFactoryStartsWithoutADispatcherAndStops(t *testing.T) {
+	// Arrange: a standalone worker keeps the factory in memory
+	wkEnv(t)
+	t.Setenv("FACTORY", "1")
+	t.Setenv("FACTORY_NO_REVIEW", "1")
+	t.Setenv("HARNESS_MODEL_PRICES", "off")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	var stderr bytes.Buffer
+
+	// Act
+	code := run(ctx, []string{"-standalone", "-once", "-addr", "127.0.0.1:0", "-id", "w-factory"}, &stderr)
+
+	// Assert
+	if code != 0 || !strings.Contains(stderr.String(), "agent factory installed") || !strings.Contains(stderr.String(), "dispatcher=false") {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+}
+
+var (
+	wkKeyOnce  sync.Once
+	wkKeyBytes []byte
+)
+
+// wkKeyPEM is a throw-away GitHub App key.
+func wkKeyPEM(t *testing.T) []byte {
+	t.Helper()
+	wkKeyOnce.Do(func() {
+		k, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wkKeyBytes = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(k)})
+	})
+	return wkKeyBytes
 }

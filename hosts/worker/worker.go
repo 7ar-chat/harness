@@ -52,6 +52,11 @@ type Options struct {
 	Redis   redis.UniversalClient
 	Models  llm.Factory
 	Backend sandbox.Backend
+	// Features builds the capabilities of the worker's harness once its store is known (nil: the profile of
+	// AGENT_PROFILE, as for any harness). The returned func releases what the features opened and runs when the
+	// worker stops. A worker has to install the features whose end-of-run hooks, tools or policies must apply to
+	// the runs it executes (the agent factory is one): a run is finished by the process that ran it.
+	Features func(ctx context.Context, cfg *config.Config, st harness.Store) ([]harness.Feature, func(), error)
 
 	// OnListening is called with the admin address once the server accepts connections.
 	OnListening func(addr string)

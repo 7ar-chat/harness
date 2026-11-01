@@ -111,6 +111,7 @@ type Builder struct {
 	created   []sandboxCreateHook
 	post      []func() error
 	starts    []func(ctx context.Context)
+	ready     []func(*Harness)
 
 	sandboxTools *lateProvider // the sandbox tools, nil without a sandbox
 }
@@ -209,6 +210,11 @@ func (b *Builder) SetPurger(p runtime.Purger) error {
 	b.purger = p
 	return nil
 }
+
+// OnReady calls f with the finished Harness, after every feature is installed
+// and before the Background functions start: a feature that must act through
+// the Harness (start runs, read stores) binds to it here.
+func (b *Builder) OnReady(f func(*Harness)) { b.ready = append(b.ready, f) }
 
 // Background starts f in a goroutine once the harness is built (New returned
 // without error); ctx is never cancelled by the harness, f ends on its own.

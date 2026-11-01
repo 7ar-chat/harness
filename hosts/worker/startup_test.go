@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/adapters/store/factorystore"
 	"github.com/7ar-chat/harness/adapters/store/memstore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"github.com/7ar-chat/harness/ai/llm/llmtest"
@@ -232,5 +234,119 @@ func TestWaitIdleWaitsForTheDefaultIdlePeriodBeforeReturning(t *testing.T) {
 	// Assert: a zero idle period means one second of calm, not an immediate return
 	if took := time.Since(start); took < time.Second {
 		t.Fatalf("returned after %v, want at least the 1 s default", took)
+	}
+}
+
+func TestFeaturesOptionReplacesTheProfileAndItsCleanupRunsWhenTheWorkerStops(t *testing.T) {
+	// Arrange: the factory is the feature a worker must install to finish the runs of factory tasks
+	quietEnv(t)
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotStore harness.Store
+	released := 0
+	o := Options{
+		Standalone: true, Backend: sandboxtest.NewBackend(), Models: llmtest.Factory{M: llmtest.New()},
+		Features: func(_ context.Context, _ *config.Config, st harness.Store) ([]harness.Feature, func(), error) {
+			gotStore = st
+			return []harness.Feature{harness.Sandbox(), harness.FactoryFeature(harness.FactoryOptions{Store: factorystore.NewMem(nil)})},
+				func() { released++ }, nil
+		},
+	}
+
+	// Act
+	b, err := buildHarness(context.Background(), cfg, o, newMetrics())
+	if err != nil {
+		t.Fatal(err)
+	}
+	installed := b.h.FactoryOf() != nil
+	releasedWhileRunning := released
+	b.close()
+
+	// Assert: the features were built over the store the harness uses and are released once, at the end
+	if !installed {
+		t.Error("the factory the Features option returned is not installed")
+	}
+	if gotStore == nil || gotStore != b.h.Store {
+		t.Errorf("Features got store %v, the harness uses %v", gotStore, b.h.Store)
+	}
+	if releasedWhileRunning != 0 || released != 1 {
+		t.Errorf("released %d times while running, %d after close; want 0 and 1", releasedWhileRunning, released)
+	}
+}
+
+func TestWithoutFeaturesTheWorkerBuildsTheProfileOfTheConfiguration(t *testing.T) {
+	// Arrange
+	quietEnv(t)
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Act
+	b, err := buildHarness(context.Background(), cfg, Options{Standalone: true, Backend: sandboxtest.NewBackend(),
+		Models: llmtest.Factory{M: llmtest.New()}}, newMetrics())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.close()
+
+	// Assert
+	if b.h.FactoryOf() != nil {
+		t.Error("the factory is installed without the Features option")
+	}
+}
+
+func TestAFeaturesFailureIsReportedAndEverythingOpenedSoFarIsReleased(t *testing.T) {
+	// Arrange
+	quietEnv(t)
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	released := 0
+	boom := errors.New("no factory tables")
+	o := Options{
+		Standalone: true, Backend: sandboxtest.NewBackend(), Models: llmtest.Factory{M: llmtest.New()},
+		Features: func(context.Context, *config.Config, harness.Store) ([]harness.Feature, func(), error) {
+			return nil, func() { released++ }, boom
+		},
+	}
+
+	// Act
+	_, err = buildHarness(context.Background(), cfg, o, newMetrics())
+
+	// Assert: wrapped, and the release the failed builder returned still ran
+	if !errors.Is(err, boom) || !strings.Contains(err.Error(), "build the features") {
+		t.Errorf("err = %v", err)
+	}
+	if released != 1 {
+		t.Errorf("released %d times, want 1", released)
+	}
+}
+
+func TestRunStopsAFeaturesCleanupAfterTheWorkerHasDrained(t *testing.T) {
+	// Arrange
+	quietEnv(t)
+	released := make(chan struct{})
+	o := Options{
+		Addr: "127.0.0.1:0", Standalone: true, Once: true, Backend: sandboxtest.NewBackend(), Models: llmtest.Factory{M: llmtest.New()},
+		Features: func(context.Context, *config.Config, harness.Store) ([]harness.Feature, func(), error) {
+			return harness.ProfileMinimal(), func() { close(released) }, nil
+		},
+	}
+
+	// Act
+	err := Run(context.Background(), o)
+
+	// Assert
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-released:
+	default:
+		t.Error("the cleanup of the features did not run when Run returned")
 	}
 }

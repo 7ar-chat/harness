@@ -9,11 +9,14 @@ import (
 
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/adapters/redisx"
+	"github.com/7ar-chat/harness/adapters/store/factorystore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
 	"github.com/7ar-chat/harness/adapters/store/teamstore"
+	"github.com/7ar-chat/harness/app/factoryenv"
 	"github.com/7ar-chat/harness/app/product"
 	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/redisinfra"
 )
@@ -36,6 +39,8 @@ type built struct {
 	team   store.TeamStore
 	sup    *product.Supervisor
 	github *product.GitHubApp
+	// factory configures the product's factory routes (nil: the factory is off).
+	factory *product.FactoryOptions
 	// bus shares the live feed between replicas: set in team mode when REDIS_HOST is.
 	bus    product.FeedBus
 	closer io.Closer
@@ -48,6 +53,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 	o := harness.Options{Config: cfg, Version: "web"}
 	var closers multiCloser
 	var ts store.TeamStore
+	var fs factory.Store
 	_, havePG := os.LookupEnv("POSTGRES_HOST")
 	switch {
 	case team && havePG:
@@ -61,6 +67,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 			return nil, fmt.Errorf("migrate Postgres: %w", err)
 		}
 		o.Store, ts = pgstore.NewPG(pool), teamstore.NewPG(pool)
+		fs = factorystore.NewPG(pool, nil)
 	case durable || team:
 		st, err := harness.OpenLocalStore(cfg.LocalStateDir)
 		if err != nil {
@@ -69,11 +76,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		closers = append(closers, st)
 		o.Store = st
 		if team {
-			dir := cfg.LocalStateDir
-			if dir == "" {
-				dir = filepath.Join(os.Getenv("HOME"), ".har", "sessions")
-			}
-			if ts, err = teamstore.Open(filepath.Join(dir, "team.json")); err != nil {
+			if ts, err = teamstore.Open(filepath.Join(stateDir(cfg), "team.json")); err != nil {
 				_ = closers.Close()
 				return nil, fmt.Errorf("open the team store: %w", err)
 			}
@@ -103,7 +106,21 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		}
 	}
 	if ts != nil {
-		gh, err := githubFromEnv(os.Getenv)
+		if fs == nil && os.Getenv("FACTORY") == "1" {
+			// One store for the factory and for the checkout that must leave its threads alone: without
+			// Postgres the factory keeps its state in factory.json beside team.json, so tasks, triggers and
+			// thread links survive a restart while their pull requests stay open. Both have to look at the
+			// same instance, and closing it on shutdown flushes the events not yet written.
+			ff, err := factorystore.Open(filepath.Join(stateDir(cfg), "factory.json"), nil)
+			if err != nil {
+				_ = closers.Close()
+				return nil, fmt.Errorf("open the factory store: %w", err)
+			}
+			closers = append(closers, ff)
+			b.closer = closers
+			fs = ff
+		}
+		gh, err := factoryenv.GitHubFromEnv(os.Getenv)
 		if err != nil {
 			_ = closers.Close()
 			return nil, err
@@ -115,7 +132,14 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		b.sup = product.NewSupervisor(ts)
 		o.Tools = append(o.Tools, b.sup.Tools())
 		o.Features = append(harness.ProfileNamed(cfg.AgentProfile), b.sup.Feature(),
-			(&product.RepoCheckout{Team: ts, GitHub: gh, Brokered: cfg.OpenSandboxCredentialProxy && cfg.SandboxBackendName() == config.BackendOpenSandbox}).Feature())
+			(&product.RepoCheckout{Team: ts, GitHub: gh, Factory: fs, Brokered: cfg.OpenSandboxCredentialProxy && cfg.SandboxBackendName() == config.BackendOpenSandbox}).Feature())
+		if fo, enabled, err := factoryenv.FromEnv(os.Getenv, cfg, fs, gh, ts); err != nil {
+			_ = closers.Close()
+			return nil, err
+		} else if enabled {
+			b.factory = &product.FactoryOptions{Escalator: fo.Escalator, Hooks: fo.Hooks}
+			o.Features = append(o.Features, harness.FactoryFeature(fo.Options))
+		}
 	}
 	h, err := harness.New(o)
 	if err != nil {
@@ -126,30 +150,13 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 	return b, nil
 }
 
-// githubFromEnv builds the GitHub App from GITHUB_APP_ID, GITHUB_APP_SLUG and
-// GITHUB_APP_PRIVATE_KEY (PEM) or GITHUB_APP_PRIVATE_KEY_FILE; nil when no App is set.
-func githubFromEnv(getenv func(string) string) (*product.GitHubApp, error) {
-	id := getenv("GITHUB_APP_ID")
-	if id == "" {
-		return nil, nil
+// stateDir is where the durable local state lives: the session store and, in team mode, team.json and
+// factory.json.
+func stateDir(cfg *config.Config) string {
+	if cfg.LocalStateDir != "" {
+		return cfg.LocalStateDir
 	}
-	key := []byte(getenv("GITHUB_APP_PRIVATE_KEY"))
-	if f := getenv("GITHUB_APP_PRIVATE_KEY_FILE"); f != "" {
-		b, err := os.ReadFile(f)
-		if err != nil {
-			return nil, fmt.Errorf("read GITHUB_APP_PRIVATE_KEY_FILE: %w", err)
-		}
-		key = b
-	}
-	if len(key) == 0 {
-		return nil, fmt.Errorf("GITHUB_APP_ID needs GITHUB_APP_PRIVATE_KEY or GITHUB_APP_PRIVATE_KEY_FILE")
-	}
-	app, err := product.NewGitHubApp(id, getenv("GITHUB_APP_SLUG"), key)
-	if err != nil {
-		return nil, err
-	}
-	app.ClientID, app.ClientSecret = getenv("GITHUB_APP_CLIENT_ID"), getenv("GITHUB_APP_CLIENT_SECRET")
-	return app, nil
+	return filepath.Join(os.Getenv("HOME"), ".har", "sessions")
 }
 
 type multiCloser []io.Closer

@@ -3,6 +3,7 @@ package product
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/sandbox"
 	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/engine/agent"
@@ -32,6 +34,11 @@ import (
 type RepoCheckout struct {
 	Team   store.TeamStore
 	GitHub *GitHubApp
+	// Factory, when set, names the threads an agent factory task owns (factory.Store.GetThreadInfo has one for
+	// them). The factory clones its own checkout on its own branch and never gives the agent a credential, so this
+	// checkout leaves those threads alone: it would otherwise clone a second time, write the installation token into
+	// the sandbox and tell the agent to push.
+	Factory factory.Store
 	// Brokered tells the agent that GitHub requests are authenticated outside the sandbox (set when the
 	// sandbox backend has a credential broker), so it uses plain git and curl without a token.
 	Brokered bool
@@ -79,6 +86,9 @@ func branchFor(threadID string) string {
 }
 
 func (rc *RepoCheckout) project(ctx context.Context, threadID string) *store.Project {
+	if rc.factoryOwns(ctx, threadID) {
+		return nil
+	}
 	meta, err := rc.Team.GetThreadMeta(ctx, threadID)
 	if err != nil || meta.ProjectID == "" {
 		return nil
@@ -88,6 +98,23 @@ func (rc *RepoCheckout) project(ctx context.Context, threadID string) *store.Pro
 		return nil
 	}
 	return p
+}
+
+// factoryOwns reports whether an agent factory task works on the thread. A lookup that fails for another reason than
+// "no such thread" counts as owned: leaving the checkout out is safe, handing a task thread a token is not.
+func (rc *RepoCheckout) factoryOwns(ctx context.Context, threadID string) bool {
+	if rc.Factory == nil {
+		return false
+	}
+	ti, err := rc.Factory.GetThreadInfo(ctx, threadID)
+	switch {
+	case errors.Is(err, factory.ErrNotFound):
+		return false
+	case err != nil:
+		slog.Warn("project repo: reading the factory thread info failed; leaving the checkout out", "thread", threadID, "error", err)
+		return true
+	}
+	return ti.TaskID != "" || ti.Repo != ""
 }
 
 // token is the installation token for the project, "" when it has none.

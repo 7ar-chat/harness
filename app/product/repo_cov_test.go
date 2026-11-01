@@ -11,10 +11,12 @@ import (
 	"time"
 
 	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/adapters/store/factorystore"
 	"github.com/7ar-chat/harness/adapters/store/teamstore"
 	"github.com/7ar-chat/harness/ai"
 	"github.com/7ar-chat/harness/ai/llm/llmtest"
 	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/sandbox"
 	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
 	"github.com/7ar-chat/harness/core/store"
@@ -348,4 +350,60 @@ func cnConfig(t *testing.T) *config.Config {
 		t.Fatal(err)
 	}
 	return cfg
+}
+
+func TestCheckoutLeavesFactoryTaskThreadsAlone(t *testing.T) {
+	cases := []struct {
+		name      string
+		info      *factory.ThreadInfo
+		lookupErr error
+		cloned    bool
+	}{
+		{"an ordinary project thread is cloned as before", nil, nil, true},
+		{"a factory task thread is left to the factory", &factory.ThreadInfo{ThreadID: "T", TaskID: "task-1", Repo: "acme/api"}, nil, false},
+		{"a delegated sub-agent thread is left alone", &factory.ThreadInfo{ThreadID: "T", TaskID: "task-1", ParentThreadID: "P"}, nil, false},
+		{"a thread info without a task or repository is not a task thread", &factory.ThreadInfo{ThreadID: "T", Role: "planner"}, nil, true},
+		{"a failing lookup leaves the checkout out rather than risk a token", nil, errors.New("store down"), false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// Arrange
+			app, _ := cnTokenAPI(t, 0)
+			rc, thread := repoRig(t, "https://github.com/acme/api", 42)
+			rc.GitHub = app
+			fs := &threadInfoStore{Mem: factorystore.NewMem(nil), err: c.lookupErr}
+			if c.info != nil {
+				c.info.ThreadID = thread
+				_ = fs.SetThreadInfo(context.Background(), *c.info)
+			}
+			rc.Factory = fs
+			sb := &fakeSandbox{}
+
+			// Act
+			note := rc.setup(context.Background(), thread, sb)
+
+			// Assert: a left-alone thread runs nothing in its sandbox, so it gets no clone and no token.
+			if got := len(sb.reqs) > 0; got != c.cloned {
+				t.Errorf("commands = %d, note %q; want cloned = %v", len(sb.reqs), note, c.cloned)
+			}
+			for _, r := range sb.reqs {
+				if !c.cloned && r.Env["GH_TOKEN"] != "" {
+					t.Error("a token was handed to a factory task thread")
+				}
+			}
+		})
+	}
+}
+
+// threadInfoStore is a factory store whose thread lookup can be made to fail.
+type threadInfoStore struct {
+	*factorystore.Mem
+	err error
+}
+
+func (s *threadInfoStore) GetThreadInfo(ctx context.Context, id string) (*factory.ThreadInfo, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.Mem.GetThreadInfo(ctx, id)
 }

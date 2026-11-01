@@ -41,6 +41,7 @@ type rigOpts struct {
 	team      bool // team mode on an in-memory TeamStore
 	prod      Options
 	sup       *Supervisor
+	mod       func(*harness.Options) // last word on the harness options (features...)
 }
 
 // scripted asks for one tool call, then answers "done" once it has seen the tool result.
@@ -86,6 +87,9 @@ func newRig(t *testing.T, o rigOpts) *rig {
 	if o.sup != nil {
 		ho.Tools = append(ho.Tools, o.sup.Tools())
 		o.prod.Supervisor = o.sup
+	}
+	if o.mod != nil {
+		o.mod(&ho)
 	}
 	h, err := harness.New(ho)
 	if err != nil {

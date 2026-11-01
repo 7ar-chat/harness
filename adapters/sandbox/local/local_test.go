@@ -247,3 +247,55 @@ func TestAJobWithHugeOutputDoesNotLoadItIntoMemory(t *testing.T) {
 		t.Fatalf("job-status allocated %d MiB for a 100 MB output: it must read only the head and the tail", allocated>>20)
 	}
 }
+
+func TestExecMapsSandboxPathsInEnvironmentValuesToTheHostWorkspace(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+		want  func(ws string) string // what the process must receive, given the host workspace
+	}{
+		{"a directory variable", "/workspace/repo", func(ws string) string { return ws + "/repo" }},
+		{"the workspace itself", "/workspace", func(ws string) string { return ws }},
+		{"free text is untouched", "see /workspace/repo for details", func(string) string { return "see /workspace/repo for details" }},
+		{"a token is untouched", "ghs_abc/workspace", func(string) string { return "ghs_abc/workspace" }},
+		{"a longer name is not the workspace", "/workspaces/a", func(string) string { return "/workspaces/a" }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// Arrange: stdout is mapped back to /workspace, so it cannot show what the process received; compare in
+			// the shell and read the exit code.
+			ws := t.TempDir()
+			b, err := local.New(local.Options{Workspace: ws, StateDir: t.TempDir()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			inst, err := b.Create(context.Background(), sandbox.CreateOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Act: the expectations are host paths, which no mapping touches.
+			res, err := inst.Exec(context.Background(), sandbox.ExecRequest{
+				Command: `[ "$V" = "$WANT_A" ] || [ "$V" = "$WANT_B" ]`,
+				Env:     map[string]string{"V": c.value, "WANT_A": c.want(ws), "WANT_B": c.want(resolved(t, ws))},
+			})
+
+			// Assert
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.ExitCode != 0 {
+				t.Errorf("the process did not receive %q for %q", c.want(ws), c.value)
+			}
+		})
+	}
+}
+
+func resolved(t *testing.T, p string) string {
+	t.Helper()
+	r, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return p
+	}
+	return r
+}

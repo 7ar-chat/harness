@@ -200,9 +200,15 @@ func (in *Instance) mapCommand(s string) string {
 }
 
 // mapEnv maps the sandbox paths the tools pass in HARNESS_* variables (the search
-// path, the glob); HARNESS_PATTERN and other free text are left alone.
+// path, the glob) and any variable whose value is a sandbox path; HARNESS_PATTERN and
+// other free text are left alone.
 func (in *Instance) mapEnv(key, v string) string {
 	if strings.HasPrefix(key, "HARNESS_") && key != "HARNESS_PATTERN" && !strings.HasSuffix(key, "_B64") {
+		return in.mapCommand(v)
+	}
+	// Any variable whose value IS a sandbox path (REPO_DIR=/workspace/repo): a real sandbox has /workspace, here
+	// it is a host directory, and a script handed the unmapped path would try to create it at the host's root.
+	if v == sandbox.Workspace || strings.HasPrefix(v, sandbox.Workspace+"/") || v == "/skills" || strings.HasPrefix(v, "/skills/") {
 		return in.mapCommand(v)
 	}
 	return v

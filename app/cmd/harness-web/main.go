@@ -48,12 +48,16 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	local := fs.Bool("local", false, "work on the current directory: SANDBOX_BACKEND=local, the coding profile, durable sessions")
 	user := fs.String("user", "local", "user login of the single local user")
 	devUsers := fs.Bool("dev-users", false, "team mode on a loopback address: act as the user named by the X-Harness-User header (development only)")
+	check := fs.String("factory-check", "", "check the agent factory's setup against GitHub for this repository (owner/name) and exit: read-only, prints [ OK ]/[WARN]/[FAIL] per check, exit 1 on a failure")
 	team := fs.Bool("team", getenv("OIDC_ISSUER") != "" || getenv("HARNESS_TEAM") == "1", "team mode: OIDC login, projects, shared threads (env OIDC_ISSUER or HARNESS_TEAM=1)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
 		return 2
+	}
+	if *check != "" {
+		return factoryCheck(ctx, *check, getenv, stdout, stderr)
 	}
 	token := getenv("HARNESS_WEB_TOKEN")
 	oidcCfg, err := oidcFromEnv(getenv, *team)
@@ -116,6 +120,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	prod := product.Options{
 		Team: teamStore, OIDC: oidcCfg, Supervisor: sup, GitHub: bt.github, Bus: bt.bus,
 		PublicURL: getenv("HARNESS_PUBLIC_URL"), SecretKey: secretKey(getenv, oidcCfg),
+	}
+	if bt.factory != nil {
+		prod.Factory = *bt.factory
 	}
 	if tok := getenv("TELEGRAM_BOT_TOKEN"); tok != "" && *team {
 		prod.Telegram = &product.Telegram{Token: tok, Username: strings.TrimPrefix(getenv("TELEGRAM_BOT_USERNAME"), "@")}

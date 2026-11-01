@@ -5,6 +5,19 @@
 //
 // Admin endpoints on HARNESS_WORKER_ADDR (default 127.0.0.1:9090): /healthz, /readyz, /metrics.
 // SIGINT/SIGTERM stop claiming runs and drain in-flight ones for RUNTIME_SHUTDOWN_GRACE_SECONDS.
+//
+// # Agent factory
+//
+// With FACTORY=1 the worker installs the agent factory in its harness, so the runs of factory tasks it executes
+// get their end-of-run hooks (the task moves on, its spend is metered), the open_pr and delegate tools, the
+// autonomy policy and the budget guard. Those act in the process that executes a run: every worker must run with
+// the same FACTORY_* settings as harness-web (docs/factory.md, "Deployment shape"). The tasks live in the worker's
+// Postgres (POSTGRES_*), the GitHub App comes from GITHUB_APP_* as in harness-web.
+//
+// A worker executes runs; it does not dispatch tasks. The dispatcher, the cron scheduler and the pull request loop
+// stay off unless FACTORY_RUN=1 (the default of harness-web is the opposite), so they run in the web tier or in the
+// one worker that opts in. The product-only pieces stay in the web tier too: task threads are not linked to a
+// project, and a task that needs a human is only logged here (the live feed and Telegram belong to harness-web).
 package main
 
 import (
@@ -56,6 +69,7 @@ func run(ctx context.Context, args []string, stderr io.Writer) int {
 		return 1
 	}
 	o.Config = cfg
+	o.Features = factoryFeatures(os.Getenv, o.Standalone)
 	if err := worker.Run(ctx, o); err != nil {
 		fmt.Fprintln(stderr, "harness-worker:", err)
 		return 1

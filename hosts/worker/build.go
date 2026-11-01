@@ -76,14 +76,26 @@ func buildHarness(ctx context.Context, cfg *config.Config, o Options, m *metrics
 			ho.Store = pgstore.NewPG(pool)
 		}
 	}
-	if rdb != nil {
+	if rdb != nil || o.Features != nil {
 		st := ho.Store
-		if st == nil { // harness.New defaults to a memory store; the event log has to be over the same one
+		if st == nil { // harness.New defaults to a memory store; the event log and the features have to be over the same one
 			st = memstore.New()
 			ho.Store = st
 		}
-		infra := redisinfra.Infra(rdb, st)
-		ho.Infra = &infra
+		if rdb != nil {
+			infra := redisinfra.Infra(rdb, st)
+			ho.Infra = &infra
+		}
+	}
+	if o.Features != nil {
+		fs, release, err := o.Features(ctx, cfg, ho.Store)
+		if release != nil {
+			cleanups = append(cleanups, release)
+		}
+		if err != nil {
+			return fail(fmt.Errorf("build the features: %w", err))
+		}
+		ho.Features = fs
 	}
 	h, err := harness.New(ho)
 	if err != nil {
