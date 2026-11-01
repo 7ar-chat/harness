@@ -52,10 +52,18 @@ processes sharing a Postgres never run the same task, and every transition appen
   "ready to merge: awaiting a human" and the escalator is told. A human merging or closing the PR completes or fails
   the task.
 
-## The independent reviewer
+## The reviewer
 
-`FactoryOptions.ReviewModel` is required with a forge (or `NoReview` as a deliberate opt-out). The gate refuses to
-run when the reviewer model equals the author's model (`RequireDifferentModel`). Before any model call it checks the
+Every pull request is reviewed by a model before it can merge (`NoReview` opts out, merging on green CI alone).
+
+* **`FACTORY_REVIEW_MODEL` set**: that model reviews, and the gate refuses to approve a change written by the same
+  model. This is the independent review.
+* **`FACTORY_REVIEW_MODEL` unset**: the default model (`LLM_DEFAULT_MODEL`) reviews. This is allowed, and weaker: a
+  model grades its own work and shares its blind spots. Every such approval is posted on the pull request starting with
+  "Note: this review was done by the same model that wrote the change, so it is not independent", and the setup
+  check reports a warning. Set a second model when the repository matters.
+
+Before any model call the gate checks the
 diff mechanically: protected paths (`.github/workflows/**`, `**/.env*`, keys, `Dockerfile`) and secrets in added
 lines are **hard** failures (the task blocks for a human); text that tries to instruct the reviewer is a blocker.
 The model then returns `{approve, summary, findings[]}`; any blocker or major finding, or a truncated source file,
@@ -83,9 +91,17 @@ sandbox backend (`opensandbox` with an egress allow-list and credential proxying
 
 ## Budgets and guards
 
-* Per task: `Budget{MaxUSD, MaxTokens}` over all attempts and delegated runs. When it is reached the task blocks
-  and its tools are denied (read-only ones stay) so the run can wrap up. At 80 % the run is told.
-* Per day: `DailyBudget` over a 24 h window, per project with `PerProject`.
+* **Per task, set by whoever creates it.** A task (or a trigger's template) carries its own `budget {maxUsd, maxTokens}`
+  over all attempts and delegated runs; there is no deployment-wide default, and a task with no budget has no cap of its
+  own. Values must be numbers >= 0 (zero removes the cap on that axis). When a task reaches its cap it blocks and its
+  tools are denied (read-only ones stay) so the run can wrap up; at 80 % the run is told.
+* **Raising a cap.** A blocked task resumes with a new budget: `POST .../tasks/{tid}/resume {"feedback": "...",
+  "budget": {"maxUsd": 5}}`. Only the task's creator or a project owner can change it, and the new cap must be above
+  what the task already spent (or 0 to remove it), otherwise the task would block again at once. The change is a
+  `budget` event in the task's history.
+* **Per day, global**: `FACTORY_DAILY_BUDGET_USD` / `_TOKENS` over a 24 h window (per project with
+  `FACTORY_DAILY_PER_PROJECT=1`). The dispatcher checks it before it starts a task. This is the one cap the deployment
+  sets; the old `FACTORY_TASK_BUDGET_*` variables are ignored and logged as such.
 * A run is capped at 150 tool calls; a run that keeps calling tools after being refused is cancelled.
 * A model without a known price is counted in tokens and flagged `unpriced` in the report, never treated as free.
 * Inside a run the existing loop guards still apply (identical calls, A-B-A-B alternation, repeated errors).
@@ -104,12 +120,11 @@ Team mode, a GitHub App and Postgres are the production shape (`docs/team.md`). 
 |---|---|
 | `FACTORY=1` | turn the factory on |
 | `FACTORY_WEBHOOK_SECRET` | GitHub webhook secret; point the App's webhook at `POST /hooks/github`. Without it every delivery is refused |
-| `FACTORY_REVIEW_MODEL` | the reviewer model (must differ from `LLM_DEFAULT_MODEL`); or `FACTORY_NO_REVIEW=1` |
+| `FACTORY_REVIEW_MODEL` | optional: the reviewer model, which must differ from `LLM_DEFAULT_MODEL` (an independent review). Unset: the default model reviews, and says so; `FACTORY_NO_REVIEW=1` merges on CI alone |
 | `FACTORY_REQUIRE_TESTS=1` | the reviewer flags source changes without a test |
 | `FACTORY_PROTECTED` | extra comma-separated path globs no agent change may touch |
 | `FACTORY_POLICY` | default policy (`supervised`, `sandboxed`, `autonomous`) |
-| `FACTORY_TASK_BUDGET_USD`, `_TOKENS` | default per-task budget |
-| `FACTORY_DAILY_BUDGET_USD`, `_TOKENS`, `FACTORY_DAILY_PER_PROJECT=1` | daily cap |
+| `FACTORY_DAILY_BUDGET_USD`, `_TOKENS`, `FACTORY_DAILY_PER_PROJECT=1` | daily cap (a task's own budget is set by its creator) |
 | `FACTORY_MAX_CONCURRENT`, `FACTORY_MAX_ATTEMPTS` | tasks running at once (4), attempts per task (3) |
 | `FACTORY_RUN=0` | do not run the dispatcher, scheduler and PR loop in this process (in `harness-worker` it is the other way round: they run only with `FACTORY_RUN=1`) |
 | `FACTORY_LESSONS=1` | distil lessons from finished tasks into project memory (needs the memory feature) |
@@ -128,7 +143,7 @@ pull requests; without it, tasks end with the agent's answer.
 ```
 GET    /api/projects/{pid}/tasks?state=       POST /api/projects/{pid}/tasks {title,spec,role?,model?,policy?,repo?,
 GET    /api/projects/{pid}/tasks/{tid}              baseBranch?,budget?,maxAttempts?,autoMerge?,dependsOn?,priority?}
-POST   /api/projects/{pid}/tasks/{tid}/cancel | /resume {feedback}
+POST   /api/projects/{pid}/tasks/{tid}/cancel | /resume {feedback?, budget?}
 GET/POST /api/projects/{pid}/triggers (owner)   DELETE /api/projects/{pid}/triggers/{trid} (owner)
 GET    /api/projects/{pid}/factory/report?days=
 POST   /hooks/github                           (HMAC-verified; no session)
@@ -147,8 +162,8 @@ h, _ := harness.New(harness.Options{Config: cfg, Features: append(harness.Profil
     harness.FactoryFeature(harness.FactoryOptions{
         Store: st, Run: true, Policy: true,
         Forge: forge.NewGitHub(forge.GitHubOptions{Auth: auth}), Auth: auth,
-        ReviewModel: "a-different-model", RequireTests: true,
-        DefaultBudget: factory.Budget{MaxUSD: 5}, DailyBudget: factory.Budget{MaxUSD: 100},
+        ReviewModel: "a-different-model", RequireTests: true, // ReviewModel "" lets the default model review
+        DailyBudget: factory.Budget{MaxUSD: 100},
     }))})
 f := h.FactoryOf()
 f.Tasks.Create(ctx, factory.Task{Owner: "alice", Title: "…", Spec: "…", Repo: "acme/app", AutoMerge: true})
@@ -196,9 +211,9 @@ harness-web -factory-check acme/app
 ```
 
 It checks the App's permissions and subscribed events, the installation on the repository, that a token mints and can
-push, that the default branch exists (and whether it is protected), the reviewer model (set, different from the
-author's, in `LLM_MODELS`), the sandbox backend and per-user quota against `FACTORY_MAX_CONCURRENT`, and whether any
-spend cap is set. It writes nothing to the repository (it mints one installation token). Exit status is 1 when a check
+push, that the default branch exists (and whether it is protected), the reviewer model (a warning when unset, because the default model then reviews its own work; a failure when set to
+the author's own model or to one outside `LLM_MODELS`), the sandbox backend and per-user quota against
+`FACTORY_MAX_CONCURRENT`, and whether a daily spend cap is set. It writes nothing to the repository (it mints one installation token). Exit status is 1 when a check
 fails; warnings do not fail.
 
 ## How a branch gets to GitHub
@@ -236,8 +251,8 @@ The factory runs code an LLM wrote, on behalf of text written by people. What it
   delivery is refused.
 * **Not covered:** a determined process inside the sandbox (use `opensandbox` with an egress allow-list and the
   credential proxy, never `local`, for untrusted tasks); a malicious project owner (owners can set budgets,
-  policies and triggers); and a model that approves its own bad work (the reviewer is a different model, not an
-  oracle). Keep GitHub branch protection on.
+  policies and triggers); and a model that approves its own bad work (an independent reviewer is a different model, not an oracle; with no
+  `FACTORY_REVIEW_MODEL` it is the same model, and every approval says so). Keep GitHub branch protection on.
 
 ## Deployment shape
 
@@ -262,7 +277,7 @@ Share between the web tier and every worker:
 | Variables | Why |
 |---|---|
 | `POSTGRES_*`, `REDIS_*` | the tasks, the queue and the event log |
-| `FACTORY=1` and the `FACTORY_*` settings: `FACTORY_POLICY`, `FACTORY_PROTECTED`, `FACTORY_REQUIRE_TESTS`, `FACTORY_REVIEW_MODEL` / `FACTORY_NO_REVIEW`, `FACTORY_TASK_BUDGET_*`, `FACTORY_DAILY_BUDGET_*`, `FACTORY_DAILY_PER_PROJECT`, `FACTORY_MAX_ATTEMPTS`, `FACTORY_LESSONS` | the hooks, policy and budget guard of a run are built from them where the run executes |
+| `FACTORY=1` and the `FACTORY_*` settings: `FACTORY_POLICY`, `FACTORY_PROTECTED`, `FACTORY_REQUIRE_TESTS`, `FACTORY_REVIEW_MODEL` / `FACTORY_NO_REVIEW`, `FACTORY_DAILY_BUDGET_*`, `FACTORY_DAILY_PER_PROJECT`, `FACTORY_MAX_ATTEMPTS`, `FACTORY_LESSONS` | the hooks, policy and budget guard of a run are built from them where the run executes |
 | `GITHUB_APP_*` | the token the host clones and pushes with, and that `open_pr` and the pull request loop call GitHub with. The agent never receives it |
 | `LLM_*`, the sandbox settings | a run uses the worker's models and sandboxes |
 

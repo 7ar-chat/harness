@@ -19,16 +19,17 @@ import (
 
 // fakeForge is a code host with one repository: tests move its CI by calling push and set.
 type fakeForge struct {
-	mu        sync.Mutex
-	prs       map[int]*factory.PRInfo
-	checks    []factory.Check
-	log       string
-	merged    string // head sha the PR was merged at
-	comments  []string
-	reviews   []string
-	opened    int
-	mergeable *bool
-	headSHA   string // the head the next OpenPR reports (set by push before a PR exists)
+	mu           sync.Mutex
+	prs          map[int]*factory.PRInfo
+	checks       []factory.Check
+	log          string
+	merged       string // head sha the PR was merged at
+	comments     []string
+	reviews      []string
+	reviewBodies []string
+	opened       int
+	mergeable    *bool
+	headSHA      string // the head the next OpenPR reports (set by push before a PR exists)
 }
 
 func cmpOr(a, b string) string {
@@ -100,6 +101,7 @@ func (f *fakeForge) Review(_ context.Context, _ string, _ int, event, body strin
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.reviews = append(f.reviews, event)
+	f.reviewBodies = append(f.reviewBodies, body)
 	return nil
 }
 
@@ -352,5 +354,32 @@ func TestFactorySendsReviewerFindingsBackAsTheNextAttempt(t *testing.T) {
 	}
 	if len(forge.comments) == 0 || !strings.Contains(forge.comments[0], "changes needed") {
 		t.Errorf("the findings were not posted on the pull request: %q", forge.comments)
+	}
+}
+
+func TestFactoryReviewsWithTheDefaultModelWhenNoReviewerIsNamedAndSaysSo(t *testing.T) {
+	// Arrange: no ReviewModel. The single model both writes and reviews, which the facade allows.
+	forge := newFakeForge()
+	forge.push("sha-1")
+	s := &prScript{forge: forge, reviewJSON: func(int) string { return approveJSON }}
+	h, st, ctx, _ := prFactory(t, s, func(o *harness.FactoryOptions) { o.ReviewModel = "" })
+	f := h.FactoryOf()
+
+	// Act
+	task, _, err := f.Tasks.Create(ctx, factory.Task{Owner: "alice", Title: "Fix", Spec: "x", Repo: "acme/app", BaseBranch: "main", AutoMerge: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitTask(ctx, t, st, task.ID, factory.StateDone)
+
+	// Assert: it was reviewed and merged, and the approval posted on the pull request admits the review was not
+	// independent: a human deciding whether to trust it must be able to see that.
+	if s.reviews != 1 || forge.mergedAt() == "" {
+		t.Errorf("reviews = %d, merged at %q; want one review and a merge", s.reviews, forge.mergedAt())
+	}
+	forge.mu.Lock()
+	defer forge.mu.Unlock()
+	if len(forge.reviewBodies) != 1 || !strings.Contains(forge.reviewBodies[0], "same model that wrote the change") {
+		t.Errorf("posted approvals = %q; want one that says the review is not independent", forge.reviewBodies)
 	}
 }

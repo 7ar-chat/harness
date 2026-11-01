@@ -74,7 +74,8 @@ type Options struct {
 	// Model is the reviewer. The coordinator configures one other than the author's.
 	Model string
 	// RequireDifferentModel makes Judge fail instead of approving a task
-	// whose author model is Model.
+	// whose author model is Model. Without it a review by the author's own
+	// model is allowed and its verdict starts with SelfReviewNote.
 	RequireDifferentModel bool
 	// SupportsReasoning reports models that accept reasoningEffort: the review
 	// then runs at medium effort. Nil: never set.
@@ -136,7 +137,7 @@ func (g *Gate) Judge(ctx context.Context, t factory.Task, pr factory.PRInfo, che
 	case t.Repo == "" || pr.Number <= 0:
 		return factory.Verdict{}, errors.New("review: task has no repository or the pull request no number")
 	}
-	if o.RequireDifferentModel && t.Model != "" && strings.EqualFold(strings.TrimSpace(t.Model), strings.TrimSpace(o.Model)) {
+	if o.RequireDifferentModel && sameModel(t.Model, o.Model) {
 		return factory.Verdict{}, fmt.Errorf("review: reviewer model %q is the model that wrote the change: refusing to rubber-stamp it", o.Model)
 	}
 
@@ -196,7 +197,21 @@ func (g *Gate) Judge(ctx context.Context, t factory.Task, pr factory.PRInfo, che
 	if err != nil {
 		return factory.Verdict{}, err
 	}
-	return assemble(ans, mech), nil
+	v := assemble(ans, mech)
+	if sameModel(t.Model, o.Model) {
+		// Allowed when the host did not require a different model (the reviewer falls back on the default one).
+		// The approval is then weaker than an independent review, and whoever reads the pull request must see that.
+		v.Summary = SelfReviewNote + "\n\n" + v.Summary
+	}
+	return v, nil
+}
+
+// SelfReviewNote starts the summary of a verdict whose reviewer is the model that wrote the change.
+const SelfReviewNote = "Note: this review was done by the same model that wrote the change, so it is not independent."
+
+func sameModel(author, reviewer string) bool {
+	a, r := strings.TrimSpace(author), strings.TrimSpace(reviewer)
+	return a != "" && strings.EqualFold(a, r)
 }
 
 // ask calls the reviewer; one retry on an answer that is not the JSON object.

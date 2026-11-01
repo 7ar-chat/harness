@@ -115,7 +115,7 @@ func goodEnv() map[string]string {
 		"FACTORY_REVIEW_MODEL":   "reviewer-model", "LLM_DEFAULT_MODEL": "author-model", "LLM_MODELS": "author-model,reviewer-model",
 		"SANDBOX_BACKEND": "opensandbox", "OPENSANDBOX_URL": "http://sandbox", "OPENSANDBOX_CREDENTIAL_PROXY": "true",
 		"HARNESS_TEAM": "1", "MAX_SANDBOXES_PER_USER": "10", "FACTORY_MAX_CONCURRENT": "4",
-		"FACTORY_TASK_BUDGET_USD": "5", "FACTORY_DAILY_BUDGET_USD": "50",
+		"FACTORY_DAILY_BUDGET_USD": "50",
 	}
 }
 
@@ -323,9 +323,11 @@ func TestRunScenarios(t *testing.T) {
 			fixes: map[string]string{factorycheck.NameReviewer: "LLM_MODELS"},
 		},
 		{
-			name:  "no reviewer and no opt out fails",
+			// The default model reviews: allowed, but it grades its own work, so it is a warning and not a failure.
+			name:  "no reviewer model falls back on the default model and warns",
 			setup: func(r *rig) { delete(r.env, "FACTORY_REVIEW_MODEL") },
-			want:  want{factorycheck.NameReviewer: factorycheck.Fail},
+			want:  want{factorycheck.NameReviewer: factorycheck.Warn},
+			fixes: map[string]string{factorycheck.NameReviewer: "FACTORY_REVIEW_MODEL"},
 		},
 		{
 			name: "no review opt out warns that merges rest on CI",
@@ -405,29 +407,32 @@ func TestRunScenarios(t *testing.T) {
 			want:  want{factorycheck.NameSandboxQuota: factorycheck.Fail},
 		},
 		{
-			name: "no budgets warn",
-			setup: func(r *rig) {
-				delete(r.env, "FACTORY_TASK_BUDGET_USD")
-				delete(r.env, "FACTORY_DAILY_BUDGET_USD")
-			},
-			want: want{factorycheck.NameBudgets: factorycheck.Warn},
+			name:  "no daily cap warns",
+			setup: func(r *rig) { delete(r.env, "FACTORY_DAILY_BUDGET_USD") },
+			want:  want{factorycheck.NameBudgets: factorycheck.Warn},
 		},
 		{
-			name: "a token budget alone is a cap",
+			name: "a daily token cap alone is a cap",
 			setup: func(r *rig) {
-				delete(r.env, "FACTORY_TASK_BUDGET_USD")
 				delete(r.env, "FACTORY_DAILY_BUDGET_USD")
 				r.env["FACTORY_DAILY_BUDGET_TOKENS"] = "1000000"
 			},
 			want: want{factorycheck.NameBudgets: factorycheck.OK},
 		},
 		{
-			name: "a zero budget is not a cap",
+			name: "a zero or invalid daily cap is not a cap",
 			setup: func(r *rig) {
-				r.env["FACTORY_TASK_BUDGET_USD"] = "0"
 				r.env["FACTORY_DAILY_BUDGET_USD"] = "abc"
+				r.env["FACTORY_DAILY_BUDGET_TOKENS"] = "0"
 			},
 			want: want{factorycheck.NameBudgets: factorycheck.Warn},
+		},
+		{
+			// A task's budget is the creator's. The old global variable is ignored, and the check says so.
+			name:  "the removed global task budget is reported as ignored",
+			setup: func(r *rig) { r.env["FACTORY_TASK_BUDGET_USD"] = "5" },
+			want:  want{factorycheck.NameBudgets: factorycheck.Warn},
+			fixes: map[string]string{factorycheck.NameBudgets: "remove FACTORY_TASK_BUDGET_USD"},
 		},
 		{
 			name:  "invalid harness setting fails the checks that depend on it",

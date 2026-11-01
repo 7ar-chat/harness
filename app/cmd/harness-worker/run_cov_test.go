@@ -208,9 +208,8 @@ func TestAWorkerExecutesRunsAndLeavesTheDispatcherToTheWebTierUnlessToldOtherwis
 
 func TestAFactoryMisconfigurationIsReportedAtStartup(t *testing.T) {
 	cases := map[string]map[string]string{
-		"bad policy":             {"FACTORY": "1", "FACTORY_POLICY": "anarchy"},
-		"unusable GitHub App":    {"FACTORY": "1", "GITHUB_APP_ID": "1"},
-		"app without a reviewer": {"FACTORY": "1", "GITHUB_APP_ID": "1", "GITHUB_APP_PRIVATE_KEY": string(wkKeyPEM(t))},
+		"bad policy":          {"FACTORY": "1", "FACTORY_POLICY": "anarchy"},
+		"unusable GitHub App": {"FACTORY": "1", "GITHUB_APP_ID": "1"},
 	}
 	for name, vars := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -229,6 +228,28 @@ func TestAFactoryMisconfigurationIsReportedAtStartup(t *testing.T) {
 				t.Errorf("features %v release %v err %v, want an error and nothing to release", fs, release != nil, err)
 			}
 		})
+	}
+}
+
+func TestAFactoryWithAGitHubAppAndNoReviewerModelStartsAndLetsTheDefaultModelReview(t *testing.T) {
+	// Arrange: the setup that used to be a startup error. A missing FACTORY_REVIEW_MODEL is now a choice (the default
+	// model reviews, and says so on every approval), so the worker must come up.
+	wkEnv(t)
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	vars := map[string]string{"FACTORY": "1", "GITHUB_APP_ID": "1", "GITHUB_APP_PRIVATE_KEY": string(wkKeyPEM(t))}
+
+	// Act
+	fs, release, err := factoryFeatures(wkGetenv(vars), true)(context.Background(), cfg, nil)
+	if release != nil {
+		defer release()
+	}
+
+	// Assert
+	if err != nil || len(fs) == 0 {
+		t.Errorf("features %v err %v; want the factory installed", fs, err)
 	}
 }
 

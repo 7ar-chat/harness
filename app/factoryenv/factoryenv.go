@@ -6,7 +6,6 @@ package factoryenv
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -43,7 +42,7 @@ type Wiring struct {
 //	FACTORY_MAX_CONCURRENT          tasks running at once (default 4)
 //	FACTORY_MAX_ATTEMPTS            attempts per task (default 3)
 //	FACTORY_POLICY                  default autonomy: supervised | sandboxed | autonomous (default sandboxed)
-//	FACTORY_TASK_BUDGET_USD / _TOKENS    default budget of one task
+//	(a task's budget is set by whoever creates the task or the trigger; there is no global one)
 //	FACTORY_DAILY_BUDGET_USD / _TOKENS   cap on all factory spend per 24h (FACTORY_DAILY_PER_PROJECT=1: per project)
 //	FACTORY_LESSONS=1               distil lessons from finished tasks into project memory
 //
@@ -83,20 +82,27 @@ func FromEnv(getenv func(string) string, cfg *config.Config, st factory.Store, g
 		return w, false, fmt.Errorf("FACTORY_POLICY: %q is not supervised, sandboxed or autonomous", o.DefaultPolicy)
 	}
 	for name, dst := range map[string]*float64{
-		"FACTORY_TASK_BUDGET_USD": &o.DefaultBudget.MaxUSD, "FACTORY_DAILY_BUDGET_USD": &o.DailyBudget.MaxUSD,
+		"FACTORY_DAILY_BUDGET_USD": &o.DailyBudget.MaxUSD,
 	} {
 		if *dst, err = num(name); err != nil {
 			return w, false, err
 		}
 	}
 	for name, dst := range map[string]*int64{
-		"FACTORY_TASK_BUDGET_TOKENS": &o.DefaultBudget.MaxTokens, "FACTORY_DAILY_BUDGET_TOKENS": &o.DailyBudget.MaxTokens,
+		"FACTORY_DAILY_BUDGET_TOKENS": &o.DailyBudget.MaxTokens,
 	} {
 		f, err := num(name)
 		if err != nil {
 			return w, false, err
 		}
 		*dst = int64(f)
+	}
+	// A task's budget belongs to whoever creates the task (or the trigger), not to the deployment. The old global
+	// setting is ignored, loudly: silently dropping a cap someone relied on would be worse than saying so.
+	for _, name := range []string{"FACTORY_TASK_BUDGET_USD", "FACTORY_TASK_BUDGET_TOKENS"} {
+		if strings.TrimSpace(getenv(name)) != "" {
+			slog.Warn(name + " is no longer read: a task's budget is set by whoever creates the task or the trigger; only FACTORY_DAILY_BUDGET_* remains global")
+		}
 	}
 	for name, dst := range map[string]*int{"FACTORY_MAX_CONCURRENT": &o.MaxConcurrent, "FACTORY_MAX_ATTEMPTS": &o.MaxAttempts} {
 		f, err := num(name)
@@ -119,7 +125,7 @@ func FromEnv(getenv func(string) string, cfg *config.Config, st factory.Store, g
 		o.Auth = product.FactoryAuth{App: gh}
 		o.Forge = forge.NewGitHub(forge.GitHubOptions{Auth: o.Auth, API: gh.API})
 		if o.ReviewModel == "" && !o.NoReview {
-			return w, false, errors.New("FACTORY with a GitHub App needs FACTORY_REVIEW_MODEL (an independent reviewer gates every merge) or FACTORY_NO_REVIEW=1")
+			slog.Warn("FACTORY_REVIEW_MODEL is not set: the default model reviews its own work; set a different model for an independent review")
 		}
 	}
 	if len(o.WebhookSecret) == 0 {
