@@ -1,4 +1,10 @@
+<p align="center"><img src="docs/assets/avatar.png" alt="harness" width="120"></p>
+
 # harness
+
+[![ci](https://github.com/7ar-chat/harness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/7ar-chat/harness/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/7ar-chat/harness.svg)](https://pkg.go.dev/github.com/7ar-chat/harness)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 An open, embeddable agent harness written in Go: a ReAct loop whose tools run in a **sandbox** (a local directory or a remote
 [OpenSandbox](https://github.com/alibaba/OpenSandbox) container), streaming
@@ -1031,6 +1037,10 @@ validation. `make ci` runs the Go and web steps locally. After changing a DTO of
   in a note before its next model call, once per run, because the prompt never starts a sandbox just to list them.
 * Web search is not built in: enable one from the MCP marketplace (Exa ships in the catalog and is on by default, see [docs/marketplace.md](docs/marketplace.md)) or configure any web-search MCP server in `MCP_SERVERS`.
 * The sandbox image (`sandbox-image/Dockerfile`) was built and smoke-tested on 2026-10-30 for linux/arm64 and linux/amd64 (see `sandbox-image/README.md`); it has not yet been run under a live OpenSandbox lifecycle server.
+
+## Contributing
+
+Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Report a vulnerability privately, as [SECURITY.md](SECURITY.md) describes.
 
 ## License
 
