@@ -7,6 +7,7 @@ container per thread, created by the harness (`sandbox.OpenSandbox`, selected by
 | File | Purpose |
 |---|---|
 | `Dockerfile` | The sandbox images (`OPENSANDBOX_IMAGE`), two targets sharing layers: `base` (what every sandbox needs) and `office` (base plus the Office/PDF/data toolchain, Python and Node; the default build). Optional extra CA certificates in `certs/`, mirrors through build args (see the header of the file). |
+| `steel/` | The Steel browser image (`harness-steel`) and its compose file: a Chromium the agent drives over a session API and CDP. Not a sandbox profile: it runs as its own service. See [steel/README.md](steel/README.md). |
 | `opensandbox.toml` | Lifecycle server configuration for a local Docker runtime. |
 
 Build and run locally:

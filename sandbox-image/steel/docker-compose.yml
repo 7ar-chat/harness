@@ -1,0 +1,21 @@
+# Steel browser for the harness browser tools. Everything is bound to 127.0.0.1: Steel
+# has no authentication. Start:  docker compose up -d   then   http://localhost:3000/ui
+services:
+  steel:
+    image: harness-steel:0.5.5
+    build: .
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"   # REST session API (and /ui, the live session viewer)
+      - "127.0.0.1:9223:9223"   # CDP
+    environment:
+      - DOMAIN=localhost:3000
+      - CDP_DOMAIN=localhost:9223
+      - LOG_STORAGE_ENABLED=true
+      - LOG_STORAGE_PATH=/data/logs/browser-logs.duckdb
+    volumes:
+      - steel-data:/data
+    shm_size: "1gb"            # Chromium crashes on pages with a small /dev/shm
+volumes:
+  steel-data:
