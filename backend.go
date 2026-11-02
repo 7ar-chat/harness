@@ -23,7 +23,7 @@ func llmOptions(cfg *config.Config) llm.Options {
 	}
 }
 
-// SandboxSettings maps the configuration (SANDBOX_BACKEND, OPENSANDBOX_*,
+// SandboxSettings maps the configuration (SANDBOX_BACKEND, OPENSANDBOX_*, E2B_*, DAYTONA_*,
 // SANDBOX_*, LOCAL_*) to the settings the registered sandbox backends are built from.
 func SandboxSettings(cfg *config.Config) backends.Settings {
 	return backends.Settings{
@@ -32,9 +32,17 @@ func SandboxSettings(cfg *config.Config) backends.Settings {
 			URL: cfg.OpenSandboxURL, APIKey: cfg.OpenSandboxAPIKey, UseServerProxy: cfg.OpenSandboxUseServerProxy,
 			Image: cfg.OpenSandboxImage, CPU: cfg.SandboxCPU, Memory: cfg.SandboxMemory,
 			TimeoutSeconds: cfg.SandboxTimeoutSeconds, EgressAllowlist: cfg.SandboxEgressAllowlist,
-			EgressDenyCIDRs: cfg.SandboxEgressDenyCIDRs, CredentialProxy: cfg.OpenSandboxCredentialProxy,
+			EgressDenyCIDRs: cfg.SandboxEgressDenyCIDRs, CredentialProxy: cfg.OpenSandboxCredentialProxy, Images: cfg.SandboxImages,
 		},
 		Local: backends.LocalSettings{Workspace: cfg.LocalWorkspace, StateDir: cfg.LocalStateDir},
+		E2B: backends.E2BSettings{
+			APIKey: cfg.E2BAPIKey, Template: cfg.E2BTemplate, Domain: cfg.E2BDomain,
+			TimeoutSeconds: cfg.SandboxTimeoutSeconds, EgressAllowlist: cfg.SandboxEgressAllowlist, EgressDenyCIDRs: cfg.SandboxEgressDenyCIDRs, Images: cfg.SandboxImages,
+		},
+		Daytona: backends.DaytonaSettings{
+			APIKey: cfg.DaytonaAPIKey, URL: cfg.DaytonaURL, Target: cfg.DaytonaTarget, Snapshot: cfg.DaytonaSnapshot,
+			TimeoutSeconds: cfg.SandboxTimeoutSeconds, EgressAllowlist: cfg.SandboxEgressAllowlist, EgressDenyCIDRs: cfg.SandboxEgressDenyCIDRs, Images: cfg.SandboxImages,
+		},
 	}
 }
 

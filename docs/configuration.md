@@ -190,11 +190,14 @@ This table is the schema of the **user file**; a project file accepts the subset
 | `limits.max_tool_output_chars`, `limits.tool_output_spill` | `AGENT_MAX_TOOL_OUTPUT_CHARS`, `AGENT_TOOL_OUTPUT_SPILL_CHARS` | |
 | `limits.step_retries`, `limits.stream_idle_seconds`, `limits.call_max_seconds`, `limits.max_output_tokens` | `LLM_STEP_RETRIES`, `LLM_STREAM_IDLE_SECONDS`, `LLM_CALL_MAX_SECONDS`, `LLM_MAX_OUTPUT_TOKENS` | |
 | `limits.compaction_threshold`, `limits.compaction_model`, `limits.keep_recent_tool_calls` | `COMPACTION_THRESHOLD`, `COMPACTION_MODEL`, `COMPACTION_KEEP_RECENT_TOOL_RESULTS` | |
-| `sandbox.backend` | `SANDBOX_BACKEND` | `local`, `opensandbox` or `none` (`none` ignores `sandbox.url`) |
+| `sandbox.backend` | `SANDBOX_BACKEND` | `local`, `opensandbox`, `e2b`, `daytona` or `none` (`none` ignores `sandbox.url`) |
 | `sandbox.url`, `sandbox.image`, `sandbox.api_key_env` | `OPENSANDBOX_URL`, `OPENSANDBOX_IMAGE`, `OPENSANDBOX_API_KEY` | `api_key_env` is a variable name |
 | `sandbox.use_server_proxy`, `sandbox.credential_proxy`, `sandbox.timeout_seconds`, `sandbox.command_timeout`, `sandbox.cpu`, `sandbox.memory` | `OPENSANDBOX_USE_SERVER_PROXY`, `OPENSANDBOX_CREDENTIAL_PROXY`, `SANDBOX_TIMEOUT_SECONDS`, `SANDBOX_COMMAND_TIMEOUT_SECONDS`, `SANDBOX_CPU`, `SANDBOX_MEMORY` | `credential_proxy` keeps the project's GitHub token outside the sandbox, see [docs/sandbox-adapters.md](sandbox-adapters.md) |
 | `sandbox.egress_allowlist`, `sandbox.egress_unrestricted`, `sandbox.max_sandboxes_per_user` | `SANDBOX_EGRESS_ALLOWLIST`, `SANDBOX_EGRESS_UNRESTRICTED`, `MAX_SANDBOXES_PER_USER` | |
 | `sandbox.workspace`, `sandbox.state_dir` | `LOCAL_WORKSPACE`, `LOCAL_STATE_DIR` | local backend |
+| `sandbox.images` | `SANDBOX_IMAGES` | map `profile: image` (env: `work=harness-office,coding=base`): the image sandboxes start from for the agent profile in use (`AGENT_PROFILE`, `work` when unset), whichever backend: an OpenSandbox container image, an E2B template, a Daytona snapshot. A profile without an entry uses the backend's default (`OPENSANDBOX_IMAGE`, `E2B_TEMPLATE`, `DAYTONA_SNAPSHOT`) |
+| `sandbox.e2b_template`, `sandbox.e2b_domain` | `E2B_TEMPLATE`, `E2B_DOMAIN` | e2b backend: the template sandboxes start from (default `base`), a self-hosted E2B domain. The key is `E2B_API_KEY` or `harness auth login e2b`, never this file |
+| `sandbox.daytona_url`, `sandbox.daytona_target`, `sandbox.daytona_snapshot` | `DAYTONA_API_URL`, `DAYTONA_TARGET`, `DAYTONA_SNAPSHOT` | daytona backend. The key is `DAYTONA_API_KEY` or `harness auth login daytona` |
 | `permissions.mode` | `AGENT_PERMISSIONS` | `ask`, `auto-edit`, `yolo`, `yolo-unsafe`, `readonly` |
 | `permissions.allow`, `.ask`, `.deny` | `AGENT_PERMISSIONS_ALLOW`, `_ASK`, `_DENY` | lists of rules, merged across the files |
 | `skills.dir`, `skills.in_coding` | `SKILLS_DIR`, `SKILLS_IN_CODING` | |

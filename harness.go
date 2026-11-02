@@ -190,6 +190,7 @@ func New(o Options) (*Harness, error) {
 		coord, locks = infra.Coordinator, infra.Coordinator
 	}
 	mgr := sandbox.NewManager(backend, st, coord, sandbox.ManagerOptions{
+		Profile:    cfg.SandboxProfile(),
 		MaxPerUser: cfg.MaxSandboxesPerUser, Timeout: cfg.SandboxTimeout(),
 		UnhealthyRecreate: time.Duration(cfg.SandboxUnhealthyRecreate) * time.Second,
 		OnCreate:          b.onCreate,

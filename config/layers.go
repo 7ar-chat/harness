@@ -221,6 +221,9 @@ func LoadWith(o LoadOptions) (*Config, error) {
 	if err := cfg.normalize(); err != nil {
 		return nil, err
 	}
+	if err := cfg.resolveSandboxKeys(userDir); err != nil {
+		return nil, err
+	}
 	if err := cfg.resolveAPIKey(procEnv, def, userDir); err != nil {
 		return nil, err
 	}
@@ -304,6 +307,12 @@ var schema = map[string]any{
 		"url":                    f("OPENSANDBOX_URL", kStr),
 		"image":                  f("OPENSANDBOX_IMAGE", kStr),
 		"use_server_proxy":       f("OPENSANDBOX_USE_SERVER_PROXY", kBool),
+		"images":                 f("SANDBOX_IMAGES", kMap),
+		"e2b_template":           f("E2B_TEMPLATE", kStr),
+		"e2b_domain":             f("E2B_DOMAIN", kStr),
+		"daytona_url":            f("DAYTONA_API_URL", kStr),
+		"daytona_target":         f("DAYTONA_TARGET", kStr),
+		"daytona_snapshot":       f("DAYTONA_SNAPSHOT", kStr),
 		"credential_proxy":       f("OPENSANDBOX_CREDENTIAL_PROXY", kBool),
 		"workspace":              f("LOCAL_WORKSPACE", kStr),
 		"state_dir":              f("LOCAL_STATE_DIR", kStr),
@@ -533,9 +542,9 @@ func parseConfigFile(file string, data []byte, user bool, procEnv map[string]str
 	}
 	if v, ok := doc.values["SANDBOX_BACKEND"]; ok {
 		switch strings.ToLower(strings.TrimSpace(v)) {
-		case "", "local", "opensandbox", "none":
+		case "", "local", "opensandbox", "e2b", "daytona", "none":
 		default:
-			return nil, errf("sandbox.backend must be local, opensandbox or none, got %q", v)
+			return nil, errf("sandbox.backend must be local, opensandbox, e2b, daytona or none, got %q", v)
 		}
 	}
 	return doc, nil

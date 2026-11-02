@@ -156,6 +156,9 @@ func (c *Config) normalizeHarness() error {
 		}
 		c.LLMModelLabels[strings.TrimSpace(name)] = strings.TrimSpace(label)
 	}
+	if err := c.parseSandboxImages(); err != nil {
+		return err
+	}
 	if err := c.normalizeLoop(); err != nil {
 		return err
 	}

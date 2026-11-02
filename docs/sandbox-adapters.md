@@ -8,6 +8,26 @@ next adapter (E2B, Firecracker, Kubernetes jobs, a REST exec service...): the
 contract, what the image must contain, how sandboxes live and die, the security
 rules, a worked example, and how to register it.
 
+## Choosing a backend
+
+`SANDBOX_BACKEND` selects one; the same agent runs on any of them.
+
+| Backend | Where it runs | Needs | Notes |
+|---|---|---|---|
+| `local` | your machine, no isolation | nothing | for a trusted developer machine; refused for servers |
+| `opensandbox` | containers on a server you run | `OPENSANDBOX_URL`, an image | you own the image (`sandbox-image/`) and the egress sidecar |
+| `e2b` | E2B's cloud, a micro-VM per conversation | `E2B_API_KEY` or `harness auth login e2b` | the `base` template has bash, python3 and git but **no ripgrep** (`search_files` falls back to python3); build a template from `sandbox-image/` for the full toolchain (`E2B_TEMPLATE`). The conformance suite passes against the live service |
+| `daytona` | Daytona's cloud | `DAYTONA_API_KEY` or `harness auth login daytona`; the default snapshot works (bash, GNU coreutils, python3, git, ripgrep) | the conformance suite passes against the live service. **Egress depends on the account tier**: tiers 1 and 2 apply Daytona's own restricted policy (a fixed list of package registries, Git hosts and AI APIs) and refuse a per-sandbox list, so the adapter creates the sandbox without it and logs a warning; tiers 3 and 4 honour `SANDBOX_EGRESS_ALLOWLIST` (domains or CIDRs, not both). No credential broker: the GitHub token is written into the sandbox, as with `local` |
+
+**Which image a sandbox starts from.** A sandbox is created for the deployment's agent profile (`AGENT_PROFILE`, `work` when
+unset), passed to the backend as `CreateOptions.Profile`. `SANDBOX_IMAGES=work=harness-office,coding=base` (or `sandbox.images`
+in `config.yml`) maps a profile to an image: a container image for OpenSandbox, a template for E2B, a snapshot for Daytona. A
+profile with no entry uses the backend's default (`OPENSANDBOX_IMAGE`, `E2B_TEMPLATE`, `DAYTONA_SNAPSHOT`, else the provider's
+own default). The profile is fixed per process: a deployment running `AGENT_PROFILE=coding` gives every thread the coding image.
+A backend of your own receives the same `Profile` and decides what it means.
+
+Both hosted backends take the same `SANDBOX_EGRESS_ALLOWLIST` as OpenSandbox, and production refuses unrestricted egress for them too.
+
 ```
 agent tools (execute_command, read_file, ...)
         │

@@ -91,6 +91,22 @@ type Config struct {
 	// sandbox backend (the local backend always reads it). Off for servers: the host's home is not the tenants'.
 	UserInstructions bool `env:"HARNESS_USER_INSTRUCTIONS"`
 
+	// SandboxImagesRaw is SANDBOX_IMAGES: "profile=image,profile=image", the image a sandbox starts from per agent profile
+	// (see SandboxProfile): an OpenSandbox container image, an E2B template or a Daytona snapshot, whichever backend is
+	// selected. A profile without an entry uses the backend's own default (OPENSANDBOX_IMAGE, E2B_TEMPLATE, DAYTONA_SNAPSHOT).
+	SandboxImagesRaw string `env:"SANDBOX_IMAGES"`
+	SandboxImages    map[string]string
+	// E2BAPIKey is E2B_API_KEY (or the "e2b" entry of auth.json: `harness auth login e2b`), used by SANDBOX_BACKEND=e2b.
+	// E2BTemplate is the template sandboxes start from (default "base"); E2BDomain a self-hosted E2B domain.
+	E2BAPIKey   string `env:"E2B_API_KEY"`
+	E2BTemplate string `env:"E2B_TEMPLATE"`
+	E2BDomain   string `env:"E2B_DOMAIN"`
+	// DaytonaAPIKey is DAYTONA_API_KEY (or the "daytona" entry of auth.json), used by SANDBOX_BACKEND=daytona.
+	DaytonaAPIKey   string `env:"DAYTONA_API_KEY"`
+	DaytonaURL      string `env:"DAYTONA_API_URL"`
+	DaytonaTarget   string `env:"DAYTONA_TARGET"`
+	DaytonaSnapshot string `env:"DAYTONA_SNAPSHOT"`
+
 	OpenSandboxURL            string `env:"OPENSANDBOX_URL"`
 	OpenSandboxAPIKey         string `env:"OPENSANDBOX_API_KEY"`
 	OpenSandboxImage          string `env:"OPENSANDBOX_IMAGE" envDefault:"python:3.11-slim"`
@@ -309,6 +325,8 @@ func (c *Config) AddModels(ids ...string) {
 const (
 	BackendOpenSandbox = "opensandbox"
 	BackendLocal       = "local"
+	BackendE2B         = "e2b"
+	BackendDaytona     = "daytona"
 	BackendNone        = "none"
 )
 
@@ -329,6 +347,42 @@ func (c *Config) SandboxBackendName() string {
 // SandboxEnabled reports whether sandbox tools are configured.
 func (c *Config) SandboxEnabled() bool { return c.SandboxBackendName() != BackendNone }
 
+// SandboxProfile is the profile sandboxes are created for: AGENT_PROFILE, "work" when unset. SANDBOX_IMAGES maps it to
+// an image.
+func (c *Config) SandboxProfile() string {
+	if p := strings.ToLower(strings.TrimSpace(c.AgentProfile)); p != "" {
+		return p
+	}
+	return "work"
+}
+
+// parseSandboxImages reads SANDBOX_IMAGES ("work=harness-office,coding=base").
+func (c *Config) parseSandboxImages() error {
+	c.SandboxImages = map[string]string{}
+	for _, entry := range trimAll(strings.Split(c.SandboxImagesRaw, ",")) {
+		if entry == "" {
+			continue
+		}
+		name, image, ok := strings.Cut(entry, "=")
+		name, image = strings.ToLower(strings.TrimSpace(name)), strings.TrimSpace(image)
+		if !ok || name == "" || image == "" {
+			return fmt.Errorf("SANDBOX_IMAGES: %q is not profile=image", entry)
+		}
+		c.SandboxImages[name] = image
+	}
+	return nil
+}
+
+// RemoteSandbox reports whether sandboxes run at a provider this package knows (OpenSandbox, E2B, Daytona): their
+// egress follows SANDBOX_EGRESS_ALLOWLIST and is checked by EgressMode.
+func (c *Config) RemoteSandbox() bool {
+	switch c.SandboxBackendName() {
+	case BackendOpenSandbox, BackendE2B, BackendDaytona:
+		return true
+	}
+	return false
+}
+
 // LocalSandbox reports whether tools run on this machine (SANDBOX_BACKEND=local).
 func (c *Config) LocalSandbox() bool {
 	return c.SandboxBackendName() == BackendLocal
@@ -339,7 +393,7 @@ func (c *Config) LocalSandbox() bool {
 // with SANDBOX_EGRESS_UNRESTRICTED=true; otherwise an error is returned.
 func (c *Config) EgressMode() (string, error) {
 	switch {
-	case c.SandboxBackendName() != BackendOpenSandbox: // none, local or a host's own backend (its own isolation)
+	case !c.RemoteSandbox(): // none, local or a host's own backend (its own isolation)
 		return "disabled", nil
 	case len(c.SandboxEgressAllowlist) > 0:
 		return "allowlist", nil

@@ -79,7 +79,7 @@ See [Compaction](/docs/concepts/compaction/).
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `SANDBOX_BACKEND` | - | `local`, `opensandbox`, `none`, or a backend a host registered. Unset: `opensandbox` when `OPENSANDBOX_URL` is set, else `none` (no sandbox tools). `opensandbox` needs the blank import of `github.com/7ar-chat/harness/adapters/sandbox/opensandbox`; `harness`, `harness-web` and `harness-worker` link it already |
+| `SANDBOX_BACKEND` | - | `local`, `opensandbox`, `e2b`, `daytona`, `none`, or a backend a host registered. Unset: `opensandbox` when `OPENSANDBOX_URL` is set, else `none` (no sandbox tools). `opensandbox` needs the blank import of `github.com/7ar-chat/harness/adapters/sandbox/opensandbox`; `harness`, `harness-web` and `harness-worker` link it already |
 | `LOCAL_WORKSPACE` | - (the working directory) | Local backend: the directory seen as `/workspace`. Also where the project directory is searched from |
 | `LOCAL_STATE_DIR` | - | Local backend state (per-sandbox directories, `/skills`, job records; default `<user cache dir>/harness`), and the session store of the commands (default `<user dir>/sessions`) |
 | `OPENSANDBOX_URL` | - | OpenSandbox lifecycle server |
@@ -87,6 +87,11 @@ See [Compaction](/docs/concepts/compaction/).
 | `OPENSANDBOX_IMAGE` | `python:3.11-slim` | Image of new sandboxes |
 | `OPENSANDBOX_USE_SERVER_PROXY` | `false` | Reach sandboxes through the server's proxy |
 | `OPENSANDBOX_CREDENTIAL_PROXY` | `false` | Create sandboxes with the egress sidecar's credential vault so GitHub authentication is added outside the sandbox. Needs opensandbox-server 0.2.0 or later and egress 1.1.1 or later in dns+nft mode |
+| `SANDBOX_IMAGES` | - | `profile=image,profile=image`: the image a sandbox starts from per agent profile (`AGENT_PROFILE`, `work` when unset). Meaning of the image follows the backend: OpenSandbox container image, E2B template, Daytona snapshot. No entry: the backend default |
+| `E2B_API_KEY` | - | **secret.** E2B API key for `SANDBOX_BACKEND=e2b`. Unset: the `e2b` entry of `~/.har/auth.json` (`harness auth login e2b`) |
+| `E2B_TEMPLATE`, `E2B_DOMAIN` | `base`, `e2b.app` | E2B template sandboxes start from, and the domain of a self-hosted E2B |
+| `DAYTONA_API_KEY` | - | **secret.** Daytona API key for `SANDBOX_BACKEND=daytona`. Unset: the `daytona` entry of `auth.json` |
+| `DAYTONA_API_URL`, `DAYTONA_TARGET`, `DAYTONA_SNAPSHOT` | Daytona cloud, account default, account default | Daytona API, region and snapshot |
 | `SANDBOX_TIMEOUT_SECONDS` | `1800` | Idle lifetime of a sandbox |
 | `SANDBOX_COMMAND_TIMEOUT_SECONDS` | `120` | Default command timeout |
 | `SANDBOX_CPU` | `1` | CPU of a sandbox |

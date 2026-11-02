@@ -61,7 +61,7 @@ func TestConfigFile_InvalidValuesAreRejectedWithTheFileAndTheKey(t *testing.T) {
 		"agents key of other role":   {"agents:\n  explore:\n    profile: coding\n", `unknown key "agents.explore.profile"`},
 		"agents model not scalar":    {"agents:\n  default:\n    model: [a]\n", "agents.default.model:"},
 		"providers scalar":           {"providers: 3\n", "providers must map provider names"},
-		"sandbox backend unknown":    {"sandbox:\n  backend: docker\n", "sandbox.backend must be local, opensandbox or none"},
+		"sandbox backend unknown":    {"sandbox:\n  backend: docker\n", "sandbox.backend must be local, opensandbox, e2b, daytona or none"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

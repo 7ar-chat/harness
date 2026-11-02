@@ -230,3 +230,28 @@ func (c *Config) RequireLLMKey() error {
 	hint := append([]string{"run `harness auth login " + c.LLMProviderName + "`", "export LLM_API_KEY"}, c.keyHint...)
 	return errors.New("no API key for provider " + c.LLMProviderName + ": " + strings.Join(hint, ", or "))
 }
+
+// resolveSandboxKeys fills the API keys of the hosted sandbox providers (E2B, Daytona) that the environment left
+// empty from auth.json (`harness auth login e2b`), the same file the model keys live in. An unusable auth.json is an
+// error only when a hosted provider is selected, so a broken file does not stop a local-sandbox run here (the model-key
+// lookup reports it).
+func (c *Config) resolveSandboxKeys(userDir string) error {
+	if userDir == "" || (c.E2BAPIKey != "" && c.DaytonaAPIKey != "") {
+		return nil
+	}
+	keys, err := ReadAuth(userDir)
+	if err != nil {
+		switch c.SandboxBackendName() {
+		case BackendE2B, BackendDaytona:
+			return err
+		}
+		return nil
+	}
+	if c.E2BAPIKey == "" {
+		c.E2BAPIKey = keys["e2b"]
+	}
+	if c.DaytonaAPIKey == "" {
+		c.DaytonaAPIKey = keys["daytona"]
+	}
+	return nil
+}
