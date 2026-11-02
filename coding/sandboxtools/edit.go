@@ -35,8 +35,8 @@ type editOutput struct {
 	// Matched is "exact" or "whitespace" (indentation-tolerant unique match).
 	Matched string `json:"matched,omitempty"`
 	// StartLine is the 1-based line where the first replacement begins (exact matches only); UIs number diffs from it.
-	StartLine int `json:"startLine,omitempty"`
-	Notice  string `json:"notice,omitempty"`
+	StartLine int    `json:"startLine,omitempty"`
+	Notice    string `json:"notice,omitempty"`
 }
 
 func (b *binding) edit(ctx context.Context, in editInput) (*editOutput, error) {
