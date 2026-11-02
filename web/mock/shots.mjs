@@ -1,0 +1,47 @@
+// Screenshots of the main screens against the mock server; fails on console errors (CSP violations included).
+import { chromium } from "playwright";
+const base = process.argv[2] ?? "http://127.0.0.1:8099";
+const out = process.argv[3] ?? "/tmp/harness-shots";
+import fs from "node:fs";
+fs.mkdirSync(out, { recursive: true });
+const browser = await chromium.launch();
+const errors = [];
+async function shot(name, hash, { w = 1440, h = 900, dark = false, act } = {}) {
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, colorScheme: dark ? "dark" : "light" });
+  const page = await ctx.newPage();
+  page.on("console", (m) => (m.type() === "error" || m.type() === "warning") && errors.push(`${name}: ${m.text()}`));
+  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  await page.goto(`${base}/#${hash}`);
+  await page.waitForTimeout(1200);
+  if (act) await act(page);
+  await page.screenshot({ path: `${out}/${name}.png` });
+  await ctx.close();
+}
+await shot("dashboard", "/");
+await shot("dashboard-dark", "/", { dark: true });
+await shot("session", "/t/t1");
+await shot("session-tools-open", "/t/t1", { act: async (p) => { for (const t of await p.locator("button:has-text('edit_file')").all()) await t.click(); await p.waitForTimeout(800); } });
+await shot("approval", "/t/t2");
+await shot("supervisor", "/supervisor");
+await shot("project", "/p/p1");
+await shot("project-members", "/p/p1?tab=members");
+await shot("project-settings", "/p/p1?tab=settings");
+await shot("memory", "/memory");
+await shot("project-memory", "/p/p1?tab=memory", { h: 1500 });
+await shot("project-memory-mine", "/p/p1?tab=memory", { act: async (p) => { await p.getByRole("tab", { name: "Me in this project" }).click(); await p.waitForTimeout(600); } });
+await shot("memory-history", "/p/p1?tab=memory", { act: async (p) => { await p.getByRole("button", { name: "History of Use idempotency keys for refunds" }).click(); await p.waitForTimeout(600); } });
+await shot("memory-keepall", "/p/p1?tab=memory", { act: async (p) => { await p.getByRole("button", { name: "Keep all" }).click(); await p.waitForTimeout(500); } });
+await shot("memory-popover", "/p/p1?tab=memory", { act: async (p) => { await p.getByRole("button", { name: "How agents use it" }).click(); await p.waitForTimeout(500); } });
+await shot("memory-mobile", "/p/p1?tab=memory", { w: 390, h: 1300 });
+await shot("session-mobile", "/t/t1", { w: 390, h: 800 });
+await shot("dashboard-mobile", "/", { w: 390, h: 800 });
+await shot("profile", "/profile");
+await shot("profile-dark-mobile", "/profile", { w: 390, h: 900, dark: true });
+await shot("profile-import", "/profile", { act: async (p) => { await p.getByRole("button", { name: /Import a project/ }).click(); await p.waitForTimeout(900); } });
+await shot("profile-telegram", "/profile", { act: async (p) => { await p.getByRole("button", { name: "Connect Telegram" }).click(); await p.waitForTimeout(1200); } });
+await shot("profile-crop", "/profile", { act: async (p) => { await p.setInputFiles("input[type=file]", { name: "a.svg", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64") }); await p.waitForTimeout(800); } });
+await shot("new-project", "/", { act: async (p) => { await p.getByRole("button", { name: "New project" }).click(); await p.waitForTimeout(500); } });
+await shot("notfound", "/t/nope");
+await shot("palette", "/", { act: async (p) => { await p.keyboard.press("Control+k"); await p.waitForTimeout(400); } });
+await browser.close();
+console.log(errors.length ? "ERRORS:\n" + [...new Set(errors)].join("\n") : "no console errors");

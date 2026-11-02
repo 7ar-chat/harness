@@ -1,0 +1,6 @@
+> go
+
+✗ read_file nope.txt
+  ⎿ file not found: nope.txt
+
+error [model_error]: the model is unavailable

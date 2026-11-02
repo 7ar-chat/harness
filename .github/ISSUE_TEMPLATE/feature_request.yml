@@ -1,0 +1,21 @@
+name: Feature request
+description: Suggest something the harness should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that you cannot do today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you would like
+      description: How you imagine it working, and what you considered instead.
+  - type: textarea
+    id: scope
+    attributes:
+      label: Where it would live
+      description: The package or part of the product you think it belongs to, if you know (`README.md` has the layout).

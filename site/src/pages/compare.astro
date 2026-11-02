@@ -1,0 +1,96 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Compared with open-source agents | 7ar.chat" description="Where 7ar fits next to the strongest open-source coding agents, and where it doesn't." path="/compare/">
+<section id="compare">
+  <div class="wrap">
+    <p class="eyebrow">Compared with open-source alternatives</p>
+    <h1 class="h2">Where 7ar fits, and where it doesn't</h1>
+    <p class="sub">The strongest open-source agents are coding agents for one developer. 7ar's bet is different: a self-hosted agent for a <em>team</em> that produces documents as well as code. If you only need a fast terminal pair-programmer, pick one of the others.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th class="us">7ar</th>
+            <th>OpenHands</th>
+            <th>OpenCode</th>
+            <th>Cline</th>
+            <th>Aider</th>
+            <th>Goose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><th>Main surface</th>
+            <td class="us">Web UI, terminal UI, HTTP API, Go library</td>
+            <td>Visual workspace (Agent Canvas)</td>
+            <td>Terminal TUI</td>
+            <td>VS Code extension and CLI</td>
+            <td>Terminal</td>
+            <td>Desktop app and CLI</td></tr>
+          <tr><th>License</th>
+            <td class="us">Not yet set in the repo</td>
+            <td>MIT</td><td>MIT</td><td>Apache-2.0</td><td>Apache-2.0</td><td>Apache-2.0</td></tr>
+          <tr><th>Written in</th>
+            <td class="us">Go</td><td>TypeScript</td><td>TypeScript</td><td>TypeScript</td><td>Python</td><td>Rust</td></tr>
+          <tr><th>Produces Office and PDF files, and checks the render</th>
+            <td class="us yes">Built in: docx, pptx, xlsx, pdf, charts skills; render and verify</td>
+            <td class="no">Not documented</td><td class="no">Not documented</td><td class="no">Not documented</td><td class="no">Not documented</td><td class="no">Not documented</td></tr>
+          <tr><th>Sandboxed execution</th>
+            <td class="us yes">Container per thread (OpenSandbox), egress deny-by-default; or local</td>
+            <td>Sandboxed runtimes (Enterprise)</td>
+            <td class="no">No built-in sandbox found</td>
+            <td class="no">Approval controls; no built-in sandbox found</td>
+            <td class="no">No built-in sandbox found</td>
+            <td class="no">Runs on-machine; no built-in sandbox found</td></tr>
+          <tr><th>Multi-user: projects, roles, audit</th>
+            <td class="us yes">In the open code: OIDC, owner/member/viewer, audit log</td>
+            <td>Enterprise layer</td>
+            <td class="no">Client-server; no team model documented</td>
+            <td>Enterprise tier: RBAC, SSO, audit</td>
+            <td class="no">Not documented</td>
+            <td class="no">Local-first; no team layer documented</td>
+          </tr>
+          <tr><th>Shared, reviewable team memory</th>
+            <td class="us yes">Project, personal, global; proposals reviewed by humans</td>
+            <td class="no">Not documented</td><td class="no">Not documented</td><td class="no">Not documented</td><td class="no">Not documented</td><td class="no">Not documented</td></tr>
+          <tr><th>Watcher agent and Telegram</th>
+            <td class="us yes">Supervisor across sessions; Telegram approvals</td>
+            <td>Automations on events and schedules</td>
+            <td class="no">Not documented</td><td class="no">Headless CLI for CI</td><td class="no">Not documented</td><td>Recipes</td></tr>
+          <tr><th>Model providers</th>
+            <td class="us">Any OpenAI-compatible endpoint, or Anthropic</td>
+            <td>100+</td><td>75+</td><td>30+</td><td>Many, incl. local</td><td>25+</td></tr>
+          <tr><th>Embeddable as a library</th>
+            <td class="us yes">Go facade and client contract</td>
+            <td>Open core, extensible</td><td>Client-server API</td><td class="no">Not documented</td><td>Scriptable CLI</td><td>Embeddable API</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Competitor details come from the OpenHands team's <a href="https://www.openhands.dev/blog/open-source-ai-coding-agents">June 2026 roundup</a>, itself a competitor's page, and each project's GitHub page; licenses were read from the GitHub API on 30 Oct 2026. "Not documented" and "no built-in … found" mean we found no such feature in those sources, not proof of absence. Tell us if a cell is wrong. 7ar's column is taken from this repository's README and <code>docs/team.md</code>.</p>
+
+    <div class="honest">
+      <div class="card">
+        <h3>Where the others are ahead</h3>
+        <ul>
+          <li><strong>Community and maturity.</strong> 7ar is new; the alternatives have tens of thousands of users and years of edge cases fixed.</li>
+          <li><strong>Provider breadth.</strong> 7ar speaks OpenAI-compatible and Anthropic natively; a router widens that, but it is narrower on paper.</li>
+          <li><strong>Editor integration.</strong> Cline lives in VS Code; OpenCode has LSP-backed edit checks.</li>
+          <li><strong>Git-native edits.</strong> Aider commits every edit, which is hard to beat for review.</li>
+          <li><strong>Ecosystem.</strong> Goose has deep MCP extensions and Linux Foundation stewardship.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Where 7ar is different</h3>
+        <ul>
+          <li><strong>Deliverables, not just diffs:</strong> render and verify for documents is part of the loop.</li>
+          <li><strong>Teams out of the box:</strong> shared sessions, roles, audit, memory and a global assistant are in the open code, not a paid tier.</li>
+          <li><strong>Containment by default:</strong> one container per thread, no network unless allowed.</li>
+          <li><strong>Small and embeddable:</strong> one ~30 MB Go binary, ~20 MB idle, with a stable client contract for your own front end.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+</Layout>

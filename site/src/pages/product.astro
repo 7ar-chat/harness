@@ -1,0 +1,29 @@
+---
+import Layout from '../layouts/Layout.astro';
+import img_ui_approval from '../assets/ui-approval.webp';
+import img_ui_memory from '../assets/ui-memory.webp';
+import img_ui_session from '../assets/ui-session.webp';
+---
+<Layout title="The product | 7ar.chat" description="The 7ar web UI: approvals, inspectable sessions with diffs, and shared project memory with human review." path="/product/">
+<section id="product">
+  <div class="wrap">
+    <p class="eyebrow">The product</p>
+    <h1 class="h2">Built for the loop of a team, not a single prompt</h1>
+    <p class="sub">The screens below are the real web UI running against a demo server with canned data (no model is called), so the content is illustrative.</p>
+    <div class="ui-grid">
+      <figure style="margin:0">
+        <div class="shot"><img src={img_ui_approval.src} width="1190" height="440" loading="lazy" alt="A session paused on an approval: the agent wants to run go test with count 20 and waits for approve, approve always or deny"></div>
+        <figcaption class="caption"><strong>You stay in control.</strong> Risky tool calls pause for approve or deny; "always" grants autonomy for the run. Modes: ask, auto-edit, readonly, yolo.</figcaption>
+      </figure>
+      <figure style="margin:0">
+        <div class="shot"><img src={img_ui_session.src} width="1190" height="765" loading="lazy" alt="Session with a diff of the edited test file, a steer message from a teammate, and token and cache stats"></div>
+        <figcaption class="caption"><strong>Everything is inspectable.</strong> Collapsible tool calls, edit diffs, a live plan, steering and cancel while a run is going.</figcaption>
+      </figure>
+      <figure class="tall" style="margin:0">
+        <div class="shot"><img src={img_ui_memory.src} width="1200" height="1250" loading="lazy" alt="Project memory page with pinned entries, pending proposals to review, and entry history"></div>
+        <figcaption class="caption"><strong>Shared memory with review.</strong> Pinned rules from AGENTS.md, agent-proposed entries waiting for a human, and per-entry history.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+</Layout>

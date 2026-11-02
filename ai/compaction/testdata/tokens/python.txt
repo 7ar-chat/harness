@@ -1,0 +1,47 @@
+import csv
+import json
+from dataclasses import dataclass, field
+from pathlib import Path
+
+
+@dataclass
+class Invoice:
+    id: str
+    amount: float
+    currency: str = "EUR"
+    tags: list[str] = field(default_factory=list)
+
+
+def load_invoices(path: Path) -> list[Invoice]:
+    """Read invoices from a CSV export, skipping malformed rows."""
+    out: list[Invoice] = []
+    with path.open(newline="", encoding="utf-8") as fh:
+        for row in csv.DictReader(fh):
+            try:
+                amount = float(row["amount"].replace(",", "."))
+            except (KeyError, ValueError):
+                continue
+            out.append(Invoice(id=row["id"], amount=amount, currency=row.get("currency") or "EUR"))
+    return out
+
+
+def reconcile(ledger: list[Invoice], bank: dict[str, float], tolerance: float = 0.01) -> dict[str, list[str]]:
+    report = {"matched": [], "mismatched": [], "missing": []}
+    for inv in ledger:
+        paid = bank.get(inv.id)
+        if paid is None:
+            report["missing"].append(inv.id)
+        elif abs(paid - inv.amount) <= tolerance:
+            report["matched"].append(inv.id)
+        else:
+            report["mismatched"].append(f"{inv.id}: ledger={inv.amount:.2f} bank={paid:.2f}")
+    return report
+
+
+if __name__ == "__main__":
+    ledger = load_invoices(Path("/workspace/inputs/ledger.csv"))
+    bank = json.loads(Path("/workspace/inputs/bank.json").read_text())
+    result = reconcile(ledger, bank)
+    for key, items in result.items():
+        print(f"{key}: {len(items)}")
+    Path("/workspace/outputs/report.json").write_text(json.dumps(result, indent=2))

@@ -1,0 +1,78 @@
+---
+import Layout from '../layouts/Layout.astro';
+import img_budget from '../assets/budget.webp';
+import img_chart from '../assets/chart.webp';
+import img_deck_revenue from '../assets/deck-revenue.webp';
+import img_deck_title from '../assets/deck-title.webp';
+import img_memo from '../assets/memo.webp';
+---
+<Layout title="Showcase: what 7ar agents made | 7ar.chat" description="Four prompts, four real files: a chart, a deck, a spreadsheet and a memo, each produced and checked by a 7ar agent in a sandbox." path="/showcase/">
+<section id="showcase">
+  <div class="wrap">
+    <p class="eyebrow">Showcase</p>
+    <h1 class="h2">Four prompts. Four real files. No editing by hand.</h1>
+    <p class="sub">Everything below was produced by 7ar in a single run inside the sandbox image, with <code>deepseek-v4.1-flash</code>, a low-cost model. Prompts are verbatim; images are renders of the final files.</p>
+
+    <!-- chart -->
+    <div class="case">
+      <div class="case-text">
+        <span class="pill">charts skill</span><span class="pill">self-check</span>
+        <h3>A chart that fixed its own layout</h3>
+        <div class="prompt"><b>Prompt:</b> Create a clean, publication-quality line chart of monthly revenue for a fictional SaaS company over 12 months of 2025 … with annotated milestones. Save it as /workspace/outputs/revenue.png, then look at it and fix any layout problems.</div>
+        <p>This model cannot see images, so 7ar's tool says so and the agent switched to measuring text geometry. It found a label running off the right edge, a clipped axis title and milestone labels sitting on the line, and fixed all three before finishing.</p>
+        <p class="run-note"><b>~36 tool calls.</b> The output is a 1800×1030 PNG.</p>
+      </div>
+      <figure style="margin:0">
+        <div class="shot"><img src={img_chart.src} width="1200" height="687" loading="lazy" alt="Line chart of monthly recurring revenue growing from about 40 thousand to 120 thousand dollars with annotated milestones"></div>
+        <figcaption class="caption">revenue.png, as delivered. Invented figures.</figcaption>
+      </figure>
+    </div>
+
+    <!-- deck -->
+    <div class="case flip">
+      <div class="case-text">
+        <span class="pill">pptx skill</span><span class="pill">fit checks</span>
+        <h3>A board deck, checked for overflow</h3>
+        <div class="prompt"><b>Prompt:</b> Build a 5-slide PowerPoint deck for a fictional Q3 board update of a SaaS company called Nimbus: title, KPIs, a revenue chart, risks, next steps. … Render the slides and check them visually for overflow before finishing.</div>
+        <p>A native, editable <code>.pptx</code>, not an image. The chart is a real PowerPoint chart (slide 3), the KPI and metrics tables are real tables, and the slides carry takeaway headlines such as "ARR grew 38% while net burn fell 15%".</p>
+        <p class="run-note"><b>~47 tool calls.</b> 5 slides, converted with headless LibreOffice for the preview.</p>
+      </div>
+      <div class="pair">
+        <figure style="margin:0"><div class="shot"><img src={img_deck_title.src} width="1200" height="675" loading="lazy" alt="Title slide: Q3 FY26 growth re-accelerated, ARR up 38 percent, net burn down 15 percent"></div></figure>
+        <figure style="margin:0"><div class="shot"><img src={img_deck_revenue.src} width="1200" height="675" loading="lazy" alt="Revenue slide with a stacked bar chart and three KPI callouts"></div></figure>
+      </div>
+    </div>
+
+    <!-- sheet -->
+    <div class="case">
+      <div class="case-text">
+        <span class="pill">xlsx skill</span><span class="pill">recalc + validate</span>
+        <h3>A workbook with live formulas</h3>
+        <div class="prompt"><b>Prompt:</b> Create an Excel workbook /workspace/outputs/budget.xlsx with a 12-month department budget … real formulas for totals and variance vs a plan column, a summary sheet, conditional formatting for overruns, and a chart. Recalculate and verify no formula errors.</div>
+        <p>393 formulas across <code>Summary</code>, <code>Budget</code> and <code>Inputs</code> sheets, conditional formatting for overruns, two charts, and built-in control checks. We recalculated it independently in LibreOffice: zero error cells.</p>
+        <p class="run-note"><b>~52 tool calls.</b> Preview shows the first sheet only.</p>
+      </div>
+      <figure style="margin:0">
+        <div class="shot"><img src={img_budget.src} width="999" height="901" loading="lazy" alt="Summary sheet of a department budget with plan, actual, variance and over/under budget status, plus control checks all OK"></div>
+        <figcaption class="caption">budget.xlsx, Summary sheet. Fictional company.</figcaption>
+      </figure>
+    </div>
+
+    <!-- memo -->
+    <div class="case flip">
+      <div class="case-text">
+        <span class="pill">pdf skill</span><span class="pill">reportlab</span>
+        <h3>A two-page memo with a decision in it</h3>
+        <div class="prompt"><b>Prompt:</b> Write a 2-page PDF memo /workspace/outputs/memo.pdf comparing three fictional vendors for a data warehouse migration, with a comparison table, a recommendation and a small bar chart. Render it and check the layout visually.</div>
+        <p>Header block, weighted-criteria table, a stacked cost chart, conditions on the recommendation, risks and dated next steps. Exactly two pages, as asked.</p>
+        <p class="run-note"><b>~59 tool calls.</b> Vendors and numbers are invented.</p>
+      </div>
+      <div class="pair memo">
+        <figure style="margin:0"><div class="shot"><img src={img_memo.src} width="827" height="1170" loading="lazy" alt="Page 1 of a vendor selection memo with a header block, summary and a side-by-side comparison table"></div></figure>
+      </div>
+    </div>
+
+    <p class="note" style="margin-top:48px">Honest footnote: a smaller model took 36 to 59 tool calls per task, and some intermediate steps failed (for example a skill path the local sandbox refused) before it recovered. With a vision-capable model, the render step shows the agent the actual pages instead of measurements. The outputs above are single runs, not best-of-N.</p>
+  </div>
+</section>
+</Layout>

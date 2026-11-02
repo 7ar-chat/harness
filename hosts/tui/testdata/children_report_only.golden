@@ -1,0 +1,6 @@
+Sub-agent transcript  ↑↓ pgup/pgdn scroll · esc returns
+
+⎇ explore  "find Handle"
+Only the report was saved with the conversation; the sub-agent's steps are not stored.
+
+Handle is in pkg/a.go:3.

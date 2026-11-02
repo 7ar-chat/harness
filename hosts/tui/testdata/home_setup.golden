@@ -1,0 +1,30 @@
+harness  a coding agent in your terminal                                                  
+                                                                                          
+  Welcome! Connect an AI provider to start. It takes about a minute.                      
+                                                                                          
+    1  Pick a provider                                                                    
+       OpenAI, Anthropic, or any OpenAI-compatible service                                
+    2  Paste your API key                                                                 
+       kept in your user folder only, readable by you alone                               
+    3  Choose a model                                                                     
+       harness asks the provider which ones your key can use                              
+                                                                                          
+  ▸ Press enter to start, or type /connect                                                
+                                                                                          
+  Already have a key in your environment?                                                 
+    export OPENAI_API_KEY=…  or  ANTHROPIC_API_KEY=…  then run harness again.             
+  Running a local model (Ollama, llama.cpp)?                                              
+    add it under providers: in /home/u/.har/config.yml — no key needed.                   
+                                                                                          
+                                                                                          
+                                                                                          
+                                                                                          
+                                                                                          
+                                                                                          
+                                                                                          
+                                                                                          
+                                                                                          
+                                                                                          
+                                                                                          
+ no provider · not connected  ctrl+o expands tools · ctrl+c quits                         
+│ Message (enter sends, alt+enter or ctrl+j adds a line)                                  

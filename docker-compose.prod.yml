@@ -1,0 +1,111 @@
+# Production deployment on Dokploy (compose from the GitHub repository, auto deploy on push).
+# Secrets and per-install values come from the Dokploy environment of the service, never from this file:
+#
+#   HARNESS_HOST            public host name, e.g. harness.tusko.ai
+#   OIDC_ISSUER             e.g. https://id.tusko.ai
+#   OIDC_CLIENT_ID / OIDC_CLIENT_SECRET
+#   OIDC_SESSION_KEY        openssl rand -hex 32   (signs the login cookie)
+#   HARNESS_SECRET_KEY      openssl rand -hex 32   (encrypts connector tokens)
+#   LLM_BASE_URL / LLM_API_KEY / LLM_MODELS / LLM_DEFAULT_MODEL
+#   LLM_DISCOVER_MODELS     (optional, default true) add the provider's model list to LLM_MODELS at startup; false: LLM_MODELS only
+#   TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_USERNAME   (optional; run one replica only: the bot long-polls)
+#   FACTORY / FACTORY_*     (optional) the agent factory: tasks from GitHub webhooks and cron, pull requests gated by CI and an
+#                           independent reviewer model. See docs/factory.md; check the setup with `harness-web -factory-check`.
+#   GITHUB_APP_ID / GITHUB_APP_SLUG / GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET / GITHUB_APP_PRIVATE_KEY
+#                           (optional GitHub App: private repositories and project import. The PEM goes on one
+#                           line in double quotes with \n for the line breaks.)
+#   SENTRY_DSN              (optional) error tracking: every slog.Error of the process is reported to any Sentry-protocol
+#                           tracker (Rustrak, Sentry, GlitchTip). Unset: logs only.
+#   SENTRY_BROWSER_DSN      (optional) errors raised in the browser UI, in a Sentry project of their own.
+#   UMAMI_URL / UMAMI_WEBSITE_ID   (optional) usage statistics with Umami; both or neither. The CSP allows only these.
+#
+# Sessions and the team data live on the harness-data volume (file store). Agents run in OpenSandbox
+# containers, not in this one, so the sandbox server and the model router must be reachable on dokploy-network.
+services:
+  harness-web:
+    build: .
+    command: ["-team", "-addr", "0.0.0.0:8080"]
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      HARNESS_PRODUCTION: "1"
+      HARNESS_PUBLIC_URL: https://${HARNESS_HOST}
+      HARNESS_SECRET_KEY: ${HARNESS_SECRET_KEY}
+      AGENT_PROFILE: coding
+
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      OIDC_REDIRECT_URL: https://${HARNESS_HOST}/auth/callback
+      OIDC_SESSION_KEY: ${OIDC_SESSION_KEY}
+
+      LLM_PROVIDER: openai
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODELS: ${LLM_MODELS}
+      LLM_DEFAULT_MODEL: ${LLM_DEFAULT_MODEL}
+      # offer every model the provider's GET /models reports (not only LLM_MODELS) in the UI and allow runs on them
+      LLM_DISCOVER_MODELS: ${LLM_DISCOVER_MODELS:-true}
+
+      SANDBOX_BACKEND: opensandbox
+      OPENSANDBOX_URL: ${OPENSANDBOX_URL}
+      OPENSANDBOX_API_KEY: ${OPENSANDBOX_API_KEY}
+      OPENSANDBOX_IMAGE: ${OPENSANDBOX_IMAGE}
+      # all execd traffic goes through the OpenSandbox server: this container is not on the Docker host's network
+      OPENSANDBOX_USE_SERVER_PROXY: "true"
+      # GitHub authentication is added to the sandbox's requests by the egress sidecar: no token enters the sandbox
+      OPENSANDBOX_CREDENTIAL_PROXY: "true"
+      # deny by default (the Credential Vault needs it): only these hosts resolve and connect from a sandbox.
+      # Set SANDBOX_EGRESS_ALLOWLIST in the Dokploy environment to add package mirrors, your API, ...
+      SANDBOX_EGRESS_ALLOWLIST: ${SANDBOX_EGRESS_ALLOWLIST:-github.com,api.github.com,codeload.github.com,objects.githubusercontent.com,raw.githubusercontent.com,pypi.org,files.pythonhosted.org,registry.npmjs.org,proxy.golang.org,sum.golang.org,index.crates.io,static.crates.io,crates.io}
+
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:-}
+      GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+
+      # The agent factory (docs/factory.md). Off unless FACTORY=1; with the GitHub App above it needs a webhook secret
+      # and a reviewer model that is not the model that writes code. Run `harness-web -factory-check owner/name` first.
+      FACTORY: ${FACTORY:-}
+      FACTORY_WEBHOOK_SECRET: ${FACTORY_WEBHOOK_SECRET:-}
+      FACTORY_REVIEW_MODEL: ${FACTORY_REVIEW_MODEL:-}
+      FACTORY_NO_REVIEW: ${FACTORY_NO_REVIEW:-}
+      FACTORY_REQUIRE_TESTS: ${FACTORY_REQUIRE_TESTS:-}
+      FACTORY_PROTECTED: ${FACTORY_PROTECTED:-}
+      FACTORY_POLICY: ${FACTORY_POLICY:-}
+      FACTORY_MAX_CONCURRENT: ${FACTORY_MAX_CONCURRENT:-}
+      FACTORY_MAX_ATTEMPTS: ${FACTORY_MAX_ATTEMPTS:-}
+      FACTORY_DAILY_BUDGET_USD: ${FACTORY_DAILY_BUDGET_USD:-}
+      FACTORY_DAILY_BUDGET_TOKENS: ${FACTORY_DAILY_BUDGET_TOKENS:-}
+      FACTORY_DAILY_PER_PROJECT: ${FACTORY_DAILY_PER_PROJECT:-}
+      FACTORY_LESSONS: ${FACTORY_LESSONS:-}
+      FACTORY_RUN: ${FACTORY_RUN:-}
+      MAX_SANDBOXES_PER_USER: ${MAX_SANDBOXES_PER_USER:-}
+
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_BROWSER_DSN: ${SENTRY_BROWSER_DSN:-}
+      UMAMI_URL: ${UMAMI_URL:-}
+      UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
+    volumes:
+      - harness-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - dokploy-network
+
+volumes:
+  harness-data:
+
+networks:
+  dokploy-network:
+    external: true

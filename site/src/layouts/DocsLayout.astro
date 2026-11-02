@@ -1,0 +1,74 @@
+---
+import Layout from './Layout.astro';
+import '../styles/docs.css';
+import { groups, flat } from '../docs/nav';
+
+// A documentation page: sidebar (all groups), the article, the on-page table of contents and prev/next links.
+interface Props {
+  title: string;
+  description: string;
+  slug: string;            // '' for the landing page
+  headings?: { depth: number; slug: string; text: string }[];
+  landing?: boolean;
+}
+const { title, description, slug, headings = [], landing = false } = Astro.props;
+const path = slug ? `/docs/${slug}/` : '/docs/';
+const here = flat.findIndex((p) => p.slug === slug);
+const prev = here > 0 ? flat[here - 1] : undefined;
+const next = here >= 0 && here < flat.length - 1 ? flat[here + 1] : undefined;
+const current = here >= 0 ? flat[here] : undefined;
+const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
+const source = slug ? `https://github.com/7ar-chat/harness/edit/main/site/src/content/docs/${slug}.md` : '';
+---
+<Layout title={slug ? `${title} | 7ar docs` : `${title} | 7ar.chat`} description={description} path={path}>
+<div class="docs wrap">
+  <aside class="docs-side" aria-label="Documentation">
+    <form class="docs-search" role="search" data-search>
+      <label class="sr-only" for="docs-q">Search the docs</label>
+      <input id="docs-q" type="search" autocomplete="off" spellcheck="false" placeholder="Search the docs  ( / )" aria-controls="docs-results" />
+      <ul id="docs-results" class="docs-results" role="listbox" hidden></ul>
+    </form>
+    <nav class="docs-nav">
+      <a class="docs-home" href="/docs/" aria-current={landing ? 'page' : undefined}>Docs home</a>
+      {groups.map((g) => (
+        <details open={current?.group.id === g.id || landing || undefined} data-group={g.id}>
+          <summary>{g.label}</summary>
+          <ul>
+            {g.pages.map((p) => (
+              <li><a href={`/docs/${p.slug}/`} aria-current={p.slug === slug ? 'page' : undefined}>{p.title}</a></li>
+            ))}
+          </ul>
+        </details>
+      ))}
+    </nav>
+  </aside>
+
+  <article class="docs-main">
+    {current && <p class="eyebrow docs-crumb"><a href="/docs/">Docs</a> / {current.group.label}</p>}
+    {!landing && <h1 class="docs-title">{title}</h1>}
+    {!landing && <p class="docs-desc">{description}</p>}
+    <div class="prose"><slot /></div>
+    {!landing && (
+      <>
+        <nav class="docs-pager" aria-label="Previous and next page">
+          {prev ? <a class="prev" href={prev.url}><span>Previous</span>{prev.title}</a> : <span></span>}
+          {next ? <a class="next" href={next.url}><span>Next</span>{next.title}</a> : <span></span>}
+        </nav>
+        <p class="docs-edit"><a href={source}>Edit this page on GitHub</a> · <a href="https://github.com/7ar-chat/harness/issues/new">Report a problem</a></p>
+      </>
+    )}
+  </article>
+
+  {toc.length > 0 && (
+    <aside class="docs-toc" aria-label="On this page">
+      <p>On this page</p>
+      <ul>
+        {toc.map((h) => <li class={`d${h.depth}`}><a href={`#${h.slug}`}>{h.text}</a></li>)}
+      </ul>
+    </aside>
+  )}
+</div>
+<script>
+  import '../scripts/docs.js';
+</script>
+</Layout>

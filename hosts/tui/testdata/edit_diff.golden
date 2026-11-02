@@ -1,0 +1,7 @@
+> fix it
+
+✓ edit_file a.go  +1 −1
+     func a() int {
+    -    return 1
+    +    return 2
+     }

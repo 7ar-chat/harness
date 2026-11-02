@@ -1,0 +1,128 @@
+# Architecture
+
+The repository is a root Go module plus seven standalone modules (`go.work`), arranged in layers. A package imports
+only packages of its own layer or a lower one, and a few groups are further restricted. `layers_test.go` fails the
+build when a rule is broken, so this page describes what the test enforces.
+
+```
+ front ends     hosts/tui   hosts/httpapi ◄── app/product  hosts/worker        app/cmd/*
+                    │            │               │               │
+                    ▼            ▼               ▼               ▼
+                hosts/client (Client contract)   harness (facade: Options, Feature/Builder, profiles)
+                                                   │
+ capabilities                  features/*   coding/*   adapters/*
+                                                   │
+ engine                                        engine/*
+                                                   │
+ vocabulary                                     core/*  config  modelinfo
+```
+
+## The layers
+
+| Layer | Packages | May import | Role |
+|---|---|---|---|
+| 0 foundation | `ai/*`, `core/{agui,store,sandbox,blobs,layout}`, `config`, `modelinfo`, `engine/syncx`, `prompts` | `core/` only (`core` never imports `config`); `ai/*` imports nothing of this repository outside `ai/` | Messages and tool vocabulary, model clients, events, domain types and the ports: what the rest of the system agrees on |
+| 2 engine | `engine/*` | layers 0, 2 | The run loop (persistence, approvals, steering), tool registry, run runtime, in-memory queue and event log |
+| 3 plug-ins | `adapters/*`, `coding/*` | layers 0, 2; **not each other's group** | Implementations of the ports (Postgres, Redis, S3, OpenSandbox, local) and the coding toolset |
+| 4 features | `features/*` | layers 0, 2, 3 (`coding`) | Optional capabilities (memory, skills, goals, permissions…). A feature never imports another feature |
+| 5 hosts | `harness` (facade), `hosts/*` | everything below | The facade composes the engine and features; hosts drive it |
+| 6 product | `app/product` | `hosts/httpapi`, `hosts/client`, the facade, `core/`, the engine's extension API | Teams, identity, connectors, assistant |
+| 9 tooling | `app/cmd/*`, `bench`, `longtest`, `examples` | anything | Composition roots and tests |
+
+## The modules
+
+Seven directories are Go modules of their own, so a program can use one without the rest. Each builds and tests alone
+(`GOWORK=off`, `make test-modules`), and `TestTheStandaloneModulesRequireOnlyTheirDeclaredModules` pins which modules
+each may require.
+
+| Module | Requires | What a user gets |
+|---|---|---|
+| `ai` | – | `ai.Message`, `ai.Model`, tools (`InferTool`), the OpenAI Chat, Responses and Anthropic clients, `ai/agent` (a loop with no store, plus the streaming/retry/scheduling pieces the run loop uses), compaction |
+| `core` | – | AG-UI events, the `store` and `blobs` ports, the sandbox contract and its manager |
+| `modelinfo` | – | prices and context windows by model id |
+| `hosts/client` | core, modelinfo | the `Client` contract and its HTTP implementation |
+| `hosts/tui` | hosts/client, core, modelinfo | the terminal UI |
+| `adapters/sandbox` | core | local and OpenSandbox backends |
+| `app` | the root and all of the above | the team product (`app/product`: OIDC, projects, audit, connectors, the assistant) and the commands (`app/cmd`: `harness`, `harness-web`, `harness-worker`, `bench`, `gen-ts`). It is an application, not a library; nothing imports it |
+
+What stays in the root module is what needs the engine and is meant to be embedded: `hosts/inproc` (a `Client` over a `Harness`),
+`hosts/clienttest`, the HTTP server, features, the stores. The product and the commands are in `app`, so an application that embeds the root does not inherit their dependencies (OIDC, JOSE and the terminal UI libraries). Tests that join a standalone module to the engine live in
+`integration/`.
+
+Host rules on top of the layers:
+
+* `hosts/tui` imports only `hosts/client` and `core/agui`, so it behaves the same against an in-process engine and a
+  remote server. `hosts/client` is the contract; `hosts/inproc` and `hosts/clienttest` are its engine-bound
+  implementation and conformance suite, and are the only members of the family that import the facade.
+* `hosts/httpapi` imports only the facade, `hosts/client` and `core/`. It is a transport over the client contract.
+* `hosts/*` do not import each other; the facade imports no host.
+
+Configuration rule: `engine/*`, `adapters/*` and `features/*` do not import `config`, except the two packages named in
+"Known gaps". The facade (`NewSandboxBackend`, `SandboxSettings`, `OpenLocalStore`; `redisinfra.NewClient`) and the hosts
+translate `*config.Config` into each package's options.
+
+## The seams
+
+**Ports live in `core`.** `core/store` (persistence), `core/sandbox` (the `Sandbox`/`Backend`/`Manager` contract,
+background-job registry), `core/blobs` (content store). Adapters implement them and may import nothing but core and the
+engine; the engine and features depend on the port, never on a backend.
+
+**`store.Store` is the small core** (threads, runs, messages, events, sandbox mapping). `store.Full` adds the stores of
+the optional capabilities (artifacts, skills, goals and plans, approvals, memory, notifications). A package asks for
+the smallest interface it uses; the memory, file and Postgres backends implement `Full`.
+
+**Features plug in through `harness.Feature` / `Builder`**: tools, prompt sections, hooks and jobs. The built-in
+features are listed in `features_core.go` and `features_state.go`; profiles (`coding`, `work`, `minimal`) are lists of
+them.
+
+**Sandboxes are selected by `SANDBOX_BACKEND`.** `adapters/sandbox/backends` is the registry; `opensandbox` and the
+host's `local` backend register themselves, and your own adapter registers from an `init` (see
+[sandbox-adapters.md](sandbox-adapters.md)). `local` runs commands on the host with no isolation: `harness-web`
+refuses it in team mode or on a non-loopback address unless `HARNESS_ALLOW_LOCAL_SANDBOX=1`.
+
+**The HTTP API is a core plus an extension seam.** `hosts/httpapi` serves threads, runs, approvals, files and the SSE
+stream for a single user. A product plugs in through `httpapi.Extension` (a `Policy` that decides who may see a
+thread, who is recorded as the author, what is audited, plus `Setup`/`Install` to add routes). `app/product` is the
+team implementation: OIDC login, projects with roles, the audit log and live feed, the assistant (supervisor),
+GitHub/Telegram connectors and the memory review pages. `app/cmd/harness-web` composes `product.New(h, api, prod)`.
+
+**Front ends are written against `hosts/client.Client`**, with an in-process (`hosts/inproc`) and an HTTP implementation checked by
+the same conformance suite (`clienttest`). Operations a server may lack are `client.Extras`
+(`ErrNotSupported`).
+
+## The web UI
+
+`web/` is a React app built by `make web` into `hosts/httpapi/ui`, which the Go binary embeds. The build output is
+not committed (a `.gitkeep` keeps `go:embed` compiling); a binary built without it serves a notice at `/`.
+
+Its API types come from the Go types: `app/cmd/gen-ts` (a tooling-layer command, so it may import `hosts/client`,
+`core/store`, `features/memory` and `product`) reflects over an explicit list (`app/cmd/gen-ts/types.go`, plus
+`product.WireTypes()` for the unexported views of `product`, among them the memory pages' entry, list and stats) and writes `web/src/api/generated.ts`, which is
+committed. It honours json tags, `omitempty`, embedded structs (`extends`), pointers (`| null`), `time.Time` (string),
+`json.RawMessage` and `any` (`unknown`) and `[]byte` (base64 string); the string unions (roles, statuses, modes...) come
+from the Go constants through a per-field override table. `make gen` rewrites the file, and `go test ./cmd/gen-ts` in `app/` (so
+CI's Go job) fails while it differs from a fresh generation. `web/src/api/types.ts` re-exports the generated types and
+keeps only the web-only shapes. Add a DTO by listing it in `types.go` and running `make gen`.
+
+## Known gaps
+
+* `features/mcp` and `features/permissions` still read the whole `*config.Config`. They are the only packages of
+  `engine/`, `adapters/` and `features/` that import `config`, listed in `mayImportConfig` in `layers_test.go` (to be
+  migrated after the MCP trust work). Every other package takes its own option struct (`llm.Options`,
+  `redisx.Options`, `backends.Settings`, `skills.DiscoverOptions`, `memory.Options`...) and the composition roots
+  (the facade, `hosts/*`, `app/cmd/*`) map `config.Config` onto them. The names of the `.har` folders live in
+  `core/layout` for packages that need a path but not the configuration.
+* There is one agent loop, `ai/agent.Loop`. It owns the shape of a run (steps, the budget, the order of the phases,
+  one recovery attempt when a call fails with no answer, `EndStep` after every started step) and asks a `Policy`
+  for everything else. `engine/agent` is the policy of a persisted run (`runPolicy`: AG-UI step events, steering,
+  compaction, guards, verification, approvals, storing each answer and result, the rules for when a run is over);
+  `features/explore` runs the same loop through `ai/agent.Run`, whose policy keeps the conversation in a slice.
+  The mechanics are shared too: `Caller` (a streamed call under a watchdog with retry and backoff; the AG-UI
+  translator is its `Attempt`), `Schedule` and `Parallel` (read-only calls batched, the rest alone, results in call
+  order), `SafeInvoke`, `CapOutput`.
+* `store/Full` still holds the types of every capability. Moving a capability's port out of core would make adapters
+  import features, so the types stay in core; a feature cannot yet bring its own tables without a `core/store` change.
+* The memory and profile pages are served by `product` only, not exposed through `client.Client`, so the TUI does not
+  have them.
+* Comments and config files still mention "harness v2/v3" and review rounds; the code and file names no longer do
+  (the SQL migration `0102_approvals_v3.sql` keeps its name because renaming an applied migration breaks tracking).

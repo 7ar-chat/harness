@@ -1,0 +1,9 @@
+.git
+Library
+out
+outputs
+bin
+web/node_modules
+web/dist
+web/mock/shots
+**/.DS_Store
