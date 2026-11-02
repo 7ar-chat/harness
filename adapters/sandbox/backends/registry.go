@@ -24,6 +24,48 @@ type Settings struct {
 	OpenSandbox OpenSandboxSettings
 	// Local configures the "local" backend.
 	Local LocalSettings
+	// E2B configures the "e2b" backend.
+	E2B E2BSettings
+	// Daytona configures the "daytona" backend.
+	Daytona DaytonaSettings
+}
+
+// E2BSettings configures the "e2b" backend (adapters/sandbox/e2b).
+type E2BSettings struct {
+	APIKey string
+	// Template is the E2B template (or alias) sandboxes start from; "" means "base".
+	Template string
+	// Domain is the E2B domain (self-hosted installations); "" means "e2b.app".
+	Domain string
+	// TimeoutSeconds is the idle lifetime of a sandbox.
+	TimeoutSeconds int
+	// EgressAllowlist, when set, makes egress deny-by-default with these domains allowed.
+	EgressAllowlist []string
+	// EgressDenyCIDRs are denied in unrestricted mode (no allowlist); empty: the package default.
+	EgressDenyCIDRs []string
+	// Images maps a sandbox profile (sandbox.CreateOptions.Profile: "coding", "work", ...) to the template it starts from;
+	// a profile without an entry uses the default above (see ImageFor).
+	Images map[string]string
+}
+
+// DaytonaSettings configures the "daytona" backend (adapters/sandbox/daytona).
+type DaytonaSettings struct {
+	APIKey string
+	// URL is the Daytona API ("" means the Daytona cloud).
+	URL string
+	// Target is the region or runner target ("" means the account default).
+	Target string
+	// Snapshot is the Daytona snapshot sandboxes start from; "" means the account default snapshot.
+	Snapshot string
+	// TimeoutSeconds is the idle lifetime of a sandbox.
+	TimeoutSeconds int
+	// EgressAllowlist, when set, makes egress deny-by-default with these domains allowed (where Daytona can express it).
+	EgressAllowlist []string
+	// EgressDenyCIDRs are denied in unrestricted mode (no allowlist); empty: the package default.
+	EgressDenyCIDRs []string
+	// Images maps a sandbox profile (sandbox.CreateOptions.Profile: "coding", "work", ...) to the snapshot it starts from;
+	// a profile without an entry uses the default above (see ImageFor).
+	Images map[string]string
 }
 
 // OpenSandboxSettings configures the "opensandbox" backend.
@@ -42,6 +84,9 @@ type OpenSandboxSettings struct {
 	EgressDenyCIDRs []string
 	// CredentialProxy creates every sandbox with the egress sidecar's Credential Vault enabled.
 	CredentialProxy bool
+	// Images maps a sandbox profile (sandbox.CreateOptions.Profile: "coding", "work", ...) to the container image it starts from;
+	// a profile without an entry uses the default above (see ImageFor).
+	Images map[string]string
 }
 
 // LocalSettings configures the "local" backend.
@@ -121,4 +166,19 @@ func NewBackend(s Settings) (sandbox.Backend, error) {
 
 func init() {
 	Register(None, func(Settings) (sandbox.Backend, error) { return nil, nil })
+}
+
+// ImageFor is the image of a profile in images, matched case-insensitively; "" when the profile has none, which
+// means the backend's default.
+func ImageFor(images map[string]string, profile string) string {
+	profile = strings.ToLower(strings.TrimSpace(profile))
+	if profile == "" {
+		return ""
+	}
+	for name, image := range images {
+		if strings.ToLower(strings.TrimSpace(name)) == profile {
+			return strings.TrimSpace(image)
+		}
+	}
+	return ""
 }

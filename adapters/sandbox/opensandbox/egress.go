@@ -32,7 +32,7 @@ func OptionsFromSettings(s backends.OpenSandboxSettings) OpenSandboxOptions {
 		URL: s.URL, APIKey: s.APIKey, UseServerProxy: s.UseServerProxy,
 		Image: s.Image, CPU: s.CPU, Memory: s.Memory,
 		TimeoutSeconds: s.TimeoutSeconds, EgressAllowlist: s.EgressAllowlist,
-		EgressDenyCIDRs: s.EgressDenyCIDRs, CredentialProxy: s.CredentialProxy,
+		EgressDenyCIDRs: s.EgressDenyCIDRs, CredentialProxy: s.CredentialProxy, Images: s.Images,
 	}
 }
 

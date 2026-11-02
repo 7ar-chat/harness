@@ -104,6 +104,29 @@ func TestCreateSendsTheConfiguredSandboxSpec(t *testing.T) {
 	}
 }
 
+func TestCreateStartsTheSandboxFromTheImageOfItsProfile(t *testing.T) {
+	// Arrange: "work" has its own image, every other profile (and none) uses the default img:1
+	for profile, want := range map[string]string{"work": "office:1", "coding": "img:1", "": "img:1"} {
+		f := newFakeOSB(t)
+		o := f.opts()
+		o.Images = map[string]string{"work": "office:1"}
+		b, err := opensandbox.NewOpenSandbox(o)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Act
+		_, err = b.Create(context.Background(), sandbox.CreateOptions{Profile: profile})
+
+		// Assert
+		reqs := f.requests("POST /v1/sandboxes")
+		var got struct{ Image struct{ URI string } }
+		if err != nil || len(reqs) != 1 || json.Unmarshal(reqs[0].Body, &got) != nil || got.Image.URI != want {
+			t.Errorf("profile %q: image %q (want %q), err %v", profile, got.Image.URI, want, err)
+		}
+	}
+}
+
 func TestCreateDoesNotLeakASandboxThatNeverBecomesUsable(t *testing.T) {
 	// A sandbox that dies while starting is deleted again, and the caller learns why.
 	// Arrange

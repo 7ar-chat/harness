@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/7ar-chat/harness/adapters/sandbox/backends"
 	"github.com/7ar-chat/harness/core/sandbox"
 	"io"
 	"log/slog"
@@ -33,6 +34,8 @@ type OpenSandboxOptions struct {
 	// CredentialProxy creates every sandbox with the egress sidecar's Credential Vault enabled, so the harness can
 	// add authentication to outbound requests without the secret entering the sandbox (see SetCredentials).
 	CredentialProxy bool
+	// Images maps a sandbox profile to the container image it starts from; a profile without an entry uses Image.
+	Images map[string]string
 }
 
 // OpenSandbox is the sandbox.Backend for the official OpenSandbox server.
@@ -131,10 +134,18 @@ func EgressPolicy(o OpenSandboxOptions) *sdk.NetworkPolicy {
 	return policy
 }
 
+// imageFor is the image of a profile: its entry of Options.Images, else Options.Image.
+func (b *OpenSandbox) imageFor(profile string) string {
+	if img := backends.ImageFor(b.opts.Images, profile); img != "" {
+		return img
+	}
+	return b.opts.Image
+}
+
 func (b *OpenSandbox) Create(ctx context.Context, co sandbox.CreateOptions) (sandbox.Instance, error) {
 	timeout := b.opts.TimeoutSeconds
 	opts := sdk.SandboxCreateOptions{
-		Image:          b.opts.Image,
+		Image:          b.imageFor(co.Profile),
 		ResourceLimits: sdk.ResourceLimits{"cpu": b.opts.CPU, "memory": b.opts.Memory},
 		TimeoutSeconds: &timeout,
 		Metadata:       co.Metadata,

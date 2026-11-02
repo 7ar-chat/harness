@@ -117,3 +117,16 @@ func TestRegisteredListsTheNamesSorted(t *testing.T) {
 		t.Fatalf("Registered() = %v", got)
 	}
 }
+
+func TestImageForMatchesTheProfileIgnoringCaseAndSpace(t *testing.T) {
+	images := map[string]string{"Work": " harness-office ", "coding": "base"}
+
+	for profile, want := range map[string]string{"work": "harness-office", " WORK ": "harness-office", "coding": "base", "minimal": "", "": ""} {
+		if got := backends.ImageFor(images, profile); got != want {
+			t.Errorf("ImageFor(%q) = %q, want %q", profile, got, want)
+		}
+	}
+	if backends.ImageFor(nil, "work") != "" {
+		t.Error("a nil map must mean the backend default")
+	}
+}
