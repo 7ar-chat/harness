@@ -6,16 +6,17 @@ container per thread, created by the harness (`sandbox.OpenSandbox`, selected by
 
 | File | Purpose |
 |---|---|
-| `Dockerfile` | The sandbox image (`OPENSANDBOX_IMAGE`): Office/PDF/data toolchain, Python and Node. Optional extra CA certificates in `certs/`, mirrors through build args (see the header of the file). |
+| `Dockerfile` | The sandbox images (`OPENSANDBOX_IMAGE`), two targets sharing layers: `base` (what every sandbox needs) and `office` (base plus the Office/PDF/data toolchain, Python and Node; the default build). Optional extra CA certificates in `certs/`, mirrors through build args (see the header of the file). |
 | `opensandbox.toml` | Lifecycle server configuration for a local Docker runtime. |
 
 Build and run locally:
 
 ```sh
-docker build -t harness-sandbox:local .
+docker build --target base   -t harness-sandbox:base .     # 393 MB unpacked
+docker build --target office -t harness-sandbox:office .   # 2.79 GB unpacked (also what a plain `docker build .` makes)
 # run the OpenSandbox lifecycle server with opensandbox.toml (see its docs), then:
 export OPENSANDBOX_URL=http://127.0.0.1:18090
-export OPENSANDBOX_IMAGE=harness-sandbox:local
+export OPENSANDBOX_IMAGE=harness-sandbox:office   # or :base for threads that do no document work
 ```
 
 ## Verified build
@@ -39,6 +40,21 @@ and `base64 -w0` behave as the `place`/`realpath`/`read-files` protocol scripts 
 (`pptxgenjs`, `docx`, `sharp`) imports work; a generated `.pptx` converts to PDF with headless
 LibreOffice and renders with `pdftoppm`. Not exercised: running under a live OpenSandbox
 lifecycle server (`opensandbox.toml`) and the `certs/` path with a real extra CA.
+
+## Which target
+
+| | `base` | `office` |
+|---|---|---|
+| Shell and protocol tools (bash, GNU coreutils, findutils, `setsid`, `rg`, `git`, `tar`, `gzip`, `curl`, `file`, `unzip`, `column`, `pkill`) | yes | yes |
+| Python 3.11 with `pypdf` (PDF text in `read_file`) | yes | yes |
+| Node 22, `pptxgenjs`, `docx`, `sharp` | no | yes |
+| LibreOffice, poppler, pandoc, qpdf, ffmpeg, Office-metric fonts | no | yes |
+| Python office and data libraries (`python-pptx`, `openpyxl`, `pandas`, `matplotlib`, `markitdown`, ...) | no | yes |
+
+Both were built and smoke-tested on linux/arm64 on 2026-11-02 (tool presence, GNU `realpath -m -z`, `mv -T`, `stat -c`,
+`base64 -w0`, a writable `/workspace`; on `office` also a generated `.pptx` converted to PDF, rendered with `pdftoppm` and read
+back with `markitdown`). Neither has run under a live OpenSandbox lifecycle server yet, and linux/amd64 was not rebuilt for
+this split (the sizes in the table below are from the earlier single image).
 
 ## Isolation model
 
