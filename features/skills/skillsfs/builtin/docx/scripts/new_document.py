@@ -3,7 +3,14 @@
 
 Usage:
   python3 new_document.py --spec spec.json --out /workspace/outputs/report.docx
+  python3 new_document.py --md report.md --out /workspace/outputs/report.docx   # Markdown instead of JSON
   python3 new_document.py --example            # print an example spec
+
+--md: the cheapest way to write a long text. Supported: "# .. ######" headings, paragraphs (blank-line separated),
+"- " / "* " bullets (2 spaces per level), "1. " numbered lists, "|a|b|" pipe tables (header row, then |---|), "> " callout
+(start it with "> [!WARNING]" for the warning kind), "![caption](path)" images (path relative to the .md file), "[TOC]" a
+table of contents, a line "---" a page break, and inline **bold**, *italic*, `code`, [label](url). Optional front matter:
+"---\ntitle: Report\nsubtitle: Q3\nauthor: A\ndate: 2026-10-06\nlocale: en\nfooter: Report\nheader: Acme\ntitle_page: true\nlandscape: false\n---".
 
 Spec (all keys optional except blocks):
 {
@@ -342,19 +349,103 @@ def build(spec, out):
     return result
 
 
+FRONT_KEYS = {"title", "subtitle", "author", "date", "locale", "footer", "header", "title_page", "landscape"}
+
+
+def md_to_spec(text, base_dir="."):
+    """Markdown (see the module docstring) -> the JSON spec build() takes."""
+    spec = {}
+    m = re.match(r"^---\s*\n(.*?)\n---\s*\n", text, re.S)
+    if m:
+        for line in m.group(1).splitlines():
+            key, _, val = line.partition(":")
+            key, val = key.strip().lower(), val.strip().strip("\"'")
+            if key in FRONT_KEYS:
+                spec[key] = {"true": True, "false": False}.get(val.lower(), val)
+        text = text[m.end():]
+    blocks, para, lines = [], [], text.splitlines()
+
+    def flush():
+        if para:
+            blocks.append({"type": "paragraph", "text": " ".join(x.strip() for x in para)})
+            para.clear()
+
+    def add_list(kind, item, level):
+        if blocks and blocks[-1]["type"] == kind and not para:
+            blocks[-1]["items"].append({"text": item, "level": level} if level else item)
+        else:
+            flush()
+            blocks.append({"type": kind, "items": [{"text": item, "level": level} if level else item]})
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        s = line.strip()
+        if not s:
+            flush()
+        elif (h := re.match(r"^(#{1,6})\s+(.*?)\s*#*$", s)):
+            flush()
+            blocks.append({"type": "heading", "text": h.group(2), "level": len(h.group(1))})
+        elif s.upper() == "[TOC]":
+            flush()
+            blocks.append({"type": "toc"})
+        elif re.fullmatch(r"(-{3,}|\*{3,})", s):
+            flush()
+            blocks.append({"type": "page_break"})
+        elif (b := re.match(r"^(\s*)[-*+]\s+(.*)", line)):
+            add_list("bullets", b.group(2).strip(), len(b.group(1)) // 2)
+        elif (n := re.match(r"^(\s*)\d+[.)]\s+(.*)", line)):
+            add_list("numbered", n.group(2).strip(), len(n.group(1)) // 2)
+        elif s.startswith("|") and i + 1 < len(lines) and re.fullmatch(r"\|?[\s:|-]+\|?", lines[i + 1].strip()):
+            flush()
+            cells = lambda row: [c.strip() for c in row.strip().strip("|").split("|")]  # noqa: E731
+            cols, rows = cells(s), []
+            i += 2
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                rows.append(cells(lines[i]))
+                i += 1
+            blocks.append({"type": "table", "columns": cols, "rows": rows})
+            continue
+        elif s.startswith(">"):
+            flush()
+            body = [re.sub(r"^>\s?", "", x.strip()) for x in lines[i:] if x.strip().startswith(">")]
+            i += len(body)
+            kind = "warning" if body and body[0].upper().startswith("[!WARNING]") else "note"
+            if body and body[0].startswith("[!"):
+                body = body[1:]
+            blocks.append({"type": "callout", "text": " ".join(body).strip(), "kind": kind})
+            continue
+        elif (im := re.fullmatch(r"!\[(.*?)\]\((.+?)\)", s)):
+            flush()
+            path = im.group(2)
+            blocks.append({"type": "image", "path": path if os.path.isabs(path) else os.path.join(base_dir, path),
+                           **({"caption": im.group(1)} if im.group(1) else {})})
+        else:
+            para.append(line)
+        i += 1
+    flush()
+    spec["blocks"] = blocks
+    return spec
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--spec", help="JSON spec file ('-' for stdin)")
+    ap.add_argument("--md", help="Markdown file instead of --spec (see above)")
     ap.add_argument("--out", help="output .docx (default: spec 'output')")
     ap.add_argument("--example", action="store_true", help="print an example spec and exit")
     args = ap.parse_args(argv)
     if args.example:
         print(json.dumps(EXAMPLE, indent=2, ensure_ascii=False))
         return 0
-    if not args.spec:
-        ap.error("--spec is required")
-    with (sys.stdin if args.spec == "-" else open(args.spec, encoding="utf-8")) as fh:
-        spec = json.load(fh)
+    if not args.spec and not args.md:
+        ap.error("--spec (or --md) is required")
+    if args.md:
+        with open(args.md, encoding="utf-8") as fh:
+            spec = md_to_spec(fh.read(), os.path.dirname(os.path.abspath(args.md)))
+    else:
+        with (sys.stdin if args.spec == "-" else open(args.spec, encoding="utf-8")) as fh:
+            spec = json.load(fh)
     out = args.out or spec.get("output")
     if not out:
         ap.error("--out is required")

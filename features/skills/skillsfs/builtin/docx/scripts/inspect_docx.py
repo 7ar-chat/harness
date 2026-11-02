@@ -19,6 +19,11 @@ Summary / reading helpers:
                                                # tracked changes, fonts, + "ok"/"problems"/"checks"
   python3 inspect_docx.py FILE.docx --text     # numbered paragraph listing: [index] (style) text
   python3 inspect_docx.py FILE.docx --text --limit 200
+  python3 inspect_docx.py FILE.docx --text --range 40-60        # paragraphs 40..60 only (the index edit_docx.py uses)
+  python3 inspect_docx.py FILE.docx --text --range 12 --full    # one paragraph, whole text
+
+--text cuts each paragraph at --max-chars (default 200) with the marker …(+n chars) and ends with the range that
+continues a cut listing; --full removes the cut. A range outside the document answers with the valid range.
 
 Paragraph indices are those of python-docx `Document(path).paragraphs` (body only, tables
 excluded), so you can edit `doc.paragraphs[i]` afterwards.
@@ -34,6 +39,9 @@ import sys
 import zipfile
 
 from lxml import etree
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from opserr import clip  # noqa: E402
 
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 NS = {"w": W,
@@ -457,6 +465,9 @@ def main(argv=None) -> int:
     ap.add_argument("--check", action="store_true", help="run the deliverable checks (exit 0 ok, 2 not ok)")
     ap.add_argument("--text", action="store_true", help="print numbered paragraphs instead of JSON")
     ap.add_argument("--limit", type=int, default=0, help="max paragraphs for --text (0 = all)")
+    ap.add_argument("--range", help="with --text: paragraphs A-B (or one index) to list")
+    ap.add_argument("--max-chars", type=int, default=200, help="with --text: cut each paragraph at this many characters")
+    ap.add_argument("--full", action="store_true", help="with --text: no cut")
     args = ap.parse_args(argv)
     args.file = os.path.abspath(args.file)  # the checker contract names the file by its absolute path
     if not os.path.isfile(args.file):
@@ -470,11 +481,28 @@ def main(argv=None) -> int:
         except Exception as exc:  # noqa: BLE001
             print(json.dumps({"ok": False, "error": f"cannot open {args.file}: {exc}"}))
             return 1
-        for i, p in enumerate(doc.paragraphs):
-            if args.limit and i >= args.limit:
-                print(f"... ({len(doc.paragraphs) - i} more)")
-                break
-            print(f"[{i}] ({p.style.name if p.style is not None else '-'}) {p.text}")
+        total = len(doc.paragraphs)
+        lo, hi = 0, total - 1
+        if args.range:
+            a, _, b = args.range.partition("-")
+            try:
+                lo, hi = int(a), int(b or a)
+            except ValueError:
+                lo, hi = -1, -1
+            if not (0 <= lo <= hi < total):
+                print(json.dumps({"ok": False, "reason": "out_of_range", "error": f"--range {args.range} out of bounds",
+                                  "valid_range": [0, total - 1]}))
+                return 1
+        if args.limit:
+            hi = min(hi, lo + args.limit - 1)
+        limit = None if args.full else args.max_chars
+        for i in range(lo, hi + 1):
+            p = doc.paragraphs[i]
+            print(f"[{i}] ({p.style.name if p.style is not None else '-'}) {clip(p.text, limit)}")
+        if hi < total - 1 and not args.range:
+            print(f"... {total - 1 - hi} more paragraphs of {total}; continue with --range {hi + 1}-{min(total - 1, hi + 40)}")
+        if args.range:
+            return 0
         for ti, table in enumerate(doc.tables):
             print(f"--- table {ti}: {len(table.rows)}x{len(table.columns)}")
             for ri, row in enumerate(table.rows[:50]):

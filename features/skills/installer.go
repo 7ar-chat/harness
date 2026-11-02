@@ -176,7 +176,7 @@ func (i *Installer) lockSkills(ctx context.Context, sandboxID string, names []st
 }
 
 func run(ctx context.Context, sb sandbox.Sandbox, cmd string) error {
-	res, err := sb.Exec(ctx, sandbox.ExecRequest{Command: cmd, Cwd: "/", Timeout: 60 * time.Second})
+	res, err := sb.Exec(ctx, sandbox.ExecRequest{Command: cmd, Cwd: sandbox.Workspace, Timeout: 60 * time.Second})
 	if err != nil {
 		return err
 	}

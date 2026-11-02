@@ -34,6 +34,8 @@ valid. Never check or view again a file you did not change since (one `view_file
 Never put a deliverable in `/workspace/.work/` and never link a file there: it is scratch space
 (specs, charts, renders) and is not kept. In your answer, only link files under `/workspace/outputs/`.
 
+In a Python script you write, take the output path from `sys.argv[1]` and pass it on the command line (`python3 /workspace/.work/build.py /workspace/outputs/report.docx`): on some backends `/workspace` exists only in command lines, so a path typed inside the file fails.
+
 **Reading.** `read_file` returns the text of a .docx directly. Use `inspect_docx.py` only when you
 need structure: paragraph indices and styles, fields, tracked changes, sections.
 
@@ -54,8 +56,10 @@ Scripts are in `/skills/docx/scripts/`; run them with `python3` (or `bash` for `
 
 ```bash
 python3 /skills/docx/scripts/inspect_docx.py IN.docx          # JSON: outline, styles, tables, fields, tracked changes, checks
-python3 /skills/docx/scripts/inspect_docx.py IN.docx --text   # "[index] (style) text" per paragraph, then the tables
+python3 /skills/docx/scripts/inspect_docx.py IN.docx --text   # "[index] (style) text" per paragraph (cut at 200 chars: …(+n chars)), then the tables
+python3 /skills/docx/scripts/inspect_docx.py IN.docx --text --range 40-60 --full   # only those paragraphs, whole text
 ```
+A long document: list the outline first, then read only the range you will change.
 `.doc`/`.odt`/`.rtf`: `soffice --headless --convert-to docx --outdir /workspace/.work IN.doc` first.
 
 ## 2. Create
@@ -65,6 +69,10 @@ python3 /skills/docx/scripts/inspect_docx.py IN.docx --text   # "[index] (style)
 python3 /skills/docx/scripts/new_document.py --example > /workspace/.work/spec.json      # the format
 python3 /skills/docx/scripts/new_document.py --spec /workspace/.work/spec.json --out /workspace/outputs/report.docx
 ```
+- Long text: write Markdown and build it directly, no JSON:
+  `python3 /skills/docx/scripts/new_document.py --md /workspace/.work/report.md --out /workspace/outputs/report.docx`
+  (`#` headings, lists, `|` tables, `> ` callouts, `![caption](path)`, `[TOC]`, `---` page break, front matter
+  `title/subtitle/author/date/locale/footer`; the full syntax is in the script's `--help`).
 - Blocks: `heading{text,level}`, `paragraph{text,align}`, `bullets{items}`, `numbered{items}`,
   `table{columns,rows,widths_cm,numeric_cols,caption}`, `image{path,width_cm,caption}`,
   `callout{text,kind}`, `toc{title}`, `page_break`. Inline `**bold**`, `*italic*`, `` `code` ``, `[label](url)`.
@@ -110,9 +118,19 @@ headers/footers, TOC field, hyperlinks, insert after a paragraph. Then:
      python3 /skills/docx/scripts/replace.py FILE.docx --inplace --pairs /workspace/.work/pairs.json   # {"old": "new"}
      ```
      Read `counts` / `not_found`. A miss usually means typographic quotes, a no-break space or another spelling.
-   - Structure (insert paragraphs, tables, images; delete sections): python-docx code that inserts
-     next to an existing paragraph with the document's own styles (`reference/python-docx.md`
-     "Insert after a paragraph"). `doc.add_paragraph()` always appends at the END.
+   - Structure (insert, rewrite or delete paragraphs, headings, lists, tables) by the paragraph index of
+     `inspect_docx.py FILE --text`, with the document's own styles, all-or-nothing:
+     ```bash
+     echo '[{"op":"set_text","index":3,"text":"Revenue grew **15%**."},
+            {"op":"insert_after","index":3,"blocks":[{"heading":"Risks"},{"bullets":["Delay","Cost"]}]},
+            {"op":"delete","range":"9-10"}]' | python3 /skills/docx/scripts/edit_docx.py FILE.docx --ops - --inplace
+     python3 /skills/docx/scripts/edit_docx.py --index            # the ops (--op NAME: one op with an example)
+     python3 /skills/docx/scripts/edit_docx.py FILE.docx --ops ops.json --dry-run   # the plan, nothing written
+     ```
+     Indexes are those you read before the batch (they do not shift inside it). A rejected op leaves the file
+     untouched: the failure gives `reason`, `valid_range` / `available` / `did_you_mean`: fix that op and resend all.
+     Images, TOC and unusual layouts: python-docx code that inserts next to an existing paragraph
+     (`reference/python-docx.md` "Insert after a paragraph"); `doc.add_paragraph()` always appends at the END.
    - Repeating table rows: copy a row with `copy.deepcopy(row._tr)` (reference "Tables").
 4. Do not change fonts, styles, margins or numbering the user did not ask to change.
 5. Headings changed and there is a TOC: `fill_toc.py FILE --inplace`.

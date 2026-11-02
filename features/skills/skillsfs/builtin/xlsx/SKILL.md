@@ -31,6 +31,8 @@ valid. Never check or view again a file you did not change since (one `view_file
 Never put a deliverable in `/workspace/.work/` and never link a file there: it is scratch space and
 is not kept. In your answer, only link files under `/workspace/outputs/`.
 
+In a Python script you write, take the output path from `sys.argv[1]` and pass it on the command line (`python3 /workspace/.work/build.py /workspace/outputs/book.xlsx`): on some backends `/workspace` exists only in command lines, so a path typed inside the file fails.
+
 **Reading.** `read_file` returns the cells of a workbook directly (`sheet` for one sheet). For
 analysis use pandas: `pd.read_excel(path, sheet_name=None)`; CSV `pd.read_csv(path, sep=None,
 engine="python")` (French files: `decimal=","`, `thousands=" "`, `encoding="utf-8-sig"` or `"cp1252"`).
@@ -48,6 +50,33 @@ Scripts are in `/skills/xlsx/scripts/`; run them with `python3` from `/workspace
 | Always, at the end | the FINISH GATE (§3), then §4 Deliver |
 
 ## 1. Create
+
+**Default: JSON spec or CSV -> `build_xlsx.py`** (no code to write; the rules below are applied for you):
+```json
+{"names": {"growth": "Inputs!$B$2"},
+ "sheets": [
+  {"name": "Inputs", "header": false, "rows": [["Item", "Value"], ["Growth rate", 0.05]],
+   "formats": {"B": "0.0%"}, "inputs": ["B2"], "widths": {"A": 18}},
+  {"name": "Plan",
+   "rows": [["Month", "Revenue", "Cost", "Margin"],
+            ["Jan", 1000, "=B2*0.6", "=B2-C2"],
+            ["Feb", "=B2*(1+growth)", "=B3*0.6", "=B3-C3"]],
+   "formats": {"B:D": "#,##0"}, "total": {"label": "Total", "cols": ["B", "C", "D"]},
+   "charts": [{"type": "column", "title": "Revenue vs cost", "categories": "A2:A3",
+               "series": ["B1:B3", "C1:C3"], "anchor": "G2"}]}]}
+```
+```bash
+python3 /skills/xlsx/scripts/build_xlsx.py --spec /workspace/.work/spec.json --out /workspace/outputs/model.xlsx
+python3 /skills/xlsx/scripts/build_xlsx.py --csv data.csv --out /workspace/outputs/data.xlsx --decimal ","   # CSV: numbers and ISO dates become real
+```
+- Sheet keys: `name`, `rows` (row 1 = header unless `"header": false`; `"=B2*C2"` is a live formula, a number is a number),
+  `formats` (column letter, `B:D`, header text or a cell range `B2:B3` -> number format), `inputs` (blue font), `total`, `widths`, `freeze`,
+  `charts` (`column|bar|line|pie`; a series range starts at its header cell), `coerce`. Top level: `names` (named cells).
+- The header is styled, frozen and filtered; widths are fitted; a bad spec lists every problem with the closest key.
+  Do not read the script: `--example` prints a full spec, and everything above is the whole format.
+- To change a workbook you built this way, edit the spec and rebuild (it is the source); `edit_xlsx.py` refuses a workbook
+  with charts. Hand-written openpyxl/xlsxwriter (below) only for what the spec cannot say (conditional formatting,
+  validation, tables, images, print setup).
 
 Rules (the user opens the file in Excel and expects a working model):
 1. **Formulas, not values**: totals, ratios, growth and lookups are Excel formulas (`=SUM(B2:B13)`,
@@ -74,10 +103,24 @@ Rules (the user opens the file in Excel and expects a working model):
 ## 2. Edit an existing workbook
 
 1. Work on a copy in `/workspace/outputs/`; never overwrite the upload.
-2. `python3 /skills/xlsx/scripts/inspect_xlsx.py BOOK.xlsx` and read `fragile_parts` / `warnings`
+2. Look before you read: `inspect_xlsx.py BOOK.xlsx --sheet Data --stats` (used range, cell kinds, header), then only what
+   you need: `--range A1:H60 --cols A,C:E --max-rows 50` (a cut dump says which `--range` continues it),
+   `--where formula|error|empty|number|text` (just those cells; add `--values` for cached values).
+   Then `python3 /skills/xlsx/scripts/inspect_xlsx.py BOOK.xlsx` and read `fragile_parts` / `warnings`
    (`inspect_xlsx.py BOOK.xlsx --formulas [--sheet Data]` lists every formula; `--sheet Data --range A1:H30`
    dumps cells as written, add `--values` for the computed values):
-   - none -> openpyxl `load_workbook(path)` (never `data_only=True` for a file you save: it
+   - none -> the usual edits as ops, all-or-nothing, no code:
+     ```bash
+     echo '[{"op":"set_cell","sheet":"Data","cell":"B2","value":42},
+            {"op":"format_range","sheet":"Data","range":"A1:D1","bold":true,"fill":"1F3864","color":"FFFFFF"},
+            {"op":"append_rows","sheet":"Data","rows":[["Total","=SUM(B2:B9)"]]}]' | python3 /skills/xlsx/scripts/edit_xlsx.py BOOK.xlsx --ops - --inplace
+     python3 /skills/xlsx/scripts/edit_xlsx.py --index          # the ops: set_cell set_range append_rows clear_range format_range
+                                                                # set_col_width freeze set_filter find_replace add_sheet rename_sheet
+                                                                # delete_sheet add_chart define_name; --op NAME: one op with an example
+     python3 /skills/xlsx/scripts/edit_xlsx.py BOOK.xlsx --ops ops.json --dry-run     # the plan, nothing written
+     ```
+     A rejected op leaves the file untouched; the failure gives `reason`, `available` (sheet names) and `did_you_mean`:
+     fix that op and resend the whole list. Then `recalc.py`. Anything else: openpyxl `load_workbook(path)` (never `data_only=True` for a file you save: it
      replaces every formula by its value). Write values into existing cells; copy styles to new rows.
    - charts, images, pivot tables, slicers, macros or shapes -> openpyxl may drop them. Use:
      ```bash

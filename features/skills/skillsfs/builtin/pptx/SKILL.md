@@ -33,6 +33,8 @@ valid. Never check or view again a file you did not change since (one `view_file
 Never put a deliverable in `/workspace/.work/` and never link a file there: it is scratch space
 (specs, chart PNGs) and is not kept. In your answer, only link files under `/workspace/outputs/`.
 
+In a Python script you write, take the output path from `sys.argv[1]` and pass it on the command line (`python3 /workspace/.work/build.py /workspace/outputs/deck.pptx`): on some backends `/workspace` exists only in command lines, so a path typed inside the file fails.
+
 **Reading.** `read_file` returns the text of a .pptx (slides and notes) directly. Use
 `inspect_pptx.py` only for shapes, positions, placeholders and layouts.
 
