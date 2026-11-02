@@ -25,11 +25,11 @@ require github.com/kr/text v0.2.0 // indirect
 require github.com/getsentry/sentry-go v0.50.0
 
 require (
-	github.com/7ar-chat/harness/adapters/sandbox v0.1.1
-	github.com/7ar-chat/harness/ai v0.1.2
-	github.com/7ar-chat/harness/core v0.3.0
-	github.com/7ar-chat/harness/hosts/client v0.1.1
-	github.com/7ar-chat/harness/modelinfo v0.1.0
+	github.com/7ar-chat/harness/adapters/sandbox v0.2.0
+	github.com/7ar-chat/harness/ai v0.2.0
+	github.com/7ar-chat/harness/core v0.4.0
+	github.com/7ar-chat/harness/hosts/client v0.2.0
+	github.com/7ar-chat/harness/modelinfo v0.2.0
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.20 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.4 // indirect
