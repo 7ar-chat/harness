@@ -146,6 +146,10 @@ type Instance interface {
 // CreateOptions are per-sandbox creation options.
 type CreateOptions struct {
 	Metadata map[string]string
+	// Profile names the environment the sandbox should provide ("coding", "work", ...). The deployment maps a profile
+	// to an image (a snapshot, a template, a container image) in its configuration (SANDBOX_IMAGES); a backend that
+	// has no image for the name, or none at all, uses its default.
+	Profile string
 }
 
 // Backend talks to the sandbox provider.

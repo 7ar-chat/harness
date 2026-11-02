@@ -947,3 +947,18 @@ func TestBrokerOfFindsTheBrokerOfAManagedSandboxOnlyWhenTheInstanceHasOne(t *tes
 		}
 	}
 }
+
+func TestTheManagerCreatesSandboxesForTheDeploymentsProfile(t *testing.T) {
+	// Arrange
+	r := newRig(t, sandbox.ManagerOptions{Profile: "coding", MaxPerUser: 5})
+	r.thread("t1", "alice")
+
+	// Act
+	_, err := r.mgr.Acquire(bg, "t1", "alice")
+
+	// Assert
+	got := r.backend.CreateOptions()
+	if err != nil || len(got) != 1 || got[0].Profile != "coding" || got[0].Metadata["work-thread"] != "t1" {
+		t.Fatalf("err %v create options %+v", err, got)
+	}
+}

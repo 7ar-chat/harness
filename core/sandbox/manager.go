@@ -42,6 +42,8 @@ type Store interface {
 
 // ManagerOptions configures the manager.
 type ManagerOptions struct {
+	// Profile is passed to Backend.Create as CreateOptions.Profile: which image the deployment's sandboxes start from.
+	Profile    string
 	MaxPerUser int
 	// Timeout is the idle lifetime given to the provider on each renewal.
 	Timeout time.Duration
@@ -479,7 +481,7 @@ func (m *DefaultManager) Acquire(ctx context.Context, threadID, login string) (S
 			return nil, ErrQuota
 		}
 	}
-	created, err := m.backend.Create(ctx, CreateOptions{Metadata: map[string]string{
+	created, err := m.backend.Create(ctx, CreateOptions{Profile: m.opts.Profile, Metadata: map[string]string{
 		"work-thread": threadID,
 		"work-user":   UserTag(login),
 	}})
