@@ -53,6 +53,8 @@ services:
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
       OIDC_REDIRECT_URL: https://${HARNESS_HOST}/auth/callback
       OIDC_SESSION_KEY: ${OIDC_SESSION_KEY}
+      # 1: a new account from the identity provider waits for an admin's approval (set it when the provider allows registration)
+      OIDC_REQUIRE_APPROVAL: ${OIDC_REQUIRE_APPROVAL:-}
 
       GITHUB_LOGIN_CLIENT_ID: ${GITHUB_LOGIN_CLIENT_ID:-}
       GITHUB_LOGIN_CLIENT_SECRET: ${GITHUB_LOGIN_CLIENT_SECRET:-}

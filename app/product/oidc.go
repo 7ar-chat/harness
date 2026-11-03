@@ -40,6 +40,10 @@ type OIDCConfig struct {
 	SessionKey []byte
 	// SessionTTL is the session lifetime (default 12 h).
 	SessionTTL time.Duration
+	// RequireApproval makes a new account from this provider wait for an admin's approval (see signup.go), as one
+	// created with GitHub does. Set it when the provider lets anyone register; leave it off when its administrator
+	// creates the accounts.
+	RequireApproval bool
 }
 
 // oidcAuth is the login flow and the session store.

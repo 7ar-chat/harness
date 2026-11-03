@@ -53,7 +53,8 @@ callback URL is `$HARNESS_PUBLIC_URL/auth/signin/github/callback`, and `HARNESS_
   signed in instead (same person, same projects). A GitHub rename creates a new account.
 - A new account is **pending**: the person gets a session, but every route except `GET /api/me` answers `403
   pending_approval`, and the app shows a "waiting for approval" screen until an admin approves. Accounts created by the
-  identity provider (OIDC) are approved at once, as are the admins and every account that existed before approvals.
+  identity provider (OIDC) are approved at once, as are the admins and every account that existed before approvals, unless
+  `OIDC_REQUIRE_APPROVAL=1` (set it when the provider lets anyone register: Authentik, Zitadel, Keycloak...).
 - `HARNESS_ADMINS` (comma-separated logins or emails) names the admins. They get an **Admin** page (`#/admin`) listing the
   accounts by status with *Approve* and *Reject* (`GET /api/admin/users?status=`, `POST /api/admin/users/{login}/approve|reject`).
   A rejected account stays rejected when it signs in again; an admin cannot be rejected.

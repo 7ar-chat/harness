@@ -255,7 +255,8 @@ func mailerFromEnv(getenv func(string) string) (product.Mailer, error) {
 }
 
 // oidcFromEnv reads OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_REDIRECT_URL,
-// OIDC_SCOPES, OIDC_LOGIN_CLAIM, OIDC_ALLOWED_DOMAINS and OIDC_SESSION_KEY. nil without an issuer.
+// OIDC_SCOPES, OIDC_LOGIN_CLAIM, OIDC_ALLOWED_DOMAINS, OIDC_SESSION_KEY and OIDC_REQUIRE_APPROVAL (1: new accounts wait
+// for an admin). nil without an issuer.
 func oidcFromEnv(getenv func(string) string, team bool) (*product.OIDCConfig, error) {
 	issuer := getenv("OIDC_ISSUER")
 	if issuer == "" {
@@ -268,7 +269,7 @@ func oidcFromEnv(getenv func(string) string, team bool) (*product.OIDCConfig, er
 		Issuer: issuer, ClientID: getenv("OIDC_CLIENT_ID"), ClientSecret: getenv("OIDC_CLIENT_SECRET"),
 		RedirectURL: getenv("OIDC_REDIRECT_URL"), Scopes: splitList(getenv("OIDC_SCOPES")),
 		LoginClaim: getenv("OIDC_LOGIN_CLAIM"), AllowedDomains: splitList(getenv("OIDC_ALLOWED_DOMAINS")),
-		SessionKey: sessionKey(getenv),
+		SessionKey: sessionKey(getenv), RequireApproval: getenv("OIDC_REQUIRE_APPROVAL") == "1",
 	}
 	if c.ClientID == "" || c.RedirectURL == "" {
 		return nil, errors.New("OIDC_ISSUER needs OIDC_CLIENT_ID and OIDC_REDIRECT_URL (https://host/auth/callback)")

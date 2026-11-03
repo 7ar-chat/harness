@@ -472,3 +472,51 @@ func TestOIDCAndGitHubSignInRunSideBySide(t *testing.T) {
 		t.Errorf("oidc login = %d %s", o.StatusCode, o.Header.Get("Location"))
 	}
 }
+
+func TestOIDCSignUpWaitsForApprovalWhenRequired(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		require  bool
+		wantUser string
+	}{{"provider creates accounts", false, store.UserApproved}, {"open registration", true, store.UserPending}} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			idp := newFakeIdP(t, map[string]any{"sub": "u-9", "preferred_username": "newbie", "email": "newbie@x.io", "email_verified": true})
+			tm := teamstore.NewMem()
+			mail := newFakeMailer()
+			r := newRig(t, rigOpts{team: true, rawAuth: true, prod: Options{Team: tm, Mail: mail, Admins: []string{"admin@x.io"}, PublicURL: "https://harness.test",
+				OIDC: &OIDCConfig{Issuer: idp.srv.URL, ClientID: "cid", ClientSecret: "s", RedirectURL: "https://harness.test/auth/callback",
+					SessionKey: []byte("0123456789abcdef0123456789abcdef"), RequireApproval: tc.require}}})
+			noFollow := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+
+			// Act: run the login by hand (the fake provider redirects to a host that is not the test server).
+			start, _ := noFollow.Get(r.srv.URL + "/auth/login")
+			start.Body.Close()
+			auth, _ := noFollow.Get(start.Header.Get("Location"))
+			auth.Body.Close()
+			cb, _ := url.Parse(auth.Header.Get("Location"))
+			req, _ := http.NewRequest("GET", r.srv.URL+"/auth/callback?"+cb.RawQuery, nil)
+			for _, c := range start.Cookies() {
+				req.AddCookie(c)
+			}
+			done, err := noFollow.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			done.Body.Close()
+
+			// Assert
+			u, err := tm.GetUser(context.Background(), "newbie")
+			if err != nil || u.Status != tc.wantUser {
+				t.Fatalf("user = %+v, %v (login answered %d)", u, err, done.StatusCode)
+			}
+			if tc.require {
+				if e := mail.next(t); !strings.Contains(e.Body, "newbie") {
+					t.Errorf("mail = %+v", e)
+				}
+			} else {
+				mail.none(t)
+			}
+		})
+	}
+}

@@ -104,6 +104,9 @@ func (s *server) Setup(o *httpapi.Options, mux *http.ServeMux) error {
 		}
 		s.oidc, ss = a, &a.sessions
 		a.admit = s.admitApproved
+		if s.opt.OIDC.RequireApproval {
+			a.admit = s.admitPending
+		}
 		a.mount(mux)
 	}
 	if g := s.opt.GitHubLogin; g != nil {
