@@ -220,18 +220,21 @@ func (s *server) githubCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	back := func(msg string) { http.Redirect(w, r, "/#/profile?github="+url.QueryEscape(msg), http.StatusFound) }
 	if !s.githubConfigured() {
+		slog.Warn("github connect: the GitHub App has no OAuth credentials")
 		back("not_configured")
 		return
 	}
 	raw, derr := decodeB64(r.URL.Query().Get("state"))
 	var st oauthState
 	if plain, oerr := s.box.open(raw); derr != nil || oerr != nil || json.Unmarshal(plain, &st) != nil || st.Login != login || time.Now().Unix() > st.Exp {
+		slog.Warn("github connect: invalid state (expired, another user, or HARNESS_SECRET_KEY changed)", "has_code", r.URL.Query().Get("code") != "", "github_error", r.URL.Query().Get("error"), "github_error_description", r.URL.Query().Get("error_description"))
 		back("invalid_state")
 		return
 	}
 	g := s.opt.GitHub
 	tok, err := g.tokenRequest(r.Context(), url.Values{"code": {r.URL.Query().Get("code")}, "redirect_uri": {s.publicBase(r) + "/auth/github/callback"}})
 	if err != nil {
+		slog.Warn("github connect: the code exchange failed (check GITHUB_APP_CLIENT_SECRET and the callback URL)", "redirect_uri", s.publicBase(r)+"/auth/github/callback", "error", err)
 		back("failed")
 		return
 	}
@@ -239,6 +242,7 @@ func (s *server) githubCallback(w http.ResponseWriter, r *http.Request) {
 		Login string `json:"login"`
 	}
 	if _, err := g.do(r.Context(), http.MethodGet, "/user", tok.Access, nil, &me); err != nil || me.Login == "" {
+		slog.Warn("github connect: could not read the GitHub user", "error", err)
 		back("failed")
 		return
 	}
@@ -249,6 +253,7 @@ func (s *server) githubCallback(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, store.ErrConflict):
 		back("account_in_use")
 	case err != nil:
+		slog.Warn("github connect: could not store the connector", "error", err)
 		back("failed")
 	default:
 		s.note(Caller{Actor: login}, "", "connector.github", nil, FeedEvent{Type: "project.changed", affects: login})
