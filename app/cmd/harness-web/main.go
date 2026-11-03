@@ -142,6 +142,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	}
 	if tok, sec := getenv("SLACK_BOT_TOKEN"), getenv("SLACK_SIGNING_SECRET"); tok != "" && sec != "" && *team {
 		prod.Slack = &product.Slack{Token: tok, SigningSecret: sec}
+	} else if tok != "" || sec != "" {
+		slog.Warn("slack: not enabled: it needs both SLACK_BOT_TOKEN and SLACK_SIGNING_SECRET, and -team")
 	}
 	if *devUsers {
 		if !*team || hasLogin || !isLoopback(*addr) {

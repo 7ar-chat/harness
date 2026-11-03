@@ -315,6 +315,7 @@ func (s *server) routeSlack() {
 		s.Mux.HandleFunc("POST "+prefix+"/slack/events", s.sk.events)
 		s.Mux.HandleFunc("POST "+prefix+"/slack/interactive", s.sk.interactive)
 	}
+	slog.Info("slack: bridge enabled", "events", "/api/slack/events", "interactive", "/api/slack/interactive")
 	go s.sk.run(context.Background())
 }
 
@@ -370,6 +371,8 @@ type slackEnvelope struct {
 func (b *slackBridge) readSigned(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	if err != nil || !b.sl.verify(r.Header, body, time.Now()) {
+		slog.Warn("slack: request rejected (check SLACK_SIGNING_SECRET)", "path", r.URL.Path,
+			"has_signature", r.Header.Get("X-Slack-Signature") != "", "timestamp", r.Header.Get("X-Slack-Request-Timestamp"))
 		http.Error(w, "bad signature", http.StatusUnauthorized)
 		return nil, false
 	}
@@ -396,6 +399,7 @@ func (b *slackBridge) events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ev := env.Event
+	slog.Info("slack: event", "type", ev.Type, "subtype", ev.Subtype, "channel_type", ev.ChannelType, "bot", ev.BotID != "", "user", ev.User)
 	if ev.BotID != "" || ev.User == "" || strings.TrimSpace(ev.Text) == "" {
 		return
 	}
@@ -693,7 +697,11 @@ func (b *slackBridge) post(ctx context.Context, d slackDest, text string, blocks
 	if blocks != nil {
 		p["blocks"] = blocks
 	}
-	return b.sl.call(ctx, "chat.postMessage", p, nil)
+	err := b.sl.call(ctx, "chat.postMessage", p, nil)
+	if err != nil {
+		slog.Warn("slack: could not post a message", "channel", d.channel, "error", err)
+	}
+	return err
 }
 
 // send on the server's side: a direct message to a Slack user.
