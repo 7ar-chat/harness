@@ -11,7 +11,9 @@ package product
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/core/capabilities"
@@ -29,6 +31,14 @@ type Options struct {
 	// OIDC, with Team, adds the login routes (/auth/login, /auth/callback,
 	// /auth/logout) and authenticates requests by session cookie.
 	OIDC *OIDCConfig
+	// GitHubLogin, with Team, adds "Continue with GitHub" to the sign-in page (see githublogin.go). It works with or
+	// without OIDC; the accounts it creates wait for an admin's approval (see signup.go).
+	GitHubLogin *GitHubLoginConfig
+	// Admins are the logins or emails of the administrators: they see the admin panel, approve new accounts and are
+	// emailed when someone signs up. Their own accounts are always approved.
+	Admins []string
+	// Mail sends the notice to the admins; nil: the admins are not emailed (the panel still lists the requests).
+	Mail Mailer
 	// Supervisor, with Team, adds the global agent (see supervisor.go).
 	Supervisor *Supervisor
 	// GitHub, with Team, connects projects to GitHub through a GitHub App (see github.go).
@@ -67,6 +77,9 @@ type server struct {
 	tg     *telegramBridge
 	hub    *hub
 	oidc   *oidcAuth
+	ghl    *githubLogin
+	// active caches the sign-up state of the accounts (see signup.go).
+	active activeCache
 }
 
 // New returns the HTTP handler: the API of h with the product on top.
@@ -75,21 +88,67 @@ func New(h *harness.Harness, api httpapi.Options, o Options) (http.Handler, erro
 	return httpapi.NewServer(h, api)
 }
 
-// Setup implements httpapi.Extension: it creates the OIDC login and takes it as the authenticator.
+// Setup implements httpapi.Extension: it creates the logins (OIDC and GitHub) and takes their session as the authenticator.
 func (s *server) Setup(o *httpapi.Options, mux *http.ServeMux) error {
-	if s.opt.OIDC == nil {
+	if s.opt.OIDC == nil && s.opt.GitHubLogin == nil {
 		return nil
 	}
-	a, err := newOIDC(context.Background(), *s.opt.OIDC, s.team)
-	if err != nil {
-		return err
+	if s.team == nil {
+		return errors.New("product: a login needs Options.Team")
 	}
-	s.oidc = a
-	a.mount(mux)
+	var ss *sessions
+	if s.opt.OIDC != nil {
+		a, err := newOIDC(context.Background(), *s.opt.OIDC, s.team)
+		if err != nil {
+			return err
+		}
+		s.oidc, ss = a, &a.sessions
+		a.admit = s.admitApproved
+		a.mount(mux)
+	}
+	if g := s.opt.GitHubLogin; g != nil {
+		cfg := *g
+		if cfg.ClientID == "" || cfg.ClientSecret == "" {
+			return errors.New("product: the GitHub login needs a client id and a secret")
+		}
+		if cfg.RedirectURL == "" {
+			base := s.configuredBase()
+			if base == "" {
+				return errors.New("product: the GitHub login needs HARNESS_PUBLIC_URL or a redirect URL")
+			}
+			cfg.RedirectURL = base + "/auth/signin/github/callback"
+		}
+		if ss == nil {
+			n := newSessions(cfg.SessionKey, cfg.SessionTTL, strings.HasPrefix(cfg.RedirectURL, "https://"))
+			ss = &n
+			mux.HandleFunc("POST /auth/logout", ss.logout)
+		}
+		s.ghl = newGitHubLogin(cfg, *ss, s.team, s.admitPending)
+		s.ghl.mount(mux)
+	}
+	mux.HandleFunc("GET /auth/providers", s.providers)
 	if o.Authenticate == nil {
-		o.Authenticate = a.authenticator()
+		o.Authenticate = ss.authenticator()
 	}
 	return nil
+}
+
+// providers lists the ways to sign in, for the sign-in page.
+func (s *server) providers(w http.ResponseWriter, _ *http.Request) {
+	type provider struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+		URL  string `json:"url"`
+	}
+	list := []provider{}
+	if s.oidc != nil {
+		list = append(list, provider{"oidc", "Single sign-on", "/auth/login"})
+	}
+	if s.ghl != nil {
+		list = append(list, provider{"github", "GitHub", "/auth/signin/github"})
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"providers": list})
 }
 
 // Install implements httpapi.Extension: it adds the product's routes.
@@ -115,6 +174,7 @@ func (s *server) Install(hs *httpapi.Server) error {
 		s.hub.attach(context.Background(), s.opt.Bus)
 	}
 	s.routeTeam()
+	s.routeAdmin()
 	s.routeCapabilities()
 	s.routeFactory()
 	if s.opt.Supervisor != nil {

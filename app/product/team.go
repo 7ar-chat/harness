@@ -62,6 +62,11 @@ func isWrite(method string) bool {
 // names into the Caller the handler works as.
 func (s *server) Resolve(r *http.Request, kind resourceKind, actor string) (Caller, error) {
 	c := Caller{Login: actor, Actor: actor}
+	if s.team != nil {
+		if err := s.gate(r, actor); err != nil {
+			return c, err
+		}
+	}
 	if s.team == nil || kind == kindNone {
 		return c, nil
 	}

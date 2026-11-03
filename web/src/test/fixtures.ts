@@ -4,7 +4,7 @@ const T = "2026-01-01T00:00:00Z";
 
 export const project = (id: string, extra: Partial<ProjectWithRole> = {}): ProjectWithRole => ({ id, name: `proj-${id}`, role: "owner", createdBy: "alice", createdAt: T, updatedAt: T, ...extra });
 export const thread = (id: string, extra: Partial<ThreadSummary> = {}): ThreadSummary => ({ id, title: `Session ${id}`, kind: "chat", status: "idle", createdBy: "alice", createdAt: T, updatedAt: new Date().toISOString(), ...extra });
-export const me = (extra: Partial<Me> = {}): Me => ({ user: { login: "alice", name: "Alice Doe", displayName: "", defaultName: "Alice Doe", email: "alice@example.com", avatarUrl: "", hasCustomAvatar: false }, projects: [], ...extra });
+export const me = (extra: Partial<Me> = {}): Me => ({ user: { login: "alice", name: "Alice Doe", displayName: "", defaultName: "Alice Doe", email: "alice@example.com", avatarUrl: "", hasCustomAvatar: false, status: "approved" }, admin: false, projects: [], ...extra });
 export const overview = (extra: Partial<Overview> = {}): Overview => ({ personal: [], projects: [], ...extra });
 
 /** The calls every page makes through the app shell and feed. */

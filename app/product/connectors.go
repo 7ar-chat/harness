@@ -108,8 +108,8 @@ func (s *server) configuredBase() string {
 	if s.opt.PublicURL != "" {
 		return strings.TrimRight(s.opt.PublicURL, "/")
 	}
-	if s.opt.OIDC != nil {
-		if u, err := url.Parse(s.opt.OIDC.RedirectURL); err == nil && u.Host != "" {
+	for _, redirect := range []string{s.opt.OIDC.redirect(), s.opt.GitHubLogin.redirect()} {
+		if u, err := url.Parse(redirect); err == nil && u.Host != "" {
 			return u.Scheme + "://" + u.Host
 		}
 	}
@@ -197,7 +197,7 @@ func (g *GitHubApp) tokenRequest(ctx context.Context, form url.Values) (githubTo
 func (s *server) githubCallback(w http.ResponseWriter, r *http.Request) {
 	login, err := s.Auth(r)
 	if err != nil || login == "" {
-		http.Redirect(w, r, "/auth/login?next="+url.QueryEscape("/#/profile"), http.StatusFound)
+		http.Redirect(w, r, "/#/profile", http.StatusFound) // the app shows the sign-in page and brings them back
 		return
 	}
 	back := func(msg string) { http.Redirect(w, r, "/#/profile?github="+url.QueryEscape(msg), http.StatusFound) }

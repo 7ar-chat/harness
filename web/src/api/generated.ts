@@ -463,6 +463,7 @@ export interface User {
   email?: string;
   avatarUrl: string;
   hasCustomAvatar: boolean;
+  status?: string;
 }
 
 export interface WorkspaceFile {

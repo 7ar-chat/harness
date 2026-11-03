@@ -53,7 +53,7 @@ func (s *server) me(w http.ResponseWriter, r *http.Request, c Caller) {
 		fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"user": viewOf(*u), "projects": nonNil(list)})
+	writeJSON(w, http.StatusOK, map[string]any{"user": viewOf(*u), "admin": s.isAdmin(u.Login, u.Email), "projects": nonNil(list)})
 }
 
 func nonNil[T any](l []T) []T {

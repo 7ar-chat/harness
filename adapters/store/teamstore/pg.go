@@ -44,10 +44,10 @@ func (s *PG) UpsertUser(ctx context.Context, u store.User) (*store.User, error) 
 	}
 	defer tx.Rollback(ctx)
 	var out store.User
-	err = tx.QueryRow(ctx, `INSERT INTO work_users (login, email, name, avatar_url) VALUES ($1, $2, $3, $4)
+	err = tx.QueryRow(ctx, `INSERT INTO work_users (login, email, name, avatar_url, status) VALUES ($1, $2, $3, $4, COALESCE(NULLIF($5, ''), 'approved'))
 		ON CONFLICT (login) DO UPDATE SET email = $2, name = $3, avatar_url = $4, last_seen = now()
 		RETURNING `+userCols,
-		u.Login, norm(u.Email), u.Name, u.AvatarURL).Scan(&out.Login, &out.Email, &out.Name, &out.AvatarURL, &out.CreatedAt, &out.LastSeen, &out.DisplayName, &out.AvatarVersion)
+		u.Login, norm(u.Email), u.Name, u.AvatarURL, u.Status).Scan(&out.Login, &out.Email, &out.Name, &out.AvatarURL, &out.CreatedAt, &out.LastSeen, &out.DisplayName, &out.AvatarVersion, &out.Status)
 	if err != nil {
 		return nil, err
 	}
@@ -61,11 +61,11 @@ func (s *PG) UpsertUser(ctx context.Context, u store.User) (*store.User, error) 
 	return &out, tx.Commit(ctx)
 }
 
-const userCols = `login, email, name, avatar_url, created_at, last_seen, display_name, avatar_version`
+const userCols = `login, email, name, avatar_url, created_at, last_seen, display_name, avatar_version, status`
 
 func scanUser(r pgx.Row) (*store.User, error) {
 	var u store.User
-	if err := r.Scan(&u.Login, &u.Email, &u.Name, &u.AvatarURL, &u.CreatedAt, &u.LastSeen, &u.DisplayName, &u.AvatarVersion); err != nil {
+	if err := r.Scan(&u.Login, &u.Email, &u.Name, &u.AvatarURL, &u.CreatedAt, &u.LastSeen, &u.DisplayName, &u.AvatarVersion, &u.Status); err != nil {
 		return nil, notFound(err)
 	}
 	return &u, nil
@@ -90,6 +90,17 @@ func (s *PG) ListUsers(ctx context.Context) ([]store.User, error) {
 		out = append(out, *u)
 	}
 	return out, rows.Err()
+}
+
+func (s *PG) SetUserStatus(ctx context.Context, login, status string) error {
+	tag, err := s.pool.Exec(ctx, `UPDATE work_users SET status = $2 WHERE login = $1`, login, status)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return store.ErrNotFound
+	}
+	return nil
 }
 
 func (s *PG) SetDisplayName(ctx context.Context, login, name string) error {

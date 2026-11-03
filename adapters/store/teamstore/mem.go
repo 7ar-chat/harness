@@ -130,7 +130,7 @@ func (m *Mem) UpsertUser(_ context.Context, u store.User) (*store.User, error) {
 	now := time.Now().UTC()
 	cur := m.d.Users[u.Login]
 	if cur == nil {
-		cur = &store.User{Login: u.Login, CreatedAt: now}
+		cur = &store.User{Login: u.Login, CreatedAt: now, Status: u.Status}
 		m.d.Users[u.Login] = cur
 	}
 	cur.Email, cur.Name, cur.AvatarURL, cur.LastSeen = norm(u.Email), u.Name, u.AvatarURL, now
@@ -149,6 +149,17 @@ func (m *Mem) UpsertUser(_ context.Context, u store.User) (*store.User, error) {
 	}
 	out := *cur
 	return &out, m.save()
+}
+
+func (m *Mem) SetUserStatus(_ context.Context, login, status string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u := m.d.Users[login]
+	if u == nil {
+		return store.ErrNotFound
+	}
+	u.Status = status
+	return m.save()
 }
 
 func (m *Mem) ListUsers(_ context.Context) ([]store.User, error) {

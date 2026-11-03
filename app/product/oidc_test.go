@@ -126,10 +126,10 @@ func TestOIDCLoginCreatesSessionAndUser(t *testing.T) {
 }
 
 func TestOIDCRejectsForgedSessionsAndUnsafeNext(t *testing.T) {
-	a := &oidcAuth{key: []byte("0123456789abcdef0123456789abcdef"), ttl: time.Hour}
+	a := &oidcAuth{sessions: sessions{key: []byte("0123456789abcdef0123456789abcdef"), ttl: time.Hour}}
 	good := a.seal(map[string]any{"l": "alice", "e": time.Now().Add(time.Hour).Unix()})
 	expired := a.seal(map[string]any{"l": "alice", "e": time.Now().Add(-time.Hour).Unix()})
-	other := (&oidcAuth{key: []byte("another-key-another-key-another!")}).seal(map[string]any{"l": "mallory", "e": time.Now().Add(time.Hour).Unix()})
+	other := (&oidcAuth{sessions: sessions{key: []byte("another-key-another-key-another!")}}).seal(map[string]any{"l": "mallory", "e": time.Now().Add(time.Hour).Unix()})
 	for name, tok := range map[string]string{"good": good, "expired": expired, "other key": other, "garbage": "x.y", "empty": ""} {
 		req, _ := http.NewRequest("GET", "/", nil)
 		req.AddCookie(&http.Cookie{Name: sessionCookie, Value: tok})

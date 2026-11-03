@@ -2,7 +2,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { loginRedirect } from "@/api/client";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { unlockAudioOnGesture } from "@/lib/sound";
@@ -21,9 +20,6 @@ void loadClientConfig().then((cfg) => {
   startErrorReporting(cfg.sentry);
   startAnalytics(cfg.umami);
 });
-
-// A 401 from any call means the session is gone: go through the server's OIDC login and come back.
-window.addEventListener("harness:unauthorized", () => setTimeout(loginRedirect, 800));
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

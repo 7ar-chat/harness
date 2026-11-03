@@ -1,8 +1,13 @@
 import { createHashHistory, createRootRoute, createRoute, createRouter, Link } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app/AppShell";
-import { Empty, ErrorState } from "@/components/app/common";
+import { ApiError } from "@/api/client";
+import { useMe } from "@/api/queries";
+import { Logo } from "@/components/app/Logo";
+import { LoginPage, PendingPage, RejectedPage } from "@/components/app/AuthScreens";
+import { Empty, ErrorState, Spinner } from "@/components/app/common";
 import { Button } from "@/components/ui/button";
+import { AdminPage } from "@/pages/Admin";
 import { Dashboard } from "@/pages/Dashboard";
 import { MemoryPage } from "@/pages/Memory";
 import { ProfilePage } from "@/pages/Profile";
@@ -11,11 +16,42 @@ import { SessionPage, SupervisorPage } from "@/pages/SessionPage";
 import { FeedProvider } from "@/lib/feed";
 import { reportError } from "@/lib/telemetry";
 
+/** Full-page loader shown until we know who the visitor is, so a signed-out visit never flashes the interface (or its errors). */
+function PageLoader() {
+  return (
+    <div className="flex h-svh flex-col items-center justify-center gap-3 text-muted-foreground" role="status" aria-busy="true">
+      <Logo className="size-8" />
+      <Spinner />
+    </div>
+  );
+}
+
+/** Decides what a visitor sees: a loader, the sign-in page, the approval screens or the app. */
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const me = useMe();
+  const [expired, setExpired] = useState(false);
+  // A call that answers 401 later on (the session ended): the app gives way to the sign-in page.
+  useEffect(() => {
+    const h = () => setExpired(true);
+    window.addEventListener("harness:unauthorized", h);
+    return () => window.removeEventListener("harness:unauthorized", h);
+  }, []);
+  const unauthenticated = me.error instanceof ApiError && me.error.status === 401;
+  if (unauthenticated || expired) return <LoginPage expired={expired && !unauthenticated} />;
+  if (me.isPending) return <PageLoader />;
+  const status = me.data?.user.status;
+  if (me.data && status === "pending") return <PendingPage me={me.data} />;
+  if (me.data && status === "rejected") return <RejectedPage me={me.data} />;
+  return children;
+}
+
 function Root() {
   return (
-    <FeedProvider>
-      <AppShell />
-    </FeedProvider>
+    <AuthGate>
+      <FeedProvider>
+        <AppShell />
+      </FeedProvider>
+    </AuthGate>
   );
 }
 
@@ -52,6 +88,7 @@ const routeTree = root.addChildren([
   }),
   createRoute({ getParentRoute: () => root, path: "/memory", component: MemoryPage }),
   createRoute({ getParentRoute: () => root, path: "/profile", component: ProfilePage }),
+  createRoute({ getParentRoute: () => root, path: "/admin", component: AdminPage }),
 ]);
 
 export const router = createRouter({ routeTree, history: createHashHistory(), defaultPreload: "intent" });

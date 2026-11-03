@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { api, ApiError, isUnsupported, putBytes } from "./client";
 import { isNewerVisit, loadLocalSeen, saveLocalSeen } from "@/lib/unread";
 import type {
-  AuditEntry, CapabilityAdd, CapabilityPut, CapabilityTestResult, CapabilityView, Connector, GithubRepos, KnownUser, User, Command, GithubStatus, Invite, Me, Member, MemoryEntry, MemoryInput, MemoryList, MemoryStats, ModelList, Overview,
+  AdminUser, AuditEntry, AuthProvider, UserStatus, CapabilityAdd, CapabilityPut, CapabilityTestResult, CapabilityView, Connector, GithubRepos, KnownUser, User, Command, GithubStatus, Invite, Me, Member, MemoryEntry, MemoryInput, MemoryList, MemoryStats, ModelList, Overview,
   Project, ProjectWithRole, Role, Thread, WorkspaceFile,
 } from "./types";
 
@@ -22,6 +22,8 @@ export const qk = {
   github: (id: string) => ["project", id, "github"] as const,
   files: (thread: string, path: string) => ["files", thread, path] as const,
   seen: ["seen"] as const,
+  adminUsers: (status?: string) => ["admin", "users", status ?? "all"] as const,
+  providers: ["auth", "providers"] as const,
   capabilities: (pid?: string) => ["capabilities", pid ?? "user"] as const,
 };
 
@@ -295,3 +297,34 @@ export const usePutCapability = (pid?: string) =>
 export const useAddCapability = (pid?: string) => useAction((b: CapabilityAdd) => api.post<CapabilityView>(capPath(pid), b), () => [qk.capabilities(pid)], "Server added");
 export const useDeleteCapability = (pid?: string) => useAction((name: string) => api.del(capPath(pid, name)), () => [qk.capabilities(pid)]);
 export const useTestCapability = (pid?: string) => useAction((name: string) => api.post<CapabilityTestResult>(capPath(pid, name, "/test")), () => []);
+
+// ---- sign-in and administration ----
+
+/** The sign-in methods the server offers (a plain fetch: the call needs no session). */
+export const useAuthProviders = () =>
+  useQuery({
+    queryKey: qk.providers,
+    queryFn: async () => {
+      const r = await fetch("/auth/providers", { credentials: "same-origin" });
+      if (!r.ok) throw new ApiError(r.status, "providers", "Could not load the sign-in methods.");
+      return ((await r.json()) as { providers?: AuthProvider[] }).providers ?? [];
+    },
+    retry: 1,
+    staleTime: 60_000,
+  });
+
+/** The users of the server by status; admins only. */
+export const useAdminUsers = (status?: UserStatus, o: { enabled?: boolean; refetchInterval?: number } = {}) =>
+  useQuery({
+    queryKey: qk.adminUsers(status),
+    queryFn: () => api.get<AdminUser[]>(`/admin/users${status ? `?status=${status}` : ""}`),
+    enabled: o.enabled ?? true,
+    refetchInterval: o.refetchInterval,
+    retry: false,
+  });
+
+export const useDecideUser = () =>
+  useAction(
+    (v: { login: string; decision: "approve" | "reject" }) => api.post<AdminUser>(`/admin/users/${encodeURIComponent(v.login)}/${v.decision}`),
+    () => [["admin", "users"]],
+  );

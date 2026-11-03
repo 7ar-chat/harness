@@ -6,6 +6,13 @@
 #   OIDC_CLIENT_ID / OIDC_CLIENT_SECRET
 #   OIDC_SESSION_KEY        openssl rand -hex 32   (signs the login cookie)
 #   HARNESS_SECRET_KEY      openssl rand -hex 32   (encrypts connector tokens)
+#   GITHUB_LOGIN_CLIENT_ID / GITHUB_LOGIN_CLIENT_SECRET   (optional) "Continue with GitHub" on the sign-in page: a GitHub OAuth App
+#                           (github.com > Settings > Developer settings > OAuth Apps) whose callback URL is
+#                           https://${HARNESS_HOST}/auth/signin/github/callback. Accounts it creates wait for an admin's approval.
+#   HARNESS_ADMINS          comma-separated logins or emails of the administrators: they see the admin panel (#/admin), approve
+#                           new accounts and are emailed when someone signs up. Their own accounts are always approved.
+#   SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASSWORD / SMTP_FROM   (optional) the mail server for that notice (port 587 STARTTLS
+#                           by default, 465 TLS); SMTP_FROM is the sender, e.g. "Harness <noreply@${HARNESS_HOST}>".
 #   LLM_BASE_URL / LLM_API_KEY / LLM_MODELS / LLM_DEFAULT_MODEL
 #   DAYTONA_API_KEY         the Daytona API key sandboxes are created with (https://app.daytona.io, Keys)
 #   DAYTONA_API_URL / DAYTONA_TARGET / DAYTONA_SNAPSHOT   (optional) the API (default https://app.daytona.io/api), the
@@ -46,6 +53,15 @@ services:
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
       OIDC_REDIRECT_URL: https://${HARNESS_HOST}/auth/callback
       OIDC_SESSION_KEY: ${OIDC_SESSION_KEY}
+
+      GITHUB_LOGIN_CLIENT_ID: ${GITHUB_LOGIN_CLIENT_ID:-}
+      GITHUB_LOGIN_CLIENT_SECRET: ${GITHUB_LOGIN_CLIENT_SECRET:-}
+      HARNESS_ADMINS: ${HARNESS_ADMINS:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
 
       LLM_PROVIDER: openai
       LLM_BASE_URL: ${LLM_BASE_URL}

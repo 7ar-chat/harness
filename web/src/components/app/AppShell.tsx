@@ -1,11 +1,10 @@
 import { Logo } from "@/components/app/Logo";
 import { identifyUser } from "@/lib/telemetry";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "@tanstack/react-router";
-import { Bot, Brain, ChevronRight, LayoutDashboard, LogOut, Monitor, Moon, Plus, Search, Sun, UserCog, WifiOff } from "lucide-react";
+import { Bot, Brain, ChevronRight, LayoutDashboard, LogOut, Monitor, Moon, Plus, Search, Sun, UserCog, Users, WifiOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 import { getDevUser, setDevUser } from "@/api/client";
-import { supervisorQuery, useMe, useMemoryStats, useOverview, useSeen } from "@/api/queries";
+import { supervisorQuery, useAdminUsers, useMe, useMemoryStats, useOverview, useSeen } from "@/api/queries";
 import type { OverviewProject, ThreadSummary } from "@/api/types";
 import { useQuery } from "@tanstack/react-query";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -168,6 +167,8 @@ function AppSidebar({ openId, openProject }: { openId?: string; openProject?: st
   const svStatus = svSummary?.status ?? supervisor?.status ?? "idle";
   const { isMobile, setOpenMobile } = useSidebar();
   const close = () => isMobile && setOpenMobile(false);
+  const isAdmin = !!useMe().data?.admin;
+  const pendingUsers = useAdminUsers("pending", { enabled: isAdmin, refetchInterval: 30_000 }).data?.length ?? 0;
   return (
     <Sidebar>
       <SidebarHeader>
@@ -206,6 +207,20 @@ function AppSidebar({ openId, openProject }: { openId?: string; openProject?: st
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
+          {isAdmin ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={loc.pathname === "/admin"}>
+                <Link to="/admin" onClick={close}>
+                  <Users /> Admin
+                  {pendingUsers ? (
+                    <span className="ml-auto rounded-full bg-warning px-1.5 text-[10px] text-black" aria-label={`${pendingUsers} users awaiting approval`}>
+                      {pendingUsers}
+                    </span>
+                  ) : null}
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
@@ -313,11 +328,6 @@ export function AppShell() {
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, []);
-  useEffect(() => {
-    const h = () => toast.error("Your session expired. Redirecting to sign in…");
-    window.addEventListener("harness:unauthorized", h);
-    return () => window.removeEventListener("harness:unauthorized", h);
   }, []);
   return (
     <DialogsProvider openPalette={() => setPalette(true)}>

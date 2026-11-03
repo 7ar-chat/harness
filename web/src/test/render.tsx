@@ -9,7 +9,7 @@ import { router } from "@/router";
 export const newQueryClient = () => new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 }, mutations: { retry: false } } });
 
 /** Renders the real app (providers as in main.tsx) at a hash route. */
-export async function renderApp(to: string, qc = newQueryClient()) {
+export async function renderApp(to: string, qc = newQueryClient(), o: { shell?: boolean } = {}) {
   const utils = render(
     <ThemeProvider>
       <QueryClientProvider client={qc}>
@@ -22,5 +22,7 @@ export async function renderApp(to: string, qc = newQueryClient()) {
   // The router is a module singleton shared by every test: mount it, then move it to the route.
   await router.navigate({ href: to });
   await waitFor(() => expect(router.state.status).toBe("idle"));
+  // The shell mounts behind the sign-in check (a full-page loader until /me answers).
+  if (o.shell !== false) await utils.findByRole("main");
   return { qc, router, ...utils };
 }

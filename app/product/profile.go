@@ -31,6 +31,8 @@ type userView struct {
 	Email           string `json:"email,omitempty"`
 	AvatarURL       string `json:"avatarUrl"`
 	HasCustomAvatar bool   `json:"hasCustomAvatar"`
+	// Status is "pending" or "rejected" while an admin has not approved the account (absent: approved).
+	Status string `json:"status,omitempty"`
 }
 
 func viewOf(u store.User) userView {
@@ -39,7 +41,7 @@ func viewOf(u store.User) userView {
 		def = u.Login
 	}
 	return userView{Login: u.Login, Name: u.Label(), DisplayName: u.DisplayName, DefaultName: def, Email: u.Email,
-		AvatarURL: u.Avatar(), HasCustomAvatar: u.AvatarVersion != ""}
+		AvatarURL: u.Avatar(), HasCustomAvatar: u.AvatarVersion != "", Status: u.Status}
 }
 
 func (s *server) routeProfile() {

@@ -463,7 +463,7 @@ func TestGitHubCallbackFailuresLinkNothing(t *testing.T) {
 	for name, tc := range map[string]struct {
 		user, query, want string
 	}{
-		"not logged in":        {"", "code=alice&state=" + valid, "/auth/login?next=%2F%23%2Fprofile"},
+		"not logged in":        {"", "code=alice&state=" + valid, "/#/profile"},
 		"no state":             {"alice", "code=alice", "/#/profile?github=invalid_state"},
 		"expired state":        {"alice", "code=alice&state=" + cnForgeState(t, "alice", time.Now().Add(-time.Second)), "/#/profile?github=invalid_state"},
 		"state of another":     {"alice", "code=alice&state=" + cnForgeState(t, "bob", time.Now().Add(time.Minute)), "/#/profile?github=invalid_state"},

@@ -1463,3 +1463,50 @@ func TestTeamSeenRacingWritersConvergeOnTheLatest(t *testing.T) {
 		}
 	})
 }
+
+func TestTeamUserStatusIsSetOnCreationAndKeptAtLogin(t *testing.T) {
+	eachStore(t, func(t *testing.T, s store.TeamStore) {
+		ctx := context.Background()
+
+		// An account created without a status is approved; one created pending waits.
+		old := addUser(t, s, "old", "old@x.io")
+		if !old.Active() || (old.Status != "" && old.Status != store.UserApproved) {
+			t.Errorf("a default account = %+v", old)
+		}
+		dave, err := s.UpsertUser(ctx, store.User{Login: "dave", Email: "dave@x.io", Status: store.UserPending})
+		must(t, err)
+		if dave.Status != store.UserPending || dave.Active() {
+			t.Errorf("a pending account = %+v", dave)
+		}
+
+		// Logging in again does not change what an admin decided, whatever status the login carries.
+		again, err := s.UpsertUser(ctx, store.User{Login: "dave", Email: "dave@x.io", Name: "Dave", Status: store.UserApproved})
+		must(t, err)
+		if again.Status != store.UserPending || again.Name != "Dave" {
+			t.Errorf("after a second login = %+v", again)
+		}
+
+		// The admin's decision is stored and read back by every lookup.
+		must(t, s.SetUserStatus(ctx, "dave", store.UserRejected))
+		got, err := s.GetUser(ctx, "dave")
+		must(t, err)
+		if got.Status != store.UserRejected || got.Active() {
+			t.Errorf("rejected = %+v", got)
+		}
+		must(t, s.SetUserStatus(ctx, "dave", store.UserApproved))
+		byMail, err := s.GetUserByEmail(ctx, "dave@x.io")
+		must(t, err)
+		if !byMail.Active() || byMail.Status != store.UserApproved {
+			t.Errorf("approved = %+v", byMail)
+		}
+		list, err := s.ListUsers(ctx)
+		must(t, err)
+		for _, u := range list {
+			if u.Login == "dave" && u.Status != store.UserApproved {
+				t.Errorf("listed = %+v", u)
+			}
+		}
+
+		wantErr(t, "unknown login", s.SetUserStatus(ctx, "nobody", store.UserApproved), store.ErrNotFound)
+	})
+}

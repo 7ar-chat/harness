@@ -52,7 +52,20 @@ type User struct {
 	DisplayName string `json:"displayName,omitempty"`
 	// AvatarVersion identifies the uploaded avatar ("" when none); AvatarURL is then superseded.
 	AvatarVersion string `json:"avatarVersion,omitempty"`
+	// Status is the sign-up state: UserPending until an admin approves the account, UserRejected when refused.
+	// Empty means approved (every account created before approvals existed).
+	Status string `json:"status,omitempty"`
 }
+
+// The states of an account (User.Status).
+const (
+	UserApproved = "approved"
+	UserPending  = "pending"
+	UserRejected = "rejected"
+)
+
+// Active reports whether the account may use the product: everything but pending and rejected.
+func (u User) Active() bool { return u.Status != UserPending && u.Status != UserRejected }
 
 // Label is the name shown for the user: their display name, else the provider's name, else the login.
 func (u User) Label() string {
@@ -160,8 +173,12 @@ type AuditEntry struct {
 // login and the host decides, from here, who may act on them.
 type TeamStore interface {
 	// UpsertUser records the user at login and claims the invites sent to the
-	// email (the memberships are created).
+	// email (the memberships are created). u.Status is applied only when the
+	// user is created (empty: approved); a returning user keeps the status an
+	// admin gave them.
 	UpsertUser(ctx context.Context, u User) (*User, error)
+	// SetUserStatus sets the sign-up state (UserApproved, UserPending, UserRejected), ErrNotFound for an unknown login.
+	SetUserStatus(ctx context.Context, login, status string) error
 	GetUser(ctx context.Context, login string) (*User, error)
 	// GetUsers returns the known users among logins, by login.
 	GetUsers(ctx context.Context, logins []string) (map[string]*User, error)

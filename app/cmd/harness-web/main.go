@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -49,7 +50,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	user := fs.String("user", "local", "user login of the single local user")
 	devUsers := fs.Bool("dev-users", false, "team mode on a loopback address: act as the user named by the X-Harness-User header (development only)")
 	check := fs.String("factory-check", "", "check the agent factory's setup against GitHub for this repository (owner/name) and exit: read-only, prints [ OK ]/[WARN]/[FAIL] per check, exit 1 on a failure")
-	team := fs.Bool("team", getenv("OIDC_ISSUER") != "" || getenv("HARNESS_TEAM") == "1", "team mode: OIDC login, projects, shared threads (env OIDC_ISSUER or HARNESS_TEAM=1)")
+	team := fs.Bool("team", getenv("OIDC_ISSUER") != "" || getenv("GITHUB_LOGIN_CLIENT_ID") != "" || getenv("HARNESS_TEAM") == "1", "team mode: login, projects, shared threads (env OIDC_ISSUER, GITHUB_LOGIN_CLIENT_ID or HARNESS_TEAM=1)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -64,8 +65,17 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if err != nil {
 		return fail(stderr, err)
 	}
-	if !isLoopback(*addr) && token == "" && oidcCfg == nil {
-		return fail(stderr, fmt.Errorf("refusing to listen on %s without HARNESS_WEB_TOKEN: set a token, configure OIDC (OIDC_ISSUER), or bind a loopback address", *addr))
+	ghLogin, err := githubLoginFromEnv(getenv, *team)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	hasLogin := oidcCfg != nil || ghLogin != nil
+	if !isLoopback(*addr) && token == "" && !hasLogin {
+		return fail(stderr, fmt.Errorf("refusing to listen on %s without HARNESS_WEB_TOKEN: set a token, configure a login (OIDC_ISSUER or GITHUB_LOGIN_CLIENT_ID), or bind a loopback address", *addr))
+	}
+	mailer, err := mailerFromEnv(getenv)
+	if err != nil {
+		return fail(stderr, err)
 	}
 	logger := slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: slog.LevelWarn})
 	tracker, err := errorTracker(getenv)
@@ -118,7 +128,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		},
 	}
 	prod := product.Options{
-		Team: teamStore, OIDC: oidcCfg, Supervisor: sup, GitHub: bt.github, Bus: bt.bus,
+		Team: teamStore, OIDC: oidcCfg, GitHubLogin: ghLogin, Admins: splitList(getenv("HARNESS_ADMINS")), Mail: mailer, Supervisor: sup, GitHub: bt.github, Bus: bt.bus,
 		PublicURL: getenv("HARNESS_PUBLIC_URL"), SecretKey: secretKey(getenv, oidcCfg),
 	}
 	if bt.factory != nil {
@@ -131,18 +141,18 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		prod.Telegram = &product.Telegram{Token: tok, Username: strings.TrimPrefix(getenv("TELEGRAM_BOT_USERNAME"), "@")}
 	}
 	if *devUsers {
-		if !*team || oidcCfg != nil || !isLoopback(*addr) {
-			return fail(stderr, errors.New("-dev-users needs -team, no OIDC_ISSUER, and a loopback address"))
+		if !*team || hasLogin || !isLoopback(*addr) {
+			return fail(stderr, errors.New("-dev-users needs -team, no OIDC_ISSUER or GITHUB_LOGIN_CLIENT_ID, and a loopback address"))
 		}
 		opts.Authenticate = devAuthenticator(teamStore, *user)
 	}
-	if *team && oidcCfg == nil { // team mode without OIDC: every request acts as -user (local development)
-		fmt.Fprintln(stderr, "harness-web: team mode without OIDC_ISSUER: everyone is", *user)
+	if *team && !hasLogin { // team mode without a login: every request acts as -user (local development)
+		fmt.Fprintln(stderr, "harness-web: team mode without OIDC_ISSUER or GITHUB_LOGIN_CLIENT_ID: everyone is", *user)
 	}
 	if mo, ok := config.ModelPriceOptions(); ok { // loaded in the background: the list gains its info once it arrives
 		opts.ModelInfo = client.TableLookup(modelinfo.LoadAsync(hctx, mo), cfg.LLMProviderName, cfg.LLMProvider)
 	}
-	opts.AllowedHosts = allowedHosts(token, oidcCfg)
+	opts.AllowedHosts = allowedHosts(token, hasLogin)
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {
 		return fail(stderr, err)
@@ -172,10 +182,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 }
 
 // allowedHosts is the Host-header allow-list of the DNS-rebinding guard. Only the server with no credential at all
-// (no token, no OIDC) needs it, and it is then reachable only on loopback; a server behind a token or a login is
+// (no token, no login) needs it, and it is then reachable only on loopback; a server behind a token or a login is
 // served under its public name, so the guard must not apply.
-func allowedHosts(token string, oidc *product.OIDCConfig) []string {
-	if token == "" && oidc == nil {
+func allowedHosts(token string, login bool) []string {
+	if token == "" && !login {
 		return []string{"localhost", "127.0.0.1", "::1"}
 	}
 	return nil
@@ -189,7 +199,59 @@ func secretKey(getenv func(string) string, oidc *product.OIDCConfig) []byte {
 	if oidc != nil && len(oidc.SessionKey) > 0 {
 		return oidc.SessionKey
 	}
+	if k := getenv("HARNESS_SESSION_KEY"); k != "" {
+		return []byte(k)
+	}
 	return nil
+}
+
+// sessionKey signs the login cookie: HARNESS_SESSION_KEY, else OIDC_SESSION_KEY (random at start when neither is set).
+func sessionKey(getenv func(string) string) []byte {
+	if k := getenv("HARNESS_SESSION_KEY"); k != "" {
+		return []byte(k)
+	}
+	return []byte(getenv("OIDC_SESSION_KEY"))
+}
+
+// githubLoginFromEnv reads GITHUB_LOGIN_CLIENT_ID and GITHUB_LOGIN_CLIENT_SECRET, the OAuth App behind "Continue with
+// GitHub" (its callback URL is $HARNESS_PUBLIC_URL/auth/signin/github/callback). nil without a client id.
+func githubLoginFromEnv(getenv func(string) string, team bool) (*product.GitHubLoginConfig, error) {
+	id := getenv("GITHUB_LOGIN_CLIENT_ID")
+	if id == "" {
+		return nil, nil
+	}
+	if !team {
+		return nil, errors.New("GITHUB_LOGIN_CLIENT_ID needs team mode (-team)")
+	}
+	if getenv("GITHUB_LOGIN_CLIENT_SECRET") == "" {
+		return nil, errors.New("GITHUB_LOGIN_CLIENT_ID needs GITHUB_LOGIN_CLIENT_SECRET")
+	}
+	if getenv("HARNESS_PUBLIC_URL") == "" {
+		return nil, errors.New("GITHUB_LOGIN_CLIENT_ID needs HARNESS_PUBLIC_URL (https://host): the OAuth callback is built from it")
+	}
+	return &product.GitHubLoginConfig{ClientID: id, ClientSecret: getenv("GITHUB_LOGIN_CLIENT_SECRET"), SessionKey: sessionKey(getenv)}, nil
+}
+
+// mailerFromEnv reads SMTP_HOST, SMTP_PORT (default 587; 465 is TLS from the start), SMTP_USER, SMTP_PASSWORD and SMTP_FROM:
+// the mail server the admins are told about new sign-ups through. nil without a host.
+func mailerFromEnv(getenv func(string) string) (product.Mailer, error) {
+	host := getenv("SMTP_HOST")
+	if host == "" {
+		return nil, nil
+	}
+	port := 0
+	if p := getenv("SMTP_PORT"); p != "" {
+		n, err := strconv.Atoi(p)
+		if err != nil || n <= 0 || n > 65535 {
+			return nil, fmt.Errorf("SMTP_PORT %q is not a port", p)
+		}
+		port = n
+	}
+	m, err := product.NewSMTPMailer(product.SMTPConfig{Host: host, Port: port, Username: getenv("SMTP_USER"), Password: getenv("SMTP_PASSWORD"), From: getenv("SMTP_FROM")})
+	if err != nil {
+		return nil, fmt.Errorf("SMTP_HOST: %w (SMTP_FROM must be an address such as noreply@example.com)", err)
+	}
+	return m, nil
 }
 
 // oidcFromEnv reads OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_REDIRECT_URL,
@@ -206,7 +268,7 @@ func oidcFromEnv(getenv func(string) string, team bool) (*product.OIDCConfig, er
 		Issuer: issuer, ClientID: getenv("OIDC_CLIENT_ID"), ClientSecret: getenv("OIDC_CLIENT_SECRET"),
 		RedirectURL: getenv("OIDC_REDIRECT_URL"), Scopes: splitList(getenv("OIDC_SCOPES")),
 		LoginClaim: getenv("OIDC_LOGIN_CLAIM"), AllowedDomains: splitList(getenv("OIDC_ALLOWED_DOMAINS")),
-		SessionKey: []byte(getenv("OIDC_SESSION_KEY")),
+		SessionKey: sessionKey(getenv),
 	}
 	if c.ClientID == "" || c.RedirectURL == "" {
 		return nil, errors.New("OIDC_ISSUER needs OIDC_CLIENT_ID and OIDC_REDIRECT_URL (https://host/auth/callback)")

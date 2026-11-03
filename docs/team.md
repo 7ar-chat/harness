@@ -38,6 +38,31 @@ keeps a signed HttpOnly `SameSite=Lax` cookie, so the SSE streams (which cannot 
 token reaches JavaScript. `OIDC_ALLOWED_DOMAINS` restricts logins by email domain. `OIDC_SESSION_KEY` signs the
 cookie; set it, or sessions end at every restart.
 
+The web app has its own sign-in page: it lists the configured ways to sign in (`GET /auth/providers`) and a visitor
+without a session lands on it instead of being redirected.
+
+## Sign-up with GitHub, and approval
+
+Set `GITHUB_LOGIN_CLIENT_ID` and `GITHUB_LOGIN_CLIENT_SECRET` (a GitHub **OAuth App**, not the GitHub App below; its
+callback URL is `$HARNESS_PUBLIC_URL/auth/signin/github/callback`, and `HARNESS_PUBLIC_URL` is required) to add
+*Continue with GitHub* to the sign-in page. It works next to OIDC or alone, and shares the session cookie
+(`OIDC_SESSION_KEY`, or `HARNESS_SESSION_KEY` when there is no OIDC).
+
+- A GitHub account becomes the user `github_<username>`. The prefix keeps it from ever being taken for a login the identity
+  provider hands out. If the **verified** primary email of the GitHub account is already the email of a user, that user is
+  signed in instead (same person, same projects). A GitHub rename creates a new account.
+- A new account is **pending**: the person gets a session, but every route except `GET /api/me` answers `403
+  pending_approval`, and the app shows a "waiting for approval" screen until an admin approves. Accounts created by the
+  identity provider (OIDC) are approved at once, as are the admins and every account that existed before approvals.
+- `HARNESS_ADMINS` (comma-separated logins or emails) names the admins. They get an **Admin** page (`#/admin`) listing the
+  accounts by status with *Approve* and *Reject* (`GET /api/admin/users?status=`, `POST /api/admin/users/{login}/approve|reject`).
+  A rejected account stays rejected when it signs in again; an admin cannot be rejected.
+- With `SMTP_HOST`, `SMTP_PORT` (587 STARTTLS, 465 TLS), `SMTP_USER`, `SMTP_PASSWORD` and `SMTP_FROM`, the admins are emailed
+  when someone signs up (the emails in `HARNESS_ADMINS`, and the email of each admin named by login). Without SMTP the
+  requests still appear in the panel.
+
+Accounts without a picture get a generated avatar.
+
 ## GitHub
 
 Set up a **GitHub App** (repository contents: read & write; pull requests: read & write if agents open them) and give

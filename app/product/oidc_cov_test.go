@@ -395,7 +395,7 @@ func TestNewOIDCValidatesAndDefaults(t *testing.T) {
 
 func TestOIDCOpenRejectsMalformedTokens(t *testing.T) {
 	// Arrange
-	a := &oidcAuth{key: []byte("0123456789abcdef0123456789abcdef")}
+	a := &oidcAuth{sessions: sessions{key: []byte("0123456789abcdef0123456789abcdef")}}
 	good := a.seal(map[string]any{"l": "alice"})
 	body, sig, _ := strings.Cut(good, ".")
 	var v map[string]any

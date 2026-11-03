@@ -952,3 +952,56 @@ func TestTeamServerFailsToStartWhenTheIdentityProviderIsUnreachable(t *testing.T
 		t.Fatalf("exit %d stderr %q", code, errb.String())
 	}
 }
+
+func TestGitHubLoginFromEnv(t *testing.T) {
+	for name, tc := range map[string]struct {
+		env     map[string]string
+		team    bool
+		want    bool
+		wantErr string
+	}{
+		"off":            {env: nil, team: true},
+		"on":             {env: map[string]string{"GITHUB_LOGIN_CLIENT_ID": "id", "GITHUB_LOGIN_CLIENT_SECRET": "s", "HARNESS_PUBLIC_URL": "https://h"}, team: true, want: true},
+		"needs team":     {env: map[string]string{"GITHUB_LOGIN_CLIENT_ID": "id"}, wantErr: "team mode"},
+		"needs secret":   {env: map[string]string{"GITHUB_LOGIN_CLIENT_ID": "id", "HARNESS_PUBLIC_URL": "https://h"}, team: true, wantErr: "GITHUB_LOGIN_CLIENT_SECRET"},
+		"needs a public": {env: map[string]string{"GITHUB_LOGIN_CLIENT_ID": "id", "GITHUB_LOGIN_CLIENT_SECRET": "s"}, team: true, wantErr: "HARNESS_PUBLIC_URL"},
+	} {
+		got, err := githubLoginFromEnv(env(tc.env), tc.team)
+		if tc.wantErr != "" {
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("%s: err = %v, want %q", name, err, tc.wantErr)
+			}
+			continue
+		}
+		if err != nil || (got != nil) != tc.want {
+			t.Errorf("%s: %+v, %v", name, got, err)
+		}
+	}
+	// The session key is shared with OIDC unless one is set for the app.
+	c, _ := githubLoginFromEnv(env(map[string]string{"GITHUB_LOGIN_CLIENT_ID": "id", "GITHUB_LOGIN_CLIENT_SECRET": "s", "HARNESS_PUBLIC_URL": "https://h", "OIDC_SESSION_KEY": "from-oidc-0123456"}), true)
+	if string(c.SessionKey) != "from-oidc-0123456" {
+		t.Errorf("session key = %q", c.SessionKey)
+	}
+	if k := sessionKey(env(map[string]string{"HARNESS_SESSION_KEY": "own", "OIDC_SESSION_KEY": "oidc"})); string(k) != "own" {
+		t.Errorf("HARNESS_SESSION_KEY should win: %q", k)
+	}
+}
+
+func TestMailerFromEnv(t *testing.T) {
+	if m, err := mailerFromEnv(env(nil)); m != nil || err != nil {
+		t.Errorf("no host: %v, %v", m, err)
+	}
+	if m, err := mailerFromEnv(env(map[string]string{"SMTP_HOST": "smtp.x.io", "SMTP_PORT": "465", "SMTP_FROM": "Harness <n@x.io>"})); m == nil || err != nil {
+		t.Errorf("configured: %v, %v", m, err)
+	}
+	for name, e := range map[string]map[string]string{
+		"bad port":    {"SMTP_HOST": "h", "SMTP_PORT": "x", "SMTP_FROM": "n@x.io"},
+		"port range":  {"SMTP_HOST": "h", "SMTP_PORT": "70000", "SMTP_FROM": "n@x.io"},
+		"no sender":   {"SMTP_HOST": "h"},
+		"bad address": {"SMTP_HOST": "h", "SMTP_FROM": "nope"},
+	} {
+		if _, err := mailerFromEnv(env(e)); err == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+}

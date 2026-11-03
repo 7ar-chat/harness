@@ -3,10 +3,6 @@ package product
 import (
 	"context"
 	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -46,11 +42,6 @@ type OIDCConfig struct {
 	SessionTTL time.Duration
 }
 
-const (
-	sessionCookie = "harness_session"
-	flowCookie    = "harness_oidc_flow"
-)
-
 // oidcAuth is the login flow and the session store.
 type oidcAuth struct {
 	cfg      OIDCConfig
@@ -58,9 +49,9 @@ type oidcAuth struct {
 	oauth    oauth2.Config
 	verifier *oidc.IDTokenVerifier
 	team     store.TeamStore
-	key      []byte
-	ttl      time.Duration
-	secure   bool
+	sessions
+	// admit records the user at login and applies the sign-up policy; the server sets it (see signup.go).
+	admit func(ctx context.Context, u store.User) (*store.User, error)
 }
 
 // newOIDC discovers the provider and returns the handler set.
@@ -77,22 +68,15 @@ func newOIDC(ctx context.Context, cfg OIDCConfig, team store.TeamStore) (*oidcAu
 		scopes = []string{"profile", "email"}
 	}
 	a := &oidcAuth{
-		cfg: cfg, provider: p, team: team, key: cfg.SessionKey, ttl: cfg.SessionTTL,
+		cfg: cfg, provider: p, team: team,
+		sessions: newSessions(cfg.SessionKey, cfg.SessionTTL, strings.HasPrefix(cfg.RedirectURL, "https://")),
 		oauth: oauth2.Config{
 			ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret, RedirectURL: cfg.RedirectURL,
 			Endpoint: p.Endpoint(), Scopes: append([]string{oidc.ScopeOpenID}, scopes...),
 		},
 		verifier: p.Verifier(&oidc.Config{ClientID: cfg.ClientID}),
-		secure:   strings.HasPrefix(cfg.RedirectURL, "https://"),
 	}
-	if len(a.key) < 16 {
-		a.key = make([]byte, 32)
-		_, _ = rand.Read(a.key)
-		slog.Warn("httpserver: no OIDC session key; sessions end when the server restarts")
-	}
-	if a.ttl <= 0 {
-		a.ttl = 12 * time.Hour
-	}
+	a.admit = func(ctx context.Context, u store.User) (*store.User, error) { return a.team.UpsertUser(ctx, u) }
 	return a, nil
 }
 
@@ -100,65 +84,6 @@ func (a *oidcAuth) mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /auth/login", a.login)
 	mux.HandleFunc("GET /auth/callback", a.callback)
 	mux.HandleFunc("POST /auth/logout", a.logout)
-}
-
-// authenticator maps the session cookie to a login.
-func (a *oidcAuth) authenticator() Authenticator {
-	return func(r *http.Request) (string, error) {
-		c, err := r.Cookie(sessionCookie)
-		if err != nil {
-			return "", errors.New("no session")
-		}
-		var s struct {
-			Login string `json:"l"`
-			Exp   int64  `json:"e"`
-		}
-		if err := a.open(c.Value, &s); err != nil || s.Login == "" || time.Now().Unix() > s.Exp {
-			return "", errors.New("invalid session")
-		}
-		return s.Login, nil
-	}
-}
-
-// seal signs v: base64(json).base64(hmac).
-func (a *oidcAuth) seal(v any) string {
-	b, _ := json.Marshal(v)
-	body := base64.RawURLEncoding.EncodeToString(b)
-	mac := hmac.New(sha256.New, a.key)
-	mac.Write([]byte(body))
-	return body + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
-}
-
-func (a *oidcAuth) open(token string, v any) error {
-	body, sig, ok := strings.Cut(token, ".")
-	if !ok {
-		return errors.New("malformed")
-	}
-	got, err := base64.RawURLEncoding.DecodeString(sig)
-	if err != nil {
-		return err
-	}
-	mac := hmac.New(sha256.New, a.key)
-	mac.Write([]byte(body))
-	if !hmac.Equal(got, mac.Sum(nil)) {
-		return errors.New("bad signature")
-	}
-	b, err := base64.RawURLEncoding.DecodeString(body)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(b, v)
-}
-
-func randomString(n int) string {
-	b := make([]byte, n)
-	_, _ = rand.Read(b)
-	return base64.RawURLEncoding.EncodeToString(b)
-}
-
-func (a *oidcAuth) setCookie(w http.ResponseWriter, name, value string, maxAge int) {
-	http.SetCookie(w, &http.Cookie{Name: name, Value: value, Path: "/", MaxAge: maxAge, HttpOnly: true,
-		Secure: a.secure, SameSite: http.SameSiteLaxMode})
 }
 
 type flowState struct {
@@ -240,13 +165,13 @@ func (a *oidcAuth) callback(w http.ResponseWriter, r *http.Request) {
 		fail(http.StatusForbidden, err.Error())
 		return
 	}
-	if _, err := a.team.UpsertUser(r.Context(), u); err != nil {
+	if _, err := a.admit(r.Context(), u); err != nil {
 		slog.Error("httpserver: recording the user failed", "error", err)
 		fail(http.StatusInternalServerError, "The login could not be completed.")
 		return
 	}
 	a.setCookie(w, flowCookie, "", -1)
-	a.setCookie(w, sessionCookie, a.seal(map[string]any{"l": u.Login, "e": time.Now().Add(a.ttl).Unix()}), int(a.ttl.Seconds()))
+	a.start(w, u.Login)
 	http.Redirect(w, r, f.Next, http.StatusFound)
 }
 
@@ -298,12 +223,15 @@ func (a *oidcAuth) userFromClaims(claims map[string]any, sub string) (store.User
 	return store.User{Login: login, Email: email, Name: name, AvatarURL: claimStr(claims, "picture")}, nil
 }
 
-func (a *oidcAuth) logout(w http.ResponseWriter, r *http.Request) {
-	a.setCookie(w, sessionCookie, "", -1)
-	w.WriteHeader(http.StatusNoContent)
-}
-
 func claimStr(m map[string]any, k string) string {
 	s, _ := m[k].(string)
 	return strings.TrimSpace(s)
+}
+
+// redirect is the callback URL ("" for a nil config).
+func (c *OIDCConfig) redirect() string {
+	if c == nil {
+		return ""
+	}
+	return c.RedirectURL
 }

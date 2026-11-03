@@ -15,8 +15,13 @@ export interface Thread extends ServerThread {
   plan?: PlanItem[];
 }
 
+/** What an account may do: "pending" and "rejected" users only reach GET /me; missing means approved. */
+export type UserStatus = "approved" | "pending" | "rejected";
+
 export interface Me {
-  user: User;
+  user: User & { status?: string };
+  /** The user administers the server (approves sign-ups). */
+  admin?: boolean;
   projects: ProjectWithRole[];
 }
 
@@ -54,4 +59,21 @@ export interface CapabilityAdd {
   headers?: Record<string, string>;
   tools?: string[];
   enabled?: boolean;
+}
+
+/** A user as the admin panel lists them. */
+export interface AdminUser {
+  login: string;
+  email?: string;
+  name?: string;
+  avatarUrl?: string;
+  createdAt: string;
+  lastSeen?: string;
+  status: UserStatus;
+}
+
+export interface AuthProvider {
+  id: "oidc" | "github" | string;
+  name: string;
+  url: string;
 }

@@ -102,7 +102,7 @@ func TestTheHostGuardOnlyProtectsTheServerWithoutACredential(t *testing.T) {
 		{"login (OIDC)", "", oidc, false},
 		{"both", "secret", oidc, false},
 	} {
-		if got := allowedHosts(c.token, c.oidc); (len(got) > 0) != c.guard {
+		if got := allowedHosts(c.token, c.oidc != nil); (len(got) > 0) != c.guard {
 			t.Errorf("%s: allowedHosts = %v, want guard=%v", c.name, got, c.guard)
 		}
 	}

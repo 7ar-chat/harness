@@ -1,5 +1,5 @@
 import { AlertTriangle, Loader2 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { ApiError } from "@/api/client";
 import { useUserDirectory } from "@/api/queries";
 import type { Role, ThreadStatus } from "@/api/types";
@@ -7,16 +7,39 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { avatarArt } from "@/lib/avatar";
 import { cn } from "@/lib/utils";
+
+/** The picture people without one get: a generated gradient with soft circles, the same for the same login everywhere. */
+function GeneratedAvatar({ seed }: { seed: string }) {
+  const id = useId();
+  const art = avatarArt(seed);
+  return (
+    <svg viewBox="0 0 100 100" className="size-full" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={art.from} />
+          <stop offset="1" stopColor={art.to} />
+        </linearGradient>
+      </defs>
+      <rect width="100" height="100" fill={`url(#${id})`} />
+      {art.blobs.map((b, i) => (
+        <circle key={i} cx={b.cx} cy={b.cy} r={b.r} fill={b.color} opacity={b.opacity} />
+      ))}
+    </svg>
+  );
+}
 
 export function UserAvatar({ login, name, url, className }: { login: string; name?: string; url?: string; className?: string }) {
   const known = useUserDirectory().get(login);
   url = url || known?.avatarUrl || undefined;
   const label = name || known?.name || login;
   return (
-    <Avatar className={cn("size-6 text-[10px]", className)} title={label}>
+    <Avatar className={cn("size-6", className)} title={label}>
       {url ? <AvatarImage src={url} alt={label} /> : null}
-      <AvatarFallback className="bg-primary/15">{label.slice(0, 2).toUpperCase()}</AvatarFallback>
+      <AvatarFallback className="bg-transparent" aria-label={label} role="img">
+        <GeneratedAvatar seed={login} />
+      </AvatarFallback>
     </Avatar>
   );
 }
