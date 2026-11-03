@@ -3,7 +3,7 @@ import { Bell, CheckCircle2, ExternalLink, Plug, Send, Upload, User as UserIcon,
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import QRCode from "qrcode";
 import {
-  meQuery, toastError, useConnectors, useDisconnect, useRemoveAvatar, useSaveProfile, useTelegramLink, useTelegramTest, useUploadAvatar,
+  meQuery, toastError, useConnectors, useDisconnect, useRemoveAvatar, useSaveProfile, useSlackLink, useSlackTest, useTelegramLink, useTelegramTest, useUploadAvatar,
 } from "@/api/queries";
 import type { Connector } from "@/api/types";
 import { Spinner, UserAvatar } from "@/components/app/common";
@@ -245,10 +245,49 @@ function TelegramDialog({ open, onClose, link }: { open: boolean; onClose: () =>
   );
 }
 
+function SlackDialog({ open, onClose, link }: { open: boolean; onClose: () => void; link?: { code: string; expiresAt: string } }) {
+  const [left, setLeft] = useState(0);
+  // Poll until the app reports the link as connected.
+  const poll = useConnectors(open ? 2000 : undefined);
+  const connected = poll.data?.find((c) => c.kind === "slack")?.connected;
+  useEffect(() => {
+    if (!link) return;
+    const tick = () => setLeft(Math.max(0, Math.round((new Date(link.expiresAt).getTime() - Date.now()) / 1000)));
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [link]);
+  useEffect(() => {
+    if (open && connected) onClose();
+  }, [open, connected, onClose]);
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Connect Slack</DialogTitle>
+          <DialogDescription>In Slack, open a direct message with the app and send this message.</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col items-center gap-3">
+          <code className="rounded-md border bg-muted px-3 py-2 text-base select-all">link {link?.code}</code>
+          <p className="text-xs text-muted-foreground" aria-live="polite">
+            {left > 0 ? `Waiting for you… the code expires in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : "This code has expired. Close and try again."}
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ConnectorCard({ c, onImport }: { c: Connector; onImport: () => void }) {
   const disconnect = useDisconnect(c.kind);
-  const link = useTelegramLink();
-  const test = useTelegramTest();
+  const tgLink = useTelegramLink();
+  const tgTest = useTelegramTest();
+  const skLink = useSlackLink();
+  const skTest = useSlackTest();
+  const slack = c.kind === "slack";
+  const link = slack ? skLink : tgLink;
+  const test = slack ? skTest : tgTest;
+  const name = slack ? "Slack" : "Telegram";
   const [dlg, setDlg] = useState(false);
   const closeDlg = useCallback(() => setDlg(false), []);
   const gh = c.kind === "github";
@@ -257,10 +296,10 @@ function ConnectorCard({ c, onImport }: { c: Connector; onImport: () => void }) 
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center gap-2">
           {gh ? <GithubMark className="size-4" /> : <Send className="size-4" />}
-          {c.label || (gh ? "GitHub" : "Telegram")}
+          {c.label || (gh ? "GitHub" : name)}
           {statusOf(c)}
         </CardTitle>
-        <CardDescription>{gh ? "Import repositories as projects and let agents work on them." : "Chat with your assistant from Telegram; it also pings you when a session needs you."}</CardDescription>
+        <CardDescription>{gh ? "Import repositories as projects and let agents work on them." : slack ? "Message your assistant or mention it in a channel; it also pings you when a session needs you." : "Chat with your assistant from Telegram; it also pings you when a session needs you."}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {!c.configured && c.message ? <p className="text-sm text-muted-foreground">{c.message}</p> : null}
@@ -276,7 +315,7 @@ function ConnectorCard({ c, onImport }: { c: Connector; onImport: () => void }) 
               disabled={link.isPending}
               onClick={() => link.mutate(undefined, { onSuccess: () => setDlg(true) })}
             >
-              {link.isPending ? <Spinner /> : <Send />} Connect Telegram
+              {link.isPending ? <Spinner /> : <Send />} Connect {name}
             </Button>
           ) : null}
           {c.connected && gh ? (
@@ -295,7 +334,8 @@ function ConnectorCard({ c, onImport }: { c: Connector; onImport: () => void }) 
             </Button>
           ) : null}
         </div>
-        {!gh ? <TelegramDialog open={dlg} onClose={closeDlg} link={link.data} /> : null}
+        {c.kind === "telegram" ? <TelegramDialog open={dlg} onClose={closeDlg} link={tgLink.data} /> : null}
+        {slack ? <SlackDialog open={dlg} onClose={closeDlg} link={skLink.data} /> : null}
       </CardContent>
     </Card>
   );

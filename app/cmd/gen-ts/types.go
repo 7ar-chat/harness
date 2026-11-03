@@ -57,7 +57,7 @@ func enums() []enum {
 		{"MessageRole", []string{store.RoleUser, store.RoleAssistant, store.RoleTool, "system"}},
 		{"AuthorKind", []string{store.AuthorUser, store.AuthorSupervisor, store.AuthorSystem}},
 		{"FileType", []string{"file", "directory"}},
-		{"ConnectorKind", []string{"github", "telegram"}},
+		{"ConnectorKind", []string{"github", "telegram", "slack"}},
 		{"MemoryStatus", []string{store.MemoryActive, store.MemoryPending, store.MemoryDeleted}},
 		{"FeedType", []string{"thread.created", "thread.updated", "thread.deleted", "run.started", "run.finished", "message.sent",
 			"member.changed", "project.changed", "memory.changed"}},

@@ -140,6 +140,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if tok := getenv("TELEGRAM_BOT_TOKEN"); tok != "" && *team {
 		prod.Telegram = &product.Telegram{Token: tok, Username: strings.TrimPrefix(getenv("TELEGRAM_BOT_USERNAME"), "@")}
 	}
+	if tok, sec := getenv("SLACK_BOT_TOKEN"), getenv("SLACK_SIGNING_SECRET"); tok != "" && sec != "" && *team {
+		prod.Slack = &product.Slack{Token: tok, SigningSecret: sec}
+	}
 	if *devUsers {
 		if !*team || hasLogin || !isLoopback(*addr) {
 			return fail(stderr, errors.New("-dev-users needs -team, no OIDC_ISSUER or GITHUB_LOGIN_CLIENT_ID, and a loopback address"))

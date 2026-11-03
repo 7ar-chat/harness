@@ -27,6 +27,10 @@ import (
 //	POST   /api/connectors/telegram/link        → {code, url, expiresAt}
 //	POST   /api/connectors/telegram/test        → 204
 //	DELETE /api/connectors/telegram
+//	POST   /api/connectors/slack/link           → {code, expiresAt}   (the user sends "link <code>" to the app)
+//	POST   /api/connectors/slack/test           → 204
+//	DELETE /api/connectors/slack
+//	POST   /api/slack/events, /api/slack/interactive   (from Slack, signed; see slack.go)
 //
 // GitHub needs the GitHub App's client id and secret (the App's "user
 // authorization"): a user token can only see repositories the App is
@@ -53,6 +57,7 @@ func (s *server) routeConnectors() {
 	s.Route("POST /connectors/telegram/link", s.telegramLink)
 	s.Route("POST /connectors/telegram/test", s.telegramTest)
 	s.Route("DELETE /connectors/telegram", s.telegramDisconnect)
+	s.routeSlack()
 	for _, prefix := range []string{"/api", ""} { // the OAuth return: a browser navigation, cookie-authenticated
 		s.Mux.HandleFunc("GET "+prefix+"/auth/github/callback", s.githubCallback)
 	}
@@ -97,7 +102,20 @@ func (s *server) listConnectors(w http.ResponseWriter, r *http.Request, c Caller
 	if cn, ok := by[store.ConnectorTelegram]; ok {
 		tg.Connected, tg.Account, tg.Label, tg.Pending = true, cn.Account, cn.Label, nil
 	}
-	writeJSON(w, http.StatusOK, []connectorView{gh, tg})
+	sk := connectorView{Kind: connectorSlack}
+	switch {
+	case s.box == nil:
+		sk.Message = "Connectors need a secret key on the server (HARNESS_SECRET_KEY)."
+	case s.sk == nil:
+		sk.Message = "The server has no Slack app (SLACK_BOT_TOKEN / SLACK_SIGNING_SECRET)."
+	default:
+		sk.Configured = true
+		sk.Pending = s.sk.pendingFor(c.Actor)
+	}
+	if cn, ok := by[connectorSlack]; ok {
+		sk.Connected, sk.Account, sk.Label, sk.Pending = true, cn.Account, cn.Label, nil
+	}
+	writeJSON(w, http.StatusOK, []connectorView{gh, tg, sk})
 }
 
 // ---- GitHub ----

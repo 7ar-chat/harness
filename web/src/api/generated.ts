@@ -94,7 +94,7 @@ export interface Connector {
   pending?: ConnectorPending;
 }
 
-export type ConnectorKind = "github" | "telegram";
+export type ConnectorKind = "github" | "telegram" | "slack";
 
 export interface ConnectorPending {
   code: string;

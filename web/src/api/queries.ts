@@ -249,8 +249,10 @@ const profileKeys = () => [qk.me, ["thread"], ["project"], qk.overview] as const
 export const useSaveProfile = () => useAction((displayName: string) => api.patch<User>("/me/profile", { displayName }), profileKeys, "Profile saved");
 export const useUploadAvatar = () => useAction((blob: Blob) => putBytes<User>("/me/avatar", blob), profileKeys, "Avatar updated");
 export const useRemoveAvatar = () => useAction(() => api.del<User>("/me/avatar"), profileKeys, "Avatar removed");
-export const useDisconnect = (kind: "github" | "telegram") => useAction(() => api.del(`/connectors/${kind}`), () => [["connectors"]], "Disconnected");
+export const useDisconnect = (kind: "github" | "telegram" | "slack") => useAction(() => api.del(`/connectors/${kind}`), () => [["connectors"]], "Disconnected");
 export const useTelegramLink = () => useAction(() => api.post<{ code: string; url: string; expiresAt: string }>("/connectors/telegram/link"), () => [["connectors"]]);
+export const useSlackLink = () => useAction(() => api.post<{ code: string; expiresAt: string }>("/connectors/slack/link"), () => [["connectors"]]);
+export const useSlackTest = () => useAction(() => api.post("/connectors/slack/test"), () => [], "Test message sent");
 export const useTelegramTest = () => useAction(() => api.post("/connectors/telegram/test"), () => [], "Test message sent");
 export const useGithubRepos = (q: string, enabled: boolean) =>
   useQuery({ queryKey: ["github-repos", q], queryFn: () => api.get<GithubRepos>(`/connectors/github/repos?q=${encodeURIComponent(q)}`), enabled, retry: false, staleTime: 15_000 });

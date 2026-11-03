@@ -60,6 +60,7 @@ func (e *FactoryEscalator) Escalate(ctx context.Context, t factory.Task, reason 
 	if s != nil {
 		s.hub.publish(FeedEvent{Type: "task.blocked", ProjectID: t.ProjectID, ThreadID: t.ThreadID, Title: t.Title, Status: reason, owner: t.Owner})
 		s.tellOnTelegram(ctx, t, reason)
+		s.tellOnSlack(ctx, t, reason)
 	}
 	if e.Notify != nil {
 		e.Notify(ctx, t.Owner, fmt.Sprintf("Task needs you: %s\n%s", t.Title, reason))
@@ -142,6 +143,24 @@ func (s *server) tellOnTelegram(ctx context.Context, t factory.Task, reason stri
 	}
 	if err := s.tg.send(ctx, cn.Account, text, nil); err != nil {
 		slog.Warn("factory: telegram escalation failed", "task_id", t.ID, "error", err)
+	}
+}
+
+// tellOnSlack direct-messages the task owner's linked Slack account; without the bridge or a link it does nothing.
+func (s *server) tellOnSlack(ctx context.Context, t factory.Task, reason string) {
+	if s.sk == nil || s.team == nil {
+		return
+	}
+	cn, err := s.team.GetConnector(ctx, t.Owner, connectorSlack)
+	if err != nil {
+		return
+	}
+	text := fmt.Sprintf("Task needs you: %s\n%s", t.Title, reason)
+	if base := s.configuredBase(); base != "" && t.ProjectID != "" {
+		text += "\n" + base + "/#/projects/" + t.ProjectID
+	}
+	if err := s.sk.dm(ctx, cn.Account, text); err != nil {
+		slog.Warn("factory: slack escalation failed", "task_id", t.ID, "error", err)
 	}
 }
 

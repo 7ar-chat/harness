@@ -150,6 +150,18 @@ GIF up to 512 KB, type checked from the bytes; no SVG), shown on every message, 
   and an approval it waits for arrives with Approve / Deny buttons; `/status` lists sessions. Sessions that wait for
   a user with Telegram linked produce a short note (unless the watcher is on, which hands them to the assistant).
   The bot long-polls, so no public webhook is needed; run it in one replica only.
+* **Slack — talk to your assistant.** Create a Slack app (api.slack.com/apps, "From scratch") and set
+  `SLACK_BOT_TOKEN` (the `xoxb-` Bot User OAuth Token) and `SLACK_SIGNING_SECRET` (Basic Information). In the app:
+  *OAuth & Permissions* → bot scopes `app_mentions:read`, `chat:write`, `im:history`, `im:write`, `users:read`;
+  *Event Subscriptions* → on, request URL `https://<host>/api/slack/events`, bot events `app_mention` and
+  `message.im`; *Interactivity* → on, request URL `https://<host>/api/slack/interactive`; *App Home* → allow
+  messages from the Messages tab. Install the app to the workspace (reinstall after changing scopes). Every request
+  is checked against the signing secret. The profile page shows a one-time code: send `link <code>` to the app in a
+  direct message. After that a direct message, or an `@mention` in a channel (answered in its thread), goes to the
+  assistant exactly like a Telegram message; approvals it waits for arrive as direct messages with Approve / Deny
+  buttons (never in a channel), `status` lists sessions, and sessions or factory tasks that need the user produce a
+  direct message. Unlinked Slack users are told how to link. Slack calls the server, so it must be reachable from
+  the internet; run the bridge in one replica only.
 
 **Capabilities.** The Capabilities tab of a project (owners edit, members read) and the profile card manage the MCP servers a
 run may use: a shipped catalog (Exa is on by default) plus custom servers, per project and per user. A project thread uses only the
@@ -176,7 +188,7 @@ replica, or the local file store), exactly as before.
 * The **watcher** runs in every replica and reacts to the events its own replica produced, so an attention note
   is queued once. Stuck-run reports are claimed in Redis (`work:feed:claim:stuck:<run>`, 24 h) so only one
   replica reports a run that went quiet.
-* The Telegram bridge long-polls, so run it in one replica only; it still hears the events of the others.
+* The Telegram and Slack bridges run in one replica only (Telegram long-polls; Slack's answers are matched with in-memory state); it still hears the events of the others.
 * In code: `product.Options.Bus` takes any `product.FeedBus` (`redisx.NewFeedBus(rdb)` for Redis,
   `product.NewMemBus()` for tests and servers in one process).
 

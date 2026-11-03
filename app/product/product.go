@@ -45,6 +45,8 @@ type Options struct {
 	GitHub *GitHubApp
 	// Telegram, with Team, lets users talk to their assistant from Telegram (see telegram.go).
 	Telegram *Telegram
+	// Slack, with Team, lets users talk to their assistant from Slack (see slack.go).
+	Slack *Slack
 	// Bus, with Team, shares the live feed between replicas (see feedbus.go): events produced by one
 	// replica reach the subscribers connected to the others. Nil keeps the feed in the process.
 	// harness-web uses redisx.NewFeedBus when REDIS_HOST is set.
@@ -75,6 +77,7 @@ type server struct {
 	// capBox seals the marketplace credentials (nil without a SecretKey).
 	capBox *secretBox
 	tg     *telegramBridge
+	sk     *slackBridge
 	hub    *hub
 	oidc   *oidcAuth
 	ghl    *githubLogin

@@ -22,6 +22,8 @@
 #                           entry by default and so uses Daytona's default snapshot (or DAYTONA_SNAPSHOT).
 #   LLM_DISCOVER_MODELS     (optional, default true) add the provider's model list to LLM_MODELS at startup; false: LLM_MODELS only
 #   TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_USERNAME   (optional; run one replica only: the bot long-polls)
+#   SLACK_BOT_TOKEN / SLACK_SIGNING_SECRET   (optional; run one replica only) the Slack app's bot token (xoxb-) and signing
+#                           secret. Request URLs: https://${HARNESS_HOST}/api/slack/events and /api/slack/interactive.
 #   FACTORY / FACTORY_*     (optional) the agent factory: tasks from GitHub webhooks and cron, pull requests gated by CI and an
 #                           independent reviewer model. See docs/factory.md; check the setup with `harness-web -factory-check`.
 #   GITHUB_APP_ID / GITHUB_APP_SLUG / GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET / GITHUB_APP_PRIVATE_KEY
@@ -85,6 +87,10 @@ services:
       SANDBOX_EGRESS_ALLOWLIST: ${SANDBOX_EGRESS_ALLOWLIST:-github.com,api.github.com,codeload.github.com,objects.githubusercontent.com,raw.githubusercontent.com,pypi.org,files.pythonhosted.org,registry.npmjs.org,proxy.golang.org,sum.golang.org,index.crates.io,static.crates.io,crates.io}
 
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
 
       GITHUB_APP_ID: ${GITHUB_APP_ID:-}
