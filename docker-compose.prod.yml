@@ -7,6 +7,12 @@
 #   OIDC_SESSION_KEY        openssl rand -hex 32   (signs the login cookie)
 #   HARNESS_SECRET_KEY      openssl rand -hex 32   (encrypts connector tokens)
 #   LLM_BASE_URL / LLM_API_KEY / LLM_MODELS / LLM_DEFAULT_MODEL
+#   DAYTONA_API_KEY         the Daytona API key sandboxes are created with (https://app.daytona.io, Keys)
+#   DAYTONA_API_URL / DAYTONA_TARGET / DAYTONA_SNAPSHOT   (optional) the API (default https://app.daytona.io/api), the
+#                           region, and the snapshot sandboxes start from (default: the account's default snapshot; it must
+#                           have bash, GNU coreutils, python3, git and ripgrep, see docs/sandbox-adapters.md section 3)
+#   SANDBOX_IMAGES          (optional) profile=image, e.g. work=harness-office. This deployment runs AGENT_PROFILE=coding, which has no
+#                           entry by default and so uses Daytona's default snapshot (or DAYTONA_SNAPSHOT).
 #   LLM_DISCOVER_MODELS     (optional, default true) add the provider's model list to LLM_MODELS at startup; false: LLM_MODELS only
 #   TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_USERNAME   (optional; run one replica only: the bot long-polls)
 #   FACTORY / FACTORY_*     (optional) the agent factory: tasks from GitHub webhooks and cron, pull requests gated by CI and an
@@ -19,8 +25,9 @@
 #   SENTRY_BROWSER_DSN      (optional) errors raised in the browser UI, in a Sentry project of their own.
 #   UMAMI_URL / UMAMI_WEBSITE_ID   (optional) usage statistics with Umami; both or neither. The CSP allows only these.
 #
-# Sessions and the team data live on the harness-data volume (file store). Agents run in OpenSandbox
-# containers, not in this one, so the sandbox server and the model router must be reachable on dokploy-network.
+# Sessions and the team data live on the harness-data volume (file store). Agents run in Daytona sandboxes, not in this
+# container, so it needs outbound HTTPS to the Daytona API and the model router must be reachable on dokploy-network.
+# (To go back to a self-hosted OpenSandbox server, see git history: SANDBOX_BACKEND=opensandbox with OPENSANDBOX_*.)
 services:
   harness-web:
     build: .
@@ -48,16 +55,15 @@ services:
       # offer every model the provider's GET /models reports (not only LLM_MODELS) in the UI and allow runs on them
       LLM_DISCOVER_MODELS: ${LLM_DISCOVER_MODELS:-true}
 
-      SANDBOX_BACKEND: opensandbox
-      OPENSANDBOX_URL: ${OPENSANDBOX_URL}
-      OPENSANDBOX_API_KEY: ${OPENSANDBOX_API_KEY}
-      OPENSANDBOX_IMAGE: ${OPENSANDBOX_IMAGE}
-      # all execd traffic goes through the OpenSandbox server: this container is not on the Docker host's network
-      OPENSANDBOX_USE_SERVER_PROXY: "true"
-      # GitHub authentication is added to the sandbox's requests by the egress sidecar: no token enters the sandbox
-      OPENSANDBOX_CREDENTIAL_PROXY: "true"
-      # deny by default (the Credential Vault needs it): only these hosts resolve and connect from a sandbox.
-      # Set SANDBOX_EGRESS_ALLOWLIST in the Dokploy environment to add package mirrors, your API, ...
+      SANDBOX_BACKEND: daytona
+      DAYTONA_API_KEY: ${DAYTONA_API_KEY}
+      DAYTONA_API_URL: ${DAYTONA_API_URL:-https://app.daytona.io/api}
+      DAYTONA_TARGET: ${DAYTONA_TARGET:-}
+      DAYTONA_SNAPSHOT: ${DAYTONA_SNAPSHOT:-}
+      SANDBOX_IMAGES: ${SANDBOX_IMAGES:-}
+      # deny by default (required in production). Daytona tiers 3 and 4 enforce this list per sandbox; on tiers 1 and 2 the
+      # account's own restricted policy applies instead (it already covers the hosts below) and the adapter logs a warning.
+      # Set SANDBOX_EGRESS_ALLOWLIST in the Dokploy environment to add package mirrors, your API, ... (domains OR CIDRs).
       SANDBOX_EGRESS_ALLOWLIST: ${SANDBOX_EGRESS_ALLOWLIST:-github.com,api.github.com,codeload.github.com,objects.githubusercontent.com,raw.githubusercontent.com,pypi.org,files.pythonhosted.org,registry.npmjs.org,proxy.golang.org,sum.golang.org,index.crates.io,static.crates.io,crates.io}
 
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
