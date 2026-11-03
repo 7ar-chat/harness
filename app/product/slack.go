@@ -315,7 +315,8 @@ func (s *server) routeSlack() {
 		s.Mux.HandleFunc("POST "+prefix+"/slack/events", s.sk.events)
 		s.Mux.HandleFunc("POST "+prefix+"/slack/interactive", s.sk.interactive)
 	}
-	slog.Info("slack: bridge enabled", "events", "/api/slack/events", "interactive", "/api/slack/interactive")
+	// Warn so it shows: harness-web logs warnings and above only.
+	slog.Warn("slack: bridge enabled", "events", "/api/slack/events", "interactive", "/api/slack/interactive")
 	go s.sk.run(context.Background())
 }
 
@@ -399,7 +400,7 @@ func (b *slackBridge) events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ev := env.Event
-	slog.Info("slack: event", "type", ev.Type, "subtype", ev.Subtype, "channel_type", ev.ChannelType, "bot", ev.BotID != "", "user", ev.User)
+	slog.Warn("slack: event received", "type", ev.Type, "subtype", ev.Subtype, "channel_type", ev.ChannelType, "bot", ev.BotID != "", "user", ev.User)
 	if ev.BotID != "" || ev.User == "" || strings.TrimSpace(ev.Text) == "" {
 		return
 	}
@@ -452,6 +453,7 @@ func (b *slackBridge) handleMessage(ctx context.Context, env slackEnvelope) {
 	}
 	cn, err := b.s.team.FindConnector(ctx, connectorSlack, ev.User)
 	if err != nil {
+		slog.Warn("slack: message from a user who is not linked", "user", ev.User, "channel", ev.Channel)
 		_ = b.send(ctx, dest, "Your Slack account is not linked to an account. Open your profile in the web app, press Connect Slack, and send me `link <code>` in a direct message.", nil)
 		return
 	}
@@ -481,6 +483,7 @@ func (b *slackBridge) handleMessage(ctx context.Context, env slackEnvelope) {
 func (b *slackBridge) link(ctx context.Context, dest slackDest, user, code string) {
 	login, ok := b.takeCode(code)
 	if !ok {
+		slog.Warn("slack: link code unknown or expired", "user", user)
 		_ = b.send(ctx, dest, "This code expired. Press Connect Slack again in the web app.", nil)
 		return
 	}
@@ -505,6 +508,7 @@ func (b *slackBridge) link(ctx context.Context, dest slackDest, user, code strin
 	case err != nil:
 		_ = b.send(ctx, dest, "Linking failed; try again.", nil)
 	default:
+		slog.Warn("slack: account linked", "user", user, "login", login)
 		b.s.note(Caller{Actor: login}, "", "connector.slack", nil, FeedEvent{Type: "project.changed", affects: login})
 		_ = b.send(ctx, dest, "Linked. Message me here or mention me in a channel; I will tell you when a session needs you.", nil)
 	}
