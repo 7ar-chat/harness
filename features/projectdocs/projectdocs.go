@@ -92,7 +92,11 @@ func (d *Docs) Section(ctx context.Context, in agent.Input) string {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	if !st.rendered {
-		sb, err := mgr.Acquire(ctx, in.Run.ThreadID, in.Run.UserLogin)
+		// Get, not Acquire: building the prompt must not create a sandbox. A run that
+		// never needs one (a greeting, a question) would otherwise start a sandbox just
+		// to look for an AGENTS.md. Once a tool has created the sandbox, the next
+		// step finds it here and the instructions join the prompt from then on.
+		sb, err := mgr.Get(ctx, in.Run.ThreadID)
 		if err != nil {
 			return ""
 		}

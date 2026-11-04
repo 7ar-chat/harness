@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/7ar-chat/harness/adapters/store/memstore"
 	"github.com/7ar-chat/harness/core/sandbox"
 	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
 	"github.com/7ar-chat/harness/core/store"
@@ -163,7 +164,7 @@ func (disabledManager) Enabled() bool { return false }
 type brokenManager struct{ sandbox.Manager }
 
 func (brokenManager) Enabled() bool { return true }
-func (brokenManager) Acquire(context.Context, string, string) (sandbox.Sandbox, error) {
+func (brokenManager) Get(context.Context, string) (sandbox.Sandbox, error) {
 	return nil, errors.New("no capacity")
 }
 
@@ -191,12 +192,12 @@ type flakyManager struct {
 }
 
 func (f *flakyManager) Enabled() bool { return true }
-func (f *flakyManager) Acquire(ctx context.Context, threadID, login string) (sandbox.Sandbox, error) {
+func (f *flakyManager) Get(ctx context.Context, threadID string) (sandbox.Sandbox, error) {
 	if f.failures > 0 {
 		f.failures--
 		return nil, errors.New("not yet")
 	}
-	return f.real.Acquire(ctx, threadID, login)
+	return f.real.Get(ctx, threadID)
 }
 
 func TestARunWithoutAnIdIsReadAgainAtEveryCall(t *testing.T) {
@@ -452,9 +453,7 @@ type fixedManager struct {
 }
 
 func (m fixedManager) Enabled() bool { return true }
-func (m fixedManager) Acquire(context.Context, string, string) (sandbox.Sandbox, error) {
-	return m.sb, nil
-}
+func (m fixedManager) Get(context.Context, string) (sandbox.Sandbox, error) { return m.sb, nil }
 
 func sectionOver(t *testing.T, sb sandbox.Sandbox) (*projectdocs.Docs, string) {
 	t.Helper()
@@ -511,5 +510,33 @@ func TestCursorRulesListedWithRelativePathsAreStillFound(t *testing.T) {
 	// Assert
 	if !strings.Contains(got, "RULE-rel") || !strings.Contains(got, "(.cursor/rules/go.mdc, repository rule)") {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestBuildingThePromptNeverCreatesASandbox(t *testing.T) {
+	// Arrange: a thread whose run has not used a sandbox yet (a greeting)
+	be := sandboxtest.NewBackend()
+	be.OnCreate = func(s *sandboxtest.Sandbox) { s.Put("/workspace/AGENTS.md", "text") }
+	st := memstore.New()
+	th, err := st.CreateThread(context.Background(), "u", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mgr := sandbox.NewManager(be, st, nil, sandbox.ManagerOptions{MaxPerUser: 5})
+	d := projectdocs.New(projectdocs.Options{Manager: mgr})
+	in := agent.Input{Run: &store.Run{ID: "r", ThreadID: th.ID, UserLogin: "u"}, Sandbox: true, Variant: prompts.Coding}
+
+	// Act
+	before := d.Section(context.Background(), in)
+	created := len(be.Created())
+	_, _ = mgr.Acquire(context.Background(), th.ID, "u") // a tool needs it now
+	after := d.Section(context.Background(), in)
+
+	// Assert
+	if before != "" || created != 0 {
+		t.Fatalf("section %q, %d sandboxes created by building the prompt", before, created)
+	}
+	if !strings.Contains(after, "text") {
+		t.Fatalf("once the sandbox exists the next step must carry the instructions, got %q", after)
 	}
 }

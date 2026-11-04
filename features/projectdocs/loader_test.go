@@ -43,6 +43,9 @@ func newEnv(t *testing.T, userDir string, files map[string]string) *env {
 	e.th = th.ID
 	e.mgr = sandbox.NewManager(be, st, nil, sandbox.ManagerOptions{MaxPerUser: 5})
 	e.docs = projectdocs.New(projectdocs.Options{Manager: e.mgr, UserDir: userDir})
+	if _, err := e.mgr.Acquire(context.Background(), th.ID, "u"); err != nil { // as a tool call would have
+		t.Fatal(err)
+	}
 	return e
 }
 

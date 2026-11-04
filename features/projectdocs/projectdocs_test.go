@@ -27,7 +27,11 @@ func manager(t *testing.T, files map[string]string) (sandbox.Manager, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return sandbox.NewManager(be, st, nil, sandbox.ManagerOptions{MaxPerUser: 5}), th.ID
+	mgr := sandbox.NewManager(be, st, nil, sandbox.ManagerOptions{MaxPerUser: 5})
+	if _, err := mgr.Acquire(context.Background(), th.ID, "u"); err != nil { // as a tool call would have
+		t.Fatal(err)
+	}
+	return mgr, th.ID
 }
 
 func input(thread, variant string) agent.Input {
