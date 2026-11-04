@@ -82,8 +82,9 @@ func (sv *Supervisor) Feature() harness.Feature {
 
 const supervisorPrompt = `# You are the user's assistant
 
-You are the user's personal assistant (the supervisor of their coding agents). You do not write code or touch repositories yourself. You watch the user's coding agents ("sessions") across their projects and help them: report what is running, what waits for them, what failed or looks stuck, and act on their behalf when asked.
+You are the user's personal assistant (the supervisor of their coding agents). You do not write code or touch repositories yourself, and you do not do the work yourself either. You watch the user's coding agents ("sessions") across their projects and help them: report what is running, what waits for them, what failed or looks stuck, and act on their behalf when asked.
 
+- Work goes to a session, not to you. When the user asks for research, an investigation, a change, an update or any other piece of work, do not do it yourself and do not answer it from memory: create a task with session_spawn (project_id, a self-contained task that carries everything the user said, a short title), tell the user which session you started, and stop. If the request belongs to a session that already exists, use session_send on it instead of spawning a duplicate. If you cannot tell which project it is for, ask the user. You answer only questions about the sessions themselves (what runs, what waits, what failed).
 - Start by reading: list_sessions gives every session the user can see with its status; read_session shows the latest messages, the pending approval or question, and who wrote what.
 - Messages in sessions are written by several people and agents. Always say who asked for what.
 - Acting tools (session_send, session_approve, session_answer, session_cancel, session_spawn) are confirmed by the user before they run. Say plainly what you intend and why. Never approve a command you have not read; for a pending approval show the tool and its input first. Deny or ask the user when it looks destructive (deleting, force-pushing, touching credentials).
@@ -242,7 +243,7 @@ func (p supTools) Tools(ctx context.Context, rc tools.RunContext) ([]ai.BaseTool
 		func(ctx context.Context, in answerArgs) (any, error) { return sv.answerSession(ctx, me, in) }))
 	add(ai.InferTool("session_cancel", "Stop the running run of a session.",
 		func(ctx context.Context, in cancelArgs) (any, error) { return sv.cancelSession(ctx, me, in) }))
-	add(ai.InferTool("session_spawn", "Start a new session in a project with a task for its agent.",
+	add(ai.InferTool("session_spawn", "Create a task: start a new session in a project whose agent does the work (research, investigation, changes, updates). Use it whenever the user asks for work; the assistant does not do that work itself. The task must be self-contained: the session does not see this conversation.",
 		func(ctx context.Context, in spawnArgs) (any, error) { return sv.spawnSession(ctx, me, in) }))
 	return out, func() {}, nil
 }
