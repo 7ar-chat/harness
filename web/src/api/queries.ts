@@ -197,7 +197,7 @@ export const useInvite = (pid: string) =>
 export const useRevokeInvite = (pid: string) => useAction((email: string) => api.del(`/projects/${pid}/invites?email=${encodeURIComponent(email)}`), () => [qk.invites(pid)]);
 export const useRecheckGithub = (pid: string) => useAction(() => api.post<GithubStatus>(`/projects/${pid}/github/connect`), () => [qk.github(pid), qk.project(pid)]);
 
-export const useCreateThread = () => useAction((b: { title: string; projectId?: string }) => api.post<Thread>("/threads", b), () => [qk.overview]);
+export const useCreateThread = () => useAction((b: { title?: string; projectId?: string } = {}) => api.post<Thread>("/threads", b), () => [qk.overview]);
 export const useRenameThread = (id: string) => useAction((title: string) => api.patch<Thread>(`/threads/${id}`, { title }), () => [qk.thread(id), qk.overview]);
 export const useDeleteThread = () => useAction((id: string) => api.del(`/threads/${id}`), () => [qk.overview], "Session deleted");
 

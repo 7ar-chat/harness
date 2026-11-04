@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { mockFetch } from "@/test/fetch";
-import { me, overview, project, shellRoutes } from "@/test/fixtures";
+import { me, overview, project, shellRoutes, thread } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 
 const templates = [
@@ -50,5 +50,21 @@ describe("New project", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create project" }));
     await waitFor(() => expect(m.find("POST", "/api/projects")).toHaveLength(1));
     expect(m.find("POST", "/api/projects")[0]?.body).toEqual({ name: "Site", description: "", repoUrl: "https://github.com/acme/site", defaultBranch: "main" });
+  });
+});
+
+describe("New session", () => {
+  it("creates a session directly without prompting for a title", async () => {
+    const m = mockFetch({
+      ...shellRoutes(overview({}), me({})),
+      "POST /api/threads": thread("t-new", { title: "" }),
+      "GET /api/threads/t-new": { id: "t-new", title: "", kind: "chat", status: "idle", createdBy: "alice", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z", messages: [], activeRun: null, pendingApproval: null, pendingQuestion: null },
+      "GET /api/threads/t-new/files": [],
+    });
+    await renderApp("/");
+    fireEvent.click(await screen.findByRole("button", { name: "New personal session" }));
+    await waitFor(() => expect(m.find("POST", "/api/threads")).toHaveLength(1));
+    expect(m.find("POST", "/api/threads")[0]?.body).toEqual({});
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
