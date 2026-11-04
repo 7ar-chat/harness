@@ -4,7 +4,7 @@ import {
   type AppendMessage,
 } from "@assistant-ui/react";
 import { Bot, Paperclip, Send, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
 import { useCommands, useMarkSeen } from "@/api/queries";
@@ -12,7 +12,7 @@ import type { Attachment, Author, Command } from "@/api/types";
 import { UserAvatar } from "@/components/app/common";
 import { Button } from "@/components/ui/button";
 import { toThreadMessage, type MessageCustom } from "./convert";
-import { MarkdownText, MemoryLinkContext, MemoryNote, PlainText, Reasoning, ToolCard } from "./parts";
+import { MarkdownText, MemoryLinkContext, MemoryNote, PlainText, Reasoning, ToolCard, ToolGroup } from "./parts";
 import { InterruptCard } from "./Prompts";
 import { useChat, type RunSettings } from "./useChat";
 import { formatUsage } from "./usage";
@@ -64,10 +64,33 @@ function AssistantMessage() {
         <span className="font-medium text-foreground">Agent</span>
       </div>
       <div className="min-w-0 pl-7">
-        <MessagePrimitive.Parts components={{ Text: MarkdownText, Reasoning, tools: { Fallback: ToolCard }, Empty: Thinking, data: { by_name: { memory: ({ data }) => <MemoryNote data={data} /> } } }} />
+        <MessagePrimitive.Parts components={{ Text: MarkdownText, Reasoning, tools: { Fallback: ToolCard }, ToolGroup, Empty: Thinking, data: { by_name: { memory: ({ data }) => <MemoryNote data={data} /> } } }} />
       </div>
     </MessagePrimitive.Root>
   );
+}
+
+/** Unsent composer text per session, kept while the app is open so switching sessions or pages does not lose it. */
+const drafts = new Map<string, string>();
+
+function DraftSync({ threadId }: { threadId: string }) {
+  const aui = useAui();
+  const text = useAuiState((s) => s.composer.text);
+  // The draft being put back: until the composer shows it, empty text must not erase the stored one.
+  const pending = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    pending.current = drafts.get(threadId);
+    if (pending.current) aui.composer().setText(pending.current);
+  }, [aui, threadId]);
+  useEffect(() => {
+    if (pending.current !== undefined) {
+      if (text !== pending.current) return;
+      pending.current = undefined;
+    }
+    if (text) drafts.set(threadId, text);
+    else drafts.delete(threadId);
+  }, [text, threadId]);
+  return null;
 }
 
 function SlashMenu({ commands }: { commands: Command[] }) {
@@ -196,6 +219,7 @@ export function ChatView({ threadId, settings, readOnly, users, self, suggestion
     <MemoryLinkContext.Provider value={projectId}>
     <AssistantRuntimeProvider runtime={runtime}>
       <ThreadPrimitive.Root className="flex h-full min-h-0 flex-col">
+        <DraftSync threadId={threadId} />
         <ThreadPrimitive.Viewport className="min-h-0 flex-1 overflow-y-auto scroll-smooth py-2" aria-live="polite">
           <ThreadPrimitive.Empty>
             <div className="mx-auto max-w-md p-8 text-center text-sm text-muted-foreground">{emptyHint ?? "Send a message to start."}</div>

@@ -418,3 +418,15 @@ func (s *recSandbox) Stat(context.Context, string) (sandbox.FileInfo, error) {
 }
 
 func newStore(clk *clock) *factorystore.Mem { return factorystore.NewMem(clk.Now) }
+
+// Adopt is what the tasks feature does for a chat session: a Running task bound to the session's thread.
+func (c *ctrl) Adopt(ctx context.Context, t factory.Task) (*factory.Task, error) {
+	c.record("adopt")
+	t.Source.Kind = factory.SourceSession
+	created, _, err := c.store.CreateTask(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+	running := factory.StateRunning
+	return c.store.UpdateTask(ctx, created.ID, factory.Patch{State: &running, ThreadID: &t.ThreadID})
+}

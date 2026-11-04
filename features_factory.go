@@ -26,6 +26,9 @@ import (
 // FeatureFactory is the name of the Factory feature.
 const FeatureFactory = "factory"
 
+// SessionAdoption describes a chat session that may open pull requests (see FactoryOptions.AdoptSession).
+type SessionAdoption = forge.Adoption
+
 // FactoryOptions configures the Factory feature.
 type FactoryOptions struct {
 	// Store holds tasks, triggers and thread links (factorystore.NewMem or NewPG). Required.
@@ -87,6 +90,18 @@ type FactoryOptions struct {
 	// sub-agents), before its first run is queued. A team host links the thread to the task's project here
 	// so the project's members can watch the agent work. An error is logged, never fatal.
 	OnSpawn func(ctx context.Context, threadID string, t factory.Task, req factory.SpawnRequest)
+
+	// AdoptSession says whether a chat session (a thread that is no task) may open pull requests, and for which
+	// repository and branches: a team host answers yes for a session of a project that has a repository. The first
+	// open_pr of such a session turns it into a task bound to the session (factory.SourceSession). Nil: only task
+	// threads open pull requests.
+	AdoptSession func(ctx context.Context, threadID string) (*SessionAdoption, error)
+	// OnTaskState is told after every state change of a task, from "" when a session became a task. A team host
+	// posts it to the project's Slack channel. It must return quickly.
+	OnTaskState func(t factory.Task, from, to factory.State)
+	// DeliverToSession hands the feedback of a session's task (CI red, review findings, a human's request) to the
+	// session as a message that starts a run. Nil: such a task blocks for a human instead.
+	DeliverToSession func(ctx context.Context, t factory.Task, feedback string) error
 
 	// Escalator hears of tasks that need a human (nil: the log only).
 	Escalator factory.Escalator
@@ -205,7 +220,7 @@ func FactoryFeature(o FactoryOptions) Feature {
 				return lastAssistantText(msgs), nil
 			},
 			Models: cfg.LLMModels, DefaultModel: cfg.LLMDefaultModel,
-			Escalator: o.Escalator, Observers: observers,
+			Escalator: o.Escalator, Observers: observers, Deliver: o.DeliverToSession, OnState: o.OnTaskState,
 			Roles: func(role string) (string, bool, bool) {
 				r, ok := roles[role]
 				return r.Instructions, r.ReadOnly, ok
@@ -322,8 +337,19 @@ func FactoryFeature(o FactoryOptions) Feature {
 			})
 			onEvent = f.Loop.OnEvent
 			checkout := &forge.Checkout{Auth: o.Auth, Store: o.Store}
+			if o.AdoptSession != nil {
+				checkout.Session = func(ctx context.Context, threadID string) *factory.ThreadInfo {
+					ad, err := o.AdoptSession(ctx, threadID)
+					if err != nil || ad == nil {
+						return nil
+					}
+					ti := ad.Info
+					ti.ThreadID = threadID
+					return &ti
+				}
+			}
 			// The agent holds no push credential: open_pr asks the host to push the task's branch.
-			b.AddTools(forge.NewTools(forge.ToolsOptions{Forge: o.Forge, Store: o.Store, Controller: svc,
+			b.AddTools(forge.NewTools(forge.ToolsOptions{Forge: o.Forge, Store: o.Store, Controller: svc, Adopt: o.AdoptSession,
 				Push: func(ctx context.Context, threadID string, protected []string) (forge.PushResult, error) {
 					sb, err := b.Sandboxes.Get(ctx, threadID)
 					if errors.Is(err, sandbox.ErrNoSandbox) {

@@ -190,6 +190,7 @@ func (s *server) Install(hs *httpapi.Server) error {
 	s.routeAdmin()
 	s.routeCapabilities()
 	s.routeFactory()
+	s.routeBoard()
 	if s.opt.Supervisor != nil {
 		s.sup = s.opt.Supervisor
 		s.routeSupervisor()

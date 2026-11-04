@@ -31,10 +31,9 @@ function ThreadItem({ t, openId }: { t: ThreadSummary; openId?: string }) {
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={t.id === openId} tooltip={t.title}>
         <Link to="/t/$threadId" params={{ threadId: t.id }} onClick={() => isMobile && setOpenMobile(false)}>
-          <StatusDot status={t.status} />
+          <StatusDot status={t.status} unread={unread} />
           <span className={unread ? "truncate font-semibold" : "truncate"}>{t.title || "(untitled)"}</span>
-          {unread ? <span className="ml-auto size-1.5 shrink-0 rounded-full bg-primary" aria-label="Unread" /> : null}
-          {t.createdBy && !unread ? <UserAvatar login={t.createdBy} className="ml-auto size-4 text-[8px]" /> : null}
+          {t.createdBy ? <UserAvatar login={t.createdBy} className="ml-auto size-4 text-[8px]" /> : null}
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>

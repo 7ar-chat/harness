@@ -1,4 +1,5 @@
 // Renderers for message parts: markdown text, thinking, tool cards (with diffs and sub-agents).
+import { useAuiState } from "@assistant-ui/react";
 import type { ReasoningMessagePartComponent, TextMessagePartComponent, ToolCallMessagePartComponent } from "@assistant-ui/react";
 import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
 import { Link } from "@tanstack/react-router";
@@ -75,8 +76,8 @@ export const ToolCard: ToolCallMessagePartComponent = ({ toolName, argsText, res
   const summary = summarizeArgs(args);
   const res = typeof result === "string" ? result : result === undefined ? "" : JSON.stringify(result);
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className={cn("my-1 rounded-md border bg-card text-card-foreground", isError && "border-destructive/50")}>
-      <CollapsibleTrigger className="group flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs">
+    <Collapsible open={open} onOpenChange={setOpen} className={cn("rounded-md text-card-foreground", open && "bg-muted/40", isError && "text-destructive")}>
+      <CollapsibleTrigger className="group flex w-full items-center gap-2 px-2 py-1 text-left text-xs">
         <ChevronRight className="size-3 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
         {isError ? <TriangleAlert className="size-3 shrink-0 text-destructive" /> : done ? <Wrench className="size-3 shrink-0 text-muted-foreground" /> : <Loader2 className="size-3 shrink-0 animate-spin" />}
         <span className="font-medium">{toolName}</span>
@@ -87,7 +88,7 @@ export const ToolCard: ToolCallMessagePartComponent = ({ toolName, argsText, res
           <SubagentCard sub={art.sub} />
         </div>
       ) : null}
-      <CollapsibleContent className="space-y-2 px-3 pb-3">
+      <CollapsibleContent className="space-y-2 px-2 pb-2">
         {edit ? (
           <Suspense fallback={<Pre>Loading diff…</Pre>}>
             <DiffBlock path={edit.path} oldText={edit.oldText} newText={edit.newText} />
@@ -101,6 +102,24 @@ export const ToolCard: ToolCallMessagePartComponent = ({ toolName, argsText, res
     </Collapsible>
   );
 };
+
+/** One collapsed "Working" block for a run of consecutive tool calls; the steps are inside, like Perplexity's. */
+export function ToolGroup({ startIndex, endIndex, children }: { startIndex: number; endIndex: number; children?: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const active = useAuiState((s) => s.message.status?.type === "running" && endIndex === s.message.parts.length - 1);
+  const steps = endIndex - startIndex + 1;
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="my-2">
+      <CollapsibleTrigger className="group flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground">
+        {active ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+        <span className="font-medium">{active ? "Working…" : "Worked"}</span>
+        <span>{steps === 1 ? "1 step" : `${steps} steps`}</span>
+        <ChevronRight className="size-3 transition-transform group-data-[state=open]:rotate-90" />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-1 space-y-0.5 border-l-2 pl-3">{children}</CollapsibleContent>
+    </Collapsible>
+  );
+}
 
 /** The project whose memory review queue a "proposed" note links to (undefined: the user's global memory). */
 export const MemoryLinkContext = createContext<string | undefined>(undefined);

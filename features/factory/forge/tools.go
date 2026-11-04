@@ -24,6 +24,19 @@ type ToolsOptions struct {
 	// opens or updates the pull request. Nil leaves pushing to the agent, for
 	// hosts whose sandbox holds its own push credentials.
 	Push func(ctx context.Context, threadID string, protected []string) (PushResult, error)
+	// Adopt says whether a thread that is not a factory task may still open pull requests: a chat session of a
+	// project that has a repository. It returns the thread's repository and branches and the task the session
+	// becomes when it first opens a pull request; nil, nil when the thread cannot. Nil disables adoption.
+	Adopt func(ctx context.Context, threadID string) (*Adoption, error)
+}
+
+// Adoption describes a chat session that may open pull requests.
+type Adoption struct {
+	// Info is what the tools need (Repo, BaseBranch, Branch, Login).
+	Info factory.ThreadInfo
+	// Task is the template of the task the session becomes (ProjectID, Owner, ThreadID, Repo, branches, Policy);
+	// open_pr fills Title and Spec from the pull request.
+	Task factory.Task
 }
 
 const (
@@ -64,14 +77,17 @@ func (p *toolProvider) Tools(ctx context.Context, rc tools.RunContext) ([]ai.Bas
 		return nil, nil, nil
 	}
 	ti, err := p.Store.GetThreadInfo(ctx, rc.ThreadID)
-	if err != nil {
-		if errors.Is(err, factory.ErrNotFound) {
-			return nil, nil, nil
-		}
+	if err != nil && !errors.Is(err, factory.ErrNotFound) {
 		return nil, nil, fmt.Errorf("forge tools: thread info of %s: %w", rc.ThreadID, err)
 	}
-	if ti.TaskID == "" || ti.Repo == "" {
-		return nil, nil, nil
+	if err != nil || ti.TaskID == "" || ti.Repo == "" {
+		ad, aerr := p.adoption(ctx, rc.ThreadID)
+		if aerr != nil {
+			return nil, nil, aerr
+		}
+		if ad == nil {
+			return nil, nil, nil
+		}
 	}
 	open, err := ai.InferTool("open_pr", openPRDesc, func(ctx context.Context, in openPRInput) (string, error) {
 		return p.openPR(ctx, rc.ThreadID, in)
@@ -109,15 +125,47 @@ After it opens, CI and a reviewer judge the change; a failure or a review comes 
 type scope struct {
 	ti   *factory.ThreadInfo
 	task *factory.Task
+	// adoption is set while the thread is a chat session without a task: task is then an empty placeholder (no
+	// pull request) and open_pr creates the real one.
+	adoption *Adoption
+}
+
+// adoption asks the host whether a thread that is not a task may open pull requests.
+func (p *toolProvider) adoption(ctx context.Context, threadID string) (*Adoption, error) {
+	if p.Adopt == nil {
+		return nil, nil
+	}
+	if _, ok := p.Controller.(factory.Adopter); !ok {
+		return nil, nil
+	}
+	ad, err := p.Adopt(ctx, threadID)
+	if err != nil {
+		return nil, fmt.Errorf("forge tools: session %s: %w", threadID, err)
+	}
+	if ad == nil || ad.Info.Repo == "" {
+		return nil, nil
+	}
+	return ad, nil
 }
 
 func (p *toolProvider) scope(ctx context.Context, threadID string) (scope, error) {
 	ti, err := p.Store.GetThreadInfo(ctx, threadID)
-	if err != nil {
-		return scope{}, tools.Errorf("this thread is not working on a repository task")
-	}
-	if ti.TaskID == "" || ti.Repo == "" {
-		return scope{}, tools.Errorf("this thread is not working on a repository task")
+	if err != nil || ti.TaskID == "" || ti.Repo == "" {
+		ad, aerr := p.adoption(ctx, threadID)
+		if aerr != nil {
+			return scope{}, aerr
+		}
+		if ad == nil {
+			return scope{}, tools.Errorf("this thread is not working on a repository task")
+		}
+		info := ad.Info
+		info.ThreadID = threadID
+		// The session may have opened its pull request already: its task is found by the thread, not by thread info.
+		if ts, lerr := p.Store.ListTasks(ctx, factory.Filter{ThreadID: threadID, Limit: 1}); lerr == nil && len(ts) > 0 && ts[0].Source.Kind == factory.SourceSession {
+			info.TaskID = ts[0].ID
+			return scope{ti: &info, task: &ts[0]}, nil
+		}
+		return scope{ti: &info, task: &factory.Task{}, adoption: ad}, nil
 	}
 	t, err := p.Store.GetTask(ctx, ti.TaskID)
 	if err != nil {
@@ -189,7 +237,11 @@ func (p *toolProvider) openPR(ctx context.Context, threadID string, in openPRInp
 			return "", tools.Errorf("opening the pull request failed: %s", explain(err))
 		}
 	}
-	if err := p.toReview(ctx, s.task.ID, pr); err != nil {
+	taskID, err := p.materialize(ctx, s, title, in.Body)
+	if err != nil {
+		return "", err
+	}
+	if err := p.toReview(ctx, taskID, pr); err != nil {
 		return "", err
 	}
 	return pushed + "Pull request opened: " + describePR(pr), nil
@@ -203,6 +255,22 @@ func describePush(r PushResult, base string) string {
 		s += fmt.Sprintf("Warning: %d uncommitted change(s) were not pushed\n", r.Dirty)
 	}
 	return s
+}
+
+// materialize returns the task the call belongs to; a chat session without one becomes a task now, bound to its
+// own thread, so the pull request loop watches its pull request and the project board shows it.
+func (p *toolProvider) materialize(ctx context.Context, s scope, title, body string) (string, error) {
+	if s.adoption == nil {
+		return s.task.ID, nil
+	}
+	t := s.adoption.Task
+	t.Title, t.Spec = title, body
+	t.ThreadID = s.ti.ThreadID
+	created, err := p.Controller.(factory.Adopter).Adopt(ctx, t)
+	if err != nil {
+		return "", fmt.Errorf("track the pull request as a task: %w", err)
+	}
+	return created.ID, nil
 }
 
 func (p *toolProvider) toReview(ctx context.Context, taskID string, pr *factory.PRInfo) error {

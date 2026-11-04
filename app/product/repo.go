@@ -84,6 +84,9 @@ func (rc *RepoCheckout) Feature() harness.Feature {
 			}
 			s := fmt.Sprintf("# Project repository\n\nThe project's repository (%s) is checked out in %s on your own branch %s. Work there; commit your changes. "+
 				"Other agents of the project work in their own copies, so do not assume they share your files.", p.RepoURL, RepoDir, branchFor(in.Run.ThreadID))
+			if rc.Factory != nil && p.GitHubInstallation != 0 {
+				s += "\n\n" + changeRequestGuidance
+			}
 			if _, _, ok := ParseRepo(p.RepoURL); ok && rc.Brokered && p.GitHubInstallation != 0 {
 				s += "\n\ngit push and the GitHub API (api.github.com, for example `curl -X POST https://api.github.com/repos/OWNER/REPO/pulls` to open a pull request) " +
 					"are already authenticated for this repository: send no token and look for none; there is none in the sandbox."
@@ -93,6 +96,15 @@ func (rc *RepoCheckout) Feature() harness.Feature {
 		return nil
 	})
 }
+
+// changeRequestGuidance tells the agent when a pull request is wanted: the user's intent decides, not the tools.
+const changeRequestGuidance = `# Pull requests
+
+Decide from what the user asked:
+- A question, an explanation, a review, an investigation or a plan: answer it. Do not edit files, commit or open a pull request.
+- A request to change something (a fix, a feature, a refactor, a rename, "make X do Y"): make the change on your branch, run the checks the repository has, commit, then call open_pr with a one-line title and a short description of what changed and how you verified it. Do this without being asked to open the pull request.
+- Unsure whether the user wants a change or an answer: ask one short question before touching anything.
+After open_pr, CI and a reviewer judge it; their findings come back to you in this conversation. Fix them on the same branch and call open_pr again.`
 
 func branchFor(threadID string) string {
 	id := strings.ReplaceAll(threadID, "-", "")

@@ -15,6 +15,8 @@ import (
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/hosts/client"
+	"github.com/7ar-chat/harness/hosts/inproc"
 )
 
 // The agent factory over HTTP. Tasks and triggers belong to a project; a
@@ -101,6 +103,112 @@ func (h *FactoryHooks) OnSpawn(ctx context.Context, threadID string, t factory.T
 	if s != nil {
 		s.hub.publish(FeedEvent{Type: "thread.created", ProjectID: t.ProjectID, ThreadID: threadID, Actor: t.Owner, Title: req.Title, owner: req.Login})
 	}
+}
+
+// AdoptSession is harness.FactoryOptions.AdoptSession: a chat session of a project whose repository the GitHub App
+// reaches may open pull requests. The checkout and the branch (har/<thread>) are the ones RepoCheckout made.
+func (h *FactoryHooks) AdoptSession(ctx context.Context, threadID string) (*harness.SessionAdoption, error) {
+	if h.Team == nil {
+		return nil, nil
+	}
+	meta, err := h.Team.GetThreadMeta(ctx, threadID)
+	if err != nil || meta.ProjectID == "" || meta.Kind != store.ThreadChat {
+		return nil, nil // a personal thread, a supervisor thread, an unknown thread: no repository
+	}
+	p, err := h.Team.GetProject(ctx, meta.ProjectID)
+	if err != nil || p.GitHubInstallation == 0 {
+		return nil, nil
+	}
+	repo := projectRepo(p)
+	if repo == "" {
+		return nil, nil
+	}
+	owner := firstNonEmpty(meta.CreatedBy, meta.Owner)
+	branch := branchFor(threadID)
+	return &harness.SessionAdoption{
+		Info: factory.ThreadInfo{Login: meta.Owner, Repo: repo, BaseBranch: p.DefaultBranch, Branch: branch},
+		Task: factory.Task{ProjectID: p.ID, Owner: owner, Repo: repo, BaseBranch: p.DefaultBranch, Branch: branch},
+	}, nil
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+// DeliverToSession is harness.FactoryOptions.DeliverToSession: CI and review feedback of a session's pull request
+// arrives in the session's own chat, as a message from the factory, so the agent that wrote the change fixes it.
+func (h *FactoryHooks) DeliverToSession(ctx context.Context, t factory.Task, feedback string) error {
+	h.mu.Lock()
+	s := h.s
+	h.mu.Unlock()
+	if s == nil || h.Team == nil {
+		return errors.New("the server is not ready")
+	}
+	meta, err := h.Team.GetThreadMeta(ctx, t.ThreadID)
+	if err != nil {
+		return err
+	}
+	cl := inproc.New(s.H, meta.Owner, inproc.WithModels(s.O.Models, s.O.DefaultModel),
+		inproc.WithAuthor(harness.Author{Login: "factory", Kind: store.AuthorSystem}))
+	th, err := cl.GetThread(ctx, t.ThreadID)
+	if err != nil {
+		return err
+	}
+	text := "About your pull request (" + t.PR.URL + "):\n\n" + feedback + "\n\nFix it on your branch, commit, and call open_pr again."
+	if th.ActiveRun != nil {
+		return cl.Steer(ctx, th.ActiveRun.ID, text)
+	}
+	if th.PendingApproval != nil || th.PendingQuestion != nil {
+		return errors.New("the session is waiting for an answer")
+	}
+	run, err := cl.Send(ctx, t.ThreadID, text, client.SendOptions{})
+	if err != nil {
+		return err
+	}
+	s.AfterRun(Caller{Login: meta.Owner, Actor: "factory", ProjectID: t.ProjectID}, run, "factory.feedback", map[string]any{"task": t.ID})
+	return nil
+}
+
+var stateLabel = map[factory.State]string{
+	factory.StatePending: "Waiting", factory.StateReady: "Ready", factory.StateRunning: "Running", factory.StateReview: "In review",
+	factory.StateBlocked: "Needs you", factory.StateDone: "Done", factory.StateFailed: "Failed", factory.StateCancelled: "Cancelled",
+}
+
+// OnTaskState is harness.FactoryOptions.OnTaskState: a plain line in the project's Slack channel for every move of a
+// task, "<title>: Running → In review". A task that blocks is announced by the escalator with its reason, so it is
+// left out here, and so is the adoption of a session (it is announced by its next move). Nothing is posted for a project without a channel.
+func (h *FactoryHooks) OnTaskState(t factory.Task, from, to factory.State) {
+	if to == factory.StateBlocked || t.ProjectID == "" || from == to || from == "" {
+		return
+	}
+	h.mu.Lock()
+	s := h.s
+	h.mu.Unlock()
+	if s == nil || s.sk == nil || s.team == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		p, err := s.team.GetProject(ctx, t.ProjectID)
+		if err != nil || p.SlackChannel == "" {
+			return
+		}
+		move := stateLabel[to]
+		if from != "" {
+			move = stateLabel[from] + " → " + stateLabel[to]
+		}
+		text := fmt.Sprintf("[%s] %s: %s", p.Name, t.Title, move)
+		if t.PR.URL != "" && to == factory.StateReview {
+			text += "\n" + t.PR.URL
+		}
+		if err := s.sk.send(ctx, slackDest{channel: p.SlackChannel}, text, nil); err != nil {
+			slog.Warn("factory: posting a task state change to slack failed", "task_id", t.ID, "error", err)
+		}
+	}()
 }
 
 func (h *FactoryHooks) bind(s *server) {

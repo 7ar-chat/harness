@@ -64,6 +64,12 @@ type Options struct {
 	Now       func() time.Time
 	PollEvery time.Duration // 0: 5s
 
+	// Deliver hands the feedback of a session task (CI red, review findings, a human's request) to its chat as a
+	// message that starts a run; nil: such a task is blocked with the feedback instead.
+	Deliver func(ctx context.Context, t factory.Task, feedback string) error
+	// OnState is told after every state change of a task (from is "" for a task adopted from a session). It must
+	// not block: the host starts its own goroutine for slow work.
+	OnState func(t factory.Task, from, to factory.State)
 	// CancelRun stops a run (nil: Cancel only marks the task).
 	CancelRun func(ctx context.Context, runID string) error
 	// RunStatus is the status of a run for Sweep: queued, running, completed,
@@ -191,6 +197,9 @@ func (s *Service) move(ctx context.Context, t *factory.Task, to factory.State, p
 		return nil, fmt.Errorf("tasks: %s %s -> %s: %w", t.ID, t.State, to, err)
 	}
 	s.event(ctx, t.ID, factory.EventState, text, map[string]any{"from": string(t.State), "to": string(to)})
+	if s.opts.OnState != nil {
+		s.opts.OnState(*u, t.State, to)
+	}
 	return u, nil
 }
 
@@ -244,6 +253,34 @@ func (s *Service) Create(ctx context.Context, t factory.Task) (*factory.Task, bo
 	return created, true, nil
 }
 
+// Adopt implements factory.Adopter: the task starts Running and is bound to the session's thread.
+func (s *Service) Adopt(ctx context.Context, t factory.Task) (*factory.Task, error) {
+	t.Source.Kind = factory.SourceSession
+	if t.Source.Key == "" {
+		t.Source.Key = "session:" + t.ThreadID
+	}
+	created, _, err := s.Create(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+	if created.State != factory.StateReady {
+		return created, nil // already adopted (same key) and moved on
+	}
+	running := factory.StateRunning
+	u, err := s.st.UpdateTask(ctx, created.ID, factory.Patch{IfState: []factory.State{factory.StateReady}, State: &running, ThreadID: &t.ThreadID})
+	if err != nil {
+		if errors.Is(err, factory.ErrConflict) {
+			return s.load(ctx, created.ID)
+		}
+		return nil, fmt.Errorf("tasks: adopting %s: %w", created.ID, err)
+	}
+	s.event(ctx, created.ID, factory.EventState, "running: opened from a session", map[string]any{"from": string(factory.StateReady), "to": string(factory.StateRunning)})
+	if s.opts.OnState != nil {
+		s.opts.OnState(*u, "", factory.StateRunning)
+	}
+	return u, nil
+}
+
 // Resume implements factory.Controller: the next attempt starts as soon as the
 // dispatcher has a slot.
 func (s *Service) Resume(ctx context.Context, taskID, feedback string) error {
@@ -260,6 +297,9 @@ func (s *Service) resume(ctx context.Context, t *factory.Task, feedback string, 
 	case factory.StateRunning, factory.StateReview, factory.StateBlocked:
 	default:
 		return conflict(t, "resume")
+	}
+	if t.Source.Kind == factory.SourceSession {
+		return s.resumeSession(ctx, t, feedback)
 	}
 	if max := s.maxAttempts(t); t.Attempts >= max {
 		reason := fmt.Sprintf("attempts exhausted (%d of %d)", t.Attempts, max)
@@ -283,6 +323,27 @@ func (s *Service) resume(ctx context.Context, t *factory.Task, feedback string, 
 		return err
 	}
 	s.Kick()
+	return nil
+}
+
+// resumeSession continues a session task in its own chat: the feedback arrives as a message and the task is Running
+// again until the agent calls open_pr (or the run ends).
+func (s *Service) resumeSession(ctx context.Context, t *factory.Task, feedback string) error {
+	if s.opts.Deliver == nil || t.ThreadID == "" {
+		return s.block(ctx, t, "needs you: "+firstLine(feedback), factory.Patch{Feedback: &feedback})
+	}
+	if max := s.maxAttempts(t); t.Attempts >= max {
+		return s.block(ctx, t, fmt.Sprintf("attempts exhausted (%d of %d): %s", t.Attempts, max, firstLine(feedback)), factory.Patch{Feedback: &feedback})
+	}
+	attempt := t.Attempts + 1
+	empty := ""
+	u, err := s.move(ctx, t, factory.StateRunning, factory.Patch{Attempts: &attempt, Feedback: &feedback, BlockedReason: &empty}, "running: "+firstLine(feedback))
+	if err != nil {
+		return err
+	}
+	if err := s.opts.Deliver(ctx, *u, feedback); err != nil {
+		return s.block(ctx, u, "could not reach the session: "+err.Error(), factory.Patch{})
+	}
 	return nil
 }
 

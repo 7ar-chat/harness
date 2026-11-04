@@ -135,6 +135,9 @@ func FromEnv(getenv func(string) string, cfg *config.Config, st factory.Store, g
 	o.Escalator = w.Escalator
 	w.Hooks = &product.FactoryHooks{Team: team}
 	o.OnSpawn = w.Hooks.OnSpawn
+	o.AdoptSession = w.Hooks.AdoptSession
+	o.DeliverToSession = w.Hooks.DeliverToSession
+	o.OnTaskState = w.Hooks.OnTaskState
 	o.PollEvery = 5 * time.Second
 	w.Options = o
 	return w, true, nil

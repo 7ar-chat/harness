@@ -292,6 +292,9 @@ func TestRepoCheckoutFeatureCloneOnSandboxCreationAndPromptSection(t *testing.T)
 			})
 			backend := sandboxtest.NewBackend()
 			rc := &RepoCheckout{Team: tm, GitHub: app, Brokered: brokered}
+			if brokered {
+				rc.Factory = factorystore.NewMem(nil) // the factory is on: the agent is told when a pull request is wanted
+			}
 			h, err := harness.New(harness.Options{Config: cnConfig(t), Models: llmtest.Factory{M: model}, Backend: backend,
 				Features: append(harness.ProfileMinimal(), rc.Feature())})
 			if err != nil {
@@ -333,6 +336,9 @@ func TestRepoCheckoutFeatureCloneOnSandboxCreationAndPromptSection(t *testing.T)
 			sys := system.String()
 			if !strings.Contains(sys, "# Project repository") || !strings.Contains(sys, RepoDir) || !strings.Contains(sys, branchFor(th.ID)) {
 				t.Fatalf("system prompt lacks the repository section")
+			}
+			if got := strings.Contains(sys, "# Pull requests") && strings.Contains(sys, "call open_pr"); got != brokered {
+				t.Fatalf("factory=%v but prompt says pull-request guidance=%v", brokered, got)
 			}
 			if got := strings.Contains(sys, "send no token and look for none"); got != brokered {
 				t.Fatalf("brokered=%v but prompt says no-token=%v", brokered, got)

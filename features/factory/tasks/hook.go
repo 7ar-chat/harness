@@ -77,6 +77,9 @@ func (s *Service) runEnded(ctx context.Context, threadID, runID, status string, 
 	if err != nil || t == nil {
 		return err
 	}
+	if t.Source.Kind == factory.SourceSession {
+		return s.sessionRunEnded(ctx, t, status)
+	}
 	switch {
 	case t.State == factory.StateBlocked && strings.HasPrefix(t.BlockedReason, waitingPrefix) && t.RunID != runID:
 		// The human answered and the run continued on the same thread.
@@ -105,6 +108,16 @@ func (s *Service) runEnded(ctx context.Context, threadID, runID, status string, 
 		return s.failedAttempt(ctx, t, firstNonEmpty(errText, "the run "+status))
 	}
 	return nil
+}
+
+// sessionRunEnded: a chat session is not a run to judge, the user drives it. A run that was delivered feedback
+// and ended without a new open_pr hands the pull request back to review (the loop looks at CI again).
+func (s *Service) sessionRunEnded(ctx context.Context, t *factory.Task, status string) error {
+	if t.State != factory.StateRunning || t.PR.Number == 0 || status != store.StatusCompleted {
+		return nil
+	}
+	_, err := s.move(ctx, t, factory.StateReview, factory.Patch{}, "review: the session finished its changes")
+	return err
 }
 
 func firstNonEmpty(a, b string) string {

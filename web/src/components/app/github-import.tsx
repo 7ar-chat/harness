@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import type { GithubRepo } from "@/api/generated";
 import { Empty, ListSkeleton } from "./common";
 
 export const GithubMark = ({ className }: { className?: string }) => (
@@ -97,6 +98,52 @@ export function ImportGithubDialog({ open, onClose }: { open: boolean; onClose: 
         ) : null}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** A searchable list of the user's repositories; `value` is the picked full name. */
+export function RepoPicker({ value, onPick }: { value: string; onPick: (r: GithubRepo) => void }) {
+  const [q, setQ] = useState("");
+  const repos = useGithubRepos(useDebounced(q), true);
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your repositories" className="pl-8" aria-label="Search repositories" />
+      </div>
+      <div className="max-h-52 min-h-24 overflow-y-auto rounded-md border" role="radiogroup" aria-label="Repository">
+        {repos.isLoading ? (
+          <ListSkeleton rows={3} />
+        ) : repos.error ? (
+          <Empty title="Could not list repositories">{repos.error instanceof Error ? repos.error.message : ""}</Empty>
+        ) : repos.data?.repos.length ? (
+          <ul className="divide-y">
+            {repos.data.repos.map((r) => (
+              <li key={r.fullName}>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={value === r.fullName}
+                  onClick={() => onPick(r)}
+                  className={`flex w-full items-center gap-2 p-2 text-left text-sm hover:bg-accent ${value === r.fullName ? "bg-accent" : ""}`}
+                >
+                  {r.private ? <Lock className="size-3.5 shrink-0 text-muted-foreground" aria-label="Private" /> : null}
+                  <span className="min-w-0 flex-1 truncate">{r.fullName}</span>
+                  {r.imported ? <Badge variant="secondary">Already a project</Badge> : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <Empty title="No repositories found" />
+        )}
+      </div>
+      {repos.data?.installUrl ? (
+        <a href={repos.data.installUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary underline underline-offset-2">
+          <ExternalLink className="size-3.5" /> Install the GitHub App on more repositories
+        </a>
+      ) : null}
+    </div>
   );
 }
 

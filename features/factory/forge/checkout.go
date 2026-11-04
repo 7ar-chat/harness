@@ -48,6 +48,9 @@ type Checkout struct {
 	Store factory.Store
 	// Dir is the checkout directory (default /workspace/repo).
 	Dir string
+	// Session names the repository and branches of a chat session that is no task (its checkout was made by the
+	// host); Push uses it for such a thread. Nil: only task threads push.
+	Session func(ctx context.Context, threadID string) *factory.ThreadInfo
 }
 
 func (c *Checkout) dir() string {
@@ -251,6 +254,9 @@ func pushError(what string, out string, token string) string {
 // Uncommitted changes are not pushed; Dirty reports them.
 func (c *Checkout) Push(ctx context.Context, threadID string, sb sandbox.Sandbox, protected ...string) (PushResult, error) {
 	ti := c.info(ctx, threadID)
+	if ti == nil && c.Session != nil {
+		ti = c.Session(ctx, threadID)
+	}
 	if ti == nil {
 		return PushResult{}, errors.New("this thread has no repository to push")
 	}

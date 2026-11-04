@@ -82,6 +82,10 @@ const (
 	// SourceDelegate marks a sub-task that the delegate tool runs inline in the
 	// delegating run: the dispatcher never picks it up.
 	SourceDelegate = "delegate"
+	// SourceSession marks the task a chat session becomes when its agent opens a pull request: the session is the
+	// task's thread for good, so the dispatcher never starts a run for it and CI or review feedback is delivered to
+	// the session as a message.
+	SourceSession = "session"
 )
 
 // Task event kinds (TaskEvent.Kind) and the Data keys the features agree on.
@@ -372,6 +376,13 @@ type Controller interface {
 	Review(ctx context.Context, taskID string, pr PullRequest) error
 	// Create adds a task (a delegated sub-task, a follow-up).
 	Create(ctx context.Context, t Task) (*Task, bool, error)
+}
+
+// Adopter turns a running chat session into a task: the task is created already Running, linked to the session's
+// thread, and never dispatched. The task service implements it; the forge tools use it the first time a session
+// opens a pull request.
+type Adopter interface {
+	Adopt(ctx context.Context, t Task) (*Task, error)
 }
 
 // Observer is told once when a task reaches a terminal state (done, failed,

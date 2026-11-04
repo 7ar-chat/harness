@@ -1,15 +1,13 @@
 // App-wide dialogs (new session, new project) opened from the sidebar, palette and pages.
 import { useNavigate } from "@tanstack/react-router";
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { useCreateProject, useCreateThread, useMe, useTemplates } from "@/api/queries";
-import { canWrite } from "@/api/client";
+import { useCreateProject, useCreateThread, useTemplates } from "@/api/queries";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ImportEntry, ImportGithubDialog } from "./github-import";
+import { ImportEntry, ImportGithubDialog, RepoPicker, useGithubConnector } from "./github-import";
 
 interface Ctx {
   newSession: (projectId?: string) => void;
@@ -20,85 +18,20 @@ interface Ctx {
 const DialogsCtx = createContext<Ctx>({ newSession: () => {}, newProject: () => {}, openPalette: () => {}, importGithub: () => {} });
 export const useDialogs = () => useContext(DialogsCtx);
 
-const PERSONAL = "__personal";
-
 export function DialogsProvider({ children, openPalette }: { children: ReactNode; openPalette: () => void }) {
-  const [session, setSession] = useState<{ open: boolean; project: string }>({ open: false, project: PERSONAL });
+  const create = useCreateThread();
+  const navigate = useNavigate();
+  // The "+" is already scoped (to a project or to yourself), so it creates the session at once; the agent names it.
+  const newSession = (p?: string) =>
+    create.mutate({ title: "", projectId: p }, { onSuccess: (t) => void navigate({ to: "/t/$threadId", params: { threadId: t.id } }) });
   const [project, setProject] = useState(false);
   const [imp, setImp] = useState(false);
   return (
-    <DialogsCtx.Provider value={{ newSession: (p) => setSession({ open: true, project: p ?? PERSONAL }), newProject: () => setProject(true), openPalette, importGithub: () => setImp(true) }}>
+    <DialogsCtx.Provider value={{ newSession, newProject: () => setProject(true), openPalette, importGithub: () => setImp(true) }}>
       {children}
-      <NewSessionDialog open={session.open} project={session.project} onClose={() => setSession((s) => ({ ...s, open: false }))} />
       <NewProjectDialog open={project} onClose={() => setProject(false)} onImport={() => (setProject(false), setImp(true))} />
       <ImportGithubDialog open={imp} onClose={() => setImp(false)} />
     </DialogsCtx.Provider>
-  );
-}
-
-function NewSessionDialog({ open, project, onClose }: { open: boolean; project: string; onClose: () => void }) {
-  const projects = (useMe().data?.projects ?? []).filter((p) => canWrite(p.role));
-  const [title, setTitle] = useState("");
-  const [pid, setPid] = useState<string | null>(null);
-  const create = useCreateThread();
-  const navigate = useNavigate();
-  const selected = pid ?? project;
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            create.mutate(
-              { title: title.trim() || "New session", projectId: selected === PERSONAL ? undefined : selected },
-              {
-                onSuccess: (t) => {
-                  setTitle("");
-                  setPid(null);
-                  onClose();
-                  void navigate({ to: "/t/$threadId", params: { threadId: t.id } });
-                },
-              },
-            );
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>New session</DialogTitle>
-            <DialogDescription>Each session is its own agent with its own chat and workspace.</DialogDescription>
-          </DialogHeader>
-          <div className="my-4 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="ns-title">Title</Label>
-              <Input id="ns-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What should the agent work on?" autoFocus />
-            </div>
-            <div className="space-y-2">
-              <Label>Project</Label>
-              <Select value={selected} onValueChange={setPid}>
-                <SelectTrigger aria-label="Project">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={PERSONAL}>Personal (only you)</SelectItem>
-                  {projects.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={create.isPending}>
-              Create
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -108,6 +41,8 @@ function NewProjectDialog({ open, onClose, onImport }: { open: boolean; onClose:
   const [source, setSource] = useState<"template" | "repo">("template");
   const [template, setTemplate] = useState("");
   const templates = useTemplates();
+  const { ready: ghReady } = useGithubConnector();
+  const [picked, setPicked] = useState("");
   const create = useCreateProject();
   const navigate = useNavigate();
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
@@ -119,12 +54,13 @@ function NewProjectDialog({ open, onClose, onImport }: { open: boolean; onClose:
             e.preventDefault();
             create.mutate(
               source === "repo"
-                ? { name: f.name.trim(), description: f.description.trim(), repoUrl: f.repoUrl.trim(), defaultBranch: f.defaultBranch.trim() }
+                ? { name: f.name.trim(), description: f.description.trim(), repoUrl: picked ? `https://github.com/${picked}` : f.repoUrl.trim(), defaultBranch: f.defaultBranch.trim() || "main" }
                 : { name: f.name.trim(), description: f.description.trim(), ...(template ? { template } : {}) },
               {
                 onSuccess: (p) => {
                   setF({ name: "", description: "", repoUrl: "", defaultBranch: "main" });
                   setTemplate("");
+                  setPicked("");
                   onClose();
                   void navigate({ to: "/p/$projectId", params: { projectId: p.id } });
                 },
@@ -181,23 +117,37 @@ function NewProjectDialog({ open, onClose, onImport }: { open: boolean; onClose:
                 <p className="text-xs text-muted-foreground">The files are kept with the project. Ask the assistant to preview the app to see it running.</p>
               </div>
             ) : (
-              <>
+              ghReady ? (
                 <div className="space-y-2">
-                  <Label htmlFor="np-repo">Repository URL</Label>
-                  <Input id="np-repo" value={f.repoUrl} onChange={set("repoUrl")} placeholder="https://github.com/org/repo" type="url" />
+                  <Label>Repository</Label>
+                  <RepoPicker
+                    value={picked}
+                    onPick={(r) => {
+                      setPicked(r.fullName);
+                      setF((v) => ({ ...v, name: v.name.trim() ? v.name : r.fullName.split("/")[1] ?? r.fullName, defaultBranch: r.defaultBranch || "main" }));
+                    }}
+                  />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="np-branch">Default branch</Label>
-                  <Input id="np-branch" value={f.defaultBranch} onChange={set("defaultBranch")} />
-                </div>
-              </>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="np-repo">Repository URL</Label>
+                    <Input id="np-repo" value={f.repoUrl} onChange={set("repoUrl")} placeholder="https://github.com/org/repo" type="url" />
+                    <p className="text-xs text-muted-foreground">Connect GitHub in your profile to pick from your repositories instead.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="np-branch">Default branch</Label>
+                    <Input id="np-branch" value={f.defaultBranch} onChange={set("defaultBranch")} />
+                  </div>
+                </>
+              )
             )}
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={create.isPending || !f.name.trim()}>
+            <Button type="submit" disabled={create.isPending || !f.name.trim() || (source === "repo" && ghReady && !picked)}>
               Create project
             </Button>
           </DialogFooter>

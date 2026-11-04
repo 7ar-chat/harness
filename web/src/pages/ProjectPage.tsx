@@ -4,7 +4,7 @@ import { ExternalLink, GitBranch, Plus, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { isOwner, canWrite, downloadText, ApiError } from "@/api/client";
 import {
-  useAudit, useDeleteProject, useGithub, useImportAgents, useMemoryStats, toastError, useInvite, useInvites, useMe, useMembers, useOverview, useProject, useRecheckGithub, useRemoveMember, useRevokeInvite, useSetMember, useUpdateProject,
+  useAudit, useSeen, useDeleteProject, useGithub, useImportAgents, useMemoryStats, toastError, useInvite, useInvites, useMe, useMembers, useOverview, useProject, useRecheckGithub, useRemoveMember, useRevokeInvite, useSetMember, useUpdateProject,
 } from "@/api/queries";
 import type { Role } from "@/api/types";
 import { Empty, ErrorState, ListSkeleton, RoleBadge, StatusDot, UserAvatar } from "@/components/app/common";
@@ -21,7 +21,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useGithubConnector } from "@/components/app/github-import";
 import { CapabilitiesPanel } from "@/components/app/capabilities";
 import { toast } from "sonner";
+import { isUnread } from "@/lib/unread";
 import { Download, FileText } from "lucide-react";
+import { Board } from "./Board";
 import { MemoryManager } from "./Memory";
 
 const ago = (iso: string) => `${formatDistanceToNowStrict(new Date(iso))} ago`;
@@ -249,6 +251,7 @@ export function ProjectPage() {
   const navigate = useNavigate();
   const project = useProject(projectId);
   const overview = useOverview().data;
+  const seen = useSeen();
   const self = useMe().data?.user.login ?? "";
   const { newSession } = useDialogs();
   const stats = useMemoryStats({ project: projectId });
@@ -307,8 +310,9 @@ export function ProjectPage() {
             ) : null}
           </div>
         </div>
-        <Tabs value={tab ?? "overview"} onValueChange={(t) => void navigate({ to: "/p/$projectId", params: { projectId }, search: { tab: t as "overview" }, replace: true })}>
+        <Tabs value={tab ?? "board"} onValueChange={(t) => void navigate({ to: "/p/$projectId", params: { projectId }, search: { tab: t as "overview" }, replace: true })}>
           <TabsList className="flex-wrap">
+            <TabsTrigger value="board">Board</TabsTrigger>
             <TabsTrigger value="overview">Sessions</TabsTrigger>
             <TabsTrigger value="members">Members</TabsTrigger>
             <TabsTrigger value="memory" className="gap-1.5">
@@ -319,6 +323,9 @@ export function ProjectPage() {
             <TabsTrigger value="audit">Audit</TabsTrigger>
             {owner ? <TabsTrigger value="settings">Settings</TabsTrigger> : null}
           </TabsList>
+          <TabsContent value="board" className="mt-4">
+            <Board projectId={projectId} />
+          </TabsContent>
           <TabsContent value="overview" className="mt-4 space-y-4">
             <Github pid={projectId} owner={owner} />
             {threads.length ? (
@@ -326,7 +333,7 @@ export function ProjectPage() {
                 {threads.map((t) => (
                   <li key={t.id}>
                     <Link to="/t/$threadId" params={{ threadId: t.id }} className="flex items-center gap-3 p-3 hover:bg-accent">
-                      <StatusDot status={t.status} />
+                      <StatusDot status={t.status} unread={isUnread(seen, t.id, t.updatedAt)} />
                       <span className="min-w-0 flex-1 truncate text-sm">{t.title || "(untitled)"}</span>
                       {t.createdBy ? <UserAvatar login={t.createdBy} className="size-5" /> : null}
                       <span className="text-xs text-muted-foreground">{ago(t.updatedAt)}</span>

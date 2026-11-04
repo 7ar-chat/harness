@@ -1,8 +1,9 @@
-import { queryOptions, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, queryOptions, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { api, ApiError, isUnsupported, putBytes } from "./client";
 import { isNewerVisit, loadLocalSeen, saveLocalSeen } from "@/lib/unread";
+import type { ThreadStatus } from "./generated";
 import type {
   AdminUser, AuditEntry, AuthProvider, UserStatus, CapabilityAdd, CapabilityPut, CapabilityTestResult, CapabilityView, Connector, SkillConnTest, SkillConnView, GithubRepos, KnownUser, User, Command, GithubStatus, Invite, Me, Member, MemoryEntry, MemoryInput, MemoryList, MemoryStats, ModelList, Overview,
   PreviewInfo, Project, ProjectTemplate, ProjectWithRole, Role, Thread, WorkspaceFile,
@@ -99,6 +100,34 @@ export function useMarkSeen() {
 
 export const useMe = () => useQuery(meQuery);
 export const useOverview = () => useQuery(overviewQuery);
+
+export interface BoardCard {
+  threadId: string;
+  title: string;
+  createdBy?: string;
+  status: ThreadStatus;
+  updatedAt: string;
+  why?: string;
+  taskId?: string;
+  taskState?: string;
+  prNumber?: number;
+  prUrl?: string;
+}
+export interface BoardColumn {
+  id: "ready" | "running" | "needs_you" | "review" | "done";
+  title: string;
+  cards: BoardCard[];
+}
+/** The project's sessions as kanban columns. It refetches whenever the live feed refreshed the overview (a session changed) and every 30 s. */
+export function useBoard(projectId: string) {
+  const stamp = useQuery(overviewQuery).dataUpdatedAt;
+  return useQuery({
+    queryKey: ["board", projectId, stamp],
+    queryFn: () => api.get<{ columns: BoardColumn[] }>(`/projects/${projectId}/board`),
+    placeholderData: keepPreviousData,
+    refetchInterval: 30_000,
+  });
+}
 export const useModels = () => useQuery(modelsQuery);
 export const useCommands = () =>
   useQuery({

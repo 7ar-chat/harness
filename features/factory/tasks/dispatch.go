@@ -60,7 +60,7 @@ func (s *Service) Dispatch(ctx context.Context) (int, error) {
 		if ctx.Err() != nil {
 			return started, ctx.Err()
 		}
-		if t.Source.Kind == factory.SourceDelegate || t.NotBefore.After(now) {
+		if t.Source.Kind == factory.SourceDelegate || t.Source.Kind == factory.SourceSession || t.NotBefore.After(now) {
 			continue
 		}
 		if t.Budget.Over(t.Spent) {

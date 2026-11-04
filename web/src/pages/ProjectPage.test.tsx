@@ -15,13 +15,14 @@ const routes = (role: "owner" | "member" | "viewer", threads = [thread("t1", { t
     "GET /api/projects/p1/github": reply(404),
     "GET /api/memory/stats": reply(404),
     "GET /api/memory": { entries: [], enabled: true },
+    "GET /api/projects/p1/board": { columns: [] },
   };
 };
 
 describe("ProjectPage", () => {
   it("renders the project with its sessions, repository and role", async () => {
     mockFetch(routes("owner"));
-    await renderApp("/p/p1");
+    await renderApp("/p/p1?tab=overview");
     expect(await screen.findByRole("heading", { name: /payments/ })).toBeTruthy();
     expect(screen.getByText("The payments service")).toBeTruthy();
     expect(screen.getByRole("link", { name: /github.com\/acme\/payments/ }).getAttribute("href")).toBe("https://github.com/acme/payments");
@@ -31,8 +32,32 @@ describe("ProjectPage", () => {
 
   it("says there are no sessions yet for a project without any", async () => {
     mockFetch(routes("owner", []));
-    await renderApp("/p/p1");
+    await renderApp("/p/p1?tab=overview");
     expect(await screen.findByText("No sessions yet", { selector: "div" })).toBeTruthy();
+  });
+
+  it("opens on the board: sessions as cards in their columns, with the pull request of the ones in review", async () => {
+    const card = (threadId: string, title: string, extra = {}) => ({ threadId, title, status: "idle", updatedAt: "2026-11-04T10:00:00Z", ...extra });
+    mockFetch({
+      ...routes("owner"),
+      "GET /api/projects/p1/board": {
+        columns: [
+          { id: "ready", title: "Ready", cards: [card("t1", "Explain the retry logic")] },
+          { id: "running", title: "Running", cards: [card("t2", "Add rate limiting", { status: "running" })] },
+          { id: "needs_you", title: "Needs you", cards: [card("t3", "Rename the table", { status: "waiting_input", why: "Which name do you prefer?" })] },
+          { id: "review", title: "In review", cards: [card("t4", "Fix login", { taskState: "review", prNumber: 12, prUrl: "https://github.com/acme/payments/pull/12" })] },
+          { id: "done", title: "Done", cards: [] },
+        ],
+      },
+    });
+    await renderApp("/p/p1");
+    const needs = await page().findByRole("region", { name: "Needs you" });
+    expect(within(needs).getByRole("link", { name: /Rename the table/ }).getAttribute("href")).toBe("/#/t/t3");
+    expect(within(needs).getByText("Which name do you prefer?")).toBeTruthy();
+    const review = page().getByRole("region", { name: "In review" });
+    expect(within(review).getByText("#12")).toBeTruthy();
+    expect(within(page().getByRole("region", { name: "Running" })).getByRole("link", { name: /Add rate limiting/ })).toBeTruthy();
+    expect(within(page().getByRole("region", { name: "Ready" })).getByRole("link", { name: /Explain the retry logic/ })).toBeTruthy();
   });
 
   it("gives owners a Settings tab and writers a New session button; viewers get neither", async () => {
