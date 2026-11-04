@@ -84,7 +84,7 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
   const [sheet, setSheet] = useState(false);
   const [tab, setTab] = useState("files");
   const [confirm, setConfirm] = useState(false);
-  const [status, setStatus] = useState<{ running: boolean; cancel: () => void; plan?: PlanItem[] }>({ running: false, cancel: () => {} });
+  const [status, setStatus] = useState<{ running: boolean; cancel: () => void; plan?: PlanItem[]; title?: string }>({ running: false, cancel: () => {} });
   const project = useMe().data?.projects.find((p) => p.id === t?.projectId);
   const role = t?.role ?? project?.role;
   const readOnly = !canWrite(role);
@@ -167,7 +167,7 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
       <header className="shrink-0 space-y-2 border-b px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
           {supervisor ? <Bot className="size-5" /> : null}
-          {supervisor ? <h1 className="text-base font-semibold">My assistant</h1> : <TitleEditor id={threadId} title={t.title} editable={!readOnly} />}
+          {supervisor ? <h1 className="text-base font-semibold">My assistant</h1> : <TitleEditor id={threadId} title={status.title || t.title} editable={!readOnly} />}
           <StatusBadge status={t.status} />
           {project ? (
             <Link to="/p/$projectId" params={{ projectId: project.id }} search={{ tab: undefined }} className="text-xs text-muted-foreground hover:underline">

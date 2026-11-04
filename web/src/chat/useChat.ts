@@ -97,6 +97,14 @@ export function useChat(threadId: string, settings: RunSettings, users: (login: 
             return;
           }
           dispatch({ type: "event", ev });
+          if (ev.type === "CUSTOM" && ev.name === "work.title") {
+            const raw = ev.value as Record<string, unknown> | undefined;
+            const title = typeof raw?.title === "string" ? raw.title.trim() : "";
+            if (title) {
+              qc.setQueryData<Thread>(qk.thread(threadId), (old) => (old ? { ...old, title } : old));
+              void qc.invalidateQueries({ queryKey: qk.overview });
+            }
+          }
           if (ev.type === "RUN_FINISHED" || ev.type === "RUN_ERROR") void finish();
         },
       });

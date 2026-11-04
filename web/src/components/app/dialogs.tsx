@@ -1,13 +1,11 @@
 // App-wide dialogs (new session, new project) opened from the sidebar, palette and pages.
 import { useNavigate } from "@tanstack/react-router";
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { useCreateProject, useCreateThread, useMe, useTemplates } from "@/api/queries";
-import { canWrite } from "@/api/client";
+import { useCreateProject, useCreateThread, useTemplates } from "@/api/queries";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ImportEntry, ImportGithubDialog } from "./github-import";
 
@@ -23,82 +21,28 @@ export const useDialogs = () => useContext(DialogsCtx);
 const PERSONAL = "__personal";
 
 export function DialogsProvider({ children, openPalette }: { children: ReactNode; openPalette: () => void }) {
-  const [session, setSession] = useState<{ open: boolean; project: string }>({ open: false, project: PERSONAL });
   const [project, setProject] = useState(false);
   const [imp, setImp] = useState(false);
+  const create = useCreateThread();
+  const navigate = useNavigate();
+
+  const newSession = (projectId?: string) => {
+    create.mutate(
+      { projectId: projectId === PERSONAL ? undefined : projectId },
+      {
+        onSuccess: (t) => {
+          void navigate({ to: "/t/$threadId", params: { threadId: t.id } });
+        },
+      },
+    );
+  };
+
   return (
-    <DialogsCtx.Provider value={{ newSession: (p) => setSession({ open: true, project: p ?? PERSONAL }), newProject: () => setProject(true), openPalette, importGithub: () => setImp(true) }}>
+    <DialogsCtx.Provider value={{ newSession, newProject: () => setProject(true), openPalette, importGithub: () => setImp(true) }}>
       {children}
-      <NewSessionDialog open={session.open} project={session.project} onClose={() => setSession((s) => ({ ...s, open: false }))} />
       <NewProjectDialog open={project} onClose={() => setProject(false)} onImport={() => (setProject(false), setImp(true))} />
       <ImportGithubDialog open={imp} onClose={() => setImp(false)} />
     </DialogsCtx.Provider>
-  );
-}
-
-function NewSessionDialog({ open, project, onClose }: { open: boolean; project: string; onClose: () => void }) {
-  const projects = (useMe().data?.projects ?? []).filter((p) => canWrite(p.role));
-  const [title, setTitle] = useState("");
-  const [pid, setPid] = useState<string | null>(null);
-  const create = useCreateThread();
-  const navigate = useNavigate();
-  const selected = pid ?? project;
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            create.mutate(
-              { title: title.trim() || "New session", projectId: selected === PERSONAL ? undefined : selected },
-              {
-                onSuccess: (t) => {
-                  setTitle("");
-                  setPid(null);
-                  onClose();
-                  void navigate({ to: "/t/$threadId", params: { threadId: t.id } });
-                },
-              },
-            );
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>New session</DialogTitle>
-            <DialogDescription>Each session is its own agent with its own chat and workspace.</DialogDescription>
-          </DialogHeader>
-          <div className="my-4 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="ns-title">Title</Label>
-              <Input id="ns-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What should the agent work on?" autoFocus />
-            </div>
-            <div className="space-y-2">
-              <Label>Project</Label>
-              <Select value={selected} onValueChange={setPid}>
-                <SelectTrigger aria-label="Project">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={PERSONAL}>Personal (only you)</SelectItem>
-                  {projects.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={create.isPending}>
-              Create
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }
 

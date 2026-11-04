@@ -158,12 +158,9 @@ async function main() {
     await composer.fill(text);
     await page.getByRole("button", { name: "Send", exact: true }).click();
   };
-  const newSession = async (title) => {
+  const newSession = async () => {
     await page.goto(`${base}/#/`);
     await page.getByRole("button", { name: "New session", exact: true }).click();
-    const dlg = page.getByRole("dialog");
-    await dlg.getByLabel("Title").fill(title);
-    await dlg.getByRole("button", { name: "Create" }).click();
     await page.waitForURL(/#\/t\/[^/]+$/);
     await visible(composer, "composer");
     return page.url().split("/t/")[1];
