@@ -1,10 +1,10 @@
 // Panels of the session view's right-hand side: files, plan, project memory, activity.
 import { formatDistanceToNowStrict } from "date-fns";
-import { CheckCircle2, Circle, CircleDot, Download, File as FileIcon, Folder, FolderOpen } from "lucide-react";
+import { CheckCircle2, Circle, CircleDot, Download, ExternalLink, File as FileIcon, Folder, FolderOpen, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { NodeApi, Tree, type NodeRendererProps } from "react-arborist";
 import { api, downloadFile, authHeaders } from "@/api/client";
-import { toastError, useAudit } from "@/api/queries";
+import { toastError, useAudit, usePreview } from "@/api/queries";
 import type { PlanItem, WorkspaceFile } from "@/api/types";
 import { Empty, ListSkeleton } from "@/components/app/common";
 import { Button } from "@/components/ui/button";
@@ -177,5 +177,43 @@ export function ActivityPanel({ projectId, threadId }: { projectId?: string; thr
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * The thread's app, running in its sandbox. It is framed without allow-same-origin: the app is code the agent wrote, so it
+ * runs in an opaque origin and cannot reach this application's API with the visitor's session.
+ */
+export function PreviewPanel({ threadId, active }: { threadId: string; active: boolean }) {
+  const q = usePreview(threadId, active);
+  const [nonce, setNonce] = useState(0);
+  const info = q.data;
+  if (!info?.running)
+    return (
+      <Empty title={q.isLoading ? "Looking for the preview…" : "Nothing is running"}>
+        Ask the assistant to preview the app: it starts it in this session's sandbox and it shows up here.
+      </Empty>
+    );
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 items-center gap-1 border-b px-2 py-1">
+        <span className="truncate text-xs text-muted-foreground">{info.manifest?.run}</span>
+        <Button variant="ghost" size="icon" className="ml-auto size-7" title="Reload" onClick={() => setNonce(nonce + 1)}>
+          <RefreshCw className="size-4" />
+        </Button>
+        <Button variant="ghost" size="icon" className="size-7" title="Open in a new tab" asChild>
+          <a href={info.url} target="_blank" rel="noreferrer">
+            <ExternalLink className="size-4" />
+          </a>
+        </Button>
+      </div>
+      <iframe
+        key={nonce}
+        title="Preview"
+        src={info.url}
+        className="min-h-0 w-full flex-1 bg-white"
+        sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"
+      />
+    </div>
   );
 }

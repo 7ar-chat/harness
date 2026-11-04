@@ -127,7 +127,7 @@ func TestCheckoutOfThreadsWithoutARepositoryDoesNothing(t *testing.T) {
 	_ = tm.SetThreadMeta(ctx, store.ThreadMeta{ThreadID: "t-gone", ProjectID: "deleted", Owner: "alice", CreatedBy: "alice"})
 	rc := &RepoCheckout{Team: tm}
 
-	for _, thread := range []string{"t-norepo", "t-personal", "t-gone", "t-unknown"} {
+	for _, thread := range []string{"t-personal", "t-gone", "t-unknown"} {
 		sb := &fakeSandbox{}
 		if note := rc.setup(ctx, thread, sb); note != "" || len(sb.reqs) != 0 {
 			t.Errorf("%s: note %q, %d commands", thread, note, len(sb.reqs))

@@ -128,7 +128,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		},
 	}
 	prod := product.Options{
-		Team: teamStore, OIDC: oidcCfg, GitHubLogin: ghLogin, Admins: splitList(getenv("HARNESS_ADMINS")), Mail: mailer, Supervisor: sup, GitHub: bt.github, Bus: bt.bus,
+		Team: teamStore, OIDC: oidcCfg, GitHubLogin: ghLogin, Admins: splitList(getenv("HARNESS_ADMINS")), Mail: mailer, Supervisor: sup, GitHub: bt.github, Preview: bt.preview, Bus: bt.bus,
 		PublicURL: getenv("HARNESS_PUBLIC_URL"), SecretKey: secretKey(getenv, oidcCfg),
 	}
 	if bt.factory != nil {

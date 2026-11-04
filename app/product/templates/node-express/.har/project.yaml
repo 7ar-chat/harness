@@ -1,0 +1,5 @@
+template: node-express
+install: npm install
+run: npm run dev
+port: 3000
+base: strip

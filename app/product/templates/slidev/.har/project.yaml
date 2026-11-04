@@ -1,0 +1,5 @@
+template: slidev
+install: npm install
+run: npx slidev --port 3030 --remote --base "${PREVIEW_BASE:-/}"
+port: 3030
+base: app

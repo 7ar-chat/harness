@@ -5,7 +5,7 @@ import { api, ApiError, isUnsupported, putBytes } from "./client";
 import { isNewerVisit, loadLocalSeen, saveLocalSeen } from "@/lib/unread";
 import type {
   AdminUser, AuditEntry, AuthProvider, UserStatus, CapabilityAdd, CapabilityPut, CapabilityTestResult, CapabilityView, Connector, SkillConnTest, SkillConnView, GithubRepos, KnownUser, User, Command, GithubStatus, Invite, Me, Member, MemoryEntry, MemoryInput, MemoryList, MemoryStats, ModelList, Overview,
-  Project, ProjectWithRole, Role, Thread, WorkspaceFile,
+  PreviewInfo, Project, ProjectTemplate, ProjectWithRole, Role, Thread, WorkspaceFile,
 } from "./types";
 
 export const qk = {
@@ -180,8 +180,13 @@ function useAction<V, R>(fn: (v: V) => Promise<R>, invalidate: (v: V, r: R) => r
   });
 }
 
+/** The starting points offered when creating a project without a repository. */
+export const useTemplates = () => useQuery({ queryKey: ["templates"], queryFn: () => api.get<ProjectTemplate[]>("/templates"), staleTime: Infinity });
+/** Where the thread's app is previewed and whether it answers; polled while the Preview tab is open. */
+export const usePreview = (threadId: string, enabled: boolean) =>
+  useQuery({ queryKey: ["preview", threadId], queryFn: () => api.get<PreviewInfo>(`/threads/${threadId}/preview`), enabled, refetchInterval: 4000, retry: false });
 export const useCreateProject = () =>
-  useAction((b: { name: string; description?: string; repoUrl?: string; defaultBranch?: string }) => api.post<Project>("/projects", b), () => [qk.me, qk.overview], "Project created");
+  useAction((b: { name: string; description?: string; repoUrl?: string; defaultBranch?: string; template?: string }) => api.post<Project>("/projects", b), () => [qk.me, qk.overview], "Project created");
 export const useUpdateProject = (id: string) =>
   useAction((b: Partial<Pick<Project, "name" | "description" | "repoUrl" | "defaultBranch" | "slackChannel">>) => api.patch<ProjectWithRole>(`/projects/${id}`, b), () => [qk.project(id), qk.me, qk.overview], "Saved");
 export const useDeleteProject = () => useAction((id: string) => api.del(`/projects/${id}`), () => [qk.me, qk.overview], "Project deleted");

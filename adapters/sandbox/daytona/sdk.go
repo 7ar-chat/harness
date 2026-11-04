@@ -69,6 +69,9 @@ type box interface {
 	FileInfo(ctx context.Context, path string) (fileEntry, error)
 	Download(ctx context.Context, path string) ([]byte, error)
 	Upload(ctx context.Context, path string, data []byte) error
+
+	// PreviewLink is the address of a port of the sandbox and the token its proxy wants in the x-daytona-preview-token header.
+	PreviewLink(ctx context.Context, port int) (url, token string, err error)
 }
 
 // sdkAPI implements api on the official SDK.
@@ -237,6 +240,14 @@ func (b *sdkBox) FileInfo(ctx context.Context, path string) (fileEntry, error) {
 
 func (b *sdkBox) Download(ctx context.Context, path string) ([]byte, error) {
 	return b.s.FileSystem.DownloadFile(ctx, path, nil)
+}
+
+func (b *sdkBox) PreviewLink(ctx context.Context, port int) (string, string, error) {
+	l, err := b.s.GetPreviewLink(ctx, port)
+	if err != nil {
+		return "", "", err
+	}
+	return l.URL, l.Token, nil
 }
 
 func (b *sdkBox) Upload(ctx context.Context, path string, data []byte) error {

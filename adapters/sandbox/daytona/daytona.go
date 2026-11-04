@@ -745,3 +745,20 @@ func restrictedNetwork(err error) bool {
 	m := strings.ToLower(err.Error())
 	return strings.Contains(m, "cannot be overridden at the sandbox level") || strings.Contains(m, "network access is restricted")
 }
+
+var _ sandbox.PortExposer = (*instance)(nil)
+
+// Endpoint implements sandbox.PortExposer with Daytona's preview link of the port. The link's token goes in the
+// x-daytona-preview-token header; the interstitial warning page Daytona shows browsers is skipped, because the
+// requests come from the harness.
+func (i *instance) Endpoint(ctx context.Context, port int) (sandbox.Endpoint, error) {
+	u, token, err := i.box.PreviewLink(ctx, port)
+	if err != nil {
+		return sandbox.Endpoint{}, i.opErr(ctx, err, false)
+	}
+	h := map[string]string{"X-Daytona-Skip-Preview-Warning": "true"}
+	if token != "" {
+		h["x-daytona-preview-token"] = token
+	}
+	return sandbox.Endpoint{URL: strings.TrimRight(u, "/"), Headers: h}, nil
+}

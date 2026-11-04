@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/adapters/blobs/s3blobs"
 	"github.com/7ar-chat/harness/adapters/redisx"
 	"github.com/7ar-chat/harness/adapters/store/capstore"
 	"github.com/7ar-chat/harness/adapters/store/factorystore"
@@ -20,6 +21,7 @@ import (
 	"github.com/7ar-chat/harness/core/capabilities"
 	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/features/artifacts"
 	"github.com/7ar-chat/harness/redisinfra"
 )
 
@@ -41,6 +43,8 @@ type built struct {
 	team   store.TeamStore
 	sup    *product.Supervisor
 	github *product.GitHubApp
+	// preview runs the projects' apps in their sandboxes; the feature and the HTTP handler share it.
+	preview *product.Preview
 	// factory configures the product's factory routes (nil: the factory is off).
 	factory *product.FactoryOptions
 	// caps is the marketplace store (team mode only); the harness already reads its servers through it.
@@ -164,6 +168,8 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		if b.skills != nil {
 			features = append(features, b.skills.Feature()) // after the profile: it reads the skills the profile loads
 		}
+		b.preview = &product.Preview{}
+		features = append(features, b.preview.Feature())
 		o.Features = append(features, b.sup.Feature(),
 			(&product.RepoCheckout{Team: ts, GitHub: gh, Factory: fs, Brokered: cfg.OpenSandboxCredentialProxy && cfg.SandboxBackendName() == config.BackendOpenSandbox}).Feature())
 		if fo, enabled, err := factoryenv.FromEnv(os.Getenv, cfg, fs, gh, ts); err != nil {
@@ -173,6 +179,23 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 			b.factory = &product.FactoryOptions{Escalator: fo.Escalator, Hooks: fo.Hooks}
 			o.Features = append(o.Features, harness.FactoryFeature(fo.Options))
 		}
+	}
+	if cfg.ArtifactsS3Bucket != "" {
+		// Content (artifacts, attachments, the files of projects without a repository) goes to the S3-compatible store
+		// (RustFS, AWS...). What was stored in the database before stays readable.
+		s3, err := s3blobs.New(s3blobs.Options{Bucket: cfg.ArtifactsS3Bucket, Endpoint: cfg.ArtifactsS3Endpoint, Region: cfg.ArtifactsS3Region,
+			AccessKey: cfg.AWSAccessKeyID, SecretKey: cfg.AWSSecretAccessKey, PathStyle: cfg.ArtifactsS3PathStyle, Prefix: cfg.ArtifactsS3Prefix})
+		if err != nil {
+			_ = closers.Close()
+			return nil, fmt.Errorf("configure the S3 blob store: %w", err)
+		}
+		if cfg.ArtifactsS3CreateBucket {
+			if err := s3.EnsureBucket(ctx); err != nil {
+				_ = closers.Close()
+				return nil, err
+			}
+		}
+		o.Blobs = artifacts.FallbackBlobs{Primary: s3, Legacy: artifacts.PGBlobs{S: o.Store}}
 	}
 	h, err := harness.New(o)
 	if err != nil {

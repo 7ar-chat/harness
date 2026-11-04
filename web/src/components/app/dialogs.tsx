@@ -1,7 +1,7 @@
 // App-wide dialogs (new session, new project) opened from the sidebar, palette and pages.
 import { useNavigate } from "@tanstack/react-router";
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { useCreateProject, useCreateThread, useMe } from "@/api/queries";
+import { useCreateProject, useCreateThread, useMe, useTemplates } from "@/api/queries";
 import { canWrite } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -104,6 +104,10 @@ function NewSessionDialog({ open, project, onClose }: { open: boolean; project: 
 
 function NewProjectDialog({ open, onClose, onImport }: { open: boolean; onClose: () => void; onImport: () => void }) {
   const [f, setF] = useState({ name: "", description: "", repoUrl: "", defaultBranch: "main" });
+  // "template": start from a template (or blank) and keep the files with the project; "repo": clone a repository.
+  const [source, setSource] = useState<"template" | "repo">("template");
+  const [template, setTemplate] = useState("");
+  const templates = useTemplates();
   const create = useCreateProject();
   const navigate = useNavigate();
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
@@ -114,10 +118,13 @@ function NewProjectDialog({ open, onClose, onImport }: { open: boolean; onClose:
           onSubmit={(e) => {
             e.preventDefault();
             create.mutate(
-              { name: f.name.trim(), description: f.description.trim(), repoUrl: f.repoUrl.trim(), defaultBranch: f.defaultBranch.trim() },
+              source === "repo"
+                ? { name: f.name.trim(), description: f.description.trim(), repoUrl: f.repoUrl.trim(), defaultBranch: f.defaultBranch.trim() }
+                : { name: f.name.trim(), description: f.description.trim(), ...(template ? { template } : {}) },
               {
                 onSuccess: (p) => {
                   setF({ name: "", description: "", repoUrl: "", defaultBranch: "main" });
+                  setTemplate("");
                   onClose();
                   void navigate({ to: "/p/$projectId", params: { projectId: p.id } });
                 },
@@ -127,7 +134,7 @@ function NewProjectDialog({ open, onClose, onImport }: { open: boolean; onClose:
         >
           <DialogHeader>
             <DialogTitle>New project</DialogTitle>
-            <DialogDescription>A project is a repository whose sessions, memory and members are shared.</DialogDescription>
+            <DialogDescription>A project is a set of files whose sessions, memory and members are shared.</DialogDescription>
           </DialogHeader>
           <ImportEntry onImport={onImport} onNavigate={onClose} />
           <div className="my-4 space-y-4">
@@ -139,14 +146,52 @@ function NewProjectDialog({ open, onClose, onImport }: { open: boolean; onClose:
               <Label htmlFor="np-desc">Description</Label>
               <Textarea id="np-desc" value={f.description} onChange={set("description")} rows={2} />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="np-repo">Repository URL</Label>
-              <Input id="np-repo" value={f.repoUrl} onChange={set("repoUrl")} placeholder="https://github.com/org/repo" type="url" />
+            <div className="flex gap-1 rounded-md bg-muted p-1 text-sm" role="tablist" aria-label="Start from">
+              {(["template", "repo"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="tab"
+                  aria-selected={source === m}
+                  className={`flex-1 rounded px-2 py-1 ${source === m ? "bg-background shadow-sm" : "text-muted-foreground"}`}
+                  onClick={() => setSource(m)}
+                >
+                  {m === "template" ? "Template" : "Existing repository"}
+                </button>
+              ))}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="np-branch">Default branch</Label>
-              <Input id="np-branch" value={f.defaultBranch} onChange={set("defaultBranch")} />
-            </div>
+            {source === "template" ? (
+              <div className="space-y-2">
+                <Label>Start from</Label>
+                <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Template">
+                  {[{ id: "", name: "Blank", description: "An empty project; the assistant sets it up." }, ...(templates.data ?? [])].map((t) => (
+                    <button
+                      key={t.id || "blank"}
+                      type="button"
+                      role="radio"
+                      aria-checked={template === t.id}
+                      onClick={() => setTemplate(t.id)}
+                      className={`rounded-md border p-2 text-left text-sm transition-colors hover:bg-accent ${template === t.id ? "border-primary bg-accent" : ""}`}
+                    >
+                      <div className="font-medium">{t.name}</div>
+                      <div className="text-xs text-muted-foreground">{t.description}</div>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">The files are kept with the project. Ask the assistant to preview the app to see it running.</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="np-repo">Repository URL</Label>
+                  <Input id="np-repo" value={f.repoUrl} onChange={set("repoUrl")} placeholder="https://github.com/org/repo" type="url" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="np-branch">Default branch</Label>
+                  <Input id="np-branch" value={f.defaultBranch} onChange={set("defaultBranch")} />
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>

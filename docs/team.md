@@ -74,6 +74,52 @@ repository is cloned into `/workspace/repo` on a branch `har/<thread>`; the clon
 installation token (never a member's personal token), kept in a credential file of the sandbox and renewed at the
 start of each run. Public repositories clone without an App. The token is never placed on a command line.
 
+## Projects, templates and preview
+
+A project does not need a repository. Creating one from the UI offers a **template** (React + Vite, Astro, Python API with
+FastAPI, Node API with Express, Slidev presentation, static website) or a blank project; `GET /api/templates` lists them and
+`POST /api/projects` takes `"template": "<id>"` instead of `repoUrl`. A template is a directory under
+`app/product/templates/` with a `template.json` (what the picker shows) and the files of the new project.
+
+**Where the files live.** The sandbox is a working copy; the project's canonical copy is a git bundle in the blob store
+(`projects/<id>/repo.bundle`). Every session of the project starts from it: `/workspace/repo` is a clone on the branch
+`har/<thread>`, and when a run ends the session's changes are committed, merged with what other sessions saved meanwhile
+and written back (under a lock, so parallel sessions cannot overwrite each other). A change that cannot be merged
+cleanly keeps the session's work on a `conflict/har/<thread>` branch, which the next sessions are told about; main keeps the
+other session's version. `node_modules`, `.venv` and `__pycache__` are never saved. A project with a repository URL is
+unchanged: it is cloned from GitHub and pushed by the agent.
+
+The blob store is the database by default. For S3, for example RustFS deployed on Dokploy, set `ARTIFACTS_S3_ENDPOINT`
+(`http://rustfs:9000` on `dokploy-network`), `ARTIFACTS_S3_BUCKET`, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+(`ARTIFACTS_S3_CREATE_BUCKET=true` creates the bucket at startup); path-style addressing is the default. Artifacts and
+the thread checkpoints use the same store. Keep a copy of the bucket off the Dokploy host: it is the only copy of the
+projects' files. Deleting a project deletes its bundle.
+
+**`.har/project.yaml`** says how a project runs. It is in the repository, so the agent can change it and it is versioned:
+
+```yaml
+install: npm install            # optional; re-run when package.json, a lock file or requirements.txt changes
+run: npm run dev                # started in /workspace/repo as a detached process
+port: 5173                      # the port the app listens on (0.0.0.0)
+base: app                       # app: the app serves itself under $PREVIEW_BASE; strip (default): the proxy removes the prefix
+```
+
+**Preview.** The agent starts the app with its `preview_start` tool (and has `preview_logs` and `preview_stop`); it runs in
+the sandbox the session already works in, so edits show through the dev server's own hot reload. The session page has a
+*Preview* tab that frames `/preview/<thread>.<mac>/`, which harness-web proxies (HTTP and WebSocket) to the sandbox's port
+(`sandbox.PortExposer`: Daytona preview links, OpenSandbox endpoints, the local backend's loopback). The preview lives as
+long as the sandbox: when the sandbox is replaced or expires, ask the agent to start it again.
+
+The app is code the agent wrote, so it is kept away from your session:
+* the address is a bearer link (an HMAC of the thread id with `HARNESS_SECRET_KEY`); the UI shows it to members of the project;
+* it is framed with `sandbox` (no `allow-same-origin`) and answered with a `Content-Security-Policy: sandbox` header, so it runs
+  in an opaque origin and cannot call the product's API with your cookies; for the same reason `localStorage` and cookies are
+  unavailable to it;
+* the visitor's `Cookie` and `Authorization` headers are not forwarded to it and its `Set-Cookie` is dropped.
+
+The sandbox's egress policy still applies: `SANDBOX_EGRESS_ALLOWLIST` must include the package registries the templates use
+(`registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org` are in the default list of `docker-compose.prod.yml`).
+
 ## My assistant (the supervisor)
 
 `GET /api/supervisor` returns the caller's supervisor thread (kind `supervisor`). It runs without a sandbox, with

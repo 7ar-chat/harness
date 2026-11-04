@@ -607,3 +607,10 @@ func (in *Instance) sweep(_ context.Context, req sandbox.ExecRequest) (sandbox.E
 	}
 	return exit(0)
 }
+
+var _ sandbox.PortExposer = (*Instance)(nil)
+
+// Endpoint implements sandbox.PortExposer: a local sandbox runs on the host, so its ports are the host's.
+func (in *Instance) Endpoint(_ context.Context, port int) (sandbox.Endpoint, error) {
+	return sandbox.Endpoint{URL: fmt.Sprintf("http://127.0.0.1:%d", port)}, nil
+}

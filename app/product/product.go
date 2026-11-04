@@ -47,6 +47,8 @@ type Options struct {
 	Telegram *Telegram
 	// Slack, with Team, lets users talk to their assistant from Slack (see slack.go).
 	Slack *Slack
+	// Preview, with Team, runs a project's app in the sandbox of its thread and serves it under /preview/ (see preview.go).
+	Preview *Preview
 	// SkillAPI, with Capabilities, serves the connections of skills that need an account (see skillconn.go).
 	SkillAPI *SkillAPI
 	// Bus, with Team, shares the live feed between replicas (see feedbus.go): events produced by one
@@ -89,6 +91,9 @@ type server struct {
 
 // New returns the HTTP handler: the API of h with the product on top.
 func New(h *harness.Harness, api httpapi.Options, o Options) (http.Handler, error) {
+	if o.Preview != nil && len(o.Preview.Key) == 0 {
+		o.Preview.Key = o.SecretKey
+	}
 	api.Extension = &server{opt: o, team: o.Team, hub: newHub()}
 	return httpapi.NewServer(h, api)
 }

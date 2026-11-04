@@ -43,6 +43,8 @@ export default defineConfig({
     proxy: {
       "/api": { target: process.env.HARNESS_URL ?? "http://127.0.0.1:8080", changeOrigin: true },
       "/auth": { target: process.env.HARNESS_URL ?? "http://127.0.0.1:8080", changeOrigin: true },
+      // Project previews (an app running in a sandbox); ws: its dev server's hot-reload socket.
+      "/preview": { target: process.env.HARNESS_URL ?? "http://127.0.0.1:8080", changeOrigin: true, ws: true },
     },
   },
   test: { environment: "jsdom", setupFiles: ["src/test/setup.ts"], include: ["src/**/*.test.ts", "src/**/*.test.tsx"] },

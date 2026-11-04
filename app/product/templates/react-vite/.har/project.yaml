@@ -1,0 +1,6 @@
+template: react-vite
+install: npm install
+run: npm run dev
+port: 5173
+# app: the dev server serves under $PREVIEW_BASE itself (see vite.config.js).
+base: app

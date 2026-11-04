@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/core/blobs"
 	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/sandbox"
 	"github.com/7ar-chat/harness/core/store"
@@ -42,6 +43,10 @@ type RepoCheckout struct {
 	// Brokered tells the agent that GitHub requests are authenticated outside the sandbox (set when the
 	// sandbox backend has a credential broker), so it uses plain git and curl without a token.
 	Brokered bool
+	// Blobs holds the files of projects that have no repository URL (see projectgit.go); default: the harness's blob store.
+	Blobs blobs.Blobs
+	// Coordinator serialises the saving of those files between processes (default: the harness's, else this process).
+	Coordinator sandbox.Coordinator
 }
 
 // RepoDir is where the repository is checked out in the sandbox.
@@ -54,6 +59,15 @@ var safeRef = regexp.MustCompile(`^[A-Za-z0-9._/-]{1,100}$`)
 // Feature installs the checkout into the harness.
 func (rc *RepoCheckout) Feature() harness.Feature {
 	return harness.FeatureFunc("project-repo", func(b *harness.Builder) error {
+		if rc.Blobs == nil {
+			rc.Blobs = b.Blobs
+		}
+		if rc.Coordinator == nil && b.Infra.Coordinator != nil {
+			rc.Coordinator = b.Infra.Coordinator
+		}
+		if b.Sandboxes != nil {
+			b.EndOfRun(localPublish{rc: rc, mgr: b.Sandboxes})
+		}
 		b.OnSandboxCreate(func(ctx context.Context, threadID string, sb sandbox.Sandbox, _ bool) string {
 			return rc.setup(ctx, threadID, sb)
 		})
@@ -62,8 +76,11 @@ func (rc *RepoCheckout) Feature() harness.Feature {
 		}
 		b.Section(func(ctx context.Context, in agent.Input) string {
 			p := rc.project(ctx, in.Run.ThreadID)
-			if p == nil || p.RepoURL == "" {
+			if p == nil {
 				return ""
+			}
+			if p.RepoURL == "" {
+				return localSection(p, in.Run.ThreadID)
 			}
 			s := fmt.Sprintf("# Project repository\n\nThe project's repository (%s) is checked out in %s on your own branch %s. Work there; commit your changes. "+
 				"Other agents of the project work in their own copies, so do not assume they share your files.", p.RepoURL, RepoDir, branchFor(in.Run.ThreadID))
@@ -174,8 +191,11 @@ cd "$REPO_DIR" 2>/dev/null && git config credential.helper 'store --file=` + cre
 
 func (rc *RepoCheckout) setup(ctx context.Context, threadID string, sb sandbox.Sandbox) string {
 	p := rc.project(ctx, threadID)
-	if p == nil || p.RepoURL == "" {
+	if p == nil {
 		return ""
+	}
+	if p.RepoURL == "" {
+		return rc.setupLocal(ctx, threadID, sb, p)
 	}
 	repoURL, err := cloneURL(p)
 	if err != nil {

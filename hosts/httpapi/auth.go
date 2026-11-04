@@ -32,6 +32,10 @@ func LocalAuthenticator(user, token string) Authenticator {
 	}
 }
 
+// PreviewPrefix is the path under which project previews are served; the server's security headers and origin guard
+// leave it to the handler that serves it.
+const PreviewPrefix = "/preview/"
+
 // wrap adds the security headers, the Host guard, the cross-origin guard and CORS.
 func (s *Server) wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -42,6 +46,13 @@ func (s *Server) wrap(next http.Handler) http.Handler {
 		h.Set("X-Frame-Options", "DENY")
 		if len(s.O.AllowedHosts) > 0 && !hostAllowed(r.Host, s.O.AllowedHosts) {
 			writeError(w, http.StatusForbidden, "forbidden_host", "Host not allowed.")
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, PreviewPrefix) {
+			// A project preview (see the product package) is a different application served under this host: it sets
+			// its own security headers, and what lets a request in is the unguessable address, not the origin (the
+			// preview runs in a sandboxed frame whose requests carry Origin: null).
+			next.ServeHTTP(w, r)
 			return
 		}
 		if origin := r.Header.Get("Origin"); origin != "" && !sameOrigin(origin, r.Host) {

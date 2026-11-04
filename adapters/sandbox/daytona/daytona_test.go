@@ -695,3 +695,30 @@ func TestListWalksToDepthWithAbsolutePaths(t *testing.T) {
 		t.Errorf("%q / %q (%v %v)", paths(d1), paths(d2), err1, err2)
 	}
 }
+
+func TestEndpointIsTheSandboxsPreviewLinkWithItsToken(t *testing.T) {
+	// Arrange
+	ctx := ctxT(t)
+	inst, err := testBackend(newFakeAPI(), Options{}).Create(ctx, sandbox.CreateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	px, ok := inst.(sandbox.PortExposer)
+	if !ok {
+		t.Fatal("a Daytona sandbox should expose its ports")
+	}
+
+	// Act
+	ep, err := px.Endpoint(ctx, 5173)
+
+	// Assert
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(ep.URL, "https://5173-") || strings.HasSuffix(ep.URL, "/") {
+		t.Errorf("url = %q", ep.URL)
+	}
+	if ep.Headers["x-daytona-preview-token"] != "tok" || ep.Headers["X-Daytona-Skip-Preview-Warning"] != "true" {
+		t.Errorf("headers = %v", ep.Headers)
+	}
+}

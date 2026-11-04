@@ -326,6 +326,13 @@ export interface PlanItem {
   status: string;
 }
 
+export interface PreviewInfo {
+  url: string;
+  running: boolean;
+  manifest?: ProjectManifest;
+  reason?: string;
+}
+
 export interface PriceTier {
   above: number;
   input?: number;
@@ -345,6 +352,22 @@ export interface Project {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProjectManifest {
+  template?: string;
+  install?: string;
+  run: string;
+  port: number;
+  base?: string;
+}
+
+export interface ProjectTemplate {
+  id: string;
+  name: string;
+  description: string;
+  tags?: string[];
+  order?: number;
 }
 
 export interface ProjectWithRole extends Project {

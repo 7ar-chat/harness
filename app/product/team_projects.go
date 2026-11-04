@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/7ar-chat/harness/core/blobs"
 	"github.com/7ar-chat/harness/core/capabilities"
 	"github.com/7ar-chat/harness/core/store"
 )
@@ -17,6 +18,7 @@ func (s *server) routeTeam() {
 	s.Route("GET /me", s.me)
 	s.routeProfile()
 	s.routeConnectors()
+	s.Route("GET /templates", s.listTemplates)
 	s.Route("GET /projects", s.listProjects)
 	s.Route("POST /projects", s.createProject)
 	s.Route("GET /projects/{pid}", s.getProject)
@@ -34,6 +36,7 @@ func (s *server) routeTeam() {
 	s.Route("GET /seen", s.listSeen)
 	s.Route("POST /seen", s.markSeen)
 	s.routeGitHub()
+	s.routePreview()
 }
 
 type projectView struct {
@@ -73,6 +76,18 @@ func (s *server) listProjects(w http.ResponseWriter, r *http.Request, c Caller) 
 	writeJSON(w, http.StatusOK, nonNil(list))
 }
 
+func (s *server) listTemplates(w http.ResponseWriter, _ *http.Request, _ Caller) {
+	writeJSON(w, http.StatusOK, nonNil(Templates()))
+}
+
+// blobStore is where the files of projects without a repository live (nil when the harness has none).
+func (s *server) blobStore() blobs.Blobs {
+	if s.H == nil || s.H.Artifacts == nil {
+		return nil
+	}
+	return s.H.Artifacts.Blobs
+}
+
 func validRepoURL(u string) bool {
 	if u == "" {
 		return true
@@ -87,6 +102,8 @@ func (s *server) createProject(w http.ResponseWriter, r *http.Request, c Caller)
 		Description   string `json:"description"`
 		RepoURL       string `json:"repoUrl"`
 		DefaultBranch string `json:"defaultBranch"`
+		// Template starts a project without a repository from one of GET /templates.
+		Template string `json:"template"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -100,11 +117,33 @@ func (s *server) createProject(w http.ResponseWriter, r *http.Request, c Caller)
 		writeError(w, http.StatusBadRequest, "invalid_request", "repoUrl must be an https, ssh or git URL.")
 		return
 	}
+	if body.Template != "" {
+		if body.RepoURL != "" {
+			writeError(w, http.StatusBadRequest, "invalid_request", "A project starts from a template or from a repository, not both.")
+			return
+		}
+		if _, ok := TemplateByID(body.Template); !ok {
+			writeError(w, http.StatusBadRequest, "invalid_request", "Unknown template.")
+			return
+		}
+		if s.blobStore() == nil {
+			writeError(w, http.StatusServiceUnavailable, "unavailable", "Projects from a template need file storage, which is not configured.")
+			return
+		}
+	}
 	p, err := s.team.CreateProject(r.Context(), store.Project{Name: body.Name, Description: body.Description,
 		RepoURL: body.RepoURL, DefaultBranch: body.DefaultBranch}, c.Actor)
 	if err != nil {
 		fail(w, err)
 		return
+	}
+	if body.Template != "" {
+		if err := SeedProjectTemplate(r.Context(), s.blobStore(), p.ID, body.Template); err != nil {
+			// A project that cannot be seeded would silently start empty: remove it and say so.
+			_ = s.team.DeleteProject(r.Context(), p.ID)
+			fail(w, err)
+			return
+		}
 	}
 	s.note(Caller{Actor: c.Actor, ProjectID: p.ID}, "", "project.create", map[string]any{"name": p.Name}, FeedEvent{Type: "project.changed", affects: c.Actor})
 	writeJSON(w, http.StatusCreated, projectView{*p, store.RoleOwner})
@@ -196,6 +235,9 @@ func (s *server) deleteProject(w http.ResponseWriter, r *http.Request, c Caller)
 		}
 	}
 	members, _ := s.team.ListMembers(r.Context(), p.ID)
+	if bs := s.blobStore(); bs != nil && p.RepoURL == "" {
+		DeleteProjectFiles(r.Context(), bs, p.ID)
+	}
 	if err := s.team.DeleteProject(r.Context(), p.ID); err != nil {
 		fail(w, err)
 		return

@@ -2,6 +2,7 @@ package daytona
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -314,4 +315,8 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+func (b *fakeBox) PreviewLink(_ context.Context, port int) (string, string, error) {
+	return fmt.Sprintf("https://%d-%s.proxy.example/", port, b.id), "tok", nil
 }

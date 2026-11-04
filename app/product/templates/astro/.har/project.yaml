@@ -1,0 +1,5 @@
+template: astro
+install: npm install
+run: npm run dev
+port: 4321
+base: app

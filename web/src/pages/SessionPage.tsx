@@ -19,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useRunSettings } from "@/lib/hooks";
 import { MemoryManager } from "./Memory";
-import { ActivityPanel, FilesPanel, PlanPanel } from "./panels";
+import { ActivityPanel, FilesPanel, PlanPanel, PreviewPanel } from "./panels";
 import { SessionCard } from "./Dashboard";
 
 const SUGGESTIONS = ["What's running?", "Anything stuck?", "Approve safe pending requests"];
@@ -82,6 +82,7 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
   const qc = useQueryClient();
   const isMobile = useIsMobile();
   const [sheet, setSheet] = useState(false);
+  const [tab, setTab] = useState("files");
   const [confirm, setConfirm] = useState(false);
   const [status, setStatus] = useState<{ running: boolean; cancel: () => void; plan?: PlanItem[] }>({ running: false, cancel: () => {} });
   const project = useMe().data?.projects.find((p) => p.id === t?.projectId);
@@ -117,9 +118,10 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
       <SessionsList />
     </div>
   ) : (
-    <Tabs defaultValue="files" className="flex h-full min-h-0 flex-col gap-0">
+    <Tabs value={tab} onValueChange={setTab} className="flex h-full min-h-0 flex-col gap-0">
       <TabsList className="m-2 shrink-0">
         <TabsTrigger value="files">Files</TabsTrigger>
+        {t.projectId ? <TabsTrigger value="preview">Preview</TabsTrigger> : null}
         <TabsTrigger value="plan">Plan{plan.length ? ` (${plan.length})` : ""}</TabsTrigger>
         <TabsTrigger value="memory">Memory</TabsTrigger>
         <TabsTrigger value="activity">Activity</TabsTrigger>
@@ -127,6 +129,11 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
       <TabsContent value="files" className="min-h-0 flex-1 overflow-hidden">
         <FilesPanel threadId={threadId} refreshKey={t.updatedAt + String(status.running)} />
       </TabsContent>
+      {t.projectId ? (
+        <TabsContent value="preview" className="min-h-0 flex-1 overflow-hidden">
+          <PreviewPanel threadId={threadId} active={tab === "preview"} />
+        </TabsContent>
+      ) : null}
       <TabsContent value="plan" className="min-h-0 flex-1 overflow-y-auto">
         <PlanPanel items={plan} />
       </TabsContent>
