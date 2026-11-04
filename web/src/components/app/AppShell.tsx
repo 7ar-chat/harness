@@ -1,12 +1,13 @@
 import { Logo } from "@/components/app/Logo";
 import { identifyUser } from "@/lib/telemetry";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "@tanstack/react-router";
-import { Bot, Brain, ChevronRight, ChevronsUpDown, LayoutDashboard, Link2, LogOut, Monitor, Moon, Plus, Search, SlidersHorizontal, Sun, UserCog, Users, WifiOff } from "lucide-react";
+import { Bot, Brain, ChevronRight, ChevronsUpDown, LayoutDashboard, Link2, LogOut, Monitor, Moon, Plus, Search, SlidersHorizontal, Sun, Trash2, UserCog, Users, WifiOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getDevUser, setDevUser } from "@/api/client";
-import { supervisorQuery, useAdminUsers, useMe, useMemoryStats, useOverview, useSeen } from "@/api/queries";
+import { supervisorQuery, useAdminUsers, useDeleteThread, useMe, useMemoryStats, useOverview, useSeen } from "@/api/queries";
 import type { OverviewProject, ThreadSummary } from "@/api/types";
 import { useQuery } from "@tanstack/react-query";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -23,8 +24,13 @@ import { ErrorBoundary } from "./ErrorBoundary";
 
 const byRecent = (a: ThreadSummary, b: ThreadSummary) => b.updatedAt.localeCompare(a.updatedAt);
 
-function ThreadItem({ t, openId }: { t: ThreadSummary; openId?: string }) {
+function ThreadItem({ t, openId, owner }: { t: ThreadSummary; openId?: string; owner?: boolean }) {
   const seen = useSeen();
+  const me = useMe().data?.user.login;
+  const del = useDeleteThread();
+  const navigate = useNavigate();
+  const [confirm, setConfirm] = useState(false);
+  const canDelete = !!me && (t.createdBy === me || owner || !t.projectId);
   const { isMobile, setOpenMobile } = useSidebar();
   const unread = isUnread(seen, t.id, t.updatedAt, openId);
   return (
@@ -36,6 +42,23 @@ function ThreadItem({ t, openId }: { t: ThreadSummary; openId?: string }) {
           {t.createdBy ? <UserAvatar login={t.createdBy} className="ml-auto size-4 text-[8px]" /> : null}
         </Link>
       </SidebarMenuButton>
+      {canDelete ? (
+        <SidebarMenuAction showOnHover onClick={() => setConfirm(true)} aria-label={`Delete ${t.title || "session"}`} title="Delete session">
+          <Trash2 />
+        </SidebarMenuAction>
+      ) : null}
+      <AlertDialog open={confirm} onOpenChange={setConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{t.title || "(untitled)"}”?</AlertDialogTitle>
+            <AlertDialogDescription>The conversation and its workspace are removed for everyone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => del.mutate(t.id, { onSuccess: () => void (t.id === openId && navigate({ to: "/" })) })}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarMenuItem>
   );
 }
@@ -73,7 +96,7 @@ function ProjectGroup({ p, openId, openProject }: { p: OverviewProject; openId?:
         ) : null}
         <CollapsibleContent>
           <SidebarMenu className="mt-1 pl-3">
-            {threads.length ? threads.map((t) => <ThreadItem key={t.id} t={t} openId={openId} />) : <li className="px-2 py-1 text-xs text-muted-foreground">No sessions yet</li>}
+            {threads.length ? threads.map((t) => <ThreadItem key={t.id} t={t} openId={openId} owner={p.role === "owner"} />) : <li className="px-2 py-1 text-xs text-muted-foreground">No sessions yet</li>}
           </SidebarMenu>
         </CollapsibleContent>
       </SidebarMenuItem>
