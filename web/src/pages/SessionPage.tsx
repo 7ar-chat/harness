@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { ModelPicker } from "@/components/app/ModelPicker";
 import { Bot, GitBranch, Pencil, PanelRight, Square, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { ApiError, canWrite } from "@/api/client";
@@ -12,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -201,18 +201,14 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-          <Select value={settings.model ?? ""} onValueChange={(model) => setSettings({ model })} disabled={!models?.models.length}>
-            <SelectTrigger size="sm" className="h-7 w-48" aria-label="Model">
-              <SelectValue placeholder={models && !models.models.length ? "No model configured" : "Model"} />
-            </SelectTrigger>
-            <SelectContent>
-              {(models?.models ?? []).map((m) => (
-                <SelectItem key={m} value={m}>
-                  {m}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ModelPicker
+            models={models?.models ?? []}
+            value={settings.model ?? ""}
+            onChange={(model) => setSettings({ model })}
+            info={models?.info}
+            disabled={!models?.models.length}
+            placeholder={models && !models.models.length ? "No model configured" : "Model"}
+          />
           <Tabs value={settings.mode} onValueChange={(m) => setSettings({ mode: m === "plan" ? "plan" : "build" })}>
             <TabsList className="h-7">
               <TabsTrigger value="build" className="px-2 text-xs">Build</TabsTrigger>
