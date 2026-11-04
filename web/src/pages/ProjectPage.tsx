@@ -264,7 +264,7 @@ export function ProjectPage() {
   const threads = (overview?.projects.find((x) => x.id === projectId)?.threads ?? []).filter((t) => t.kind !== "supervisor").sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return (
     <ScrollArea className="h-full">
-      <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
+      <div className="space-y-6 p-4 md:p-8">
         <div className="flex flex-wrap items-start gap-3">
           <div className="min-w-0 flex-1">
             <h1 className="flex items-center gap-2 text-xl font-semibold">
