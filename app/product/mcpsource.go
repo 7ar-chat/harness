@@ -66,7 +66,7 @@ func NewMCPSource(team store.TeamStore, caps capabilities.Store, catalog []capab
 		}
 		var out []config.MCPServer
 		for _, it := range capabilities.Effective(entries, installs) {
-			if !it.Enabled {
+			if !it.Enabled || (it.Entry == nil && isSkillInstall(it.Name)) { // skill connections are not MCP servers
 				continue
 			}
 			s, err := serverOf(box, it)

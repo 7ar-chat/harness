@@ -7,6 +7,10 @@ and optional `scripts/`, `reference/` files. The model sees an index of them in 
 reads one with `load_skill`, and its folder appears read-only under `/skills/<name>/` in the sandbox
 (installed lazily, only for the skills a run loads or names in a command).
 
+A skill that needs an account of the user's (a Dokploy server, any HTTP API) can declare it in a `connect:` block; the
+server then makes the calls with the user's sealed credentials, which never reach the sandbox or the model. See
+[docs/marketplace.md](marketplace.md#skills-with-an-account).
+
 Skills are discovered from, lowest to highest precedence (a later source replaces a skill of the same name):
 
 | Source | Where | Notes |

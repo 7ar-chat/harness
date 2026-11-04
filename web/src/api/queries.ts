@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { api, ApiError, isUnsupported, putBytes } from "./client";
 import { isNewerVisit, loadLocalSeen, saveLocalSeen } from "@/lib/unread";
 import type {
-  AdminUser, AuditEntry, AuthProvider, UserStatus, CapabilityAdd, CapabilityPut, CapabilityTestResult, CapabilityView, Connector, GithubRepos, KnownUser, User, Command, GithubStatus, Invite, Me, Member, MemoryEntry, MemoryInput, MemoryList, MemoryStats, ModelList, Overview,
+  AdminUser, AuditEntry, AuthProvider, UserStatus, CapabilityAdd, CapabilityPut, CapabilityTestResult, CapabilityView, Connector, SkillConnTest, SkillConnView, GithubRepos, KnownUser, User, Command, GithubStatus, Invite, Me, Member, MemoryEntry, MemoryInput, MemoryList, MemoryStats, ModelList, Overview,
   Project, ProjectWithRole, Role, Thread, WorkspaceFile,
 } from "./types";
 
@@ -25,6 +25,7 @@ export const qk = {
   adminUsers: (status?: string) => ["admin", "users", status ?? "all"] as const,
   providers: ["auth", "providers"] as const,
   capabilities: (pid?: string) => ["capabilities", pid ?? "user"] as const,
+  skillConnections: (pid?: string) => ["skill-connections", pid ?? "user"] as const,
 };
 
 export const meQuery = queryOptions({ queryKey: qk.me, queryFn: () => api.get<Me>("/me"), staleTime: 60_000, retry: (n, e) => !(e instanceof ApiError && e.status < 500) && n < 2 });
@@ -298,6 +299,27 @@ export const usePutCapability = (pid?: string) =>
   useAction((v: { name: string; body: CapabilityPut }) => api.put<CapabilityView>(capPath(pid, v.name), v.body), () => [qk.capabilities(pid)]);
 export const useAddCapability = (pid?: string) => useAction((b: CapabilityAdd) => api.post<CapabilityView>(capPath(pid), b), () => [qk.capabilities(pid)], "Server added");
 export const useDeleteCapability = (pid?: string) => useAction((name: string) => api.del(capPath(pid, name)), () => [qk.capabilities(pid)]);
+// ---- skill connections (skills that need an account: a Dokploy server...) ----
+const skillPath = (pid?: string, name?: string, suffix = "") => `${pid ? `/projects/${pid}` : "/me"}/skill-connections${name ? `/${encodeURIComponent(name)}` : ""}${suffix}`;
+/** The scope's connectable skills, or null when this server has none (404/501). */
+export const useSkillConnections = (pid?: string) =>
+  useQuery({
+    queryKey: qk.skillConnections(pid),
+    queryFn: async () => {
+      try {
+        return await api.get<SkillConnView[]>(skillPath(pid));
+      } catch (e) {
+        if (isUnsupported(e)) return null;
+        throw e;
+      }
+    },
+    retry: false,
+  });
+export const usePutSkillConnection = (pid?: string) =>
+  useAction((v: { name: string; body: { enabled?: boolean; fields?: Record<string, string> } }) => api.put<SkillConnView>(skillPath(pid, v.name), v.body), () => [qk.skillConnections(pid)]);
+export const useDeleteSkillConnection = (pid?: string) => useAction((name: string) => api.del(skillPath(pid, name)), () => [qk.skillConnections(pid)], "Disconnected");
+export const useTestSkillConnection = (pid?: string) => useAction((name: string) => api.post<SkillConnTest>(skillPath(pid, name, "/test")), () => []);
+
 export const useTestCapability = (pid?: string) => useAction((name: string) => api.post<CapabilityTestResult>(capPath(pid, name, "/test")), () => []);
 
 // ---- sign-in and administration ----

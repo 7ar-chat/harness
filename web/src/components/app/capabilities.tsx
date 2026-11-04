@@ -1,7 +1,9 @@
-import { CheckCircle2, ExternalLink, Plug, Plus, Search, Trash2, X } from "lucide-react";
+import { CheckCircle2, ExternalLink, Plug, Plus, Search, ShieldCheck, Trash2, X } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
-import { useAddCapability, useCapabilities, useDeleteCapability, usePutCapability, useTestCapability } from "@/api/queries";
-import type { CapabilityPut, CapabilityTestResult, CapabilityTransport, CapabilityView } from "@/api/types";
+import {
+  useAddCapability, useCapabilities, useDeleteCapability, useDeleteSkillConnection, usePutCapability, usePutSkillConnection, useSkillConnections, useTestCapability, useTestSkillConnection,
+} from "@/api/queries";
+import type { CapabilityPut, CapabilityTestResult, CapabilityTransport, CapabilityView, SkillConnTest, SkillConnView } from "@/api/types";
 import { Empty, ErrorState, ListSkeleton, Spinner } from "@/components/app/common";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -588,6 +590,167 @@ function Section({ id, title, action, children }: { id: string; title: string; a
   );
 }
 
+// ---- skills that need an account ----
+function skillStatus(c: SkillConnView): { label: string; className?: string; variant: "default" | "secondary" | "outline" } {
+  if (c.enabled) return { label: "Connected", variant: "default" };
+  if (c.installed && c.missing?.length) return { label: "Needs setup", variant: "default", className: "bg-warning text-black" };
+  return { label: "Not connected", variant: "outline" };
+}
+
+function SkillDialog({ skill, pid, onClose }: { skill: SkillConnView; pid?: string; onClose: () => void }) {
+  const put = usePutSkillConnection(pid);
+  const del = useDeleteSkillConnection(pid);
+  const test = useTestSkillConnection(pid);
+  const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(skill.fields.filter((f) => !f.secret).map((f) => [f.key, f.value ?? ""])));
+  const [cleared, setCleared] = useState<Record<string, boolean>>({});
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<SkillConnTest>();
+  const [confirm, setConfirm] = useState(false);
+  const busy = put.isPending || del.isPending;
+  const writes = skill.allow.filter((a) => !a.startsWith("GET "));
+
+  const save = () => {
+    const fields: Record<string, string> = {};
+    for (const f of skill.fields) {
+      const v = values[f.key]?.trim() ?? "";
+      if (cleared[f.key]) fields[f.key] = "";
+      else if (v && (f.secret || v !== (f.value ?? ""))) fields[f.key] = v;
+    }
+    const missing = skill.fields.filter((f) => f.required && !(values[f.key]?.trim() || (f.set && !cleared[f.key]))).map((f) => f.label);
+    if (missing.length) return setError(`Fill in: ${missing.join(", ")}.`);
+    for (const f of skill.fields) {
+      const v = fields[f.key];
+      if (f.type === "url" && v) {
+        const e = validateUrl(v);
+        if (e) return setError(e);
+      }
+    }
+    setError("");
+    put.mutate({ name: skill.name, body: { enabled: true, fields } }, { onSuccess: onClose });
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); save(); }}>
+          <DialogHeader>
+            <DialogTitle>Connect {skill.name}</DialogTitle>
+            <DialogDescription>{skill.description}</DialogDescription>
+          </DialogHeader>
+          <p className="flex items-start gap-2 rounded-md border p-2 text-xs text-muted-foreground">
+            <ShieldCheck className="mt-0.5 size-4 shrink-0" />
+            <span>Your credentials are stored encrypted on the server and added to requests there. The agent never sees them and cannot read them back.</span>
+          </p>
+          {skill.fields.map((f) => (
+            <FieldRow
+              key={f.key}
+              id={`skill-${skill.name}-${f.key}`}
+              label={f.label}
+              help={f.help}
+              required={f.required}
+              isSet={f.set}
+              value={values[f.key] ?? ""}
+              onValue={(v) => setValues((o) => ({ ...o, [f.key]: v }))}
+              cleared={!!cleared[f.key]}
+              onClear={(c) => setCleared((o) => ({ ...o, [f.key]: c }))}
+              secret={f.secret}
+              setText={f.secret ? "Set" : "Saved"}
+            />
+          ))}
+          <div className="space-y-1.5 text-sm">
+            <p className="font-medium">What the agent can do with it</p>
+            <ul className="list-inside list-disc text-xs text-muted-foreground">
+              <li>Read: {skill.allow.some((a) => a === "GET *") ? "everything the API lets it read" : "the endpoints listed below"}</li>
+              {writes.length ? writes.map((a) => <li key={a} className="font-mono">{a} <span className="font-sans">(asks you first)</span></li>) : <li>Nothing else: it cannot change anything.</li>}
+            </ul>
+            {skill.host ? <p className="text-xs text-muted-foreground">Requests go to <span className="font-mono">{skill.host}</span> only.</p> : null}
+          </div>
+          {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+          {result ? (
+            result.ok ? (
+              <p role="status" className="flex items-center gap-1.5 rounded-md border p-2 text-sm"><CheckCircle2 className="size-4 text-success" /> The server answered.</p>
+            ) : (
+              <p role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-2 text-sm">Connection failed{result.error ? `: ${result.error}` : "."}</p>
+            )
+          ) : null}
+          <DialogFooter className="gap-2 sm:justify-between">
+            <div className="flex gap-2">
+              {skill.installed ? (
+                <Button type="button" variant="ghost" className="text-destructive" disabled={busy} onClick={() => setConfirm(true)}>
+                  <Trash2 /> Disconnect
+                </Button>
+              ) : null}
+              {skill.installed && skill.canTest ? (
+                <Button type="button" variant="outline" disabled={busy || test.isPending} onClick={() => test.mutate(skill.name, { onSuccess: setResult })}>
+                  {test.isPending ? <Spinner /> : null} Test
+                </Button>
+              ) : null}
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+              <Button type="submit" disabled={busy}>{put.isPending ? <Spinner /> : null} {skill.installed ? "Save" : "Connect"}</Button>
+            </div>
+          </DialogFooter>
+        </form>
+        <AlertDialog open={confirm} onOpenChange={setConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Disconnect {skill.name}?</AlertDialogTitle>
+              <AlertDialogDescription>The stored credentials are deleted and agents lose access to it.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => del.mutate(skill.name, { onSuccess: onClose })}>Disconnect</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SkillConnections({ pid, canEdit }: { pid?: string; canEdit: boolean }) {
+  const q = useSkillConnections(pid);
+  const [selected, setSelected] = useState<string>();
+  const list = q.data ?? [];
+  if (!list.length) return null; // none declared, or the server has none
+  const sel = list.find((c) => c.name === selected);
+  return (
+    <Section id="cap-skills-h" title="Skills with an account">
+      <p className="text-sm text-muted-foreground">
+        Skills that act on one of your accounts. Connect one and agents can use it; the credentials stay on the server.{canEdit ? "" : " Only a project owner can change them."}
+      </p>
+      <ul className="grid gap-3 sm:grid-cols-2" aria-label="Skills with an account">
+        {list.map((c) => {
+          const st = skillStatus(c);
+          return (
+            <li key={c.name}>
+              <Card className="h-full">
+                <CardHeader>
+                  <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                    <h3>{c.name}</h3>
+                    <Badge variant={st.variant} className={st.className}>{st.label}</Badge>
+                  </CardTitle>
+                  <CardDescription>{c.description}</CardDescription>
+                </CardHeader>
+                {c.host && c.enabled ? <CardContent className="text-xs text-muted-foreground">Connected to <span className="font-mono">{c.host}</span></CardContent> : null}
+                {canEdit ? (
+                  <CardFooter>
+                    <Button variant="outline" size="sm" aria-label={`${c.installed ? "Configure" : "Connect"} ${c.name}`} onClick={() => setSelected(c.name)}>
+                      {c.installed ? "Configure" : "Connect"}
+                    </Button>
+                  </CardFooter>
+                ) : null}
+              </Card>
+            </li>
+          );
+        })}
+      </ul>
+      {canEdit && sel ? <SkillDialog key={sel.name} skill={sel} pid={pid} onClose={() => setSelected(undefined)} /> : null}
+    </Section>
+  );
+}
+
 export function CapabilitiesPanel({ scope }: { scope: CapabilitiesScope }) {
   const pid = scope.kind === "project" ? scope.projectId : undefined;
   const canEdit = scope.kind === "user" || scope.canEdit;
@@ -678,6 +841,7 @@ export function CapabilitiesPanel({ scope }: { scope: CapabilitiesScope }) {
           <p className="text-sm text-muted-foreground">No custom servers yet.</p>
         )}
       </Section>
+      <SkillConnections pid={pid} canEdit={canEdit} />
       {canEdit && sel ? <ConfigureDialog key={sel.name} cap={sel} pid={pid} onClose={() => setSelected(undefined)} /> : null}
       {canEdit && adding ? <AddDialog pid={pid} onClose={() => setAdding(false)} /> : null}
     </div>

@@ -47,6 +47,8 @@ type Options struct {
 	Telegram *Telegram
 	// Slack, with Team, lets users talk to their assistant from Slack (see slack.go).
 	Slack *Slack
+	// SkillAPI, with Capabilities, serves the connections of skills that need an account (see skillconn.go).
+	SkillAPI *SkillAPI
 	// Bus, with Team, shares the live feed between replicas (see feedbus.go): events produced by one
 	// replica reach the subscribers connected to the others. Nil keeps the feed in the process.
 	// harness-web uses redisx.NewFeedBus when REDIS_HOST is set.

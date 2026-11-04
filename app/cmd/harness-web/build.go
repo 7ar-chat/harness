@@ -45,6 +45,8 @@ type built struct {
 	factory *product.FactoryOptions
 	// caps is the marketplace store (team mode only); the harness already reads its servers through it.
 	caps capabilities.Store
+	// skills serves the connections of skills that need an account (nil without the marketplace).
+	skills *product.SkillAPI
 	// bus shares the live feed between replicas: set in team mode when REDIS_HOST is.
 	bus    product.FeedBus
 	closer io.Closer
@@ -147,11 +149,22 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 			return nil, err
 		}
 		b.caps = caps
+		if caps != nil {
+			if b.skills, err = product.NewSkillAPI(ts, caps, product.SecretKeyFromEnv(os.Getenv)); err != nil {
+				_ = closers.Close()
+				return nil, err
+			}
+			o.ExtraSkills = product.Skills()
+		}
 		o.MemoryUserKey = product.MemoryUserKey(ts, o.Store.ListMessages)
 		o.MemoryShared = product.MemoryShared
 		b.sup = product.NewSupervisor(ts)
 		o.Tools = append(o.Tools, b.sup.Tools())
-		o.Features = append(harness.ProfileNamed(cfg.AgentProfile), b.sup.Feature(),
+		features := harness.ProfileNamed(cfg.AgentProfile)
+		if b.skills != nil {
+			features = append(features, b.skills.Feature()) // after the profile: it reads the skills the profile loads
+		}
+		o.Features = append(features, b.sup.Feature(),
 			(&product.RepoCheckout{Team: ts, GitHub: gh, Factory: fs, Brokered: cfg.OpenSandboxCredentialProxy && cfg.SandboxBackendName() == config.BackendOpenSandbox}).Feature())
 		if fo, enabled, err := factoryenv.FromEnv(os.Getenv, cfg, fs, gh, ts); err != nil {
 			_ = closers.Close()

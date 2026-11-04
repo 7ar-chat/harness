@@ -117,6 +117,7 @@ func (s *server) routeCapabilities() {
 	if s.opt.Capabilities == nil {
 		return
 	}
+	s.routeSkillConnections()
 	for _, p := range []struct {
 		prefix  string
 		project bool
@@ -172,7 +173,8 @@ func (s *server) capState(ctx context.Context, sc capScope) ([]capabilities.Item
 	if err != nil {
 		return nil, err
 	}
-	return capabilities.Effective(catalog, installs), nil
+	items := capabilities.Effective(catalog, installs)
+	return slices.DeleteFunc(items, func(it capabilities.Item) bool { return it.Entry == nil && isSkillInstall(it.Name) }), nil
 }
 
 func itemNamed(items []capabilities.Item, name string) (capabilities.Item, bool) {
@@ -351,6 +353,10 @@ func (s *server) addCapability(w http.ResponseWriter, r *http.Request, sc capSco
 	}
 	if !capabilities.ValidName(body.Name) {
 		writeError(w, http.StatusBadRequest, "invalid_name", "A server name is lower case, starts with a letter and has at most 32 letters, digits, - or _ (no double underscore).")
+		return
+	}
+	if isSkillInstall(body.Name) {
+		writeError(w, http.StatusBadRequest, "invalid_name", "Names starting with skill_ are reserved for skill connections.")
 		return
 	}
 	url := ""

@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { CapabilityView } from "@/api/types";
+import type { CapabilityView, SkillConnView } from "@/api/types";
 import { mockFetch, reply } from "@/test/fetch";
 import { me, overview, project, shellRoutes } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
@@ -186,5 +186,90 @@ describe("Profile capabilities", () => {
     expect(await within(screen.getByRole("main")).findByText("Capabilities", { selector: "[data-slot=card-title]" })).toBeTruthy();
     expect(await screen.findByText("Docs search")).toBeTruthy();
     expect(m.find("GET", "/api/me/capabilities")).toHaveLength(1);
+  });
+});
+
+describe("Skills with an account", () => {
+  const dokploy = (extra: Partial<SkillConnView> = {}): SkillConnView => ({
+    name: "dokploy",
+    description: "Inspect and redeploy services on your Dokploy server",
+    fields: [
+      { key: "url", label: "Dokploy URL", type: "url", secret: false, required: true, set: false },
+      { key: "token", label: "API key", secret: true, required: true, set: false },
+    ],
+    enabled: false,
+    installed: false,
+    missing: ["url", "token"],
+    allow: ["GET *", "POST /compose.redeploy"],
+    canTest: true,
+    ...extra,
+  });
+
+  it("shows what the agent will be able to do, then sends the credentials as fields and never shows the key back", async () => {
+    const connected = dokploy({
+      enabled: true,
+      installed: true,
+      missing: undefined,
+      host: "dokploy.example.com",
+      fields: [
+        { key: "url", label: "Dokploy URL", type: "url", secret: false, required: true, set: true, value: "https://dokploy.example.com" },
+        { key: "token", label: "API key", secret: true, required: true, set: true },
+      ],
+    });
+    let current = [dokploy()];
+    const m = await open("owner", undefined, {
+      "GET /api/projects/p1/skill-connections": () => current,
+      "PUT /api/projects/p1/skill-connections/dokploy": () => {
+        current = [connected];
+        return connected;
+      },
+    });
+    expect((await card("dokploy")).getByText("Not connected")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Connect dokploy" }));
+    let dlg = within(await screen.findByRole("dialog"));
+
+    // before connecting, the user is told where the key goes, and that the writes ask first
+    expect(dlg.getByText(/never sees them/)).toBeTruthy();
+    expect(dlg.getByText("POST /compose.redeploy")).toBeTruthy();
+    expect(dlg.getByText(/asks you first/)).toBeTruthy();
+    expect((dlg.getByLabelText("API key") as HTMLInputElement).type).toBe("password");
+
+    // required fields are checked before anything is sent; an http address is refused
+    fireEvent.click(dlg.getByRole("button", { name: "Connect" }));
+    expect(dlg.getByRole("alert").textContent).toContain("Fill in");
+    fireEvent.change(dlg.getByLabelText("Dokploy URL"), { target: { value: "http://dokploy.example.com" } });
+    fireEvent.change(dlg.getByLabelText("API key"), { target: { value: "tok-secret-1" } });
+    fireEvent.click(dlg.getByRole("button", { name: "Connect" }));
+    expect(dlg.getByRole("alert").textContent).toContain("https");
+    expect(m.find("PUT", "/api/projects/p1/skill-connections/dokploy")).toHaveLength(0);
+
+    fireEvent.change(dlg.getByLabelText("Dokploy URL"), { target: { value: "https://dokploy.example.com" } });
+    fireEvent.click(dlg.getByRole("button", { name: "Connect" }));
+    await waitFor(() => expect(m.find("PUT", "/api/projects/p1/skill-connections/dokploy")).toHaveLength(1));
+    expect(m.find("PUT", "/api/projects/p1/skill-connections/dokploy")[0]!.body).toEqual({
+      enabled: true,
+      fields: { url: "https://dokploy.example.com", token: "tok-secret-1" },
+    });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect((await card("dokploy")).getByText("Connected")).toBeTruthy();
+
+    // reopened: the address is shown (it says where the key goes), the key is only "Set"
+    fireEvent.click(screen.getByRole("button", { name: "Configure dokploy" }));
+    dlg = within(await screen.findByRole("dialog"));
+    expect((dlg.getByLabelText("Dokploy URL") as HTMLInputElement).value).toBe("https://dokploy.example.com");
+    expect((dlg.getByLabelText("API key") as HTMLInputElement).value).toBe("");
+    expect(document.body.textContent).not.toContain("tok-secret-1");
+  });
+
+  it("shows a member the state without controls, and nothing at all when the server has no such skills", async () => {
+    await open("member", undefined, { "GET /api/projects/p1/skill-connections": [dokploy()] });
+    expect((await card("dokploy")).getByText("Not connected")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Connect dokploy" })).toBeNull();
+  });
+
+  it("is absent when the server declares no connectable skill", async () => {
+    await open("owner", undefined, { "GET /api/projects/p1/skill-connections": [] });
+    await screen.findByRole("heading", { name: "Marketplace" });
+    expect(screen.queryByRole("heading", { name: "Skills with an account" })).toBeNull();
   });
 });

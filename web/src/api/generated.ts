@@ -401,6 +401,35 @@ export interface SendOptions {
   sandbox?: SandboxMode;
 }
 
+export interface SkillConnTest {
+  ok: boolean;
+  status?: number;
+  error?: string;
+}
+
+export interface SkillConnView {
+  name: string;
+  description: string;
+  fields: SkillFieldView[];
+  enabled: boolean;
+  installed: boolean;
+  missing?: string[];
+  allow: string[];
+  host?: string;
+  canTest: boolean;
+}
+
+export interface SkillFieldView {
+  key: string;
+  label: string;
+  help?: string;
+  type?: string;
+  secret: boolean;
+  required: boolean;
+  set: boolean;
+  value?: string;
+}
+
 export interface SupervisorSettings {
   watch: boolean;
   stuckMinutes: number;

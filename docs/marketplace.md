@@ -91,3 +91,71 @@ Filling in a field does not enable the server: send `enabled: true` as well. At 
 Nothing to set. With `POSTGRES_HOST` the catalog and installs live in Postgres (migration `0500_capabilities.sql`); without it
 `harness-web` keeps them in `capabilities.json` next to `team.json`. `harness-worker` shares the Postgres ones and has no marketplace
 without it. Stdio servers are not offered: nothing here starts a process.
+
+## Skills with an account
+
+Some skills act on an account of the user's: a Dokploy server, a Cloudflare zone, any service with an HTTP API. A
+skill declares what it needs in a `connect:` block of its `SKILL.md`; the Capabilities tab (a project's, or the
+profile's) then shows it under **Skills with an account**, where the user fills in the address and key, sees what the
+agent will be able to do, and turns it on. Nothing in the product is written per skill.
+
+The agent gets two tools, `skill_api_get` and `skill_api_call`. **The server makes the request**: the credentials are
+sealed in the database like the marketplace's keys, added to the request here, and never reach the sandbox or the
+model, so a prompt injection has nothing to read. The sandbox is not involved at all (no environment variable, no
+file), which is the point: an agent that can run commands can print whatever is in its environment.
+
+```yaml
+---
+name: dokploy
+description: Inspect and redeploy services on the user's Dokploy server.
+connect:
+  fields:                                    # what the user fills in (at most 8)
+    - {key: url,   label: "Dokploy URL", type: url}
+    - {key: token, label: "API key", secret: true}
+  base: "${url}/api"                         # https://fixed.host/path, or ${field of type url}/path
+  headers: {x-api-key: "${token}"}           # added to every request
+  allow:                                     # the only calls the agent can make
+    - "GET *"
+    - "POST /compose.redeploy"
+  redact: [env, refreshToken]                # JSON keys whose values the model never sees
+  test: /settings.health                     # optional: the GET behind the "Test" button
+---
+```
+
+Quote the templates. `required` defaults to true; a `secret` field is never shown back; a `type: url` field is shown
+(it says where the key goes) and is checked like a custom MCP server's address.
+
+### Why this is safe to give to users
+
+* **Only trusted skills may declare it**: the built-in ones, the product's own (`app/product/skills`, embedded) and
+  those in `SKILLS_DIR`. A project's skill is the repository's text and is ignored here: otherwise a repository could
+  ship a declaration that sends the key to its own host.
+* **The address is not the agent's**: the base is fixed by the skill or is the URL the user typed; the path the agent
+  sends must start with `/`, with no `..`, `?`, `#`, `%` or `//`, and the final address must stay under the base.
+  The transport is the guarded one of the MCP servers (loopback, private, link-local and metadata addresses are
+  refused, also for what a name resolves to) and **no redirect is followed**, since the key is a header.
+* **Writes are explicit**: only the methods and paths in `allow` are possible (`GET *` is how reads are granted), the
+  user is shown the list before connecting, and `skill_api_call` needs the user's approval like the built-in risky
+  tools. Anything else is refused before a request is made.
+* **The model sees less than the API returns**: values under the `redact` keys, at any depth, and any secret the user
+  filled in (should an API echo it) come back as `[REDACTED]`. Responses are cut at 64 KiB.
+* **Scopes do not mix**: a project's session uses the project's connection, a personal session the user's own; a
+  member's key never reaches a shared session. A disabled connection offers no tools.
+* **Every call is audited** (`skill.api`: skill, method, path and status, never the body or the key), and changes to a
+  project's connections are in its log (`skill.enable`, `skill.update`, `skill.disable`, `skill.disconnect`).
+
+### Routes
+
+```
+GET    /projects/{pid}/skill-connections            GET    /me/skill-connections
+PUT    /projects/{pid}/skill-connections/{skill} {enabled?, fields?}    PUT /me/skill-connections/{skill}
+DELETE /projects/{pid}/skill-connections/{skill}    DELETE /me/skill-connections/{skill}
+POST   /projects/{pid}/skill-connections/{skill}/test                   POST /me/skill-connections/{skill}/test
+```
+
+The connection is stored as a capability install named `skill_<skill>` (so it has the same scopes, sealing and
+store); the marketplace hides and skips it, and custom servers cannot take the `skill_` prefix. harness-worker does not
+register the tools yet: the runs that use a connection are the web server's.
+
+The product ships one such skill, `dokploy`: it can read the server's state and redeploy a compose stack or an
+application, and nothing else.

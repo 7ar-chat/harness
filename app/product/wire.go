@@ -26,5 +26,8 @@ func WireTypes() map[string]any {
 		"CapabilityFieldView":  CapabilityFieldView{},
 		"CapabilityTool":       CapabilityTool{},
 		"CapabilityTestResult": CapabilityTestResult{},
+		"SkillConnView":        SkillConnView{},
+		"SkillFieldView":       SkillFieldView{},
+		"SkillConnTest":        SkillConnTest{},
 	}
 }
