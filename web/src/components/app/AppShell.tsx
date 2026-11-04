@@ -1,7 +1,7 @@
 import { Logo } from "@/components/app/Logo";
 import { identifyUser } from "@/lib/telemetry";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "@tanstack/react-router";
-import { Bot, Brain, ChevronRight, LayoutDashboard, LogOut, Monitor, Moon, Plus, Search, Sun, UserCog, Users, WifiOff } from "lucide-react";
+import { Bot, Brain, ChevronRight, ChevronsUpDown, LayoutDashboard, Link2, LogOut, Monitor, Moon, Plus, Search, SlidersHorizontal, Sun, UserCog, Users, WifiOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getDevUser, setDevUser } from "@/api/client";
 import { supervisorQuery, useAdminUsers, useMe, useMemoryStats, useOverview, useSeen } from "@/api/queries";
@@ -86,6 +86,8 @@ function UserMenu() {
   const { theme, setTheme } = useTheme();
   const { isMobile } = useSidebar();
   const [dev, setDev] = useState(getDevUser());
+  const isAdmin = !!useMe().data?.admin;
+  const pendingUsers = useAdminUsers("pending", { enabled: isAdmin, refetchInterval: 30_000 }).data?.length ?? 0;
   const logout = async () => {
     try {
       await fetch("/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => undefined);
@@ -96,37 +98,63 @@ function UserMenu() {
   if (!me) return null;
   return (
     <DropdownMenu>
-      <div className="flex items-center gap-1">
-        <Link to="/profile" aria-label="Your profile" className="shrink-0 rounded-full p-1 hover:bg-sidebar-accent">
-          <UserAvatar login={me.login} name={me.name} url={me.avatarUrl} className="size-7" />
-        </Link>
-        <DropdownMenuTrigger asChild>
-          <SidebarMenuButton size="lg" aria-label="User menu" className="flex-1">
-            <div className="grid min-w-0 flex-1 text-left leading-tight">
-              <span className="truncate text-sm font-medium">{me.name || me.login}</span>
-              <span className="truncate text-xs text-muted-foreground">{me.email || me.login}</span>
-            </div>
-          </SidebarMenuButton>
-        </DropdownMenuTrigger>
-      </div>
-      <DropdownMenuContent side={isMobile ? "bottom" : "right"} align="end" className="w-60">
+      <DropdownMenuTrigger asChild>
+        <SidebarMenuButton size="lg" aria-label="User menu" className="data-[state=open]:bg-sidebar-accent">
+          <span className="relative shrink-0">
+            <UserAvatar login={me.login} name={me.name} url={me.avatarUrl} className="size-8" />
+            {pendingUsers ? <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-warning ring-2 ring-sidebar" aria-label={`${pendingUsers} users awaiting approval`} /> : null}
+          </span>
+          <div className="grid min-w-0 flex-1 text-left leading-tight">
+            <span className="truncate text-sm font-medium">{me.name || me.login}</span>
+            <span className="truncate text-xs text-muted-foreground">{me.email || me.login}</span>
+          </div>
+          <ChevronsUpDown className="ml-auto size-4 text-muted-foreground" />
+        </SidebarMenuButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side={isMobile ? "top" : "right"} align="end" className="w-64">
+        <div className="flex items-center gap-2 px-2 py-1.5">
+          <UserAvatar login={me.login} name={me.name} url={me.avatarUrl} className="size-8" />
+          <div className="grid min-w-0 leading-tight">
+            <span className="truncate text-sm font-medium">{me.name || me.login}</span>
+            <span className="truncate text-xs text-muted-foreground">@{me.login}{isAdmin ? " · admin" : ""}</span>
+          </div>
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/profile" search={{ tab: "profile" }}>
+            <UserCog /> Profile
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/profile" search={{ tab: "connectors" }}>
+            <Link2 /> Connectors
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/profile" search={{ tab: "preferences" }}>
+            <SlidersHorizontal /> Preferences
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/memory">
+            <Brain /> My memory
+          </Link>
+        </DropdownMenuItem>
+        {isAdmin ? (
+          <DropdownMenuItem asChild>
+            <Link to="/admin">
+              <Users /> Admin
+              {pendingUsers ? <span className="ml-auto rounded-full bg-warning px-1.5 text-[10px] text-black">{pendingUsers} pending</span> : null}
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuSeparator />
         <DropdownMenuLabel>Theme</DropdownMenuLabel>
         {([["light", "Light", Sun], ["dark", "Dark", Moon], ["system", "System", Monitor]] as const).map(([v, label, Icon]) => (
           <DropdownMenuItem key={v} onSelect={() => setTheme(v)}>
             <Icon /> {label} {theme === v ? "✓" : ""}
           </DropdownMenuItem>
         ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link to="/memory">
-            <Brain /> My memory
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/profile">
-            <UserCog /> Profile, connectors and sounds
-          </Link>
-        </DropdownMenuItem>
         {import.meta.env.DEV ? (
           <>
             <DropdownMenuSeparator />
@@ -147,7 +175,7 @@ function UserMenu() {
           </>
         ) : null}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => void logout()}>
+        <DropdownMenuItem onSelect={() => void logout()} className="text-destructive focus:text-destructive">
           <LogOut /> Log out
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -166,8 +194,6 @@ function AppSidebar({ openId, openProject }: { openId?: string; openProject?: st
   const svStatus = svSummary?.status ?? supervisor?.status ?? "idle";
   const { isMobile, setOpenMobile } = useSidebar();
   const close = () => isMobile && setOpenMobile(false);
-  const isAdmin = !!useMe().data?.admin;
-  const pendingUsers = useAdminUsers("pending", { enabled: isAdmin, refetchInterval: 30_000 }).data?.length ?? 0;
   return (
     <Sidebar>
       <SidebarHeader>
@@ -206,20 +232,6 @@ function AppSidebar({ openId, openProject }: { openId?: string; openProject?: st
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          {isAdmin ? (
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={loc.pathname === "/admin"}>
-                <Link to="/admin" onClick={close}>
-                  <Users /> Admin
-                  {pendingUsers ? (
-                    <span className="ml-auto rounded-full bg-warning px-1.5 text-[10px] text-black" aria-label={`${pendingUsers} users awaiting approval`}>
-                      {pendingUsers}
-                    </span>
-                  ) : null}
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ) : null}
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>

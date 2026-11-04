@@ -24,9 +24,17 @@ describe("ProfilePage", () => {
     // Act
     await renderApp("/profile");
     // Assert
-    expect(await page().findByRole("heading", { name: "Profile", level: 1 })).toBeTruthy();
+    expect(await page().findByRole("heading", { name: "Settings", level: 1 })).toBeTruthy();
     expect(await page().findByText("alice@example.com")).toBeTruthy();
     expect((page().getByLabelText("Display name") as HTMLInputElement).placeholder).toBe("Alice Doe");
+  });
+
+  it("lists the connectors of the server in their own section", async () => {
+    // Arrange
+    mockFetch(routes());
+    // Act
+    await renderApp("/profile?tab=connectors");
+    // Assert
     expect(await page().findByText("Connected as alice-gh")).toBeTruthy();
     expect(page().getByRole("button", { name: /Import a project from GitHub/ })).toBeTruthy();
     expect(page().getByText("Not configured")).toBeTruthy();
@@ -37,7 +45,7 @@ describe("ProfilePage", () => {
     // Arrange
     mockFetch(routes({ "GET /api/connectors": [] }));
     // Act
-    await renderApp("/profile");
+    await renderApp("/profile?tab=connectors");
     // Assert
     expect(await page().findByText("No connectors are available on this server.")).toBeTruthy();
   });
@@ -46,7 +54,7 @@ describe("ProfilePage", () => {
     // Arrange
     mockFetch(routes({ "GET /api/connectors": reply(404) }));
     // Act
-    await renderApp("/profile");
+    await renderApp("/profile?tab=connectors");
     // Assert
     expect(await page().findByText("No connectors are available on this server.")).toBeTruthy();
   });

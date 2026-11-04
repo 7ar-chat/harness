@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bell, CheckCircle2, ExternalLink, Plug, Send, Upload, User as UserIcon, Volume2 } from "lucide-react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { Bell, CheckCircle2, ExternalLink, Link2, Plug, Send, SlidersHorizontal, Upload, User as UserIcon, UserCog, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import QRCode from "qrcode";
 import {
@@ -410,25 +411,57 @@ function Preferences() {
   );
 }
 
+const SECTIONS = [
+  { id: "profile", label: "Profile", icon: UserCog, hint: "Your name, avatar and account" },
+  { id: "connectors", label: "Connectors", icon: Link2, hint: "GitHub, Slack, Telegram and other accounts" },
+  { id: "capabilities", label: "Capabilities", icon: Plug, hint: "MCP servers for your personal sessions" },
+  { id: "preferences", label: "Preferences", icon: SlidersHorizontal, hint: "Sounds and notifications" },
+] as const;
+export type ProfileSection = (typeof SECTIONS)[number]["id"];
+export const profileSections = SECTIONS.map((s) => s.id);
+
 export function ProfilePage() {
+  const { tab } = useSearch({ from: "/profile" });
+  const navigate = useNavigate();
+  const current = SECTIONS.find((s) => s.id === tab) ?? SECTIONS[0];
   return (
     <ScrollArea className="h-full">
-      <div className="mx-auto max-w-2xl space-y-6 p-4 md:p-8">
-        <h1 className="text-xl font-semibold">Profile</h1>
-        <ProfileCard />
-        <Connectors />
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Plug className="size-4" /> Capabilities
-            </CardTitle>
-            <CardDescription>MCP servers that give your assistant more tools in your personal sessions.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <CapabilitiesPanel scope={{ kind: "user" }} />
-          </CardContent>
-        </Card>
-        <Preferences />
+      <div className="space-y-4 p-4 md:p-8">
+        <h1 className="text-xl font-semibold">Settings</h1>
+        <div className="flex flex-col gap-6 md:flex-row">
+          <nav aria-label="Settings sections" className="flex shrink-0 gap-1 overflow-x-auto md:w-56 md:flex-col">
+            {SECTIONS.map((s) => (
+              <Button
+                key={s.id}
+                variant={s.id === current.id ? "secondary" : "ghost"}
+                className="justify-start"
+                aria-current={s.id === current.id ? "page" : undefined}
+                onClick={() => void navigate({ to: "/profile", search: { tab: s.id }, replace: true })}
+              >
+                <s.icon /> {s.label}
+              </Button>
+            ))}
+          </nav>
+          <div className="min-w-0 max-w-3xl flex-1 space-y-4">
+            <p className="text-sm text-muted-foreground">{current.hint}</p>
+            {current.id === "profile" ? <ProfileCard /> : null}
+            {current.id === "connectors" ? <Connectors /> : null}
+            {current.id === "capabilities" ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Plug className="size-4" /> Capabilities
+                  </CardTitle>
+                  <CardDescription>MCP servers that give your assistant more tools in your personal sessions.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <CapabilitiesPanel scope={{ kind: "user" }} />
+                </CardContent>
+              </Card>
+            ) : null}
+            {current.id === "preferences" ? <Preferences /> : null}
+          </div>
+        </div>
       </div>
     </ScrollArea>
   );
