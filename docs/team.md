@@ -152,7 +152,8 @@ GIF up to 512 KB, type checked from the bytes; no SVG), shown on every message, 
   The bot long-polls, so no public webhook is needed; run it in one replica only.
 * **Slack — talk to your assistant.** Create a Slack app (api.slack.com/apps, "From scratch") and set
   `SLACK_BOT_TOKEN` (the `xoxb-` Bot User OAuth Token) and `SLACK_SIGNING_SECRET` (Basic Information). In the app:
-  *OAuth & Permissions* → bot scopes `app_mentions:read`, `chat:write`, `im:history`, `im:write`, `users:read`;
+  *OAuth & Permissions* → bot scopes `app_mentions:read`, `chat:write`, `im:history`, `im:write`, `users:read`, plus `channels:read`,
+  `groups:read` and `channels:join` for project channels;
   *Event Subscriptions* → on, request URL `https://<host>/api/slack/events`, bot events `app_mention` and
   `message.im`; *Interactivity* → on, request URL `https://<host>/api/slack/interactive`; *App Home* → allow
   messages from the Messages tab. Install the app to the workspace (reinstall after changing scopes). Every request
@@ -162,6 +163,13 @@ GIF up to 512 KB, type checked from the bytes; no SVG), shown on every message, 
   buttons (never in a channel), `status` lists sessions, and sessions or factory tasks that need the user produce a
   direct message. Unlinked Slack users are told how to link. Slack calls the server, so it must be reachable from
   the internet; run the bridge in one replica only.
+  **Project channel and choices.** An owner can set a *Slack channel* (`#name` or id) in the project's settings;
+  the app joins a public channel (invite it to a private one) and says hello there. From then on the project's
+  sessions are announced once in that channel, for the whole team: a question, a failure, a blocked factory task.
+  A tool approval still goes to the person it concerns as a direct message. Without a channel every linked member
+  gets a direct message. A question that offers choices (`ask_user` options) is rendered as one button per choice
+  (a select menu past five); the owner and the members of the project may press one, and the press answers the
+  session. A question that also takes free text says where to type it.
 
 **Capabilities.** The Capabilities tab of a project (owners edit, members read) and the profile card manage the MCP servers a
 run may use: a shipped catalog (Exa is on by default) plus custom servers, per project and per user. A project thread uses only the

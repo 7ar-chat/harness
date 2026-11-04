@@ -112,10 +112,13 @@ type Project struct {
 	DefaultBranch string `json:"defaultBranch,omitempty"`
 	// GitHubInstallation is the id of the GitHub App installation that grants
 	// access to the repository (0 when not connected).
-	GitHubInstallation int64     `json:"githubInstallation,omitempty"`
-	CreatedBy          string    `json:"createdBy"`
-	CreatedAt          time.Time `json:"createdAt"`
-	UpdatedAt          time.Time `json:"updatedAt"`
+	GitHubInstallation int64 `json:"githubInstallation,omitempty"`
+	// SlackChannel is the id of the Slack channel the project's team-visible notifications go to (empty: direct
+	// messages only).
+	SlackChannel string    `json:"slackChannel,omitempty"`
+	CreatedBy    string    `json:"createdBy"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
 // ProjectPatch is a partial project update.
@@ -125,6 +128,7 @@ type ProjectPatch struct {
 	RepoURL            *string
 	DefaultBranch      *string
 	GitHubInstallation *int64
+	SlackChannel       *string
 }
 
 // Member is a user's role in a project.

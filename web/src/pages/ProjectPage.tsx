@@ -148,10 +148,10 @@ function Settings({ pid }: { pid: string }) {
   const update = useUpdateProject(pid);
   const del = useDeleteProject();
   const navigate = useNavigate();
-  const [f, setF] = useState({ name: "", description: "", repoUrl: "", defaultBranch: "" });
+  const [f, setF] = useState({ name: "", description: "", repoUrl: "", defaultBranch: "", slackChannel: "" });
   const [confirm, setConfirm] = useState(false);
   useEffect(() => {
-    if (p) setF({ name: p.name, description: p.description ?? "", repoUrl: p.repoUrl ?? "", defaultBranch: p.defaultBranch ?? "" });
+    if (p) setF({ name: p.name, description: p.description ?? "", repoUrl: p.repoUrl ?? "", defaultBranch: p.defaultBranch ?? "", slackChannel: p.slackChannel ?? "" });
   }, [p]);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   return (
@@ -178,6 +178,14 @@ function Settings({ pid }: { pid: string }) {
         <div className="space-y-2">
           <Label htmlFor="s-branch">Default branch</Label>
           <Input id="s-branch" value={f.defaultBranch} onChange={set("defaultBranch")} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="s-slack">Slack channel</Label>
+          <Input id="s-slack" value={f.slackChannel} onChange={set("slackChannel")} placeholder="#proj-payments or a channel id" />
+          <p className="text-xs text-muted-foreground">
+            Questions (with their choices as buttons), failures and approvals of this project's sessions are announced there. Leave empty for direct
+            messages only. Invite the app to a private channel first.
+          </p>
         </div>
         <Button type="submit" disabled={update.isPending}>
           Save

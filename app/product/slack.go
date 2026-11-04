@@ -47,7 +47,9 @@ const connectorSlack = "slack"
 //     a mention);
 //   - a tool approval the assistant waits for arrives as a direct message with
 //     Approve / Deny buttons, never in a channel;
-//   - "status" lists the sessions, "help" says what the app does.
+//   - "status" lists the sessions, "help" says what the app does;
+//   - a question with choices (ask_user options) comes with one button per choice (see slack_routing.go), and a
+//     project with a Slack channel has its sessions announced there.
 //
 // Only linked users are served. Process-wide: run one replica with the bridge.
 type Slack struct {
@@ -126,9 +128,15 @@ type slackDest struct {
 }
 
 type slackAction struct {
+	// login is the owner of the thread (whose client resumes it).
 	login, thread, interrupt string
 	approve                  bool
-	expires                  time.Time
+	// question marks an answer to an ask_user question: answer is the chosen option.
+	question bool
+	answer   string
+	// project, when set, lets that project's members (not only the owner) act on the thread.
+	project string
+	expires time.Time
 }
 
 // slackBridge is the app's side of the server.
@@ -514,10 +522,13 @@ func (b *slackBridge) link(ctx context.Context, dest slackDest, user, code strin
 	}
 }
 
-func (b *slackBridge) assistantClient(login string) client.Client {
+func (b *slackBridge) assistantClient(login string) client.Client { return b.clientFor(login, login) }
+
+// clientFor acts on the threads of owner, written by author.
+func (b *slackBridge) clientFor(owner, author string) client.Client {
 	s := b.s
-	return inproc.New(s.H, login, inproc.WithModels(s.O.Models, s.O.DefaultModel),
-		inproc.WithAuthor(harness.Author{Login: login, Kind: store.AuthorUser}))
+	return inproc.New(s.H, owner, inproc.WithModels(s.O.Models, s.O.DefaultModel),
+		inproc.WithAuthor(harness.Author{Login: author, Kind: store.AuthorUser}))
 }
 
 // toAssistant puts a Slack message into the assistant's thread: it answers a
@@ -602,7 +613,10 @@ func (b *slackBridge) interactive(w http.ResponseWriter, r *http.Request) {
 			TS string `json:"ts"`
 		} `json:"message"`
 		Actions []struct {
-			Value string `json:"value"`
+			Value          string `json:"value"`
+			SelectedOption struct {
+				Value string `json:"value"`
+			} `json:"selected_option"`
 		} `json:"actions"`
 	}
 	if json.Unmarshal([]byte(form.Get("payload")), &p) != nil || p.Type != "block_actions" || len(p.Actions) == 0 {
@@ -611,6 +625,9 @@ func (b *slackBridge) interactive(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	value, user, channel, ts := p.Actions[0].Value, p.User.ID, p.Channel.ID, p.Message.TS
+	if p.Actions[0].SelectedOption.Value != "" { // a select menu: the choice is the selected option
+		value = p.Actions[0].SelectedOption.Value
+	}
 	go b.handleButton(context.WithoutCancel(r.Context()), value, user, channel, ts)
 }
 
@@ -627,22 +644,39 @@ func (b *slackBridge) handleButton(ctx context.Context, value, user, channel, ts
 		_ = b.send(ctx, dest, "This request is no longer valid.", nil)
 		return
 	}
-	// Only the Slack user linked to the account may decide.
-	if cn, err := b.s.team.FindConnector(ctx, connectorSlack, user); err != nil || cn.Login != act.login {
+	// Only the Slack user linked to the account (or, for a project's session, a member of the project) may decide.
+	actor, allowed := b.mayAct(ctx, user, act)
+	if !allowed {
 		_ = b.send(ctx, dest, "Not allowed.", nil)
 		return
 	}
-	cl := b.assistantClient(act.login)
+	cl := b.clientFor(act.login, actor)
 	th, err := cl.GetThread(ctx, act.thread)
-	if err != nil || th.PendingApproval == nil || th.PendingApproval["id"] != act.interrupt {
+	if err != nil {
 		b.finishButton(ctx, channel, ts, "Already handled.")
 		return
 	}
-	decision := client.DecisionDeny
-	if act.approve {
-		decision = client.DecisionApprove
+	req := client.ResumeRequest{InterruptID: act.interrupt, Interactive: true}
+	var done string
+	if act.question {
+		if th.PendingQuestion == nil || th.PendingQuestion.InterruptID != act.interrupt {
+			b.finishButton(ctx, channel, ts, "Already handled.")
+			return
+		}
+		req.Reason, req.Text = "ask_user", act.answer
+		done = fmt.Sprintf("Chosen by <@%s>: %s", user, act.answer)
+	} else {
+		if th.PendingApproval == nil || th.PendingApproval["id"] != act.interrupt {
+			b.finishButton(ctx, channel, ts, "Already handled.")
+			return
+		}
+		req.Reason, req.Decision = client.ReasonToolApproval, client.DecisionDeny
+		done = "Denied."
+		if act.approve {
+			req.Decision, done = client.DecisionApprove, "Approved."
+		}
 	}
-	run, err := cl.Resume(ctx, act.thread, client.ResumeRequest{InterruptID: act.interrupt, Reason: client.ReasonToolApproval, Decision: decision, Interactive: true})
+	run, err := cl.Resume(ctx, act.thread, req)
 	if err != nil {
 		_ = b.send(ctx, dest, "That did not work.", nil)
 		return
@@ -650,10 +684,35 @@ func (b *slackBridge) handleButton(ctx context.Context, value, user, channel, ts
 	b.mu.Lock()
 	delete(b.actions, key)
 	b.mu.Unlock()
-	b.s.note(Caller{Login: act.login, Actor: act.login}, act.thread, "approval.slack", map[string]any{"decision": decision}, FeedEvent{Type: "message.sent"})
-	b.markRun(run.ID, dest)
-	b.s.AfterRun(Caller{Login: act.login, Actor: act.login}, run, "run.resume", map[string]any{"decision": decision, "via": "slack"})
-	b.finishButton(ctx, channel, ts, map[bool]string{true: "Approved.", false: "Denied."}[act.approve])
+	caller := Caller{Login: act.login, Actor: actor}
+	detail := map[string]any{"decision": req.Decision, "via": "slack"}
+	kind := "approval.slack"
+	if act.question {
+		detail, kind = map[string]any{"answer": act.answer, "via": "slack"}, "answer.slack"
+	}
+	b.s.note(caller, act.thread, kind, detail, FeedEvent{Type: "message.sent"})
+	if b.s.sup != nil && b.s.sup.isSupervisorThread(ctx, act.thread) {
+		b.markRun(run.ID, dest)
+	}
+	b.s.AfterRun(caller, run, "run.resume", detail)
+	b.finishButton(ctx, channel, ts, done)
+}
+
+// mayAct tells whether the Slack user may act on the thread behind a button, and as which account.
+func (b *slackBridge) mayAct(ctx context.Context, slackUser string, act slackAction) (string, bool) {
+	cn, err := b.s.team.FindConnector(ctx, connectorSlack, slackUser)
+	if err != nil {
+		return "", false
+	}
+	if cn.Login == act.login {
+		return cn.Login, true
+	}
+	if act.project != "" {
+		if role, err := b.s.team.MemberRole(ctx, act.project, cn.Login); err == nil && store.RoleAtLeast(role, store.RoleMember) {
+			return cn.Login, true
+		}
+	}
+	return "", false
 }
 
 // finishButton replaces the message that carried the buttons.
@@ -733,18 +792,7 @@ func (b *slackBridge) onFinished(ctx context.Context, ev FeedEvent) {
 	if !ok {
 		return
 	}
-	title := ev.ThreadID
-	if t, err := b.s.H.Store.GetThread(ctx, ev.owner, ev.ThreadID); err == nil && t.Title != "" {
-		title = t.Title
-	}
-	for _, u := range b.s.sup.recipients(ctx, ev.ProjectID, ev.owner) {
-		if b.s.sup.settings(ctx, u).Watch {
-			continue // the watcher puts it to the assistant, whose answer is delivered
-		}
-		if cn, err := b.s.team.GetConnector(ctx, u, connectorSlack); err == nil {
-			_ = b.dm(ctx, cn.Account, fmt.Sprintf("Session %q %s.", title, what))
-		}
-	}
+	b.announce(ctx, ev, what)
 }
 
 func (b *slackBridge) assistantResult(ctx context.Context, ev FeedEvent, cn store.Connector, dest slackDest) {
@@ -776,7 +824,8 @@ func (b *slackBridge) assistantResult(ctx context.Context, ev FeedEvent, cn stor
 		}
 		_ = b.send(ctx, slackDest{channel: cn.Account}, text, blocks)
 	case th.PendingQuestion != nil:
-		_ = b.send(ctx, dest, th.PendingQuestion.Question, nil)
+		text, blocks := b.questionMessage(slackAction{login: login, thread: ev.ThreadID}, th.PendingQuestion, "", "Or just reply to me with your own answer.")
+		_ = b.send(ctx, dest, text, blocks)
 	default:
 		for i := len(th.Messages) - 1; i >= 0; i-- {
 			if m := th.Messages[i]; m.Role == store.RoleAssistant && strings.TrimSpace(m.Content) != "" {

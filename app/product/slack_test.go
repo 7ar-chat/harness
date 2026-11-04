@@ -51,6 +51,9 @@ func newFakeSlack(t *testing.T) *fakeSlack {
 		switch method {
 		case "auth.test":
 			json.NewEncoder(w).Encode(map[string]any{"ok": true, "user_id": "UBOT"})
+		case "conversations.list":
+			json.NewEncoder(w).Encode(map[string]any{"ok": true, "channels": []any{
+				map[string]any{"id": "C0AAAAAAA1", "name": "general"}, map[string]any{"id": "C0BBBBBBB2", "name": "proj-pay"}}})
 		case "users.info":
 			json.NewEncoder(w).Encode(map[string]any{"ok": true, "user": map[string]any{"name": "alice", "real_name": "Alice A"}})
 		default:
@@ -283,5 +286,76 @@ func TestSlackButtonsOnlyForTheLinkedUser(t *testing.T) {
 	b.interactive(w, signed(form, time.Now(), "wrong"))
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("unsigned interactive = %d", w.Code)
+	}
+}
+
+func TestSlackQuestionChoicesAreButtonsOrASelect(t *testing.T) {
+	f := newFakeSlack(t)
+	b := skBridge(t, f, newCnFaultTeam())
+	q := &store.PendingQuestion{InterruptID: "i1", Question: "Which database?", AllowFreeText: true,
+		Options: []store.QuestionOption{{Label: "Postgres", Description: "robust"}, {Label: "SQLite"}}}
+	text, blocks := b.questionMessage(slackAction{login: "alice", thread: "t1", project: "p1"}, q, "[pay] ", "Or use the web app.")
+	if !strings.Contains(text, "Which database?") || !strings.Contains(text, "Postgres*: robust") || !strings.Contains(text, "web app") {
+		t.Fatalf("text = %q", text)
+	}
+	els := blocks[1].(map[string]any)["elements"].([]any)
+	if len(els) != 2 || els[0].(map[string]any)["type"] != "button" {
+		t.Fatalf("elements = %v", els)
+	}
+	act, ok := b.action(strings.TrimPrefix(els[1].(map[string]any)["value"].(string), "ap:"))
+	if !ok || !act.question || act.answer != "SQLite" || act.interrupt != "i1" || act.project != "p1" {
+		t.Fatalf("action = %+v", act)
+	}
+
+	for i := 0; i < 6; i++ {
+		q.Options = append(q.Options, store.QuestionOption{Label: "opt" + strconv.Itoa(i)})
+	}
+	_, blocks = b.questionMessage(slackAction{login: "alice", thread: "t1"}, q, "", "")
+	menu := blocks[1].(map[string]any)["elements"].([]any)[0].(map[string]any)
+	if menu["type"] != "static_select" || len(menu["options"].([]any)) != 8 {
+		t.Fatalf("menu = %v", menu)
+	}
+	if _, blocks = b.questionMessage(slackAction{}, &store.PendingQuestion{Question: "Why?"}, "", ""); blocks != nil {
+		t.Fatal("a question without choices must stay plain text")
+	}
+}
+
+func TestSlackProjectMembersMayAnswerButOthersMayNot(t *testing.T) {
+	f := newFakeSlack(t)
+	tm := newCnFaultTeam()
+	cnUsers(t, tm, "alice", "bob", "eve")
+	b := skBridge(t, f, tm)
+	ctx := context.Background()
+	p, err := tm.CreateProject(ctx, store.Project{Name: "pay"}, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = tm.SetMember(ctx, p.ID, "bob", store.RoleMember)
+	for u, id := range map[string]string{"alice": "U1", "bob": "U2", "eve": "U3"} {
+		_ = tm.SetConnector(ctx, store.Connector{Login: u, Kind: connectorSlack, Account: id})
+	}
+	act := slackAction{login: "alice", thread: "t1", project: p.ID}
+	if who, ok := b.mayAct(ctx, "U2", act); !ok || who != "bob" {
+		t.Fatalf("a member must be able to answer, got %q %v", who, ok)
+	}
+	if _, ok := b.mayAct(ctx, "U3", act); ok {
+		t.Fatal("a stranger answered")
+	}
+	if _, ok := b.mayAct(ctx, "U2", slackAction{login: "alice", thread: "t1"}); ok {
+		t.Fatal("a personal thread must stay the owner's")
+	}
+}
+
+func TestSlackResolveChannel(t *testing.T) {
+	f := newFakeSlack(t)
+	b := skBridge(t, f, newCnFaultTeam())
+	ctx := context.Background()
+	for in, want := range map[string]string{"#proj-pay": "C0BBBBBBB2", "General": "C0AAAAAAA1", "C0ZZZZZZZ9": "C0ZZZZZZZ9", "  ": ""} {
+		if got, err := b.resolveChannel(ctx, in); err != nil || got != want {
+			t.Errorf("resolveChannel(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	if _, err := b.resolveChannel(ctx, "#nope"); err == nil {
+		t.Error("an unknown channel must be an error")
 	}
 }

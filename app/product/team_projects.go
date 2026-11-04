@@ -2,6 +2,7 @@ package product
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -141,6 +142,8 @@ func (s *server) patchProject(w http.ResponseWriter, r *http.Request, c Caller) 
 		Description   *string `json:"description"`
 		RepoURL       *string `json:"repoUrl"`
 		DefaultBranch *string `json:"defaultBranch"`
+		// SlackChannel is a channel id or #name; empty stops the channel notifications.
+		SlackChannel *string `json:"slackChannel"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -153,8 +156,26 @@ func (s *server) patchProject(w http.ResponseWriter, r *http.Request, c Caller) 
 		writeError(w, http.StatusBadRequest, "invalid_request", "repoUrl must be an https, ssh or git URL.")
 		return
 	}
+	if body.SlackChannel != nil {
+		if s.sk == nil {
+			writeError(w, http.StatusNotImplemented, "not_configured", "Slack is not configured on this server.")
+			return
+		}
+		id, err := s.sk.resolveChannel(r.Context(), *body.SlackChannel)
+		if err == nil && id != "" && id != p.SlackChannel {
+			err = s.sk.checkChannel(r.Context(), id, p.Name)
+			if err != nil {
+				err = fmt.Errorf("the app cannot post in that channel; invite it there first: %w", err)
+			}
+		}
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+			return
+		}
+		body.SlackChannel = &id
+	}
 	up, err := s.team.UpdateProject(r.Context(), p.ID, store.ProjectPatch{Name: body.Name, Description: body.Description,
-		RepoURL: body.RepoURL, DefaultBranch: body.DefaultBranch})
+		RepoURL: body.RepoURL, DefaultBranch: body.DefaultBranch, SlackChannel: body.SlackChannel})
 	if err != nil {
 		fail(w, err)
 		return

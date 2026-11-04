@@ -183,7 +183,7 @@ function useAction<V, R>(fn: (v: V) => Promise<R>, invalidate: (v: V, r: R) => r
 export const useCreateProject = () =>
   useAction((b: { name: string; description?: string; repoUrl?: string; defaultBranch?: string }) => api.post<Project>("/projects", b), () => [qk.me, qk.overview], "Project created");
 export const useUpdateProject = (id: string) =>
-  useAction((b: Partial<Pick<Project, "name" | "description" | "repoUrl" | "defaultBranch">>) => api.patch<ProjectWithRole>(`/projects/${id}`, b), () => [qk.project(id), qk.me, qk.overview], "Saved");
+  useAction((b: Partial<Pick<Project, "name" | "description" | "repoUrl" | "defaultBranch" | "slackChannel">>) => api.patch<ProjectWithRole>(`/projects/${id}`, b), () => [qk.project(id), qk.me, qk.overview], "Saved");
 export const useDeleteProject = () => useAction((id: string) => api.del(`/projects/${id}`), () => [qk.me, qk.overview], "Project deleted");
 export const useSetMember = (pid: string) => useAction((v: { login: string; role: Role }) => api.put(`/projects/${pid}/members/${encodeURIComponent(v.login)}`, { role: v.role }), () => [qk.members(pid)]);
 export const useRemoveMember = (pid: string) => useAction((login: string) => api.del(`/projects/${pid}/members/${encodeURIComponent(login)}`), () => [qk.members(pid), qk.me, qk.overview]);

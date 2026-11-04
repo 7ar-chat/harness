@@ -282,11 +282,11 @@ func (s *PG) GetUsers(ctx context.Context, logins []string) (map[string]*store.U
 	return out, rows.Err()
 }
 
-const projectCols = `id, name, description, repo_url, default_branch, github_installation, created_by, created_at, updated_at`
+const projectCols = `id, name, description, repo_url, default_branch, github_installation, slack_channel, created_by, created_at, updated_at`
 
 func scanProject(r pgx.Row) (*store.Project, error) {
 	var p store.Project
-	if err := r.Scan(&p.ID, &p.Name, &p.Description, &p.RepoURL, &p.DefaultBranch, &p.GitHubInstallation, &p.CreatedBy, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	if err := r.Scan(&p.ID, &p.Name, &p.Description, &p.RepoURL, &p.DefaultBranch, &p.GitHubInstallation, &p.SlackChannel, &p.CreatedBy, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		return nil, notFound(err)
 	}
 	return &p, nil
@@ -301,9 +301,9 @@ func (s *PG) CreateProject(ctx context.Context, p store.Project, owner string) (
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
-	out, err := scanProject(tx.QueryRow(ctx, `INSERT INTO work_projects (id, name, description, repo_url, default_branch, github_installation, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING `+projectCols,
-		p.ID, p.Name, p.Description, p.RepoURL, p.DefaultBranch, p.GitHubInstallation, owner))
+	out, err := scanProject(tx.QueryRow(ctx, `INSERT INTO work_projects (id, name, description, repo_url, default_branch, github_installation, slack_channel, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING `+projectCols,
+		p.ID, p.Name, p.Description, p.RepoURL, p.DefaultBranch, p.GitHubInstallation, p.SlackChannel, owner))
 	if pgCode(err, "23505") {
 		return nil, store.ErrConflict
 	}
@@ -323,9 +323,9 @@ func (s *PG) GetProject(ctx context.Context, id string) (*store.Project, error) 
 func (s *PG) UpdateProject(ctx context.Context, id string, patch store.ProjectPatch) (*store.Project, error) {
 	return scanProject(s.pool.QueryRow(ctx, `UPDATE work_projects SET
 			name = coalesce($2, name), description = coalesce($3, description), repo_url = coalesce($4, repo_url),
-			default_branch = coalesce($5, default_branch), github_installation = coalesce($6, github_installation), updated_at = now()
+			default_branch = coalesce($5, default_branch), github_installation = coalesce($6, github_installation), slack_channel = coalesce($7, slack_channel), updated_at = now()
 		WHERE id = $1 RETURNING `+projectCols,
-		id, patch.Name, patch.Description, patch.RepoURL, patch.DefaultBranch, patch.GitHubInstallation))
+		id, patch.Name, patch.Description, patch.RepoURL, patch.DefaultBranch, patch.GitHubInstallation, patch.SlackChannel))
 }
 
 func (s *PG) DeleteProject(ctx context.Context, id string) error {
@@ -348,7 +348,7 @@ func (s *PG) DeleteProject(ctx context.Context, id string) error {
 }
 
 func (s *PG) ListProjects(ctx context.Context, login string) ([]store.ProjectRole, error) {
-	rows, err := s.pool.Query(ctx, `SELECT p.id, p.name, p.description, p.repo_url, p.default_branch, p.github_installation,
+	rows, err := s.pool.Query(ctx, `SELECT p.id, p.name, p.description, p.repo_url, p.default_branch, p.github_installation, p.slack_channel,
 			p.created_by, p.created_at, p.updated_at, m.role
 		FROM work_projects p JOIN work_project_members m ON m.project_id = p.id WHERE m.login = $1 ORDER BY p.name`, login)
 	if err != nil {
@@ -358,7 +358,7 @@ func (s *PG) ListProjects(ctx context.Context, login string) ([]store.ProjectRol
 	var out []store.ProjectRole
 	for rows.Next() {
 		var pr store.ProjectRole
-		if err := rows.Scan(&pr.ID, &pr.Name, &pr.Description, &pr.RepoURL, &pr.DefaultBranch, &pr.GitHubInstallation,
+		if err := rows.Scan(&pr.ID, &pr.Name, &pr.Description, &pr.RepoURL, &pr.DefaultBranch, &pr.GitHubInstallation, &pr.SlackChannel,
 			&pr.CreatedBy, &pr.CreatedAt, &pr.UpdatedAt, &pr.Role); err != nil {
 			return nil, err
 		}

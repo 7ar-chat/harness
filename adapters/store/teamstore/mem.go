@@ -408,6 +408,9 @@ func (m *Mem) UpdateProject(_ context.Context, id string, patch store.ProjectPat
 	if patch.GitHubInstallation != nil {
 		p.GitHubInstallation = *patch.GitHubInstallation
 	}
+	if patch.SlackChannel != nil {
+		p.SlackChannel = *patch.SlackChannel
+	}
 	p.UpdatedAt = time.Now().UTC()
 	out := *p
 	return &out, m.save()

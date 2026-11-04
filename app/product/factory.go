@@ -151,13 +151,20 @@ func (s *server) tellOnSlack(ctx context.Context, t factory.Task, reason string)
 	if s.sk == nil || s.team == nil {
 		return
 	}
-	cn, err := s.team.GetConnector(ctx, t.Owner, connectorSlack)
-	if err != nil {
-		return
-	}
 	text := fmt.Sprintf("Task needs you: %s\n%s", t.Title, reason)
 	if base := s.configuredBase(); base != "" && t.ProjectID != "" {
 		text += "\n" + base + "/#/projects/" + t.ProjectID
+	}
+	if t.ProjectID != "" { // the project's channel, when it has one, tells the whole team
+		if p, err := s.team.GetProject(ctx, t.ProjectID); err == nil && p.SlackChannel != "" {
+			if s.sk.send(ctx, slackDest{channel: p.SlackChannel}, "["+p.Name+"] "+text, nil) == nil {
+				return
+			}
+		}
+	}
+	cn, err := s.team.GetConnector(ctx, t.Owner, connectorSlack)
+	if err != nil {
+		return
 	}
 	if err := s.sk.dm(ctx, cn.Account, text); err != nil {
 		slog.Warn("factory: slack escalation failed", "task_id", t.ID, "error", err)

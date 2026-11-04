@@ -341,6 +341,7 @@ export interface Project {
   repoUrl?: string;
   defaultBranch?: string;
   githubInstallation?: number;
+  slackChannel?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
