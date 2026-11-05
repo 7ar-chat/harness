@@ -33,7 +33,7 @@ describe("ProfilePage", () => {
     // Arrange
     mockFetch(routes());
     // Act
-    await renderApp("/profile?tab=connectors");
+    await renderApp("/connectors");
     // Assert
     expect(await page().findByText("Connected as alice-gh")).toBeTruthy();
     expect(page().getByRole("button", { name: /Import a project from GitHub/ })).toBeTruthy();
@@ -45,7 +45,7 @@ describe("ProfilePage", () => {
     // Arrange
     mockFetch(routes({ "GET /api/connectors": [] }));
     // Act
-    await renderApp("/profile?tab=connectors");
+    await renderApp("/connectors");
     // Assert
     expect(await page().findByText("No connectors are available on this server.")).toBeTruthy();
   });
@@ -54,7 +54,7 @@ describe("ProfilePage", () => {
     // Arrange
     mockFetch(routes({ "GET /api/connectors": reply(404) }));
     // Act
-    await renderApp("/profile?tab=connectors");
+    await renderApp("/connectors");
     // Assert
     expect(await page().findByText("No connectors are available on this server.")).toBeTruthy();
   });

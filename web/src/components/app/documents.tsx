@@ -21,7 +21,7 @@ export function DocumentsCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <FileText className="size-4" /> Documents
+          <FileText className="size-4" /> References
         </CardTitle>
         <CardDescription>
           Files your assistant can use in every session: your CV, a cover-letter template, certificates. It reads them to answer for you, and can attach
@@ -39,7 +39,7 @@ export function DocumentsCard() {
               multiple
               accept={ACCEPT}
               className="sr-only"
-              aria-label="Choose documents to add"
+              aria-label="Choose references to add"
               onChange={(e) => {
                 const files = Array.from(e.target.files ?? []);
                 e.target.value = "";
@@ -47,11 +47,11 @@ export function DocumentsCard() {
               }}
             />
             <Button variant="outline" onClick={() => input.current?.click()} disabled={upload.isPending}>
-              {upload.isPending ? <Spinner /> : <Upload />} Add documents
+              {upload.isPending ? <Spinner /> : <Upload />} Add references
             </Button>
             {docs.isLoading ? <Spinner /> : null}
-            {docs.data && docs.data.length === 0 ? <p className="text-sm text-muted-foreground">No documents yet. PDF, Word, text, spreadsheet, slides or image, up to 20 MB each.</p> : null}
-            <ul className="divide-y rounded-md border" aria-label="Your documents">
+            {docs.data && docs.data.length === 0 ? <p className="text-sm text-muted-foreground">No references yet. PDF, Word, text, spreadsheet, slides or image, up to 20 MB each.</p> : null}
+            <ul className="divide-y rounded-md border" aria-label="Your references">
               {(docs.data ?? []).map((d) => (
                 <li key={d.name} className="flex items-center gap-3 px-3 py-2 text-sm">
                   <FileText className="size-4 shrink-0 text-muted-foreground" />

@@ -182,7 +182,7 @@ describe("CapabilitiesPanel", () => {
 describe("Profile capabilities", () => {
   it("manages the user's own servers through /api/me/capabilities", async () => {
     const m = mockFetch({ ...shellRoutes(), "GET /api/connectors": [], "GET /api/me/capabilities": [docs] });
-    await renderApp("/profile?tab=capabilities");
+    await renderApp("/capabilities");
     expect(await within(screen.getByRole("main")).findByText("Capabilities", { selector: "[data-slot=card-title]" })).toBeTruthy();
     expect(await screen.findByText("Docs search")).toBeTruthy();
     expect(m.find("GET", "/api/me/capabilities")).toHaveLength(1);

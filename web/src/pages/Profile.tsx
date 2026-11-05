@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Bell, CheckCircle2, ExternalLink, FileText, Link2, Plug, Send, SlidersHorizontal, Upload, User as UserIcon, UserCog, Volume2 } from "lucide-react";
+import { Bell, CheckCircle2, ExternalLink, Plug, Send, SlidersHorizontal, Upload, User as UserIcon, UserCog, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import QRCode from "qrcode";
 import {
@@ -343,7 +343,7 @@ function ConnectorCard({ c, onImport }: { c: Connector; onImport: () => void }) 
   );
 }
 
-function Connectors() {
+export function Connectors() {
   const { data, isLoading } = useConnectors();
   const [imp, setImp] = useState(false);
   return (
@@ -414,9 +414,6 @@ function Preferences() {
 
 const SECTIONS = [
   { id: "profile", label: "Profile", icon: UserCog, hint: "Your name, avatar and account" },
-  { id: "documents", label: "Documents", icon: FileText, hint: "Your CV and other files, available to your assistant in every session" },
-  { id: "connectors", label: "Connectors", icon: Link2, hint: "GitHub, Slack, Telegram and other accounts" },
-  { id: "capabilities", label: "Capabilities", icon: Plug, hint: "MCP servers for your personal sessions" },
   { id: "preferences", label: "Preferences", icon: SlidersHorizontal, hint: "Sounds and notifications" },
 ] as const;
 export type ProfileSection = (typeof SECTIONS)[number]["id"];
@@ -447,25 +444,59 @@ export function ProfilePage() {
           <div className="min-w-0 max-w-3xl flex-1 space-y-4">
             <p className="text-sm text-muted-foreground">{current.hint}</p>
             {current.id === "profile" ? <ProfileCard /> : null}
-            {current.id === "documents" ? <DocumentsCard /> : null}
-            {current.id === "connectors" ? <Connectors /> : null}
-            {current.id === "capabilities" ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Plug className="size-4" /> Capabilities
-                  </CardTitle>
-                  <CardDescription>MCP servers that give your assistant more tools in your personal sessions.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <CapabilitiesPanel scope={{ kind: "user" }} />
-                </CardContent>
-              </Card>
-            ) : null}
             {current.id === "preferences" ? <Preferences /> : null}
           </div>
         </div>
       </div>
     </ScrollArea>
+  );
+}
+
+/** A page of its own for something that used to be a settings section: a title, a hint and the content. */
+function SidePage({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
+  return (
+    <ScrollArea className="h-full">
+      <div className="space-y-4 p-4 md:p-8">
+        <h1 className="text-xl font-semibold">{title}</h1>
+        <div className="min-w-0 max-w-3xl space-y-4">
+          <p className="text-sm text-muted-foreground">{hint}</p>
+          {children}
+        </div>
+      </div>
+    </ScrollArea>
+  );
+}
+
+export function ReferencesPage() {
+  return (
+    <SidePage title="References" hint="Your CV and other files, available to your assistant in every session">
+      <DocumentsCard />
+    </SidePage>
+  );
+}
+
+export function ConnectorsPage() {
+  return (
+    <SidePage title="Connectors" hint="GitHub, Slack, Telegram and other accounts">
+      <Connectors />
+    </SidePage>
+  );
+}
+
+export function CapabilitiesPage() {
+  return (
+    <SidePage title="Capabilities" hint="MCP servers for your personal sessions">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Plug className="size-4" /> Capabilities
+          </CardTitle>
+          <CardDescription>MCP servers that give your assistant more tools in your personal sessions.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CapabilitiesPanel scope={{ kind: "user" }} />
+        </CardContent>
+      </Card>
+    </SidePage>
   );
 }
