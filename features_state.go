@@ -225,7 +225,7 @@ func memoryOptions(cfg *config.Config) memory.Options {
 		WriteMode: cfg.MemoryWriteMode, DeleteMode: cfg.MemoryDeleteMode, DefaultScope: cfg.MemoryDefaultScope,
 		EmbeddingBackend: cfg.MemoryEmbeddingBackend, RecallInjection: cfg.MemoryRecallInjection,
 		MaxEntries: cfg.MemoryMaxEntries, MaxContentBytes: cfg.MemoryMaxContentBytes,
-		Extract: cfg.MemoryExtract, ExtractModel: cfg.MemoryExtractModel,
+		Extract: cfg.MemoryExtract, ExtractModel: cfg.MemoryExtractModel, ExtractAutoConfirm: cfg.MemoryExtractAutoConfirm,
 	}
 	if o.MaxEntries <= 0 {
 		o.MaxEntries = -1 // "≤ 0: no limit" is the service's negative value (0 is its default)

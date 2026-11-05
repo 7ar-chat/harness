@@ -19,7 +19,7 @@ import (
 // decisions and their reason, conventions, constraints, working commands, pitfalls, preferences. Each
 // candidate is reconciled with the entries that already look like it (a new fact is added, a changed
 // one updates its entry, a known one is skipped) and written as a PENDING proposal: nothing is used
-// until a member confirms it in the memory page. This is the "background extraction" of mem0 and
+// until a member confirms it in the memory page (unless Options.ExtractAutoConfirm). This is the "background extraction" of mem0 and
 // LangMem with the confirmation step of this harness.
 
 const extractInstructions = `You curate the long-term memory of a software team's coding agent. Below are the memories that already exist and the latest part of a conversation. Propose the durable knowledge in the conversation that a future session should have.
@@ -279,7 +279,7 @@ func (x *Extractor) apply(ctx context.Context, run *store.Run, layers []Layer, e
 					svc.stats.extractSkipped.Add(1)
 					return
 				}
-				w := Writer{Login: l.Key, ThreadID: run.ThreadID, Source: store.MemorySourceProxy, Untrusted: true}
+				w := Writer{Login: l.Key, ThreadID: run.ThreadID, Source: store.MemorySourceProxy, Untrusted: !svc.o.ExtractAutoConfirm}
 				in := UpdateInput{ID: e.ID, Content: &content, Metadata: meta}
 				if r := svc.Update(ctx, w, in); r.IsError {
 					slog.Debug("memory: extracted update refused", "id", e.ID, "error", r.Data)
@@ -306,7 +306,7 @@ func (x *Extractor) apply(ctx context.Context, run *store.Run, layers []Layer, e
 		if title != "" {
 			in.Title = &title
 		}
-		w := Writer{Login: layer.Key, ThreadID: run.ThreadID, Source: store.MemorySourceProxy, Untrusted: true}
+		w := Writer{Login: layer.Key, ThreadID: run.ThreadID, Source: store.MemorySourceProxy, Untrusted: !svc.o.ExtractAutoConfirm}
 		if r := svc.Create(ctx, w, in); r.IsError {
 			slog.Debug("memory: extracted memory refused", "error", r.Data)
 		} else {

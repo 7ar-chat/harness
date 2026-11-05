@@ -63,6 +63,8 @@ type Options struct {
 	// is the model it uses (default: the run's own).
 	Extract      bool
 	ExtractModel string
+	// ExtractAutoConfirm makes extracted memories active at once instead of pending until a member keeps them.
+	ExtractAutoConfirm bool
 }
 
 func (o Options) normalized() Options {
@@ -185,6 +187,9 @@ type Service struct {
 	// Messages reads a thread's messages (recall uses the last user message as its query; extraction
 	// reads the run).
 	Messages func(ctx context.Context, threadID string) ([]*store.Message, error)
+	// OnRecall, when set, is told which entries a run's recall injected (the learning feature attributes the
+	// run's outcome to them). It must be quick and must not fail the run.
+	OnRecall func(ctx context.Context, runID, threadID string, info RecallInfo)
 
 	stats serviceStats
 	// embedding counts the background embeddings in flight (embedAsync), so a test can wait for them.

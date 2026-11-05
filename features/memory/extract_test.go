@@ -363,3 +363,27 @@ func TestExtractionKeepsTheEndOfALongTranscript(t *testing.T) {
 		t.Fatalf("prompt of %d chars is not bounded", n)
 	}
 }
+
+func TestExtractionAutoConfirmWritesActiveEntriesNobodyHasToKeep(t *testing.T) {
+	// Arrange
+	answer := `{"memories":[{"op":"add","kind":"facts","content":"Deploys go through the release branch and need a green CI first."}]}`
+	rig := newExtractRig(t, answer, convo)
+	rig.f.svc = memory.New(rig.f.st, memory.Options{Extract: true, ExtractAutoConfirm: true})
+	rig.f.svc.Messages = func(context.Context, string) ([]*store.Message, error) { return convo, nil }
+	rig.f.svc.UserKeyFor = func(context.Context, string, string) string { return "pu:p1:alice" }
+	rig.x.Svc = rig.f.svc
+
+	// Act
+	rig.finish(rig.run(), store.StatusCompleted)
+	waitFor(t, "the memory", func() bool { return rig.f.svc.Stats().ExtractProposed == 1 })
+
+	// Assert
+	ctx := context.Background()
+	if p, _ := rig.f.st.ListMemoryEntries(ctx, "alice", store.MemoryPending); len(p) != 0 {
+		t.Fatalf("%d pending entries with auto-confirm on", len(p))
+	}
+	active, _ := rig.f.st.ListMemoryEntries(ctx, "alice", store.MemoryActive)
+	if len(active) != 1 || active[0].Metadata["auto"] != true {
+		t.Fatalf("active = %+v", active)
+	}
+}

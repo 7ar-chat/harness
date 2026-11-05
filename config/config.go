@@ -198,11 +198,15 @@ type Config struct {
 	// MemoryExtractModel (default: the run's model). With HARNESS_MEMORY_EMBEDDING_BACKEND=openai,
 	// entries and queries get vectors from the OpenAI-compatible endpoint MemoryEmbeddingURL
 	// (default: LLM_BASE_URL, else api.openai.com) with MemoryEmbeddingKey (default LLM_API_KEY).
-	MemoryExtract        bool   `env:"HARNESS_MEMORY_EXTRACT"`
-	MemoryExtractModel   string `env:"HARNESS_MEMORY_EXTRACT_MODEL"`
-	MemoryEmbeddingURL   string `env:"HARNESS_MEMORY_EMBEDDING_URL"`
-	MemoryEmbeddingKey   string `env:"HARNESS_MEMORY_EMBEDDING_KEY"`
-	MemoryEmbeddingModel string `env:"HARNESS_MEMORY_EMBEDDING_MODEL"`
+	MemoryExtract      bool   `env:"HARNESS_MEMORY_EXTRACT"`
+	MemoryExtractModel string `env:"HARNESS_MEMORY_EXTRACT_MODEL"`
+	// MemoryExtractAutoConfirm writes the extracted memories as active entries instead of pending proposals, so
+	// nobody has to confirm them. The trade-off: anything in the exchange that the extractor keeps (tool output,
+	// a fetched page) becomes trusted memory without a human looking at it.
+	MemoryExtractAutoConfirm bool   `env:"HARNESS_MEMORY_EXTRACT_AUTOCONFIRM"`
+	MemoryEmbeddingURL       string `env:"HARNESS_MEMORY_EMBEDDING_URL"`
+	MemoryEmbeddingKey       string `env:"HARNESS_MEMORY_EMBEDDING_KEY"`
+	MemoryEmbeddingModel     string `env:"HARNESS_MEMORY_EMBEDDING_MODEL"`
 	// Harness v2 §4–§9 (context windows, reasoning/vision models — LLM_VISION_MODELS
 	// also decides which models receive attached images —, compaction).
 	Harness

@@ -158,7 +158,8 @@ Pending proposals are never recalled. The agent can also `memory_search` (both l
 exchange and proposes durable knowledge: decisions and their reason, conventions, constraints, commands that worked,
 pitfalls, preferences. Each candidate is compared with the entries that look like it: a new fact is added, a changed
 one becomes a **proposed update** of its entry, a known one is skipped. Everything arrives as `pending` and is used
-only after a member keeps it in the review queue. On by default in team mode; `HARNESS_MEMORY_EXTRACT=false` turns it
+only after a member keeps it in the review queue, unless `HARNESS_MEMORY_EXTRACT_AUTOCONFIRM=true`, which writes
+them as active entries at once (nothing in the exchange is then checked by a human before it is recalled). On by default in team mode; `HARNESS_MEMORY_EXTRACT=false` turns it
 off. An entry that changes keeps its previous versions in `metadata.history` (10 kept, newest first) with the thread
 that changed it.
 

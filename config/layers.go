@@ -343,6 +343,7 @@ var schema = map[string]any{
 		"default_scope":          f("HARNESS_MEMORY_DEFAULT_SCOPE", kStr),
 		"embedding_backend":      f("HARNESS_MEMORY_EMBEDDING_BACKEND", kStr),
 		"recall_injection":       f("HARNESS_MEMORY_RECALL_INJECTION", kBool),
+		"extract_autoconfirm":    f("HARNESS_MEMORY_EXTRACT_AUTOCONFIRM", kBool),
 		"max_entries":            f("HARNESS_MEMORY_MAX_ENTRIES", kInt),
 		"max_content_bytes":      f("HARNESS_MEMORY_MAX_CONTENT_BYTES", kInt),
 		"consolidation_hours":    f("HARNESS_MEMORY_CONSOLIDATION_HOURS", kInt),

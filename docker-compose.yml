@@ -57,6 +57,8 @@ services:
       # memory: proposals after each run are on by default in team mode; real embeddings are optional
       HARNESS_MEMORY_EXTRACT: ${HARNESS_MEMORY_EXTRACT:-true}
       HARNESS_MEMORY_EXTRACT_MODEL: ${HARNESS_MEMORY_EXTRACT_MODEL:-}
+      # true: extracted memories are active at once; false: they wait in the review queue until a member keeps them
+      HARNESS_MEMORY_EXTRACT_AUTOCONFIRM: ${HARNESS_MEMORY_EXTRACT_AUTOCONFIRM:-true}
       HARNESS_MEMORY_EMBEDDING_BACKEND: ${HARNESS_MEMORY_EMBEDDING_BACKEND:-simple}
       HARNESS_MEMORY_EMBEDDING_URL: ${HARNESS_MEMORY_EMBEDDING_URL:-}
       HARNESS_MEMORY_EMBEDDING_KEY: ${HARNESS_MEMORY_EMBEDDING_KEY:-}
