@@ -37,6 +37,9 @@ The agent finds them three ways:
 * the prompt names the user's documents;
 * `documents_list` returns each file's path in the sandbox (`/workspace/documents/<name>`) and in the browser;
 * `documents_to_workspace` copies them into the conversation's sandbox, to read, convert or edit.
+* The agent also keeps the library up to date: `documents_save_from_url` downloads a file (a résumé linked on the user's website)
+  and saves it; `documents_save_from_sandbox` stores an edited or generated file; `documents_write` saves text; `documents_rename`
+  and `documents_delete` tidy up. Downloads are made by the harness, never to a private or loopback address, at most 20 MiB.
 
 The browser service mounts the same volume read-only at `/docs` (`HARNESS_DOCUMENTS_BROWSER_ROOT`), so
 `browser_file_upload` can attach a document to a form. Anyone who can run commands as the agent can read the documents of the

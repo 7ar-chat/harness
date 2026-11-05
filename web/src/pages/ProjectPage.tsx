@@ -150,10 +150,10 @@ function Settings({ pid }: { pid: string }) {
   const update = useUpdateProject(pid);
   const del = useDeleteProject();
   const navigate = useNavigate();
-  const [f, setF] = useState({ name: "", description: "", repoUrl: "", defaultBranch: "", slackChannel: "" });
+  const [f, setF] = useState({ name: "", description: "", repoUrl: "", extraRepos: "", defaultBranch: "", slackChannel: "" });
   const [confirm, setConfirm] = useState(false);
   useEffect(() => {
-    if (p) setF({ name: p.name, description: p.description ?? "", repoUrl: p.repoUrl ?? "", defaultBranch: p.defaultBranch ?? "", slackChannel: p.slackChannel ?? "" });
+    if (p) setF({ name: p.name, description: p.description ?? "", repoUrl: p.repoUrl ?? "", extraRepos: (p.extraRepos ?? []).join("\n"), defaultBranch: p.defaultBranch ?? "", slackChannel: p.slackChannel ?? "" });
   }, [p]);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   return (
@@ -162,7 +162,8 @@ function Settings({ pid }: { pid: string }) {
         className="max-w-xl space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
-          update.mutate(f);
+          const { extraRepos, ...rest } = f;
+          update.mutate({ ...rest, extraRepos: extraRepos.split(/\s+/).filter(Boolean) });
         }}
       >
         <div className="space-y-2">
@@ -176,6 +177,14 @@ function Settings({ pid }: { pid: string }) {
         <div className="space-y-2">
           <Label htmlFor="s-repo">Repository URL</Label>
           <Input id="s-repo" value={f.repoUrl} onChange={set("repoUrl")} type="url" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="s-more-repos">More repositories</Label>
+          <Textarea id="s-more-repos" value={f.extraRepos} onChange={set("extraRepos")} rows={3} placeholder={"https://github.com/org/api\nhttps://github.com/org/web"} disabled={!f.repoUrl.trim()} />
+          <p className="text-xs text-muted-foreground">
+            One URL per line, up to 10. Every session clones them beside the main repository, each in its own folder under /workspace/repos, and can commit in
+            each. GitHub repositories need the GitHub App installed on them too.
+          </p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="s-branch">Default branch</Label>
@@ -277,6 +286,11 @@ export function ProjectPage() {
                   <ExternalLink className="size-3" /> {p.repoUrl}
                 </a>
               ) : null}
+              {(p.extraRepos ?? []).map((u) => (
+                <a key={u} href={u} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">
+                  <ExternalLink className="size-3" /> {u}
+                </a>
+              ))}
               {p.defaultBranch ? (
                 <span className="inline-flex items-center gap-1">
                   <GitBranch className="size-3" /> {p.defaultBranch}
@@ -335,7 +349,6 @@ export function ProjectPage() {
                     <Link to="/t/$threadId" params={{ threadId: t.id }} className="flex items-center gap-3 p-3 hover:bg-accent">
                       <StatusDot status={t.status} unread={isUnread(seen, t.id, t.updatedAt)} />
                       <span className="min-w-0 flex-1 truncate text-sm">{t.title || "(untitled)"}</span>
-                      {t.createdBy ? <UserAvatar login={t.createdBy} className="size-5" /> : null}
                       <span className="text-xs text-muted-foreground">{ago(t.updatedAt)}</span>
                     </Link>
                   </li>

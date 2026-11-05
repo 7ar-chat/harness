@@ -631,3 +631,38 @@ func TestTmOverviewListsOnlyWhatTheUserCanSee(t *testing.T) {
 		t.Fatalf("thread row = %v", th)
 	}
 }
+
+func TestProjectsCanLinkSeveralRepositories(t *testing.T) {
+	r := newRig(t, rigOpts{team: true})
+	p := r.json("POST", "/api/projects", "alice", `{"name":"multi","repoUrl":"https://github.com/acme/api","extraRepos":[" https://github.com/acme/web ","https://github.com/acme/web"]}`, 201)
+	id := p["id"].(string)
+	if got := p["extraRepos"].([]any); len(got) != 1 || got[0] != "https://github.com/acme/web" {
+		t.Fatalf("created extraRepos = %v", got)
+	}
+	// Replacing the list, and leaving it alone when the patch does not mention it.
+	up := r.json("PATCH", "/api/projects/"+id, "alice", `{"extraRepos":["https://github.com/acme/web","https://github.com/acme/docs"]}`, 200)
+	if got := up["extraRepos"].([]any); len(got) != 2 {
+		t.Fatalf("patched extraRepos = %v", got)
+	}
+	up = r.json("PATCH", "/api/projects/"+id, "alice", `{"description":"x"}`, 200)
+	if got := up["extraRepos"].([]any); len(got) != 2 {
+		t.Fatalf("an unrelated patch changed extraRepos: %v", got)
+	}
+	// Refused: a bad URL, and more repositories without a main one.
+	for name, body := range map[string]string{
+		"bad url":          `{"extraRepos":["nope"]}`,
+		"main repo erased": `{"repoUrl":""}`,
+	} {
+		if got := r.do("PATCH", "/api/projects/"+id, "alice", body).StatusCode; got != 400 {
+			t.Errorf("%s: status %d, want 400", name, got)
+		}
+	}
+	if got := r.do("POST", "/api/projects", "alice", `{"name":"no-main","extraRepos":["https://github.com/acme/web"]}`).StatusCode; got != 400 {
+		t.Errorf("extra repositories without a main one: status %d, want 400", got)
+	}
+	// Clearing.
+	up = r.json("PATCH", "/api/projects/"+id, "alice", `{"extraRepos":[]}`, 200)
+	if got, _ := up["extraRepos"].([]any); len(got) != 0 {
+		t.Fatalf("cleared extraRepos = %v", got)
+	}
+}

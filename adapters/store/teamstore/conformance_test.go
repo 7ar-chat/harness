@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -660,8 +661,22 @@ func TestTeamCreateProject(t *testing.T) {
 		}
 		got, err := s.GetProject(ctx, "proj-1")
 		must(t, err)
-		if *got != *p {
+		if !reflect.DeepEqual(got, p) {
 			t.Fatalf("stored %+v differs from returned %+v", got, p)
+		}
+		desc := "d"
+		more := []string{"https://github.com/x/web", "https://github.com/x/docs"}
+		up, err := s.UpdateProject(ctx, "proj-1", store.ProjectPatch{ExtraRepos: &more})
+		must(t, err)
+		if !reflect.DeepEqual(up.ExtraRepos, more) || up.RepoURL != "https://github.com/x/api" {
+			t.Fatalf("after setting extra repos: %+v", up)
+		}
+		if untouched, err := s.UpdateProject(ctx, "proj-1", store.ProjectPatch{Description: &desc}); err != nil || !reflect.DeepEqual(untouched.ExtraRepos, more) {
+			t.Fatalf("a patch without extra repos changed them: %+v, %v", untouched, err)
+		}
+		none := []string{}
+		if cleared, err := s.UpdateProject(ctx, "proj-1", store.ProjectPatch{ExtraRepos: &none}); err != nil || len(cleared.ExtraRepos) != 0 {
+			t.Fatalf("clearing extra repos: %+v, %v", cleared, err)
 		}
 		if r, err := s.MemberRole(ctx, "proj-1", "alice"); err != nil || r != store.RoleOwner {
 			t.Fatalf("creator role = %q, %v", r, err)
@@ -723,7 +738,7 @@ func TestTeamUpdateProjectChangesOnlyThePatchedFields(t *testing.T) {
 		if !got.UpdatedAt.After(created.UpdatedAt) {
 			t.Fatalf("UpdatedAt not bumped: %v -> %v", created.UpdatedAt, got.UpdatedAt)
 		}
-		if stored, _ := s.GetProject(ctx, "p1"); *stored != *got {
+		if stored, _ := s.GetProject(ctx, "p1"); !reflect.DeepEqual(stored, got) {
 			t.Fatalf("stored %+v differs from returned %+v", stored, got)
 		}
 

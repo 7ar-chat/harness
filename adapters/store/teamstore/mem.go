@@ -405,6 +405,9 @@ func (m *Mem) UpdateProject(_ context.Context, id string, patch store.ProjectPat
 	if patch.DefaultBranch != nil {
 		p.DefaultBranch = *patch.DefaultBranch
 	}
+	if patch.ExtraRepos != nil {
+		p.ExtraRepos = append([]string(nil), (*patch.ExtraRepos)...)
+	}
 	if patch.GitHubInstallation != nil {
 		p.GitHubInstallation = *patch.GitHubInstallation
 	}

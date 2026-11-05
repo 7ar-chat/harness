@@ -80,7 +80,7 @@ func TestPromptSectionAndBrowserPath(t *testing.T) {
 	s := documents.New(t.TempDir())
 	s.BrowserRoot = "/docs"
 	in := agent.Input{Run: &store.Run{UserLogin: "ana"}}
-	if got := s.PromptSection(context.Background(), in); got != "" {
+	if got := s.PromptSection(context.Background(), in); !strings.Contains(got, "empty") || strings.Contains(got, "cv.pdf") {
 		t.Fatalf("no documents, section = %q", got)
 	}
 	if _, err := s.Put("ana", "cv.pdf", []byte("x")); err != nil {

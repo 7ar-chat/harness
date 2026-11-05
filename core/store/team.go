@@ -110,6 +110,8 @@ type Project struct {
 	Description   string `json:"description,omitempty"`
 	RepoURL       string `json:"repoUrl,omitempty"`
 	DefaultBranch string `json:"defaultBranch,omitempty"`
+	// ExtraRepos are more repositories of the project, cloned beside RepoURL (which stays the main one).
+	ExtraRepos []string `json:"extraRepos,omitempty"`
 	// GitHubInstallation is the id of the GitHub App installation that grants
 	// access to the repository (0 when not connected).
 	GitHubInstallation int64 `json:"githubInstallation,omitempty"`
@@ -127,6 +129,7 @@ type ProjectPatch struct {
 	Description        *string
 	RepoURL            *string
 	DefaultBranch      *string
+	ExtraRepos         *[]string
 	GitHubInstallation *int64
 	SlackChannel       *string
 }

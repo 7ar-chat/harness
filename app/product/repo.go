@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -52,6 +53,59 @@ type RepoCheckout struct {
 // RepoDir is where the repository is checked out in the sandbox.
 const RepoDir = sandbox.Workspace + "/repo"
 
+// ExtraDir holds the project's additional repositories, one directory each (/workspace/repos/<name>).
+const ExtraDir = sandbox.Workspace + "/repos"
+
+// repoCheckout is one repository of a project and where it is checked out.
+type repoCheckout struct{ URL, Dir string }
+
+var unsafeDirChars = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
+
+// repoDirName is the directory name for a repository URL: its last path segment, made safe.
+func repoDirName(raw string) string {
+	name := ""
+	if _, r, ok := ParseRepo(raw); ok {
+		name = r
+	} else if u, err := url.Parse(strings.TrimSpace(raw)); err == nil {
+		name = strings.TrimSuffix(path.Base(strings.TrimSuffix(u.Path, "/")), ".git")
+	}
+	name = strings.Trim(unsafeDirChars.ReplaceAllString(name, "-"), ".-")
+	if name == "" {
+		name = "repo"
+	}
+	return name
+}
+
+// extraCheckouts lists the project's additional repositories with distinct directories under ExtraDir.
+func extraCheckouts(p *store.Project) []repoCheckout {
+	used := map[string]bool{}
+	var out []repoCheckout
+	for _, raw := range p.ExtraRepos {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		name := repoDirName(raw)
+		for n, base := 2, name; used[name]; n++ {
+			name = fmt.Sprintf("%s-%d", base, n)
+		}
+		used[name] = true
+		out = append(out, repoCheckout{URL: raw, Dir: ExtraDir + "/" + name})
+	}
+	return out
+}
+
+// githubRepos lists the github.com repositories of the project (the main one first) as owner/repo pairs.
+func githubRepos(p *store.Project) [][2]string {
+	var out [][2]string
+	for _, raw := range append([]string{p.RepoURL}, p.ExtraRepos...) {
+		if o, r, ok := ParseRepo(raw); ok {
+			out = append(out, [2]string{o, r})
+		}
+	}
+	return out
+}
+
 const credFile = sandbox.ScratchDir + "/git-credentials"
 
 var safeRef = regexp.MustCompile(`^[A-Za-z0-9._/-]{1,100}$`)
@@ -84,12 +138,19 @@ func (rc *RepoCheckout) Feature() harness.Feature {
 			}
 			s := fmt.Sprintf("# Project repository\n\nThe project's repository (%s) is checked out in %s on your own branch %s. Work there; commit your changes. "+
 				"Other agents of the project work in their own copies, so do not assume they share your files.", p.RepoURL, RepoDir, branchFor(in.Run.ThreadID))
+			if extras := extraCheckouts(p); len(extras) > 0 {
+				s += "\n\nThe project has more repositories, each checked out on the same branch name in its own directory:"
+				for _, e := range extras {
+					s += fmt.Sprintf("\n- %s in %s", e.URL, e.Dir)
+				}
+				s += "\nCommit in each repository you change; they are separate repositories."
+			}
 			if rc.Factory != nil && p.GitHubInstallation != 0 {
 				s += "\n\n" + changeRequestGuidance
 			}
-			if _, _, ok := ParseRepo(p.RepoURL); ok && rc.Brokered && p.GitHubInstallation != 0 {
+			if len(githubRepos(p)) > 0 && rc.Brokered && p.GitHubInstallation != 0 {
 				s += "\n\ngit push and the GitHub API (api.github.com, for example `curl -X POST https://api.github.com/repos/OWNER/REPO/pulls` to open a pull request) " +
-					"are already authenticated for this repository: send no token and look for none; there is none in the sandbox."
+					"are already authenticated for the project's repositories: send no token and look for none; there is none in the sandbox."
 			}
 			return s
 		})
@@ -153,11 +214,14 @@ func (rc *RepoCheckout) token(ctx context.Context, p *store.Project) string {
 	}
 	// Only a github.com repository gets a token, and one limited to that repository: the installation may cover
 	// many others, and a project whose URL was changed to another host must never receive GitHub credentials.
-	_, repo, ok := ParseRepo(p.RepoURL)
-	if !ok {
+	var names []string
+	for _, or := range githubRepos(p) {
+		names = append(names, or[1])
+	}
+	if len(names) == 0 {
 		return ""
 	}
-	t, err := rc.GitHub.InstallationToken(ctx, p.GitHubInstallation, repo)
+	t, err := rc.GitHub.InstallationToken(ctx, p.GitHubInstallation, names...)
 	if err != nil {
 		slog.Warn("project repo: GitHub token failed", "project", p.ID, "error", err)
 		return ""
@@ -167,13 +231,15 @@ func (rc *RepoCheckout) token(ctx context.Context, p *store.Project) string {
 
 // cloneURL is the repository URL to clone: https for GitHub (the token is
 // presented through git config, not the URL), the project's URL otherwise.
-func cloneURL(p *store.Project) (string, error) {
-	if owner, repo, ok := ParseRepo(p.RepoURL); ok {
+func cloneURL(p *store.Project) (string, error) { return cloneURLOf(p.RepoURL) }
+
+func cloneURLOf(raw string) (string, error) {
+	if owner, repo, ok := ParseRepo(raw); ok {
 		return "https://github.com/" + owner + "/" + repo + ".git", nil
 	}
-	u, err := url.Parse(p.RepoURL)
+	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "https" || u.User != nil {
-		return "", fmt.Errorf("only https repository URLs without credentials can be cloned (got %q)", p.RepoURL)
+		return "", fmt.Errorf("only https repository URLs without credentials can be cloned (got %q)", raw)
 	}
 	return u.String(), nil
 }
@@ -209,44 +275,69 @@ func (rc *RepoCheckout) setup(ctx context.Context, threadID string, sb sandbox.S
 	if p.RepoURL == "" {
 		return rc.setupLocal(ctx, threadID, sb, p)
 	}
-	repoURL, err := cloneURL(p)
-	if err != nil {
-		return "Project repository not checked out: " + err.Error()
-	}
 	branch := p.DefaultBranch
 	if branch != "" && !safeRef.MatchString(branch) {
 		return "Project repository not checked out: the default branch name is not valid."
 	}
 	token := rc.token(ctx, p)
-	_, _, github := ParseRepo(p.RepoURL)
-	broker := github && sandbox.BrokerOf(sb) != nil
-	env := map[string]string{"REPO_URL": repoURL, "REPO_DIR": RepoDir, "REPO_BRANCH": branch, "THREAD_BRANCH": branchFor(threadID)}
-	switch {
-	case token != "" && broker:
-		// The credentials are in place before the clone, which runs without any token. If the broker refuses them
+	broker := len(githubRepos(p)) > 0 && sandbox.BrokerOf(sb) != nil
+	if token != "" && broker {
+		// The credentials are in place before the clones, which run without any token. If the broker refuses them
 		// the sandbox still gets none: a private repository then fails to clone with a clear message, rather than
 		// the secret silently entering the workload.
 		rc.writeCredentials(ctx, sb, p, token)
-	case token != "":
-		env["GH_TOKEN"] = token
 	}
-	cctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
-	var out strings.Builder
-	res, err := sb.Exec(cctx, sandbox.ExecRequest{Command: setupScript, Env: env, Timeout: 5 * time.Minute,
-		OnStderr: func(t string) { out.WriteString(t) }, OnStdout: func(t string) { out.WriteString(t) }})
-	if err != nil || res.ExitCode != 0 {
-		slog.Warn("project repo: checkout failed", "thread", threadID, "exit", res.ExitCode, "error", err)
-		msg := strings.TrimSpace(redact(out.String(), token))
-		if len(msg) > 400 {
-			msg = msg[len(msg)-400:]
+	all := append([]repoCheckout{{URL: p.RepoURL, Dir: RepoDir}}, extraCheckouts(p)...)
+	var notes []string
+	anyOK := false
+	for i, rp := range all {
+		repoURL, err := cloneURLOf(rp.URL)
+		if err != nil {
+			if i == 0 {
+				notes = append(notes, "Project repository not checked out: "+err.Error())
+			} else {
+				notes = append(notes, "Not checked out: "+rp.URL+": "+err.Error())
+			}
+			continue
 		}
-		return "Cloning the project repository into " + RepoDir + " failed: " + msg
+		b := ""
+		if i == 0 {
+			b = branch // the other repositories use their own default branch
+		}
+		env := map[string]string{"REPO_URL": repoURL, "REPO_DIR": rp.Dir, "REPO_BRANCH": b, "THREAD_BRANCH": branchFor(threadID)}
+		_, _, github := ParseRepo(rp.URL)
+		if token != "" && !broker && github {
+			env["GH_TOKEN"] = token
+		}
+		cctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		var out strings.Builder
+		res, err := sb.Exec(cctx, sandbox.ExecRequest{Command: setupScript, Env: env, Timeout: 5 * time.Minute,
+			OnStderr: func(t string) { out.WriteString(t) }, OnStdout: func(t string) { out.WriteString(t) }})
+		cancel()
+		if err != nil || res.ExitCode != 0 {
+			slog.Warn("project repo: checkout failed", "thread", threadID, "repo", rp.URL, "exit", res.ExitCode, "error", err)
+			msg := strings.TrimSpace(redact(out.String(), token))
+			if len(msg) > 400 {
+				msg = msg[len(msg)-400:]
+			}
+			if i == 0 {
+				notes = append(notes, "Cloning the project repository into "+RepoDir+" failed: "+msg)
+			} else {
+				notes = append(notes, "Cloning "+rp.URL+" into "+rp.Dir+" failed: "+msg)
+			}
+			continue
+		}
+		anyOK = true
+		if i == 0 {
+			notes = append(notes, fmt.Sprintf("The project repository %s is checked out in %s on branch %s.", p.RepoURL, RepoDir, branchFor(threadID)))
+		} else {
+			notes = append(notes, fmt.Sprintf("%s is checked out in %s.", rp.URL, rp.Dir))
+		}
 	}
-	if token != "" && !broker {
+	if token != "" && !broker && anyOK {
 		rc.writeCredentials(ctx, sb, p, token)
 	}
-	return fmt.Sprintf("The project repository %s is checked out in %s on branch %s.", p.RepoURL, RepoDir, branchFor(threadID))
+	return strings.Join(notes, " ")
 }
 
 // writeCredentials gives the sandbox the token. With a credential broker the token goes to the broker: requests to
@@ -255,35 +346,56 @@ func (rc *RepoCheckout) setup(ctx context.Context, threadID string, sb sandbox.S
 // It reports whether the credentials are in place.
 func (rc *RepoCheckout) writeCredentials(ctx context.Context, sb sandbox.Sandbox, p *store.Project, token string) bool {
 	if broker := sandbox.BrokerOf(sb); broker != nil {
-		owner, repo, ok := ParseRepo(p.RepoURL)
-		if !ok {
+		repos := githubRepos(p)
+		if len(repos) == 0 {
 			return false
 		}
-		if err := broker.SetCredentials(ctx, brokeredGitHub(owner, repo, token)); err != nil {
+		if err := broker.SetCredentials(ctx, brokeredGitHubRepos(repos, token)); err != nil {
 			slog.Warn("project repo: handing the token to the credential broker failed", "project", p.ID, "error", redact(err.Error(), token))
 			return false
 		}
 		return true
 	}
-	res, err := sb.Exec(ctx, sandbox.ExecRequest{Command: credScript, Timeout: time.Minute,
-		Env: map[string]string{"GH_TOKEN": token, "REPO_DIR": RepoDir}})
-	return err == nil && res.ExitCode == 0
+	ok := true
+	for _, d := range append([]string{RepoDir}, dirsOf(extraCheckouts(p))...) {
+		res, err := sb.Exec(ctx, sandbox.ExecRequest{Command: credScript, Timeout: time.Minute,
+			Env: map[string]string{"GH_TOKEN": token, "REPO_DIR": d}})
+		ok = ok && err == nil && res.ExitCode == 0
+	}
+	return ok
 }
 
 // brokeredGitHub is what the broker needs to authenticate git (smart HTTP on github.com) and the REST API for one
 // repository, and nothing else: the token itself is limited to that repository too.
 func brokeredGitHub(owner, repo, token string) sandbox.CredentialSet {
+	return brokeredGitHubRepos([][2]string{{owner, repo}}, token)
+}
+
+func dirsOf(cs []repoCheckout) []string {
+	out := make([]string, len(cs))
+	for i, c := range cs {
+		out[i] = c.Dir
+	}
+	return out
+}
+
+// brokeredGitHubRepos is brokeredGitHub for several repositories (owner, repo) that share one token.
+func brokeredGitHubRepos(repos [][2]string, token string) sandbox.CredentialSet {
 	basic := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + token))
+	var gitPaths, apiPaths []string
+	for _, or := range repos {
+		owner, repo := or[0], or[1]
+		gitPaths = append(gitPaths, "/"+owner+"/"+repo+".git*", "/"+owner+"/"+repo+"/*")
+		apiPaths = append(apiPaths, "/repos/"+owner+"/"+repo, "/repos/"+owner+"/"+repo+"/*")
+	}
 	return sandbox.CredentialSet{
 		Credentials: []sandbox.Credential{
 			{Name: "github-git", Value: basic},
 			{Name: "github-api", Value: token},
 		},
 		Bindings: []sandbox.CredentialBinding{
-			{Name: "github-git", Host: "github.com", Paths: []string{"/" + owner + "/" + repo + ".git*", "/" + owner + "/" + repo + "/*"},
-				Auth: sandbox.AuthBasic, Credential: "github-git"},
-			{Name: "github-api", Host: "api.github.com", Paths: []string{"/repos/" + owner + "/" + repo, "/repos/" + owner + "/" + repo + "/*"},
-				Auth: sandbox.AuthBearer, Credential: "github-api"},
+			{Name: "github-git", Host: "github.com", Paths: gitPaths, Auth: sandbox.AuthBasic, Credential: "github-git"},
+			{Name: "github-api", Host: "api.github.com", Paths: apiPaths, Auth: sandbox.AuthBearer, Credential: "github-api"},
 		},
 	}
 }

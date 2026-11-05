@@ -75,7 +75,7 @@ func TestMemOpenRestoresEveryKindOfState(t *testing.T) {
 		t.Fatalf("seen = %v", s)
 	}
 	// Projects, members, invites, threads.
-	if p, err := r.GetProject(ctx, "p1"); err != nil || *p != *project {
+	if p, err := r.GetProject(ctx, "p1"); err != nil || !reflect.DeepEqual(p, project) {
 		t.Fatalf("project = %+v, %v", p, err)
 	}
 	if got := roles(t, r, "p1"); !sameRoles(got, map[string]string{"alice": store.RoleOwner, "bob": store.RoleViewer}) {

@@ -39,7 +39,6 @@ function ThreadItem({ t, openId, owner }: { t: ThreadSummary; openId?: string; o
         <Link to="/t/$threadId" params={{ threadId: t.id }} onClick={() => isMobile && setOpenMobile(false)}>
           <StatusDot status={t.status} unread={unread} />
           <span className={unread ? "truncate font-semibold" : "truncate"}>{t.title || "(untitled)"}</span>
-          {t.createdBy ? <UserAvatar login={t.createdBy} className="ml-auto size-4 text-[8px]" /> : null}
         </Link>
       </SidebarMenuButton>
       {canDelete ? (

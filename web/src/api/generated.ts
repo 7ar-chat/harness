@@ -347,6 +347,7 @@ export interface Project {
   description?: string;
   repoUrl?: string;
   defaultBranch?: string;
+  extraRepos?: string[];
   githubInstallation?: number;
   slackChannel?: string;
   createdBy: string;

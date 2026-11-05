@@ -6,7 +6,7 @@ import { useState } from "react";
 import { api } from "@/api/client";
 import { qk, toastError, useOverview } from "@/api/queries";
 import type { Thread, ThreadStatus, ThreadSummary } from "@/api/types";
-import { Empty, ErrorState, ListSkeleton, StatusBadge, UserAvatar, isActive, needsYou } from "@/components/app/common";
+import { Empty, ErrorState, ListSkeleton, StatusBadge, isActive, needsYou } from "@/components/app/common";
 import { useDialogs } from "@/components/app/dialogs";
 import { ImportEntry } from "@/components/app/github-import";
 import { Button } from "@/components/ui/button";
@@ -51,7 +51,7 @@ export function SessionCard({ t }: { t: Row }) {
           <span className="truncate">{t.projectName}</span>
           {t.createdBy ? (
             <span className="ml-auto flex items-center gap-1">
-              <UserAvatar login={t.createdBy} className="size-4 text-[8px]" /> {t.createdBy}
+              {t.createdBy}
             </span>
           ) : null}
         </div>

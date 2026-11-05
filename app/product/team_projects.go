@@ -97,12 +97,43 @@ func validRepoURL(u string) bool {
 	return err == nil && (p.Scheme == "https" || p.Scheme == "ssh" || p.Scheme == "git") && p.Host != ""
 }
 
+// MaxExtraRepos is how many repositories a project can have besides its main one.
+const MaxExtraRepos = 10
+
+// cleanExtraRepos trims and de-duplicates the additional repositories (the main one never repeats among them) and
+// returns the reason when the list is not acceptable.
+func cleanExtraRepos(main string, in []string) ([]string, string) {
+	seen := map[string]bool{strings.ToLower(strings.TrimSuffix(strings.TrimSpace(main), ".git")): true}
+	out := []string{}
+	for _, raw := range in {
+		raw = strings.TrimSpace(raw)
+		key := strings.ToLower(strings.TrimSuffix(raw, ".git"))
+		if raw == "" || seen[key] {
+			continue
+		}
+		if !validRepoURL(raw) {
+			return nil, "Each repository must be an https, ssh or git URL: " + raw
+		}
+		seen[key] = true
+		out = append(out, raw)
+	}
+	if len(out) > MaxExtraRepos {
+		return nil, fmt.Sprintf("A project can have at most %d more repositories.", MaxExtraRepos)
+	}
+	if len(out) > 0 && strings.TrimSpace(main) == "" {
+		return nil, "Set the project's main repository before adding more."
+	}
+	return out, ""
+}
+
 func (s *server) createProject(w http.ResponseWriter, r *http.Request, c Caller) {
 	var body struct {
 		Name          string `json:"name"`
 		Description   string `json:"description"`
 		RepoURL       string `json:"repoUrl"`
 		DefaultBranch string `json:"defaultBranch"`
+		// ExtraRepos are more repositories cloned beside RepoURL.
+		ExtraRepos []string `json:"extraRepos"`
 		// Template starts a project without a repository from one of GET /templates.
 		Template string `json:"template"`
 	}
@@ -116,6 +147,11 @@ func (s *server) createProject(w http.ResponseWriter, r *http.Request, c Caller)
 	}
 	if !validRepoURL(body.RepoURL) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "repoUrl must be an https, ssh or git URL.")
+		return
+	}
+	extra, bad := cleanExtraRepos(body.RepoURL, body.ExtraRepos)
+	if bad != "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", bad)
 		return
 	}
 	if body.Template != "" {
@@ -133,7 +169,7 @@ func (s *server) createProject(w http.ResponseWriter, r *http.Request, c Caller)
 		}
 	}
 	p, err := s.team.CreateProject(r.Context(), store.Project{Name: body.Name, Description: body.Description,
-		RepoURL: body.RepoURL, DefaultBranch: body.DefaultBranch}, c.Actor)
+		RepoURL: body.RepoURL, DefaultBranch: body.DefaultBranch, ExtraRepos: extra}, c.Actor)
 	if err != nil {
 		fail(w, err)
 		return
@@ -182,6 +218,8 @@ func (s *server) patchProject(w http.ResponseWriter, r *http.Request, c Caller) 
 		Description   *string `json:"description"`
 		RepoURL       *string `json:"repoUrl"`
 		DefaultBranch *string `json:"defaultBranch"`
+		// ExtraRepos replaces the list of additional repositories.
+		ExtraRepos *[]string `json:"extraRepos"`
 		// SlackChannel is a channel id or #name; empty stops the channel notifications.
 		SlackChannel *string `json:"slackChannel"`
 	}
@@ -195,6 +233,21 @@ func (s *server) patchProject(w http.ResponseWriter, r *http.Request, c Caller) 
 	if body.RepoURL != nil && !validRepoURL(*body.RepoURL) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "repoUrl must be an https, ssh or git URL.")
 		return
+	}
+	if body.ExtraRepos != nil || (body.RepoURL != nil && len(p.ExtraRepos) > 0) {
+		main, list := p.RepoURL, p.ExtraRepos
+		if body.RepoURL != nil {
+			main = *body.RepoURL
+		}
+		if body.ExtraRepos != nil {
+			list = *body.ExtraRepos
+		}
+		clean, bad := cleanExtraRepos(main, list)
+		if bad != "" {
+			writeError(w, http.StatusBadRequest, "invalid_request", bad)
+			return
+		}
+		body.ExtraRepos = &clean
 	}
 	if body.SlackChannel != nil {
 		if s.sk == nil {
@@ -215,7 +268,7 @@ func (s *server) patchProject(w http.ResponseWriter, r *http.Request, c Caller) 
 		body.SlackChannel = &id
 	}
 	up, err := s.team.UpdateProject(r.Context(), p.ID, store.ProjectPatch{Name: body.Name, Description: body.Description,
-		RepoURL: body.RepoURL, DefaultBranch: body.DefaultBranch, SlackChannel: body.SlackChannel})
+		RepoURL: body.RepoURL, DefaultBranch: body.DefaultBranch, ExtraRepos: body.ExtraRepos, SlackChannel: body.SlackChannel})
 	if err != nil {
 		fail(w, err)
 		return

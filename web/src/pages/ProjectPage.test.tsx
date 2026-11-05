@@ -112,4 +112,18 @@ describe("ProjectPage", () => {
     const alert = await screen.findByText("kaboom");
     expect(within(alert.parentElement!).getByRole("button", { name: "Try again" })).toBeTruthy();
   });
+
+  it("links several repositories to one project: shows them and saves the list from the settings", async () => {
+    const p = project("p1", { name: "payments", repoUrl: "https://github.com/acme/payments", defaultBranch: "main", role: "owner", extraRepos: ["https://github.com/acme/web"] });
+    const f = mockFetch({ ...routes("owner"), "GET /api/projects/p1": p, "PATCH /api/projects/p1": p });
+    const { router } = await renderApp("/p/p1?tab=overview");
+    expect(await screen.findByRole("link", { name: /github.com\/acme\/web/ })).toBeTruthy();
+    await router.navigate({ to: "/p/$projectId", params: { projectId: "p1" }, search: { tab: "settings" } });
+    const box = (await screen.findByLabelText("More repositories")) as HTMLTextAreaElement;
+    expect(box.value).toBe("https://github.com/acme/web");
+    fireEvent.change(box, { target: { value: "https://github.com/acme/web\nhttps://github.com/acme/docs" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(f.find("PATCH", "/api/projects/p1")).toHaveLength(1));
+    expect((f.find("PATCH", "/api/projects/p1")[0]?.body as { extraRepos: string[] }).extraRepos).toEqual(["https://github.com/acme/web", "https://github.com/acme/docs"]);
+  });
 });

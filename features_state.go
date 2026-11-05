@@ -230,6 +230,7 @@ func Documents() Feature {
 		svc := documents.New(b.Config.DocumentsDir)
 		svc.BrowserRoot = b.Config.DocumentsBrowserRoot
 		svc.Sandboxes = b.Sandboxes
+		svc.HTTP = documents.PublicClient() // addresses a model read on web pages: never a private or loopback host
 		b.Documents = svc
 		b.AddTools(documents.Provider{Svc: svc})
 		b.Section(svc.PromptSection)

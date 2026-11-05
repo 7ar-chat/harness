@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { formatDistanceToNowStrict } from "date-fns";
 import { ExternalLink, GitPullRequest } from "lucide-react";
 import { useBoard, useSeen, type BoardCard, type BoardColumn } from "@/api/queries";
-import { Empty, ErrorState, ListSkeleton, StatusDot, UserAvatar } from "@/components/app/common";
+import { Empty, ErrorState, ListSkeleton, StatusDot } from "@/components/app/common";
 import { cn } from "@/lib/utils";
 import { isUnread } from "@/lib/unread";
 
@@ -33,7 +33,6 @@ function Card({ card }: { card: BoardCard }) {
         </div>
         {card.why ? <p className="mt-1.5 line-clamp-3 pl-4 text-xs text-muted-foreground">{card.why}</p> : null}
         <div className="mt-2 flex items-center gap-2 pl-4 text-xs text-muted-foreground">
-          {card.createdBy ? <UserAvatar login={card.createdBy} className="size-4 text-[8px]" /> : null}
           {card.prNumber ? (
             <span className="inline-flex items-center gap-1">
               <GitPullRequest className="size-3" /> #{card.prNumber}

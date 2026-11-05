@@ -3,8 +3,10 @@ package product
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -412,4 +414,95 @@ func (s *threadInfoStore) GetThreadInfo(ctx context.Context, id string) (*factor
 		return nil, s.err
 	}
 	return s.Mem.GetThreadInfo(ctx, id)
+}
+
+func TestCheckoutClonesEveryRepositoryOfTheProject(t *testing.T) {
+	// Arrange
+	rc, thread := repoRig(t, "https://github.com/acme/api", 0)
+	p := rc.project(context.Background(), thread)
+	more := []string{"https://github.com/acme/web", "https://github.com/other/web", "https://example.com/x/docs.git"}
+	p, err := rc.Team.UpdateProject(context.Background(), p.ID, store.ProjectPatch{ExtraRepos: &more})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sb := &fakeSandbox{}
+	// Act
+	msg := rc.setup(context.Background(), thread, sb)
+	// Assert
+	if len(sb.reqs) != 4 {
+		t.Fatalf("want one clone per repository, got %d: %+v", len(sb.reqs), sb.reqs)
+	}
+	dirs := []string{RepoDir, ExtraDir + "/web", ExtraDir + "/web-2", ExtraDir + "/docs"}
+	urls := []string{"https://github.com/acme/api.git", "https://github.com/acme/web.git", "https://github.com/other/web.git", "https://example.com/x/docs.git"}
+	for i, r := range sb.reqs {
+		if r.Env["REPO_DIR"] != dirs[i] || r.Env["REPO_URL"] != urls[i] {
+			t.Errorf("clone %d = %v, want %s into %s", i, r.Env, urls[i], dirs[i])
+		}
+	}
+	if sb.reqs[0].Env["REPO_BRANCH"] != "main" || sb.reqs[1].Env["REPO_BRANCH"] != "" {
+		t.Errorf("only the main repository uses the project's default branch: %v / %v", sb.reqs[0].Env, sb.reqs[1].Env)
+	}
+	if !strings.Contains(msg, ExtraDir+"/docs") || strings.Contains(msg, "failed") {
+		t.Errorf("message = %q", msg)
+	}
+	_ = p
+}
+
+func TestCheckoutKeepsGoingWhenAnAdditionalRepositoryFails(t *testing.T) {
+	// Arrange
+	rc, thread := repoRig(t, "https://github.com/acme/api", 0)
+	p := rc.project(context.Background(), thread)
+	more := []string{"ssh://git@example.com/x/y", "https://github.com/acme/web"}
+	if _, err := rc.Team.UpdateProject(context.Background(), p.ID, store.ProjectPatch{ExtraRepos: &more}); err != nil {
+		t.Fatal(err)
+	}
+	sb := &fakeSandbox{}
+	// Act
+	msg := rc.setup(context.Background(), thread, sb)
+	// Assert
+	if len(sb.reqs) != 2 {
+		t.Fatalf("the unsupported URL is skipped, the others cloned: %d requests", len(sb.reqs))
+	}
+	if !strings.Contains(msg, "Not checked out") || !strings.Contains(msg, "ssh://git@example.com/x/y") || !strings.Contains(msg, ExtraDir+"/web") {
+		t.Errorf("message = %q", msg)
+	}
+}
+
+func TestBrokeredCredentialsCoverEveryGitHubRepository(t *testing.T) {
+	// Arrange
+	set := brokeredGitHubRepos([][2]string{{"acme", "api"}, {"acme", "web"}}, "tok")
+	// Assert
+	git := set.Bindings[0].Paths
+	if len(git) != 4 || git[2] != "/acme/web.git*" {
+		t.Errorf("git paths = %v", git)
+	}
+	if api := set.Bindings[1].Paths; len(api) != 4 || api[2] != "/repos/acme/web" {
+		t.Errorf("api paths = %v", api)
+	}
+}
+
+func TestCleanExtraRepos(t *testing.T) {
+	for _, tc := range []struct {
+		name, main string
+		in         []string
+		want       []string
+		bad        bool
+	}{
+		{"trims and drops blanks and duplicates", "https://github.com/a/api", []string{" https://github.com/a/web ", "", "https://github.com/a/web", "https://github.com/a/api.git"}, []string{"https://github.com/a/web"}, false},
+		{"needs a main repository", "", []string{"https://github.com/a/web"}, nil, true},
+		{"refuses a bad URL", "https://github.com/a/api", []string{"not a url"}, nil, true},
+		{"limits the count", "https://github.com/a/api", func() []string {
+			var l []string
+			for i := 0; i <= MaxExtraRepos; i++ {
+				l = append(l, fmt.Sprintf("https://github.com/a/r%d", i))
+			}
+			return l
+		}(), nil, true},
+		{"empty is fine without a main", "", nil, []string{}, false},
+	} {
+		got, bad := cleanExtraRepos(tc.main, tc.in)
+		if (bad != "") != tc.bad || (!tc.bad && !reflect.DeepEqual(got, tc.want)) {
+			t.Errorf("%s: got %v, %q", tc.name, got, bad)
+		}
+	}
 }
