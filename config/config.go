@@ -205,8 +205,16 @@ type Config struct {
 	// a fetched page) becomes trusted memory without a human looking at it.
 	MemoryExtractAutoConfirm bool   `env:"HARNESS_MEMORY_EXTRACT_AUTOCONFIRM"`
 	MemoryEmbeddingURL       string `env:"HARNESS_MEMORY_EMBEDDING_URL"`
-	MemoryEmbeddingKey       string `env:"HARNESS_MEMORY_EMBEDDING_KEY"`
-	MemoryEmbeddingModel     string `env:"HARNESS_MEMORY_EMBEDDING_MODEL"`
+	// DocumentsDir is where the users' document libraries are stored (HARNESS_DOCUMENTS_DIR). Empty: the feature is off.
+	// DocumentsBrowserRoot is where the browser service sees that directory (HARNESS_DOCUMENTS_BROWSER_ROOT), so the
+	// agent can attach a document to a web form.
+	DocumentsDir string `env:"HARNESS_DOCUMENTS_DIR"`
+	// BrowserURL is the MCP endpoint of the browser service (HARNESS_BROWSER_URL, e.g. http://browser:8931/mcp). It adds
+	// an MCP server named "browser" limited to BrowserTools, unless MCP_SERVERS already defines one.
+	BrowserURL           string `env:"HARNESS_BROWSER_URL"`
+	DocumentsBrowserRoot string `env:"HARNESS_DOCUMENTS_BROWSER_ROOT"`
+	MemoryEmbeddingKey   string `env:"HARNESS_MEMORY_EMBEDDING_KEY"`
+	MemoryEmbeddingModel string `env:"HARNESS_MEMORY_EMBEDDING_MODEL"`
 	// Harness v2 §4–§9 (context windows, reasoning/vision models — LLM_VISION_MODELS
 	// also decides which models receive attached images —, compaction).
 	Harness
@@ -273,6 +281,9 @@ func (c *Config) normalize() error {
 				return fmt.Errorf("MCP_SERVERS: server %q: %w", s.Name, err)
 			}
 		}
+	}
+	if err := c.addBrowserServer(); err != nil {
+		return err
 	}
 	if err := c.normalizePromptAndEfforts(); err != nil { // before the presets (efforts per model)
 		return err

@@ -131,6 +131,13 @@ services:
       FACTORY_RUN: ${FACTORY_RUN:-}
       MAX_SANDBOXES_PER_USER: ${MAX_SANDBOXES_PER_USER:-}
 
+      # The users' document library (a CV, templates...), kept on the harness-docs volume that the browser service
+      # also mounts (read-only) so the agent can attach a document to a web form.
+      HARNESS_DOCUMENTS_DIR: ${HARNESS_DOCUMENTS_DIR:-/data/documents}
+      HARNESS_DOCUMENTS_BROWSER_ROOT: ${HARNESS_DOCUMENTS_BROWSER_ROOT:-/docs}
+      # The browser the agent drives (service "browser" below; docs/browser.md). Empty turns it off.
+      HARNESS_BROWSER_URL: ${HARNESS_BROWSER_URL:-http://browser:8931/mcp}
+
       ARTIFACTS_S3_ENDPOINT: ${ARTIFACTS_S3_ENDPOINT:-}
       ARTIFACTS_S3_BUCKET: ${ARTIFACTS_S3_BUCKET:-}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
@@ -144,6 +151,7 @@ services:
       UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
     volumes:
       - harness-data:/data
+      - harness-docs:/data/documents
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
       interval: 30s
@@ -152,10 +160,34 @@ services:
       start_period: 20s
     networks:
       - dokploy-network
+      - browser-net
+
+  # A headless Chromium behind the Playwright MCP server (sandbox-image/browser). It lives outside the Daytona sandboxes
+  # because their network is deny-by-default and a browser has to reach job boards. It sits on its own network, so a
+  # hostile page cannot reach the database, the identity provider or the model router; only harness-web joins it.
+  browser:
+    build: ./sandbox-image/browser
+    restart: unless-stopped
+    expose:
+      - "8931"
+    shm_size: 1gb
+    mem_limit: 3g
+    cpus: 2
+    pids_limit: 512
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - harness-docs:/docs:ro
+    networks:
+      - browser-net
 
 volumes:
   harness-data:
+  harness-docs:
 
 networks:
   dokploy-network:
     external: true
+  browser-net:

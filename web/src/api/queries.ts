@@ -284,6 +284,18 @@ const profileKeys = () => [qk.me, ["thread"], ["project"], qk.overview] as const
 export const useSaveProfile = () => useAction((displayName: string) => api.patch<User>("/me/profile", { displayName }), profileKeys, "Profile saved");
 export const useUploadAvatar = () => useAction((blob: Blob) => putBytes<User>("/me/avatar", blob), profileKeys, "Avatar updated");
 export const useRemoveAvatar = () => useAction(() => api.del<User>("/me/avatar"), profileKeys, "Avatar removed");
+// ---- the user's document library ----
+export interface UserDocument {
+  name: string;
+  size: number;
+  mimeType: string;
+  modified: string;
+}
+export const useDocuments = () =>
+  useQuery({ queryKey: ["documents"], queryFn: () => api.get<UserDocument[]>("/me/documents"), retry: false });
+export const useUploadDocument = () =>
+  useAction((f: File) => putBytes<UserDocument>(`/me/documents/${encodeURIComponent(f.name)}`, f), () => [["documents"]], "Document saved");
+export const useDeleteDocument = () => useAction((name: string) => api.del(`/me/documents/${encodeURIComponent(name)}`), () => [["documents"]], "Document deleted");
 export const useDisconnect = (kind: "github" | "telegram" | "slack") => useAction(() => api.del(`/connectors/${kind}`), () => [["connectors"]], "Disconnected");
 export const useTelegramLink = () => useAction(() => api.post<{ code: string; url: string; expiresAt: string }>("/connectors/telegram/link"), () => [["connectors"]]);
 export const useSlackLink = () => useAction(() => api.post<{ code: string; expiresAt: string }>("/connectors/slack/link"), () => [["connectors"]]);

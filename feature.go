@@ -17,6 +17,7 @@ import (
 	"github.com/7ar-chat/harness/engine/tools"
 	"github.com/7ar-chat/harness/features/artifacts"
 	"github.com/7ar-chat/harness/features/artifacts/workspace"
+	"github.com/7ar-chat/harness/features/documents"
 	"github.com/7ar-chat/harness/features/memory"
 	"github.com/7ar-chat/harness/features/skills"
 	"github.com/7ar-chat/harness/features/verify"
@@ -82,6 +83,7 @@ type Builder struct {
 	Skills    *skills.Registry
 	Installer *skills.Installer
 	Memory    *memory.Service
+	Documents *documents.Service
 	Verifier  *verify.Verifier
 
 	installed map[string]bool

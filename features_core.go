@@ -41,6 +41,8 @@ const (
 	FeatureMemory      = "memory"
 	FeatureToolProfile = "toolprofile"
 	FeaturePermissions = "permissions"
+	FeatureDocuments   = "documents"
+	FeatureBrowser     = "browser"
 )
 
 type builtin struct {

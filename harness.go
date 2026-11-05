@@ -44,6 +44,7 @@ import (
 	"github.com/7ar-chat/harness/engine/tools"
 	"github.com/7ar-chat/harness/features/artifacts"
 	"github.com/7ar-chat/harness/features/artifacts/workspace"
+	"github.com/7ar-chat/harness/features/documents"
 	"github.com/7ar-chat/harness/features/memory"
 	"github.com/7ar-chat/harness/features/skills"
 )
@@ -131,6 +132,8 @@ type Harness struct {
 	Agent     *agent.Agent
 	// Memory is the memory service (nil without the Memory feature).
 	Memory *memory.Service
+	// Documents is the users' document library (nil unless HARNESS_DOCUMENTS_DIR is set).
+	Documents *documents.Service
 
 	sandboxTools bool
 	redo         redoStacks
@@ -212,7 +215,7 @@ func New(o Options) (*Harness, error) {
 	}
 
 	h := &Harness{cfg: cfg, Store: st, Log: infra.Log, Queue: infra.Broker, Bus: infra.Broker,
-		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace, Memory: b.Memory,
+		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace, Memory: b.Memory, Documents: b.Documents,
 		sandboxTools: b.sandboxTools != nil}
 	h.Agent = &agent.Agent{
 		Models: models, Tools: registry, Store: st, Steers: h.Bus,

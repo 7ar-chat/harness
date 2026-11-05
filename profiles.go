@@ -15,7 +15,7 @@ func ProfileWork() []Feature {
 	return []Feature{
 		Sandbox(), Codecheck(false),
 		Skills(), MCP(), Plan(), ProjectDocs(),
-		Artifacts(), Workspace(), Titles(), Verify(), Goals(), Memory(),
+		Artifacts(), Workspace(), Titles(), Verify(), Goals(), Memory(), Documents(), Browser(),
 		ToolProfile(false), Permissions(false),
 	}
 }
@@ -28,7 +28,7 @@ func ProfileCoding() []Feature {
 	return []Feature{
 		Sandbox(), Codecheck(true), Explore(),
 		Skills(), MCP(), Plan(), ProjectDocs(),
-		Artifacts(), Workspace(), Titles(), Verify(), Goals(), Memory(),
+		Artifacts(), Workspace(), Titles(), Verify(), Goals(), Memory(), Documents(), Browser(),
 		ToolProfile(true), Permissions(true),
 	}
 }

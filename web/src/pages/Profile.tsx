@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Bell, CheckCircle2, ExternalLink, Link2, Plug, Send, SlidersHorizontal, Upload, User as UserIcon, UserCog, Volume2 } from "lucide-react";
+import { Bell, CheckCircle2, ExternalLink, FileText, Link2, Plug, Send, SlidersHorizontal, Upload, User as UserIcon, UserCog, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import QRCode from "qrcode";
 import {
@@ -9,6 +9,7 @@ import {
 import type { Connector } from "@/api/types";
 import { Spinner, UserAvatar } from "@/components/app/common";
 import { CapabilitiesPanel } from "@/components/app/capabilities";
+import { DocumentsCard } from "@/components/app/documents";
 import { GithubMark, ImportGithubDialog } from "@/components/app/github-import";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -413,6 +414,7 @@ function Preferences() {
 
 const SECTIONS = [
   { id: "profile", label: "Profile", icon: UserCog, hint: "Your name, avatar and account" },
+  { id: "documents", label: "Documents", icon: FileText, hint: "Your CV and other files, available to your assistant in every session" },
   { id: "connectors", label: "Connectors", icon: Link2, hint: "GitHub, Slack, Telegram and other accounts" },
   { id: "capabilities", label: "Capabilities", icon: Plug, hint: "MCP servers for your personal sessions" },
   { id: "preferences", label: "Preferences", icon: SlidersHorizontal, hint: "Sounds and notifications" },
@@ -445,6 +447,7 @@ export function ProfilePage() {
           <div className="min-w-0 max-w-3xl flex-1 space-y-4">
             <p className="text-sm text-muted-foreground">{current.hint}</p>
             {current.id === "profile" ? <ProfileCard /> : null}
+            {current.id === "documents" ? <DocumentsCard /> : null}
             {current.id === "connectors" ? <Connectors /> : null}
             {current.id === "capabilities" ? (
               <Card>

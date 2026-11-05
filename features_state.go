@@ -14,6 +14,7 @@ import (
 	"github.com/7ar-chat/harness/engine/tools"
 	"github.com/7ar-chat/harness/features/artifacts"
 	"github.com/7ar-chat/harness/features/artifacts/workspace"
+	"github.com/7ar-chat/harness/features/documents"
 	"github.com/7ar-chat/harness/features/goals"
 	"github.com/7ar-chat/harness/features/memory"
 	"github.com/7ar-chat/harness/features/memory/memorytools"
@@ -215,6 +216,40 @@ func Memory() Feature {
 		b.ContextSection(b.prof.memorySection(memory.RecallSection(svc)))
 		b.Job(runtime.Job{Name: "memory-consolidation", Every: time.Duration(max(cfg.MemoryConsolidationHours, 0)) * time.Hour,
 			Run: memory.Consolidator{Store: b.Store, Retention: time.Duration(max(cfg.MemoryDeletedRetentionDays, 0)) * 24 * time.Hour}.Run})
+		return nil
+	}}
+}
+
+// Documents is the users' document library (a CV, templates...): stored under HARNESS_DOCUMENTS_DIR, named in the prompt,
+// listed and copied into the sandbox by tools. Without HARNESS_DOCUMENTS_DIR it contributes nothing.
+func Documents() Feature {
+	return builtin{FeatureDocuments, func(b *Builder) error {
+		if b.Config.DocumentsDir == "" {
+			return nil
+		}
+		svc := documents.New(b.Config.DocumentsDir)
+		svc.BrowserRoot = b.Config.DocumentsBrowserRoot
+		svc.Sandboxes = b.Sandboxes
+		b.Documents = svc
+		b.AddTools(documents.Provider{Svc: svc})
+		b.Section(svc.PromptSection)
+		return nil
+	}}
+}
+
+// BrowserServer is the name of the MCP server whose tools drive a web browser.
+const BrowserServer = "browser"
+
+// Browser tells the agent how to use the browser tools and how to apply for jobs, when an MCP server named "browser"
+// (MCP_SERVERS) is configured. Without it, it contributes nothing.
+func Browser() Feature {
+	return builtin{FeatureBrowser, func(b *Builder) error {
+		for _, s := range b.Config.MCPServers {
+			if s.Name == BrowserServer {
+				b.Section(func(context.Context, agent.Input) string { return prompts.Browser })
+				return nil
+			}
+		}
 		return nil
 	}}
 }
