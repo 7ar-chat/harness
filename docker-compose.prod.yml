@@ -25,9 +25,9 @@
 #                           python:3.11-slim), OPENSANDBOX_USE_SERVER_PROXY and OPENSANDBOX_CREDENTIAL_PROXY.
 #   BROWSER_BACKEND         where the agent's browser runs, independent of SANDBOX_BACKEND: service (default: the browser container below,
 #                           HARNESS_BROWSER_URL), daytona, e2b or opensandbox (a browser sandbox on that provider per conversation,
-#                           from the browser-desktop image: live view, kept 20 minutes after last use) or none. The provider needs its
+#                           from the browser-sandbox image, Steel: live view, kept 20 minutes after last use) or none. The provider needs its
 #                           variables above and a sandbox image/template/snapshot named BROWSER_IMAGE (default harness-browser), built
-#                           from sandbox-image/browser-desktop. Browser sandboxes get open internet access whatever
+#                           from sandbox-image/browser-sandbox. Browser sandboxes get open internet access whatever
 #                           SANDBOX_EGRESS_ALLOWLIST says. See docs/browser.md.
 #   SANDBOX_IMAGES          (optional) profile=image, e.g. work=harness-office. An image name belongs to one backend (a Daytona snapshot is
 #                           not an E2B template), so leave it empty when you switch backends and set DAYTONA_SNAPSHOT / E2B_TEMPLATE /

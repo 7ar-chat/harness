@@ -272,7 +272,7 @@ func TestViewURLOnlyForAConversationWithABrowser(t *testing.T) {
 		t.Fatal(err)
 	}
 	u, h := m.ViewURL(context.Background(), "t")
-	if !strings.Contains(u, "-sbx1.example/vnc.html") || h["x-token"] != "t-sbx1" {
+	if !strings.HasSuffix(u, "-sbx1.example"+ViewPath) || h["x-token"] != "t-sbx1" {
 		t.Fatalf("view = %q %v", u, h)
 	}
 }

@@ -17,10 +17,10 @@ browser runs on E2B:
 | `BROWSER_BACKEND` | The browser is |
 |---|---|
 | `service` (default) | the always-on container above, at `HARNESS_BROWSER_URL`. Its state does not carry from one message to the next |
-| `daytona`, `e2b`, `opensandbox` | a sandbox on that provider, one per conversation, started on the first use and deleted after `BROWSER_IDLE_MINUTES` (20) without use. Image `BROWSER_IMAGE` (default `harness-browser`: a Daytona snapshot, an E2B template or an OpenSandbox image of that name), built from [`sandbox-image/browser-desktop`](../sandbox-image/browser-desktop/README.md) |
+| `daytona`, `e2b`, `opensandbox` | a sandbox on that provider, one per conversation, started on the first use and deleted after `BROWSER_IDLE_MINUTES` (20) without use. Image `BROWSER_IMAGE` (default `harness-browser`: a Daytona snapshot, an E2B template or an OpenSandbox image of that name), built from [`sandbox-image/browser-sandbox`](../sandbox-image/browser-sandbox/README.md) |
 | `none` | no browser |
 
-A browser sandbox is a headed Chromium that a person can watch and take over (noVNC) with the Playwright MCP server on it, so
+A browser sandbox runs [Steel](https://github.com/steel-dev/steel-browser) (its Chromium, session API and live viewer) with the Playwright MCP server attached to that Chromium, so what the agent does shows in Steel's viewer, and
 the page, the cookies and a half-filled form are still there in the conversation's next message. Its user's documents are
 copied to `/docs/<tag>/` (the path `documents_list` reports) when it starts and when the library changes. The provider's
 access token (Daytona's preview token, E2B's traffic token) is sent with every MCP request; it never reaches the model.

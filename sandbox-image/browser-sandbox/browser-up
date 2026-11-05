@@ -1,0 +1,35 @@
+#!/bin/sh
+# Starts the browser stack and stays in the foreground (run it with `setsid sh -c 'browser-up >/tmp/browser.log 2>&1 &'`):
+#   Steel (node, API + viewer + CDP on :3000)  ->  one Steel session (the browser)  ->  playwright-mcp on :8931 attached to it
+# Writes /tmp/browser.ready when the MCP server answers. Environment: WIDTH, HEIGHT (default 1366x900).
+set -eu
+WIDTH="${WIDTH:-1366}"; HEIGHT="${HEIGHT:-900}"
+mkdir -p /out /data/logs
+export DOMAIN=localhost:3000 CDP_DOMAIN=localhost:3000 HOST=0.0.0.0 PORT=3000 \
+       DISABLE_CHROME_SANDBOX=true LOG_STORAGE_ENABLED=false NODE_ENV="${NODE_ENV:-production}"
+
+pids=""
+trap 'kill $pids 2>/dev/null || true' EXIT INT TERM
+
+# DISABLE_CHROME_SANDBOX: Chromium's own sandbox needs privileges a (non-root) sandbox user lacks; the provider's sandbox is the
+# isolation boundary. --no-nginx: nginx only republishes CDP on :9223; the agent reaches CDP on :3000.
+# Steel's entrypoint starts `node ./api/build/index.js`: relative to /app.
+(cd /app && exec /app/api/entrypoint.sh --no-nginx) &
+pids="$pids $!"
+for i in $(seq 1 120); do curl -fsS http://127.0.0.1:3000/v1/health >/dev/null 2>&1 && break; sleep 0.5; done
+curl -fsS http://127.0.0.1:3000/v1/health >/dev/null 2>&1 || { echo "browser-up: Steel did not start" >&2; exit 1; }
+
+# The session is the browser the agent drives and the viewer shows.
+curl -fsS -X POST http://127.0.0.1:3000/v1/sessions -H 'content-type: application/json' \
+     -d "{\"dimensions\":{\"width\":$WIDTH,\"height\":$HEIGHT}}" >/dev/null || { echo "browser-up: no Steel session" >&2; exit 1; }
+
+playwright-mcp --cdp-endpoint ws://127.0.0.1:3000/ --host 0.0.0.0 --port 8931 --allowed-hosts '*' \
+    --allow-unrestricted-file-access --output-dir /out --timeout-action 10000 --timeout-navigation 45000 &
+pids="$pids $!"
+for i in $(seq 1 60); do
+  [ "$(curl -s -o /dev/null -m2 -w '%{http_code}' http://127.0.0.1:8931/ 2>/dev/null)" != "000" ] && break
+  sleep 0.5
+done
+echo "browser-up: ready (viewer :3000/v1/sessions/debug, MCP :8931/mcp)"
+touch /tmp/browser.ready
+wait

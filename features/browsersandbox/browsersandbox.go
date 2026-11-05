@@ -1,7 +1,7 @@
 // Package browsersandbox runs the agent's browser in a sandbox of its own, on a sandbox provider that may be another one
 // than the code sandboxes use (BROWSER_BACKEND=daytona|e2b|opensandbox next to SANDBOX_BACKEND). A conversation that
-// uses the browser gets one sandbox from the image sandbox-image/browser-desktop: a headed Chromium that a person can
-// watch and take over (noVNC), and the Playwright MCP server on that same Chromium. The sandbox is kept for the
+// uses the browser gets one sandbox from the image sandbox-image/browser-sandbox: Steel's Chromium, which a person can
+// watch (Steel's session viewer), and the Playwright MCP server attached to that same Chromium. The sandbox is kept for the
 // conversation, so the page, the cookies and a half-filled form are still there in the next message, and is deleted
 // after BROWSER_IDLE_MINUTES without use.
 //
@@ -21,11 +21,14 @@ import (
 	"github.com/7ar-chat/harness/core/sandbox"
 )
 
-// Ports the image serves (sandbox-image/browser-desktop).
+// Ports the image serves (sandbox-image/browser-sandbox).
 const (
 	MCPPort  = 8931 // the Playwright MCP server, at /mcp
-	ViewPort = 6080 // noVNC, at /vnc.html
+	ViewPort = 3000 // Steel: the live view of the session at ViewPath, its REST API and CDP
 )
+
+// ViewPath is the page of Steel's live session viewer.
+const ViewPath = "/v1/sessions/debug"
 
 // Profile is the sandbox profile of browser sandboxes: the backend maps it to BROWSER_IMAGE.
 const Profile = "browser"
@@ -121,7 +124,7 @@ func (m *Manager) Servers(ctx context.Context, threadID, login string) ([]Server
 	return []Server{b.server}, nil
 }
 
-// ViewURL is the address of the live view of the conversation's browser (noVNC), "" when it has no browser. The
+// ViewURL is the address of the live view of the conversation's browser (Steel's session viewer), "" when it has no browser. The
 // address carries the provider's access, so it is only shown to people who may open the conversation.
 func (m *Manager) ViewURL(ctx context.Context, threadID string) (string, map[string]string) {
 	if m == nil {
@@ -144,7 +147,7 @@ func (m *Manager) ViewURL(ctx context.Context, threadID string) (string, map[str
 	if err != nil {
 		return "", nil
 	}
-	return ep.URL + "/vnc.html?autoconnect=1&resize=scale", ep.Headers
+	return strings.TrimRight(ep.URL, "/") + ViewPath, ep.Headers
 }
 
 func (m *Manager) start(ctx context.Context, b *box, threadID, login string) error {
@@ -172,7 +175,7 @@ func (m *Manager) start(ctx context.Context, b *box, threadID, login string) err
 	// The image's own start script; output goes to a file, so the command returns at once.
 	if res, err := inst.Exec(cctx, sandbox.ExecRequest{Timeout: 30 * time.Second,
 		Command: `setsid sh -c 'browser-up >/tmp/browser.log 2>&1 &' </dev/null >/dev/null 2>&1; echo started`}); err != nil || res.ExitCode != 0 {
-		return fail(fmt.Errorf("the browser did not start in its sandbox (is %q the browser-desktop image?): %v", Profile, err))
+		return fail(fmt.Errorf("the browser did not start in its sandbox (is %q the browser-sandbox image?): %v", Profile, err))
 	}
 	for {
 		res, err := inst.Exec(cctx, sandbox.ExecRequest{Command: "test -f /tmp/browser.ready", Timeout: 10 * time.Second})
