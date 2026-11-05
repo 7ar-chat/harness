@@ -220,7 +220,7 @@ type Config struct {
 	// image of that name (BROWSER_IMAGE).
 	BrowserImage string `env:"BROWSER_IMAGE" envDefault:"harness-browser"`
 	// BrowserIdleMinutes is how long a conversation's browser sandbox is kept after its last use (BROWSER_IDLE_MINUTES).
-	BrowserIdleMinutes int `env:"BROWSER_IDLE_MINUTES" envDefault:"20"`
+	BrowserIdleMinutes   int    `env:"BROWSER_IDLE_MINUTES" envDefault:"20"`
 	DocumentsBrowserRoot string `env:"HARNESS_DOCUMENTS_BROWSER_ROOT"`
 	MemoryEmbeddingKey   string `env:"HARNESS_MEMORY_EMBEDDING_KEY"`
 	MemoryEmbeddingModel string `env:"HARNESS_MEMORY_EMBEDDING_MODEL"`

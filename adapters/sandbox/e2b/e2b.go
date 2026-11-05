@@ -100,7 +100,7 @@ type sandboxInfo struct {
 	// TrafficAccessToken is the token a request to a port of the sandbox must carry when the sandbox does not allow
 	// public traffic.
 	TrafficAccessToken string `json:"trafficAccessToken"`
-	State           string `json:"state"`
+	State              string `json:"state"`
 }
 
 // templateFor is the template of a profile: its entry of Options.Images, else Options.Template.

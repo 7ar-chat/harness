@@ -30,7 +30,7 @@ type instance struct {
 	// E2B domain its ports are served under.
 	traffic string
 	domain  string
-	root  bool   // run commands as root (the creation bootstrap only)
+	root    bool // run commands as root (the creation bootstrap only)
 }
 
 var _ sandbox.Instance = (*instance)(nil)
