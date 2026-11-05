@@ -27,6 +27,9 @@ func main() {
 	out := flag.String("out", "", "write the JSON report here")
 	list := flag.Bool("list", false, "list the tasks")
 	compare := flag.Bool("compare", false, "compare two JSON reports given as arguments (before after)")
+	gate := flag.Bool("gate", false, "accept or reject a change: compare two JSON reports (before after); exit 1 on reject, 2 when inconclusive")
+	gateGain := flag.Bool("gate-require-gain", false, "with -gate: accept only a measurable improvement, not just 'no regression'")
+	gateRuns := flag.Int("gate-min-runs", 3, "with -gate: runs a task needs in both reports to count")
 	steps := flag.Int("steps", 0, "override AGENT_MAX_STEPS")
 	timeout := flag.Duration("timeout", 10*time.Minute, "per-task timeout")
 	keep := flag.Bool("keep", false, "keep the working directories")
@@ -64,6 +67,26 @@ func main() {
 		}
 		bench.Compare(os.Stdout, a, b)
 		return
+	}
+
+	if *gate {
+		if flag.NArg() != 2 {
+			fatal(fmt.Errorf("-gate needs two report files (before after)"))
+		}
+		a, err1 := bench.ReadReport(flag.Arg(0))
+		b, err2 := bench.ReadReport(flag.Arg(1))
+		if err1 != nil || err2 != nil {
+			fatal(fmt.Errorf("%v %v", err1, err2))
+		}
+		v := bench.Gate(a, b, bench.GateOptions{MinRuns: *gateRuns, RequireGain: *gateGain})
+		bench.WriteVerdict(os.Stdout, v)
+		switch {
+		case v.Accept:
+			return
+		case v.Inconclusive:
+			os.Exit(2)
+		}
+		os.Exit(1)
 	}
 
 	var names []string

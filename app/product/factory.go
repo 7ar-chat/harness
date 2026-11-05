@@ -33,6 +33,7 @@ import (
 //	POST   /api/projects/{pid}/triggers {name,kind,schedule|event,match,template,enabled} → 201 Trigger   (owner)
 //	DELETE /api/projects/{pid}/triggers/{trid}              → 204   (owner)
 //	GET    /api/projects/{pid}/factory/report?days=         → spend report
+//	GET    /api/projects/{pid}/factory/learning?view=rows|clusters|experiment&min=&n= → the learning dataset (rows: JSON lines of finished tasks with the context their runs had), the recurring failures mined from it, or the prompt-variant standings (404 without FACTORY_LEARNING=1)
 //	POST   /hooks/github                                    → GitHub webhook deliveries
 
 // FactoryOptions connects the product to the factory service of the harness.
@@ -301,6 +302,7 @@ func (s *server) routeFactory() {
 	s.Route("POST /projects/{pid}/triggers", s.createTrigger)
 	s.Route("DELETE /projects/{pid}/triggers/{trid}", s.deleteTrigger)
 	s.Route("GET /projects/{pid}/factory/report", s.factoryReport)
+	s.Route("GET /projects/{pid}/factory/learning", s.factoryLearning)
 	s.Mux.Handle("POST /hooks/github", s.factory().WebhookHandler())
 	s.Mux.Handle("POST /api/hooks/github", s.factory().WebhookHandler())
 }
@@ -700,4 +702,37 @@ func (s *server) factoryReport(w http.ResponseWriter, r *http.Request, c Caller)
 		return
 	}
 	writeJSON(w, http.StatusOK, rep)
+}
+
+// factoryLearning serves the learning dataset of a project: its rows, the failure clusters mined from them, or the
+// standings of the prompt experiment.
+func (s *server) factoryLearning(w http.ResponseWriter, r *http.Request, c Caller) {
+	p, _, ok := s.project(w, r, c, store.RoleViewer)
+	if !ok {
+		return
+	}
+	f := s.factory()
+	if f.Dataset == nil {
+		s.FailAccess(w, errNotFound)
+		return
+	}
+	q := r.URL.Query()
+	switch view := q.Get("view"); view {
+	case "clusters", "experiment":
+		n, _ := strconv.Atoi(q.Get("n"))
+		if view == "clusters" {
+			n, _ = strconv.Atoi(q.Get("min"))
+		}
+		v, err := f.LearningView(r.Context(), p.ID, view, n)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, v)
+	default:
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		if err := f.WriteLearningRows(r.Context(), w, p.ID); err != nil {
+			fail(w, err)
+		}
+	}
 }

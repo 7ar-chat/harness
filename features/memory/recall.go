@@ -45,6 +45,8 @@ type RecallInfo struct {
 	Relevant []string
 	Fallback bool
 	Chars    int
+	// Keys maps each recalled entry id to the memory key (layer) it lives in.
+	Keys map[string]string
 }
 
 // RecallBlock builds the memory the run starts with: the pinned entries of every layer, then the
@@ -100,6 +102,7 @@ func (s *Service) RecallBlock(ctx context.Context, layers []Layer, query string)
 		lines = append(lines, "- "+strings.ReplaceAll(block, "\n", "\n  "))
 		used += utf8.RuneCountInString(block)
 		info.Pinned = append(info.Pinned, p.e.ID)
+		info.addKey(p.e)
 	}
 	// Entries that match what the user just asked.
 	if q := strings.TrimSpace(query); q != "" && len(rest) > 0 {
@@ -139,6 +142,7 @@ func (s *Service) RecallBlock(ctx context.Context, layers []Layer, query string)
 			used += utf8.RuneCountInString(line)
 			seen[h.Entry.ID] = true
 			info.Relevant = append(info.Relevant, h.Entry.ID)
+			info.addKey(h.Entry)
 		}
 	}
 	// Nothing matched: the latest decisions, facts and constraints of the primary memory.
@@ -164,6 +168,13 @@ func (s *Service) RecallBlock(ctx context.Context, layers []Layer, query string)
 	}
 	info.Chars = utf8.RuneCountInString(text)
 	return text, info
+}
+
+func (i *RecallInfo) addKey(e *store.MemoryEntry) {
+	if i.Keys == nil {
+		i.Keys = map[string]string{}
+	}
+	i.Keys[e.ID] = e.UserLogin
 }
 
 func firstNonEmpty(a, b string) string {

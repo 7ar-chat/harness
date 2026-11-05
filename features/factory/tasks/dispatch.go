@@ -175,6 +175,11 @@ func (s *Service) request(t factory.Task, attempt int) factory.SpawnRequest {
 	if s.opts.Roles != nil {
 		instructions, readOnly, _ = s.opts.Roles(role)
 	}
+	if s.opts.Variant != nil {
+		if _, extra := s.opts.Variant(t); strings.TrimSpace(extra) != "" {
+			instructions = strings.TrimSpace(instructions + "\n\n" + extra)
+		}
+	}
 	model := t.Model
 	if model == "" {
 		model = s.opts.DefaultModel

@@ -34,6 +34,7 @@ with `FACTORY=1` (below).
 | `features/factory/budget` | spend metering per task and per day, repeated-failure detection, tool denial when exhausted |
 | `features/factory/policy` | the autonomy policy: classifies each tool call and allows, asks, or denies it |
 | `features/factory/lessons` | distils finished tasks into project memory so later runs recall what cost an attempt |
+| `features/factory/learning` | the self-improvement loop: run ledger, memory scoring and curation, failure mining, prompt experiments, the improver (see below) |
 | `bench/swebench` | SWE-bench style instances as `bench.Task`s, with hidden tests and a resolved/not-resolved evaluator |
 
 ## A task's life
@@ -128,6 +129,9 @@ Team mode, a GitHub App and Postgres are the production shape (`docs/team.md`). 
 | `FACTORY_MAX_CONCURRENT`, `FACTORY_MAX_ATTEMPTS` | tasks running at once (4), attempts per task (3) |
 | `FACTORY_RUN=0` | do not run the dispatcher, scheduler and PR loop in this process (in `harness-worker` it is the other way round: they run only with `FACTORY_RUN=1`) |
 | `FACTORY_LESSONS=1` | distil lessons from finished tasks into project memory (needs the memory feature) |
+| `FACTORY_LEARNING=1` | record each run's context and each task's outcome, score memory entries by it ([Learning and self-improvement](#learning-and-self-improvement)) |
+| `FACTORY_LEARNING_CURATE=1`, `FACTORY_LEARNING_VARIANTS=file.json` | retire or promote memory entries by their record; run a prompt experiment |
+| `FACTORY_IMPROVE_REPO=owner/name`, `FACTORY_IMPROVE_OWNER` | turn recurring failures into improvement pull requests (never auto-merged); also `_PROJECT`, `_BASE_BRANCH`, `_MODEL`, `_MIN_COUNT`, `_MAX_OPEN`, `_MAX_PER_DAY`, `_BUDGET_USD`, `_FROZEN` |
 
 Without `POSTGRES_HOST` the factory keeps its state (tasks, events, triggers, thread links, the spend ledger and seen
 webhook deliveries) in `factory.json` next to `team.json` in `LOCAL_STATE_DIR` (default `~/.har/sessions`), so it
@@ -169,6 +173,57 @@ f := h.FactoryOf()
 f.Tasks.Create(ctx, factory.Task{Owner: "alice", Title: "…", Spec: "…", Repo: "acme/app", AutoMerge: true})
 mux.Handle("POST /hooks/github", f.WebhookHandler())
 ```
+
+## Learning and self-improvement
+
+The factory learns facts (lessons) on its own. This feature closes the loop: it measures whether what the agents were
+given helped, and changes the setup only behind an eval gate and a pull request. Switch it on with `FACTORY_LEARNING=1`
+(`FactoryOptions.Learning`); the rest builds on it. It needs no schema change: attribution is stored as task events and
+the counters in the memory entries' metadata.
+
+| Step | What it does | Switch |
+|---|---|---|
+| **Ledger** | each run's recall is recorded as a `context` event (memory entry ids, model, prompt variant); when the task ends an `outcome` event adds the result, cost, attempts and the skills the thread used | `FACTORY_LEARNING=1` |
+| **Dataset** | `learning.Collect` flattens finished tasks into rows (task, context, result, CI failures, review rejects, cost, duration). Served as JSON lines at `GET /api/projects/{pid}/factory/learning` | with the ledger |
+| **Memory scoring** | each recalled entry counts a use, a win or a loss per finished task (`uses`, `wins`, `losses` in its metadata, never twice for a task). A blocked task is provisional and does not count | with the ledger |
+| **Curation** | every 6 h, an automatically written entry (a lesson) with at least 6 verdicts is compared with the project's success rate: clearly below it loses importance and, when far below, is retired (soft-deleted, restorable); clearly above gains importance and the tag `proven`. Entries a user wrote or pinned are never touched | `FACTORY_LEARNING_CURATE=1` |
+| **Failure mining** | tasks that failed, or blocked on a failure, are grouped by `factory.Fingerprint`; `?view=clusters` lists the recurring ones with their cost. `learning.CandidatesOf` turns them into regression-case outlines for `bench/candidates/` | with the ledger |
+| **Prompt experiments** | `FACTORY_LEARNING_VARIANTS=file.json` (`{"name":"extra instructions"}`) gives each task the control or one variant by a hash of its id; `?view=experiment` compares them and names a winner only with enough tasks, a one-sided p under 0.05 and a cost under 1.5x the control | `FACTORY_LEARNING_VARIANTS` |
+| **Eval gate** | `bench -gate before.json after.json` accepts or rejects a change on measured results (see below) | none, a CLI |
+| **Improver** | daily, turns each recurring failure into a task for the coder role: find the cause, make the smallest change (a lesson, a skill under `app/product/skills/`, a prompt or tool description), add the regression case, run the gate, open a pull request | `FACTORY_IMPROVE_REPO` |
+
+### The eval gate
+
+```
+bench -tier hard -n 3 -out before.json     # on the base branch
+bench -tier hard -n 3 -out after.json      # with the change
+bench -gate before.json after.json         # exit 0 accept, 1 reject, 2 inconclusive
+bench -gate -gate-require-gain ...         # accept only a measurable improvement
+```
+
+It rejects when a task's pass rate fell by more than a third or the overall rate fell significantly (one-sided
+two-proportion test, 10 %). It is inconclusive, and so does not accept, when a task has fewer runs than `-gate-min-runs`
+(3) or a task of the baseline is **missing** from the new report: shrinking the suite is the easiest way to raise a
+score. With `-gate-require-gain` it also needs a higher pass rate, or the same rate with 5 % fewer uncached tokens.
+
+### Guardrails of the improver
+
+* **It never merges.** Its tasks have `AutoMerge` off: the independent reviewer reviews the pull request and a human merges it.
+* **It cannot edit what judges it.** While `FACTORY_IMPROVE_REPO` is set, `learning.DefaultFrozen` (`bench/*.go`,
+  `bench/swebench/**`, the learning, review, policy and budget packages) is added to the protected paths of both the
+  review gate (a hard failure) and the policy engine (the write is denied), for **every** factory task, not only the
+  improver's. Override the list with `FACTORY_IMPROVE_FROZEN`. Adding a case under `bench/candidates/` stays allowed.
+* **It is rate limited.** At most `FACTORY_IMPROVE_MAX_OPEN` (2) improvement tasks in flight and
+  `FACTORY_IMPROVE_MAX_PER_DAY` (3) per 24 h, each capped at `FACTORY_IMPROVE_BUDGET_USD` (5), 2 attempts, sandboxed
+  policy, lowest priority. A failure is proposed once (`Source.Key = improve:<signature>`).
+* **The failure text it is shown is data**, fenced and capped; the task spec says so.
+
+Required: `FACTORY_IMPROVE_OWNER` (the login the tasks run as), the GitHub App, and `FACTORY_LEARNING=1`.
+
+What it does **not** do: it does not generate runnable bench tasks (they need a fixture and hidden tests, so a mined
+failure becomes a candidate outline that the improver or a person completes), it does not detect that two lessons
+contradict each other, and its attribution is statistical, not causal: an entry is judged against the project's
+baseline over many tasks, so a few tasks say little (hence the minimum of 6 verdicts and the confidence interval).
 
 ## Evaluating the harness
 
@@ -277,7 +332,7 @@ Share between the web tier and every worker:
 | Variables | Why |
 |---|---|
 | `POSTGRES_*`, `REDIS_*` | the tasks, the queue and the event log |
-| `FACTORY=1` and the `FACTORY_*` settings: `FACTORY_POLICY`, `FACTORY_PROTECTED`, `FACTORY_REQUIRE_TESTS`, `FACTORY_REVIEW_MODEL` / `FACTORY_NO_REVIEW`, `FACTORY_DAILY_BUDGET_*`, `FACTORY_DAILY_PER_PROJECT`, `FACTORY_MAX_ATTEMPTS`, `FACTORY_LESSONS` | the hooks, policy and budget guard of a run are built from them where the run executes |
+| `FACTORY=1` and the `FACTORY_*` settings: `FACTORY_POLICY`, `FACTORY_PROTECTED`, `FACTORY_REQUIRE_TESTS`, `FACTORY_REVIEW_MODEL` / `FACTORY_NO_REVIEW`, `FACTORY_DAILY_BUDGET_*`, `FACTORY_DAILY_PER_PROJECT`, `FACTORY_MAX_ATTEMPTS`, `FACTORY_LESSONS`, `FACTORY_LEARNING*`, `FACTORY_IMPROVE_*` | the hooks, policy and budget guard of a run are built from them where the run executes |
 | `GITHUB_APP_*` | the token the host clones and pushes with, and that `open_pr` and the pull request loop call GitHub with. The agent never receives it |
 | `LLM_*`, the sandbox settings | a run uses the worker's models and sandboxes |
 

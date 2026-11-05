@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -15,11 +16,14 @@ import (
 	"github.com/7ar-chat/harness/features/factory/budget"
 	"github.com/7ar-chat/harness/features/factory/delegate"
 	"github.com/7ar-chat/harness/features/factory/forge"
+	"github.com/7ar-chat/harness/features/factory/learning"
 	"github.com/7ar-chat/harness/features/factory/lessons"
 	factorypolicy "github.com/7ar-chat/harness/features/factory/policy"
 	"github.com/7ar-chat/harness/features/factory/review"
 	"github.com/7ar-chat/harness/features/factory/tasks"
 	"github.com/7ar-chat/harness/features/factory/triggers"
+	"github.com/7ar-chat/harness/features/memory"
+	"github.com/7ar-chat/harness/features/skills"
 	"github.com/7ar-chat/harness/modelinfo"
 )
 
@@ -86,6 +90,22 @@ type FactoryOptions struct {
 	Lessons      bool
 	LessonsModel string
 
+	// Learning records what each task's runs were given (recalled memory, skills, prompt variant) and how the
+	// task ended, and credits or debits the memory entries by the outcomes. It is the data every other part of
+	// self-improvement reads. Needs the Memory feature to attribute recalls.
+	Learning bool
+	// LearningCurate retires memory entries that measurably hurt and promotes those that measurably help
+	// (judged against the project's baseline success rate), every few hours.
+	LearningCurate bool
+	// LearningVariants runs a prompt experiment: each task gets one of these variants (name -> extra
+	// instructions) or the control, chosen by a hash of its id, and learning.Decide compares the outcomes.
+	LearningVariants map[string]string
+	// Improve turns recurring failures into tasks that change prompts, skills or lessons behind the eval gate and
+	// a pull request that never auto-merges. Store and Controller are filled in. While it is set the eval harness,
+	// the learning code, the reviewer, the policy and the budget (learning.DefaultFrozen, or Improve.Frozen) are
+	// protected from every automated change. Needs a Forge and Learning.
+	Improve *learning.ImproverOptions
+
 	// OnSpawn is told of every thread the factory creates for a task (the task's run and its delegated
 	// sub-agents), before its first run is queued. A team host links the thread to the task's project here
 	// so the project's members can watch the agent work. An error is logged, never fatal.
@@ -141,6 +161,38 @@ type Factory struct {
 	Budget   *budget.Guard
 	Spawner  *FactorySpawner
 	Roles    map[string]delegate.Role
+	// Dataset serves the learning dataset (one JSON line per finished task); nil without Learning. It does no
+	// authentication: mount it behind the host's own.
+	Dataset http.Handler
+	// Improver proposes fixes for recurring failures; nil unless FactoryOptions.Improve is set.
+	Improver *learning.Improver
+	// Curator judges memory entries by their track record; nil unless FactoryOptions.LearningCurate is set.
+	Curator *learning.Curator
+}
+
+// WriteLearningRows writes the learning dataset of a project as JSON lines (one finished task per line).
+func (f *Factory) WriteLearningRows(ctx context.Context, w io.Writer, projectID string) error {
+	rows, err := learning.Collect(ctx, f.Store, factory.Filter{ProjectID: projectID})
+	if err != nil {
+		return err
+	}
+	return learning.WriteJSONL(w, rows)
+}
+
+// LearningView computes an analysis of a project's dataset: "clusters" are the failures that recurred in at least
+// n tasks (default 2); "experiment" compares the prompt variants (n is the fewest tasks a variant needs, default 20).
+func (f *Factory) LearningView(ctx context.Context, projectID, view string, n int) (any, error) {
+	rows, err := learning.Collect(ctx, f.Store, factory.Filter{ProjectID: projectID})
+	if err != nil {
+		return nil, err
+	}
+	switch view {
+	case "clusters":
+		return learning.Mine(rows, n), nil
+	case "experiment":
+		return learning.Decide(rows, n, 0), nil
+	}
+	return nil, fmt.Errorf("%w: unknown learning view %q", factory.ErrInvalid, view)
 }
 
 // Report is the project's factory spend since a time, for dashboards.
@@ -203,6 +255,58 @@ func FactoryFeature(o FactoryOptions) Feature {
 			}))
 		}
 
+		var experiment learning.Experiment
+		var promptVersion func(factory.Task) string
+		if o.Learning {
+			experiment = learning.Experiment{Variants: o.LearningVariants}
+			if len(o.LearningVariants) > 0 {
+				promptVersion = func(t factory.Task) string { return experiment.Pick(t.ID) }
+			}
+			skillsOf := func(ctx context.Context, threadID string) []string {
+				msgs, err := st.ListMessages(ctx, threadID)
+				if err != nil {
+					return nil
+				}
+				return skills.LoadedIn(msgs)
+			}
+			observers = append(observers, learning.NewLearner(learning.Options{
+				Store: o.Store, Memory: st, Skills: skillsOf, PromptVersion: promptVersion,
+			}))
+			if b.Memory != nil {
+				rec := &learning.Recorder{Store: o.Store, PromptVersion: promptVersion}
+				prev := b.Memory.OnRecall
+				b.Memory.OnRecall = func(ctx context.Context, runID, threadID string, info memory.RecallInfo) {
+					if prev != nil {
+						prev(ctx, runID, threadID, info)
+					}
+					ids := append(append([]string(nil), info.Pinned...), info.Relevant...)
+					rec.Recall(ctx, runID, threadID, ids, info.Keys)
+				}
+			}
+		}
+		// While the improver is on, the machinery that judges it is off limits to every automated change.
+		protectedReview, protectedPolicy := o.Protected, o.Protected
+		if o.Improve != nil {
+			if !o.Learning {
+				return errors.New("factory: Improve needs Learning")
+			}
+			if o.Forge == nil {
+				return errors.New("factory: Improve needs a Forge: it proposes changes as pull requests")
+			}
+			frozen := o.Improve.Frozen
+			if frozen == nil {
+				frozen = learning.DefaultFrozen
+			}
+			if protectedReview == nil {
+				protectedReview = review.DefaultProtected
+			}
+			if protectedPolicy == nil {
+				protectedPolicy = factorypolicy.DefaultProtected
+			}
+			protectedReview = append(append([]string(nil), protectedReview...), frozen...)
+			protectedPolicy = append(append([]string(nil), protectedPolicy...), frozen...)
+		}
+
 		// The guard needs the service as its controller and the service needs the guard as its gate: the gate
 		// reads the guard through this variable, which is set right after both exist.
 		var guard *budget.Guard
@@ -221,6 +325,13 @@ func FactoryFeature(o FactoryOptions) Feature {
 			},
 			Models: cfg.LLMModels, DefaultModel: cfg.LLMDefaultModel,
 			Escalator: o.Escalator, Observers: observers, Deliver: o.DeliverToSession, OnState: o.OnTaskState,
+			Variant: func(t factory.Task) (string, string) {
+				if len(o.LearningVariants) == 0 {
+					return "", ""
+				}
+				v := experiment.Pick(t.ID)
+				return v, experiment.Instructions(v)
+			},
 			Roles: func(role string) (string, bool, bool) {
 				r, ok := roles[role]
 				return r.Instructions, r.ReadOnly, ok
@@ -272,6 +383,25 @@ func FactoryFeature(o FactoryOptions) Feature {
 		b.EndOfRun(guard.Hook())
 		b.EndOfRun(svc.Hook())
 		b.Job(svc.Job())
+		if o.Learning {
+			f.Dataset = learning.Handler(o.Store)
+			if o.LearningCurate {
+				f.Curator = learning.NewCurator(learning.CuratorOptions{
+					Memory: st, Baseline: learning.BaselineFromStore(o.Store, 30*24*time.Hour),
+				})
+				b.Job(f.Curator.Job())
+			}
+			if o.Improve != nil {
+				io := *o.Improve
+				io.Store, io.Controller = o.Store, svc
+				imp, err := learning.NewImprover(io)
+				if err != nil {
+					return fmt.Errorf("factory: %w", err)
+				}
+				f.Improver = imp
+				b.Job(imp.Job())
+			}
+		}
 		if o.Policy {
 			// The policy must see a call first, so its denial wins over every other hook. Its approval gate is
 			// the engine's own (the first BeforeTool hook, installed before any feature), which the supervised
@@ -282,7 +412,7 @@ func FactoryFeature(o FactoryOptions) Feature {
 					inner = hs.BeforeTool[0]
 				}
 				pe := factorypolicy.New(factorypolicy.Options{
-					Store: o.Store, Protected: o.Protected, ProtectedBranches: o.PolicyProtectedBranches,
+					Store: o.Store, Protected: protectedPolicy, ProtectedBranches: o.PolicyProtectedBranches,
 					DefaultPolicy: defaultPolicy, Config: o.PolicyConfig, Inner: inner,
 					Escalate: func(ctx context.Context, taskID, reason string) {
 						t, err := o.Store.GetTask(ctx, taskID)
@@ -327,7 +457,7 @@ func FactoryFeature(o FactoryOptions) Feature {
 				}
 				gate = review.New(review.Options{
 					Forge: o.Forge, Models: b.Models, Model: reviewer, RequireDifferentModel: o.ReviewModel != "",
-					SupportsReasoning: cfg.SupportsReasoning, Protected: o.Protected,
+					SupportsReasoning: cfg.SupportsReasoning, Protected: protectedReview,
 					RequireTests: o.RequireTests, Rubric: o.ReviewRubric,
 				})
 			}

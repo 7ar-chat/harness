@@ -105,6 +105,10 @@ const (
 	EventEscalated = "escalated"
 	EventLesson    = "lesson"
 	EventNote      = "note"
+	// EventContext records what a run was given (recalled memory entries, skills, prompt variant, model);
+	// EventOutcome records how the task ended, with that context, so the learning feature can attribute results.
+	EventContext = "context"
+	EventOutcome = "outcome"
 )
 
 // Over reports whether s exceeds b.

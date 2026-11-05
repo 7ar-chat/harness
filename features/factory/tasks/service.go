@@ -45,6 +45,10 @@ type Options struct {
 	Models       []string
 	DefaultModel string
 
+	// Variant names the prompt variant an experiment assigned to a task and returns its extra instructions, which
+	// are appended to the role's (nil: no experiment).
+	Variant func(t factory.Task) (name, instructions string)
+
 	// Escalator is told when a task blocks (nil: nobody).
 	Escalator factory.Escalator
 	// Observers are told when a task finishes or blocks.

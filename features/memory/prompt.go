@@ -118,6 +118,9 @@ func RecallSection(svc *Service) agent.PromptSection {
 		svc.stats.recallItems.Add(int64(len(info.Pinned) + len(info.Relevant)))
 		svc.stats.recallPinned.Add(int64(len(info.Pinned)))
 		svc.stats.recallChars.Add(int64(info.Chars))
+		if svc.OnRecall != nil && len(info.Keys) > 0 {
+			svc.OnRecall(ctx, in.Run.ID, in.Run.ThreadID, info)
+		}
 		slog.Debug("memory: recall", "run_id", in.Run.ID, "pinned", len(info.Pinned), "relevant", len(info.Relevant), "fallback", info.Fallback)
 		return text
 	}

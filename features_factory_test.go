@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/7ar-chat/harness/ai/llm/llmtest"
 	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
+	"github.com/7ar-chat/harness/features/factory/learning"
 	"github.com/7ar-chat/harness/modelinfo"
 )
 
@@ -113,8 +115,10 @@ func TestFactoryBlocksATaskWhoseRunsKeepFailingTheSameWay(t *testing.T) {
 
 func TestFactoryOptionsAreValidatedAtBuildTime(t *testing.T) {
 	cases := map[string]harness.FactoryOptions{
-		"no store":           {},
-		"forge without auth": {Store: factorystore.NewMem(nil), Forge: nopForge{}},
+		"no store":                 {},
+		"forge without auth":       {Store: factorystore.NewMem(nil), Forge: nopForge{}},
+		"improve without learning": {Store: factorystore.NewMem(nil), Improve: &learning.ImproverOptions{Repo: "a/b", Owner: "o"}},
+		"improve without a forge":  {Store: factorystore.NewMem(nil), Learning: true, Improve: &learning.ImproverOptions{Repo: "a/b", Owner: "o"}},
 	}
 	for name, o := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -338,5 +342,69 @@ func TestFactoryKeepsTheSandboxOfABlockedTaskForTheHumanAnswer(t *testing.T) {
 	// Assert: blocked is not finished, so nothing was destroyed.
 	if k := be.Killed(); len(k) != 0 {
 		t.Errorf("killed %v while the task waits for a human", k)
+	}
+}
+
+func TestFactoryLearningRecordsTheOutcomeAndRunsThePromptExperiment(t *testing.T) {
+	// Arrange: one variant only besides the control, so which one a task gets is decided by its id; make both carry
+	// a marker the model can see.
+	var sawMarker atomic.Bool
+	model := llmtest.NewFunc(func(c llmtest.Call) llmtest.Turn {
+		for _, m := range c.Messages {
+			if strings.Contains(m.Content, "VARIANT-MARKER") {
+				sawMarker.Store(true)
+			}
+		}
+		return llmtest.Turn{Chunks: []*ai.Message{ai.AssistantMessage("done: 42", nil)}}
+	})
+	h, st, ctx := factoryHarness(t, model, harness.FactoryOptions{
+		Run: true, PollEvery: 10 * time.Millisecond, Learning: true,
+		LearningVariants: map[string]string{"a": "VARIANT-MARKER", "b": "VARIANT-MARKER"},
+	})
+	f := h.FactoryOf()
+	if f.Dataset == nil {
+		t.Fatal("Learning published no dataset handler")
+	}
+	var ids []string
+	for i := range 6 {
+		tk, _, err := f.Tasks.Create(ctx, factory.Task{Owner: "alice", Title: fmt.Sprint("task ", i), Spec: "do it"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, tk.ID)
+	}
+	f.Tasks.Kick()
+
+	// Act
+	for _, id := range ids {
+		waitTask(ctx, t, st, id, factory.StateDone)
+	}
+
+	// Assert: every finished task has an outcome event, and the dataset has a row per task
+	eventually(ctx, t, "outcomes to be recorded", func() bool {
+		for _, id := range ids {
+			ev, _ := st.ListEvents(ctx, id, 0)
+			found := false
+			for _, e := range ev {
+				found = found || e.Kind == factory.EventOutcome
+			}
+			if !found {
+				return false
+			}
+		}
+		return true
+	})
+	var sb strings.Builder
+	if err := f.WriteLearningRows(ctx, &sb, ""); err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(sb.String(), "\n"); n != len(ids) || !strings.Contains(sb.String(), `"result":"success"`) {
+		t.Errorf("dataset has %d rows, want %d:\n%s", n, len(ids), sb.String())
+	}
+	if !sawMarker.Load() {
+		t.Error("no run was given its variant's instructions")
+	}
+	if _, err := f.LearningView(ctx, "", "experiment", 0); err != nil {
+		t.Errorf("experiment view: %v", err)
 	}
 }

@@ -6,6 +6,7 @@ package factoryenv
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/features/factory/forge"
+	"github.com/7ar-chat/harness/features/factory/learning"
 	"github.com/7ar-chat/harness/modelinfo"
 )
 
@@ -45,6 +47,12 @@ type Wiring struct {
 //	(a task's budget is set by whoever creates the task or the trigger; there is no global one)
 //	FACTORY_DAILY_BUDGET_USD / _TOKENS   cap on all factory spend per 24h (FACTORY_DAILY_PER_PROJECT=1: per project)
 //	FACTORY_LESSONS=1               distil lessons from finished tasks into project memory
+//	FACTORY_LEARNING=1              record what each run was given and how the task ended; score memory entries by it
+//	FACTORY_LEARNING_CURATE=1       retire memory entries that measurably hurt, promote those that help (needs FACTORY_LEARNING)
+//	FACTORY_LEARNING_VARIANTS       path of a JSON object {"variant":"extra instructions"}: a prompt experiment (needs FACTORY_LEARNING)
+//	FACTORY_IMPROVE_REPO            owner/name: turn recurring failures into improvement pull requests (never auto-merged);
+//	                                needs FACTORY_LEARNING and the GitHub App. Also FACTORY_IMPROVE_OWNER (login the tasks run as, required),
+//	                                _PROJECT, _BASE_BRANCH, _MODEL, _MIN_COUNT (3), _MAX_OPEN (2), _MAX_PER_DAY (3), _BUDGET_USD (5), _FROZEN (globs)
 //
 // st is the task store (nil: in memory, nothing survives the process; harness-web passes a file-backed or Postgres one). team links the threads of a task to its project; nil leaves them private
 // to the owner, which is what a process without the team store wants.
@@ -75,6 +83,9 @@ func FromEnv(getenv func(string) string, cfg *config.Config, st factory.Store, g
 		NoReview: getenv("FACTORY_NO_REVIEW") == "1", ReviewModel: getenv("FACTORY_REVIEW_MODEL"),
 		DefaultPolicy: getenv("FACTORY_POLICY"), PerProject: getenv("FACTORY_DAILY_PER_PROJECT") == "1",
 		Protected: splitList(getenv("FACTORY_PROTECTED")),
+	}
+	if err := learningFromEnv(getenv, &o); err != nil {
+		return w, false, err
 	}
 	switch o.DefaultPolicy {
 	case "", factory.PolicySupervised, factory.PolicySandboxed, factory.PolicyAutonomous:
@@ -177,4 +188,63 @@ func splitList(s string) []string {
 		}
 	}
 	return out
+}
+
+// learningFromEnv reads the FACTORY_LEARNING* and FACTORY_IMPROVE_* variables.
+func learningFromEnv(getenv func(string) string, o *harness.FactoryOptions) error {
+	o.Learning = getenv("FACTORY_LEARNING") == "1"
+	o.LearningCurate = getenv("FACTORY_LEARNING_CURATE") == "1"
+	if !o.Learning {
+		for _, n := range []string{"FACTORY_LEARNING_CURATE", "FACTORY_LEARNING_VARIANTS", "FACTORY_IMPROVE_REPO"} {
+			if strings.TrimSpace(getenv(n)) != "" {
+				return fmt.Errorf("%s needs FACTORY_LEARNING=1", n)
+			}
+		}
+		return nil
+	}
+	if path := strings.TrimSpace(getenv("FACTORY_LEARNING_VARIANTS")); path != "" {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("FACTORY_LEARNING_VARIANTS: %w", err)
+		}
+		if err := json.Unmarshal(b, &o.LearningVariants); err != nil {
+			return fmt.Errorf("FACTORY_LEARNING_VARIANTS: %s is not a JSON object of strings: %w", path, err)
+		}
+	}
+	repo := strings.TrimSpace(getenv("FACTORY_IMPROVE_REPO"))
+	if repo == "" {
+		return nil
+	}
+	if a, b, ok := strings.Cut(repo, "/"); !ok || a == "" || b == "" || strings.Contains(b, "/") {
+		return fmt.Errorf("FACTORY_IMPROVE_REPO: %q is not owner/name", repo)
+	}
+	owner := strings.TrimSpace(getenv("FACTORY_IMPROVE_OWNER"))
+	if owner == "" {
+		return fmt.Errorf("FACTORY_IMPROVE_REPO needs FACTORY_IMPROVE_OWNER, the login the improvement tasks run as")
+	}
+	imp := learning.ImproverOptions{
+		Repo: repo, Owner: owner, ProjectID: getenv("FACTORY_IMPROVE_PROJECT"),
+		BaseBranch: getenv("FACTORY_IMPROVE_BASE_BRANCH"), Model: getenv("FACTORY_IMPROVE_MODEL"),
+		Frozen: splitList(getenv("FACTORY_IMPROVE_FROZEN")),
+	}
+	for name, dst := range map[string]*int{
+		"FACTORY_IMPROVE_MIN_COUNT": &imp.MinCount, "FACTORY_IMPROVE_MAX_OPEN": &imp.MaxOpen, "FACTORY_IMPROVE_MAX_PER_DAY": &imp.MaxPerDay,
+	} {
+		if v := strings.TrimSpace(getenv(name)); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil || n < 1 {
+				return fmt.Errorf("%s: %q is not a positive integer", name, v)
+			}
+			*dst = n
+		}
+	}
+	if v := strings.TrimSpace(getenv("FACTORY_IMPROVE_BUDGET_USD")); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil || f <= 0 {
+			return fmt.Errorf("FACTORY_IMPROVE_BUDGET_USD: %q is not a positive number", v)
+		}
+		imp.Budget.MaxUSD = f
+	}
+	o.Improve = &imp
+	return nil
 }

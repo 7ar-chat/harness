@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/adapters/store/factorystore"
 	"github.com/7ar-chat/harness/adapters/store/teamstore"
 	"github.com/7ar-chat/harness/app/product"
@@ -340,5 +341,40 @@ func TestGitHubFromEnv(t *testing.T) {
 				t.Errorf("app = %+v", app)
 			}
 		})
+	}
+}
+
+func TestLearningFromEnv(t *testing.T) {
+	vars := filepath.Join(t.TempDir(), "variants.json")
+	if err := os.WriteFile(vars, []byte(`{"terse":"be brief"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	on := map[string]string{
+		"FACTORY_LEARNING": "1", "FACTORY_LEARNING_CURATE": "1", "FACTORY_LEARNING_VARIANTS": vars,
+		"FACTORY_IMPROVE_REPO": "acme/app", "FACTORY_IMPROVE_OWNER": "alice", "FACTORY_IMPROVE_MIN_COUNT": "4",
+		"FACTORY_IMPROVE_BUDGET_USD": "2.5", "FACTORY_IMPROVE_FROZEN": "bench/**, gate/**",
+	}
+	var o harness.FactoryOptions
+	if err := learningFromEnv(env(on), &o); err != nil {
+		t.Fatal(err)
+	}
+	if !o.Learning || !o.LearningCurate || o.LearningVariants["terse"] != "be brief" || o.Improve == nil ||
+		o.Improve.Repo != "acme/app" || o.Improve.Owner != "alice" || o.Improve.MinCount != 4 ||
+		o.Improve.Budget.MaxUSD != 2.5 || len(o.Improve.Frozen) != 2 {
+		t.Fatalf("options = %+v improve = %+v", o, o.Improve)
+	}
+
+	bad := map[string]map[string]string{
+		"curate without learning":  {"FACTORY_LEARNING_CURATE": "1"},
+		"improve without learning": {"FACTORY_IMPROVE_REPO": "acme/app"},
+		"improve without owner":    {"FACTORY_LEARNING": "1", "FACTORY_IMPROVE_REPO": "acme/app"},
+		"malformed repo":           {"FACTORY_LEARNING": "1", "FACTORY_IMPROVE_REPO": "acme", "FACTORY_IMPROVE_OWNER": "a"},
+		"bad count":                {"FACTORY_LEARNING": "1", "FACTORY_IMPROVE_REPO": "a/b", "FACTORY_IMPROVE_OWNER": "a", "FACTORY_IMPROVE_MAX_OPEN": "0"},
+		"variants not an object":   {"FACTORY_LEARNING": "1", "FACTORY_LEARNING_VARIANTS": "/nonexistent.json"},
+	}
+	for name, m := range bad {
+		if err := learningFromEnv(env(m), &harness.FactoryOptions{}); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
 	}
 }
