@@ -219,6 +219,11 @@ type Config struct {
 	// BrowserImage is the image browser sandboxes start from: a Daytona snapshot, an E2B template or an OpenSandbox
 	// image of that name (BROWSER_IMAGE).
 	BrowserImage string `env:"BROWSER_IMAGE" envDefault:"harness-browser"`
+	// JobsDir is where the job-search profiles and jobs are stored (HARNESS_JOBS_DIR). Empty: the feature is off.
+	// JobsScanMinutes is how often the autonomous search scans the job boards of the users who turned it on and wakes the
+	// agent when there is something to do (0: never by itself).
+	JobsDir         string `env:"HARNESS_JOBS_DIR"`
+	JobsScanMinutes int    `env:"HARNESS_JOBS_SCAN_MINUTES" envDefault:"60"`
 	// BrowserIdleMinutes is how long a conversation's browser sandbox is kept after its last use (BROWSER_IDLE_MINUTES).
 	BrowserIdleMinutes   int    `env:"BROWSER_IDLE_MINUTES" envDefault:"20"`
 	DocumentsBrowserRoot string `env:"HARNESS_DOCUMENTS_BROWSER_ROOT"`

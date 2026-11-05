@@ -18,6 +18,7 @@ func (s *server) routeTeam() {
 	s.Route("GET /me", s.me)
 	s.routeProfile()
 	s.routeDocuments()
+	s.routeJobs()
 	s.routeConnectors()
 	s.Route("GET /templates", s.listTemplates)
 	s.Route("GET /projects", s.listProjects)

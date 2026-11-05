@@ -296,6 +296,56 @@ export const useDocuments = () =>
 export const useUploadDocument = () =>
   useAction((f: File) => putBytes<UserDocument>(`/me/documents/${encodeURIComponent(f.name)}`, f), () => [["documents"]], "Document saved");
 export const useDeleteDocument = () => useAction((name: string) => api.del(`/me/documents/${encodeURIComponent(name)}`), () => [["documents"]], "Document deleted");
+// ---- the job search ----
+export interface JobCompany {
+  name: string;
+  ats: "greenhouse" | "lever" | "ashby";
+  slug: string;
+}
+export interface JobProfile {
+  enabled: boolean;
+  mode: "queue" | "auto";
+  titles: string[];
+  exclude?: string[];
+  locations?: string[];
+  remoteOnly?: boolean;
+  minSalary?: number;
+  currency?: string;
+  workAuth?: string[];
+  needsSponsorship?: boolean;
+  companies?: JobCompany[];
+  blacklist?: string[];
+  dealbreakers?: string;
+  notes?: string;
+  minScore: number;
+  queueScore: number;
+  dailyCap: number;
+}
+export interface Job {
+  id: string;
+  company: string;
+  title: string;
+  location?: string;
+  remote?: boolean;
+  url: string;
+  status: string;
+  score?: number;
+  reason?: string;
+  note?: string;
+  seen: string;
+  appliedAt?: string;
+}
+export interface JobsOverview {
+  profile: JobProfile;
+  counts: Record<string, number>;
+  jobs: Job[];
+}
+const jobsKey = ["jobs"] as const;
+export const useJobs = () => useQuery({ queryKey: jobsKey, queryFn: () => api.get<JobsOverview>("/me/jobs"), retry: false, refetchInterval: 30000 });
+export const useSaveJobProfile = () => useAction((p: JobProfile) => api.put<JobProfile>("/me/jobs/profile", p), () => [jobsKey], "Saved");
+export const useAddJobBoard = () => useAction((url: string) => api.post<{ openJobs: number }>("/me/jobs/boards", { url }), () => [jobsKey], "Board added");
+export const useScanJobs = () => useAction(() => api.post<{ added: number; boards: number; errors?: string[] }>("/me/jobs/scan"), () => [jobsKey]);
+export const useSetJobStatus = () => useAction((v: { id: string; status: string }) => api.patch<Job>(`/me/jobs/${v.id}`, { status: v.status }), () => [jobsKey]);
 export const useDisconnect = (kind: "github" | "telegram" | "slack") => useAction(() => api.del(`/connectors/${kind}`), () => [["connectors"]], "Disconnected");
 export const useTelegramLink = () => useAction(() => api.post<{ code: string; url: string; expiresAt: string }>("/connectors/telegram/link"), () => [["connectors"]]);
 export const useSlackLink = () => useAction(() => api.post<{ code: string; expiresAt: string }>("/connectors/slack/link"), () => [["connectors"]]);

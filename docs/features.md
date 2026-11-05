@@ -106,6 +106,11 @@ it unattended, delivers pull requests, and merges them only after CI and an inde
 per-task budgets, loop guards and autonomy policies. `harness-web` enables it with `FACTORY=1`. See
 [docs/factory.md](factory.md).
 
+## Job search
+
+The `Jobs` feature (`HARNESS_JOBS_DIR`) lets the agent search for work and apply for a person within limits they set; see
+[docs/jobs.md](jobs.md).
+
 ## Sandbox per run
 
 The sandbox is optional for each run: `RunOptions.Sandbox` (JSON `sandbox` on `POST /api/threads/{id}/runs`) is

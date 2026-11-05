@@ -46,6 +46,7 @@ import (
 	"github.com/7ar-chat/harness/features/artifacts/workspace"
 	"github.com/7ar-chat/harness/features/browsersandbox"
 	"github.com/7ar-chat/harness/features/documents"
+	"github.com/7ar-chat/harness/features/jobhunt"
 	"github.com/7ar-chat/harness/features/memory"
 	"github.com/7ar-chat/harness/features/skills"
 )
@@ -138,6 +139,8 @@ type Harness struct {
 	Memory *memory.Service
 	// Documents is the users' document library (nil unless HARNESS_DOCUMENTS_DIR is set).
 	Documents *documents.Service
+	// Jobs is the job-search service (nil unless HARNESS_JOBS_DIR is set).
+	Jobs *jobhunt.Service
 	// Browser keeps the browser sandboxes of the conversations (nil unless BROWSER_BACKEND names a sandbox provider).
 	Browser *browsersandbox.Manager
 
@@ -221,7 +224,7 @@ func New(o Options) (*Harness, error) {
 	}
 
 	h := &Harness{cfg: cfg, Store: st, Log: infra.Log, Queue: infra.Broker, Bus: infra.Broker,
-		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace, Memory: b.Memory, Documents: b.Documents, Browser: b.BrowserSandboxes,
+		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace, Memory: b.Memory, Documents: b.Documents, Jobs: b.Jobs, Browser: b.BrowserSandboxes,
 		sandboxTools: b.sandboxTools != nil}
 	h.Agent = &agent.Agent{
 		Models: models, Tools: registry, Store: st, Steers: h.Bus,

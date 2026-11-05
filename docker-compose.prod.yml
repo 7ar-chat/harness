@@ -157,6 +157,10 @@ services:
       # also mounts (read-only) so the agent can attach a document to a web form.
       HARNESS_DOCUMENTS_DIR: ${HARNESS_DOCUMENTS_DIR:-/data/documents}
       HARNESS_DOCUMENTS_BROWSER_ROOT: ${HARNESS_DOCUMENTS_BROWSER_ROOT:-/docs}
+      # The job search (docs/jobs.md): each user's profile and jobs on the harness-jobs volume; the scan runs every
+      # HARNESS_JOBS_SCAN_MINUTES for the users who turned it on. Empty HARNESS_JOBS_DIR turns the feature off.
+      HARNESS_JOBS_DIR: ${HARNESS_JOBS_DIR:-/data/jobs}
+      HARNESS_JOBS_SCAN_MINUTES: ${HARNESS_JOBS_SCAN_MINUTES:-60}
       # The browser the agent drives (service "browser" below; docs/browser.md). Empty turns it off.
       HARNESS_BROWSER_URL: ${HARNESS_BROWSER_URL:-http://browser:8931/mcp}
 
@@ -174,6 +178,7 @@ services:
     volumes:
       - harness-data:/data
       - harness-docs:/data/documents
+      - harness-jobs:/data/jobs
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
       interval: 30s
@@ -207,6 +212,7 @@ services:
 
 volumes:
   harness-data:
+  harness-jobs:
   harness-docs:
 
 networks:

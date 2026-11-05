@@ -43,6 +43,7 @@ const (
 	FeaturePermissions = "permissions"
 	FeatureDocuments   = "documents"
 	FeatureBrowser     = "browser"
+	FeatureJobs        = "jobs"
 )
 
 type builtin struct {

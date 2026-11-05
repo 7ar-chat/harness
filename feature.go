@@ -19,6 +19,7 @@ import (
 	"github.com/7ar-chat/harness/features/artifacts/workspace"
 	"github.com/7ar-chat/harness/features/browsersandbox"
 	"github.com/7ar-chat/harness/features/documents"
+	"github.com/7ar-chat/harness/features/jobhunt"
 	"github.com/7ar-chat/harness/features/memory"
 	"github.com/7ar-chat/harness/features/skills"
 	"github.com/7ar-chat/harness/features/verify"
@@ -85,6 +86,7 @@ type Builder struct {
 	Installer *skills.Installer
 	Memory    *memory.Service
 	Documents *documents.Service
+	Jobs      *jobhunt.Service
 	Verifier  *verify.Verifier
 	// BrowserSandboxes and BrowserServers are set by the Browser feature when the browser runs in sandboxes of its own
 	// (BROWSER_BACKEND): BrowserServers returns the conversation's browser as an MCP server, for package mcpfeature.
