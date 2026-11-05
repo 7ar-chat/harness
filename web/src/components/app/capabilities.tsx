@@ -8,7 +8,6 @@ import { Empty, ErrorState, ListSkeleton, Spinner } from "@/components/app/commo
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -536,14 +535,16 @@ function AddDialog({ pid, onClose }: { pid?: string; onClose: () => void }) {
 }
 
 // ---- cards and the panel ----
-function CapCard({ cap, canEdit, onConfigure }: { cap: CapabilityView; canEdit: boolean; onConfigure: () => void }) {
+function CapRow({ cap, canEdit, pid, onConfigure }: { cap: CapabilityView; canEdit: boolean; pid?: string; onConfigure: () => void }) {
   const st = statusOf(cap);
   const need = missingLabels(cap);
+  const put = usePutCapability(pid);
+  const canToggle = canEdit && !cap.orphan && !need.length;
   return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-          <h3>{cap.title}</h3>
+    <div data-slot="row" className="flex items-start gap-3 border-b py-3">
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-medium">{cap.title}</h3>
           <Badge variant={st.variant} className={st.className}>
             {st.label}
           </Badge>
@@ -552,37 +553,58 @@ function CapCard({ cap, canEdit, onConfigure }: { cap: CapabilityView; canEdit: 
               {cap.category}
             </Badge>
           ) : null}
-        </CardTitle>
-        <CardDescription>{cap.description}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-1.5 text-xs text-muted-foreground">
-        {need.length && !cap.orphan ? <p>Needs: {need.join(", ")}</p> : null}
-        {cap.kind === "custom" ? <p className="break-all font-mono">{cap.url}</p> : null}
-        <p>{cap.tools?.length ? `${cap.tools.length} allowed tool${cap.tools.length === 1 ? "" : "s"}` : "Read-only tools"}</p>
-        {cap.homepage ? (
-          <a href={cap.homepage} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline" aria-label={`${cap.title} homepage`}>
-            <ExternalLink className="size-3" /> Homepage
-          </a>
+        </div>
+        <p className="text-sm text-muted-foreground">{cap.description}</p>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+          {need.length && !cap.orphan ? <span className="text-warning-foreground">Needs: {need.join(", ")}</span> : null}
+          {cap.kind === "custom" ? <span className="break-all font-mono">{cap.url}</span> : null}
+          <span>{cap.tools?.length ? `${cap.tools.length} allowed tool${cap.tools.length === 1 ? "" : "s"}` : "Read-only tools"}</span>
+          {cap.transport ? <span className="uppercase">{cap.transport}</span> : null}
+          {cap.homepage ? (
+            <a href={cap.homepage} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline" aria-label={`${cap.title} homepage`}>
+              <ExternalLink className="size-3" /> Homepage
+            </a>
+          ) : null}
+        </div>
+        {cap.tools?.length ? (
+          <details className="text-xs text-muted-foreground">
+            <summary className="w-fit cursor-pointer select-none hover:text-foreground">Allowed tools</summary>
+            <p className="mt-1 flex flex-wrap gap-1">
+              {cap.tools.map((t) => (
+                <code key={t} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">
+                  {t}
+                </code>
+              ))}
+            </p>
+          </details>
         ) : null}
-      </CardContent>
+      </div>
       {canEdit ? (
-        <CardFooter>
+        <div className="flex shrink-0 items-center gap-2">
+          <Switch
+            checked={cap.enabled}
+            disabled={!canToggle || put.isPending}
+            aria-label={`${cap.enabled ? "Turn off" : "Turn on"} ${cap.title}`}
+            title={need.length ? `Set ${need.join(", ")} first` : undefined}
+            onCheckedChange={(enabled) => put.mutate({ name: cap.name, body: { enabled } })}
+          />
           <Button variant="outline" size="sm" aria-label={`${cap.orphan ? "Manage" : "Configure"} ${cap.title}`} onClick={onConfigure}>
             {cap.orphan ? "Manage" : "Configure"}
           </Button>
-        </CardFooter>
+        </div>
       ) : null}
-    </Card>
+    </div>
   );
 }
 
-function Section({ id, title, action, children }: { id: string; title: string; action?: ReactNode; children: ReactNode }) {
+function Section({ id, title, count, action, children }: { id: string; title: string; count?: number; action?: ReactNode; children: ReactNode }) {
   return (
-    <section className="space-y-3" aria-labelledby={id}>
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 id={id} className="flex-1 text-sm font-medium text-muted-foreground">
+    <section className="space-y-2" aria-labelledby={id}>
+      <div className="flex flex-wrap items-center gap-2 border-b pb-2">
+        <h2 id={id} className="text-sm font-semibold">
           {title}
         </h2>
+        {count !== undefined ? <span className="flex-1 text-sm text-muted-foreground">{count}</span> : <span className="flex-1" />}
         {action}
       </div>
       {children}
@@ -716,32 +738,28 @@ function SkillConnections({ pid, canEdit }: { pid?: string; canEdit: boolean }) 
   if (!list.length) return null; // none declared, or the server has none
   const sel = list.find((c) => c.name === selected);
   return (
-    <Section id="cap-skills-h" title="Skills with an account">
+    <Section id="cap-skills-h" title="Skills with an account" count={list.length}>
       <p className="text-sm text-muted-foreground">
         Skills that act on one of your accounts. Connect one and agents can use it; the credentials stay on the server.{canEdit ? "" : " Only a project owner can change them."}
       </p>
-      <ul className="grid gap-3 sm:grid-cols-2" aria-label="Skills with an account">
+      <ul aria-label="Skills with an account">
         {list.map((c) => {
           const st = skillStatus(c);
           return (
-            <li key={c.name}>
-              <Card className="h-full">
-                <CardHeader>
-                  <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                    <h3>{c.name}</h3>
-                    <Badge variant={st.variant} className={st.className}>{st.label}</Badge>
-                  </CardTitle>
-                  <CardDescription>{c.description}</CardDescription>
-                </CardHeader>
-                {c.host && c.enabled ? <CardContent className="text-xs text-muted-foreground">Connected to <span className="font-mono">{c.host}</span></CardContent> : null}
-                {canEdit ? (
-                  <CardFooter>
-                    <Button variant="outline" size="sm" aria-label={`${c.installed ? "Configure" : "Connect"} ${c.name}`} onClick={() => setSelected(c.name)}>
-                      {c.installed ? "Configure" : "Connect"}
-                    </Button>
-                  </CardFooter>
-                ) : null}
-              </Card>
+            <li key={c.name} data-slot="row" className="flex items-start gap-3 border-b py-3">
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-medium">{c.name}</h3>
+                  <Badge variant={st.variant} className={st.className}>{st.label}</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">{c.description}</p>
+                {c.host && c.enabled ? <p className="text-xs text-muted-foreground">Connected to <span className="font-mono">{c.host}</span></p> : null}
+              </div>
+              {canEdit ? (
+                <Button variant="outline" size="sm" aria-label={`${c.installed ? "Configure" : "Connect"} ${c.name}`} onClick={() => setSelected(c.name)}>
+                  {c.installed ? "Configure" : "Connect"}
+                </Button>
+              ) : null}
             </li>
           );
         })}
@@ -757,6 +775,7 @@ export function CapabilitiesPanel({ scope }: { scope: CapabilitiesScope }) {
   const q = useCapabilities(pid);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
+  const [status, setStatus] = useState("all");
   const [selected, setSelected] = useState<string>();
   const [adding, setAdding] = useState(false);
   const list = q.data ?? [];
@@ -765,8 +784,9 @@ export function CapabilitiesPanel({ scope }: { scope: CapabilitiesScope }) {
   const categories = useMemo(() => [...new Set(catalog.map((c) => c.category).filter((c): c is string => !!c))].sort(), [catalog]);
   const shown = useMemo(() => {
     const s = search.trim().toLowerCase();
-    return catalog.filter((c) => (category === "all" || c.category === category) && (!s || [c.title, c.name, c.description, c.category ?? ""].some((t) => t.toLowerCase().includes(s))));
-  }, [catalog, search, category]);
+    const state = (c: CapabilityView) => (c.missing?.length ? "setup" : c.enabled ? "on" : "off");
+    return catalog.filter((c) => (category === "all" || c.category === category) && (status === "all" || state(c) === status) && (!s || [c.title, c.name, c.description, c.category ?? "", ...(c.tools ?? [])].some((t) => t.toLowerCase().includes(s))));
+  }, [catalog, search, category, status]);
 
   if (q.isLoading) return <ListSkeleton />;
   if (q.error) return <ErrorState error={q.error} retry={() => void q.refetch()} />;
@@ -780,16 +800,27 @@ export function CapabilitiesPanel({ scope }: { scope: CapabilitiesScope }) {
   const who = pid ? "this project" : "your personal sessions";
 
   return (
-    <div className="space-y-8">
-      <Section id="cap-market-h" title="Marketplace">
+    <div className="space-y-6">
+      <Section id="cap-market-h" title="Marketplace" count={shown.length}>
         <p className="text-sm text-muted-foreground">
           MCP servers that give agents more tools in {who}.{canEdit ? "" : " Only a project owner can change them."}
         </p>
         <div className="flex flex-wrap gap-2">
           <div className="relative min-w-48 flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-            <Input type="search" aria-label="Search the marketplace" placeholder="Search servers" className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input type="search" aria-label="Search the marketplace" placeholder="Search servers, descriptions and tools" className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger aria-label="Filter by status" className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any status</SelectItem>
+              <SelectItem value="on">On</SelectItem>
+              <SelectItem value="off">Off</SelectItem>
+              <SelectItem value="setup">Needs setup</SelectItem>
+            </SelectContent>
+          </Select>
           {categories.length ? (
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger aria-label="Filter by category" className="w-44">
@@ -807,10 +838,10 @@ export function CapabilitiesPanel({ scope }: { scope: CapabilitiesScope }) {
           ) : null}
         </div>
         {shown.length ? (
-          <ul className="grid gap-3 sm:grid-cols-2" aria-label="Marketplace servers">
+          <ul aria-label="Marketplace servers">
             {shown.map((c) => (
               <li key={c.name}>
-                <CapCard cap={c} canEdit={canEdit} onConfigure={() => setSelected(c.name)} />
+                <CapRow cap={c} canEdit={canEdit} pid={pid} onConfigure={() => setSelected(c.name)} />
               </li>
             ))}
           </ul>
@@ -821,6 +852,7 @@ export function CapabilitiesPanel({ scope }: { scope: CapabilitiesScope }) {
       <Section
         id="cap-custom-h"
         title="Added by you"
+        count={custom.length}
         action={
           canEdit ? (
             <Button size="sm" onClick={() => setAdding(true)}>
@@ -830,10 +862,10 @@ export function CapabilitiesPanel({ scope }: { scope: CapabilitiesScope }) {
         }
       >
         {custom.length ? (
-          <ul className="grid gap-3 sm:grid-cols-2" aria-label="Custom servers">
+          <ul aria-label="Custom servers">
             {custom.map((c) => (
               <li key={c.name}>
-                <CapCard cap={c} canEdit={canEdit} onConfigure={() => setSelected(c.name)} />
+                <CapRow cap={c} canEdit={canEdit} pid={pid} onConfigure={() => setSelected(c.name)} />
               </li>
             ))}
           </ul>

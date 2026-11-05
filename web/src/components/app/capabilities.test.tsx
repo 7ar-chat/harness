@@ -50,7 +50,7 @@ const open = async (role: "owner" | "member", list?: unknown, extra?: Record<str
   fireEvent.click(tab);
   return m;
 };
-const card = async (title: string) => within((await screen.findByRole("heading", { name: title })).closest("[data-slot=card]") as HTMLElement);
+const card = async (title: string) => within((await screen.findByRole("heading", { name: title })).closest("[data-slot=row]") as HTMLElement);
 
 describe("CapabilitiesPanel", () => {
   it("renders the catalog with a status per entry and the custom servers apart", async () => {
@@ -183,7 +183,7 @@ describe("Profile capabilities", () => {
   it("manages the user's own servers through /api/me/capabilities", async () => {
     const m = mockFetch({ ...shellRoutes(), "GET /api/connectors": [], "GET /api/me/capabilities": [docs] });
     await renderApp("/capabilities");
-    expect(await within(screen.getByRole("main")).findByText("Capabilities", { selector: "[data-slot=card-title]" })).toBeTruthy();
+    expect(await within(screen.getByRole("main")).findByRole("heading", { name: "Capabilities", level: 1 })).toBeTruthy();
     expect(await screen.findByText("Docs search")).toBeTruthy();
     expect(m.find("GET", "/api/me/capabilities")).toHaveLength(1);
   });

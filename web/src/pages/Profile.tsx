@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bell, CheckCircle2, ExternalLink, Plug, Send, Upload, User as UserIcon, Volume2 } from "lucide-react";
+import { Bell, CheckCircle2, ExternalLink, Send, Upload, User as UserIcon, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import QRCode from "qrcode";
 import {
@@ -8,7 +8,7 @@ import {
 import type { Connector } from "@/api/types";
 import { Spinner, UserAvatar } from "@/components/app/common";
 import { CapabilitiesPanel } from "@/components/app/capabilities";
-import { DocumentsCard } from "@/components/app/documents";
+import { ReferencesPanel } from "@/components/app/documents";
 import { GithubMark, ImportGithubDialog } from "@/components/app/github-import";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -279,7 +279,7 @@ function SlackDialog({ open, onClose, link }: { open: boolean; onClose: () => vo
   );
 }
 
-function ConnectorCard({ c, onImport }: { c: Connector; onImport: () => void }) {
+function ConnectorRow({ c, onImport }: { c: Connector; onImport: () => void }) {
   const disconnect = useDisconnect(c.kind);
   const tgLink = useTelegramLink();
   const tgTest = useTelegramTest();
@@ -293,19 +293,29 @@ function ConnectorCard({ c, onImport }: { c: Connector; onImport: () => void }) 
   const closeDlg = useCallback(() => setDlg(false), []);
   const gh = c.kind === "github";
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex flex-wrap items-center gap-2">
-          {gh ? <GithubMark className="size-4" /> : <Send className="size-4" />}
-          {c.label || (gh ? "GitHub" : name)}
-          {statusOf(c)}
-        </CardTitle>
-        <CardDescription>{gh ? "Import repositories as projects and let agents work on them." : slack ? "Message your assistant or mention it in a channel; it also pings you when a session needs you." : "Chat with your assistant from Telegram; it also pings you when a session needs you."}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {!c.configured && c.message ? <p className="text-sm text-muted-foreground">{c.message}</p> : null}
-        {c.configured && !c.connected && c.message ? <p className="text-sm text-muted-foreground">{c.message}</p> : null}
-        <div className="flex flex-wrap gap-2">
+    <div className="flex flex-col gap-3 border-b py-4 md:flex-row md:items-start">
+      <div className="flex min-w-0 flex-1 gap-3">
+        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">{gh ? <GithubMark className="size-4" /> : <Send className="size-4" />}</span>
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-medium">{c.label || (gh ? "GitHub" : name)}</h3>
+            {statusOf(c)}
+          </div>
+          <p className="text-sm text-muted-foreground">{gh ? "Import repositories as projects and let agents work on them." : slack ? "Message your assistant or mention it in a channel; it also pings you when a session needs you." : "Chat with your assistant from Telegram; it also pings you when a session needs you."}</p>
+          <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+            <div className="flex gap-1">
+              <dt>Account</dt>
+              <dd className="font-mono">{c.connected ? c.account || "connected" : "—"}</dd>
+            </div>
+            <div className="flex gap-1">
+              <dt>Server</dt>
+              <dd>{c.configured ? "set up" : "not set up"}</dd>
+            </div>
+          </dl>
+          {c.message ? <p className="text-xs text-muted-foreground">{c.message}</p> : null}
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
           {c.configured && !c.connected && gh ? (
             <Button onClick={() => c.connectUrl && location.assign(c.connectUrl)} disabled={!c.connectUrl}>
               <GithubMark className="size-4" /> Connect GitHub
@@ -334,25 +344,23 @@ function ConnectorCard({ c, onImport }: { c: Connector; onImport: () => void }) 
               Disconnect
             </Button>
           ) : null}
-        </div>
-        {c.kind === "telegram" ? <TelegramDialog open={dlg} onClose={closeDlg} link={tgLink.data} /> : null}
-        {slack ? <SlackDialog open={dlg} onClose={closeDlg} link={skLink.data} /> : null}
-      </CardContent>
-    </Card>
+      </div>
+      {c.kind === "telegram" ? <TelegramDialog open={dlg} onClose={closeDlg} link={tgLink.data} /> : null}
+      {slack ? <SlackDialog open={dlg} onClose={closeDlg} link={skLink.data} /> : null}
+    </div>
   );
 }
 
 export function Connectors() {
   const { data, isLoading } = useConnectors();
   const [imp, setImp] = useState(false);
+  const connected = data?.filter((c) => c.connected).length ?? 0;
   return (
-    <section className="space-y-3" aria-labelledby="conn-h">
-      <h2 id="conn-h" className="text-sm font-medium text-muted-foreground">
-        Connectors
-      </h2>
+    <section aria-label="Connectors">
       {isLoading ? <Spinner /> : null}
       {data?.length === 0 ? <p className="text-sm text-muted-foreground">No connectors are available on this server.</p> : null}
-      {data?.map((c) => <ConnectorCard key={c.kind} c={c} onImport={() => setImp(true)} />)}
+      {data?.length ? <p className="border-b pb-2 text-xs text-muted-foreground">{connected} of {data.length} connected</p> : null}
+      {data?.map((c) => <ConnectorRow key={c.kind} c={c} onImport={() => setImp(true)} />)}
       <ImportGithubDialog open={imp} onClose={() => setImp(false)} />
     </section>
   );
@@ -426,16 +434,16 @@ export function ProfilePage() {
   );
 }
 
-/** A page of its own for something that used to be a settings section: a title, a hint and the content. */
+/** A page of its own for something that used to be a settings section: a title, a hint and flat content. */
 function SidePage({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
   return (
     <ScrollArea className="h-full">
-      <div className="space-y-4 p-4 md:p-8">
-        <h1 className="text-xl font-semibold">{title}</h1>
-        <div className="min-w-0 max-w-3xl space-y-4">
+      <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-8">
+        <header className="space-y-1">
+          <h1 className="text-xl font-semibold">{title}</h1>
           <p className="text-sm text-muted-foreground">{hint}</p>
-          {children}
-        </div>
+        </header>
+        {children}
       </div>
     </ScrollArea>
   );
@@ -443,15 +451,15 @@ function SidePage({ title, hint, children }: { title: string; hint: string; chil
 
 export function ReferencesPage() {
   return (
-    <SidePage title="References" hint="Your CV and other files, available to your assistant in every session">
-      <DocumentsCard />
+    <SidePage title="References" hint="Your CV, templates and other files. Your assistant can read them in every session and attach them to web forms.">
+      <ReferencesPanel />
     </SidePage>
   );
 }
 
 export function ConnectorsPage() {
   return (
-    <SidePage title="Connectors" hint="GitHub, Slack, Telegram and other accounts">
+    <SidePage title="Connectors" hint="Accounts your assistant can use and reach you through.">
       <Connectors />
     </SidePage>
   );
@@ -459,18 +467,8 @@ export function ConnectorsPage() {
 
 export function CapabilitiesPage() {
   return (
-    <SidePage title="Capabilities" hint="MCP servers for your personal sessions">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Plug className="size-4" /> Capabilities
-          </CardTitle>
-          <CardDescription>MCP servers that give your assistant more tools in your personal sessions.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <CapabilitiesPanel scope={{ kind: "user" }} />
-        </CardContent>
-      </Card>
+    <SidePage title="Capabilities" hint="MCP servers that give your assistant more tools in your personal sessions.">
+      <CapabilitiesPanel scope={{ kind: "user" }} />
     </SidePage>
   );
 }
