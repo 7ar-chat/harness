@@ -10,6 +10,8 @@
 package mcpfeature
 
 import (
+	"context"
+
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/config"
 	"github.com/7ar-chat/harness/engine/agent"
@@ -26,11 +28,20 @@ func install(b *harness.Builder) error {
 		pending = b.Config.Layers.MCPPending
 	}
 	p := mcptools.NewWithPending(b.Config.MCPServers, pending, b.Options.Version, mcptools.MaxResultChars)
-	if p == nil && b.Options.MCPServers != nil {
+	if p == nil && (b.Options.MCPServers != nil || b.Config.BrowserSandboxBackend() != "") {
 		p = mcptools.NewDynamic(nil, b.Options.Version, mcptools.MaxResultChars)
 	}
 	if p == nil {
 		return nil
+	}
+	if b.Config.BrowserSandboxBackend() != "" {
+		// The Browser feature installs after this one: look its servers up when a run asks.
+		p.Trusted = func(ctx context.Context, threadID, login string) ([]config.MCPServer, error) {
+			if b.BrowserServers == nil {
+				return nil, nil
+			}
+			return b.BrowserServers(ctx, threadID, login)
+		}
 	}
 	if b.Options.MCPServers != nil {
 		p.Dynamic = b.Options.MCPServers

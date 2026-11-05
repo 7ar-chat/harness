@@ -97,6 +97,9 @@ type sandboxInfo struct {
 	SandboxID       string `json:"sandboxID"`
 	Domain          string `json:"domain"`
 	EnvdAccessToken string `json:"envdAccessToken"`
+	// TrafficAccessToken is the token a request to a port of the sandbox must carry when the sandbox does not allow
+	// public traffic.
+	TrafficAccessToken string `json:"trafficAccessToken"`
 	State           string `json:"state"`
 }
 
@@ -118,6 +121,11 @@ func (b *E2B) Create(ctx context.Context, co sandbox.CreateOptions) (sandbox.Ins
 		body["metadata"] = co.Metadata
 	}
 	if n := networkConfig(b.opts); n != nil {
+		// A browser sandbox serves its tools and its live view on ports: only requests that carry the sandbox's traffic
+		// token (see Endpoint) may reach them.
+		if strings.EqualFold(strings.TrimSpace(co.Profile), "browser") {
+			n["allowPublicTraffic"] = false
+		}
 		body["network"] = n
 	}
 	var info sandboxInfo
@@ -170,7 +178,8 @@ func (b *E2B) instance(info sandboxInfo) *instance {
 	if base == "" {
 		base = fmt.Sprintf("https://%d-%s.%s", envdPort, info.SandboxID, domain)
 	}
-	return &instance{b: b, id: info.SandboxID, token: info.EnvdAccessToken, envd: strings.TrimRight(base, "/")}
+	return &instance{b: b, id: info.SandboxID, token: info.EnvdAccessToken, traffic: info.TrafficAccessToken,
+		domain: domain, envd: strings.TrimRight(base, "/")}
 }
 
 // errNotFound is a 404 from the control plane: the sandbox (or template) does not exist.

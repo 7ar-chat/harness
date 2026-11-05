@@ -350,3 +350,42 @@ func contains(l []string, s string) bool {
 	}
 	return false
 }
+
+func TestBrowserSandboxesAreCreatedPrivateAndTheirPortsNeedTheTrafficToken(t *testing.T) {
+	// Arrange: the control plane answers with a traffic token
+	f := newFake(t)
+	f.start = stream(start(1), end(0))
+	f.routes["/sandboxes"] = func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&f.created)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"sandboxID":"sb1","envdAccessToken":"tok","trafficAccessToken":"traffic-1","domain":"example.test"}`))
+	}
+	b := f.backend(Options{Template: "default-tpl", Images: map[string]string{"browser": "harness-browser"}})
+
+	// Act
+	inst, err := b.Create(context.Background(), sandbox.CreateOptions{Profile: "browser"})
+
+	// Assert
+	if err != nil || f.created["templateID"] != "harness-browser" {
+		t.Fatalf("Create = %v, %v, body %v", inst, err, f.created)
+	}
+	if net, _ := f.created["network"].(map[string]any); net["allowPublicTraffic"] != false {
+		t.Fatalf("a browser sandbox must not allow public traffic: %v", f.created["network"])
+	}
+	ports := sandbox.PortsOf(inst)
+	if ports == nil {
+		t.Fatal("an E2B sandbox must expose its ports")
+	}
+	ep, err := ports.Endpoint(context.Background(), 8931)
+	if err != nil || ep.URL != "https://8931-sb1.example.test" || ep.Headers["e2b-traffic-access-token"] != "traffic-1" {
+		t.Fatalf("endpoint = %+v, %v", ep, err)
+	}
+
+	// A code sandbox keeps E2B's defaults.
+	if _, err := b.Create(context.Background(), sandbox.CreateOptions{Profile: "coding"}); err != nil {
+		t.Fatal(err)
+	}
+	if net, _ := f.created["network"].(map[string]any); net["allowPublicTraffic"] != nil {
+		t.Fatalf("a code sandbox must keep the default traffic policy: %v", net)
+	}
+}

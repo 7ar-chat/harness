@@ -44,6 +44,7 @@ import (
 	"github.com/7ar-chat/harness/engine/tools"
 	"github.com/7ar-chat/harness/features/artifacts"
 	"github.com/7ar-chat/harness/features/artifacts/workspace"
+	"github.com/7ar-chat/harness/features/browsersandbox"
 	"github.com/7ar-chat/harness/features/documents"
 	"github.com/7ar-chat/harness/features/memory"
 	"github.com/7ar-chat/harness/features/skills"
@@ -73,6 +74,9 @@ type Options struct {
 	// backends.Register), else OpenSandbox when OPENSANDBOX_URL is set, else
 	// none: the agent then has no sandbox tools and a prompt that says so.
 	Backend sandbox.Backend
+	// BrowserBackend provides the browser sandboxes of BROWSER_BACKEND=daytona|e2b|opensandbox. Default: the backend that
+	// setting names, built from the configuration (Config.BrowserSandboxConfig).
+	BrowserBackend sandbox.Backend
 	// Blobs stores artifact contents (default: in the Store).
 	Blobs artifacts.Blobs
 	// Infra holds the implementations of what several processes share: run
@@ -134,6 +138,8 @@ type Harness struct {
 	Memory *memory.Service
 	// Documents is the users' document library (nil unless HARNESS_DOCUMENTS_DIR is set).
 	Documents *documents.Service
+	// Browser keeps the browser sandboxes of the conversations (nil unless BROWSER_BACKEND names a sandbox provider).
+	Browser *browsersandbox.Manager
 
 	sandboxTools bool
 	redo         redoStacks
@@ -215,7 +221,7 @@ func New(o Options) (*Harness, error) {
 	}
 
 	h := &Harness{cfg: cfg, Store: st, Log: infra.Log, Queue: infra.Broker, Bus: infra.Broker,
-		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace, Memory: b.Memory, Documents: b.Documents,
+		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace, Memory: b.Memory, Documents: b.Documents, Browser: b.BrowserSandboxes,
 		sandboxTools: b.sandboxTools != nil}
 	h.Agent = &agent.Agent{
 		Models: models, Tools: registry, Store: st, Steers: h.Bus,

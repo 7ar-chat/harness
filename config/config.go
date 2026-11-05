@@ -211,7 +211,16 @@ type Config struct {
 	DocumentsDir string `env:"HARNESS_DOCUMENTS_DIR"`
 	// BrowserURL is the MCP endpoint of the browser service (HARNESS_BROWSER_URL, e.g. http://browser:8931/mcp). It adds
 	// an MCP server named "browser" limited to BrowserTools, unless MCP_SERVERS already defines one.
-	BrowserURL           string `env:"HARNESS_BROWSER_URL"`
+	BrowserURL string `env:"HARNESS_BROWSER_URL"`
+	// BrowserBackend says where the agent's browser runs, independently of SandboxBackend (where its code runs):
+	// "" or "service" is the always-on browser service at BrowserURL; "daytona", "e2b" or "opensandbox" starts a browser
+	// sandbox on that provider for each conversation that uses the browser (BROWSER_BACKEND); "none" gives no browser.
+	BrowserBackend string `env:"BROWSER_BACKEND"`
+	// BrowserImage is the image browser sandboxes start from: a Daytona snapshot, an E2B template or an OpenSandbox
+	// image of that name (BROWSER_IMAGE).
+	BrowserImage string `env:"BROWSER_IMAGE" envDefault:"harness-browser"`
+	// BrowserIdleMinutes is how long a conversation's browser sandbox is kept after its last use (BROWSER_IDLE_MINUTES).
+	BrowserIdleMinutes int `env:"BROWSER_IDLE_MINUTES" envDefault:"20"`
 	DocumentsBrowserRoot string `env:"HARNESS_DOCUMENTS_BROWSER_ROOT"`
 	MemoryEmbeddingKey   string `env:"HARNESS_MEMORY_EMBEDDING_KEY"`
 	MemoryEmbeddingModel string `env:"HARNESS_MEMORY_EMBEDDING_MODEL"`
@@ -281,6 +290,9 @@ func (c *Config) normalize() error {
 				return fmt.Errorf("MCP_SERVERS: server %q: %w", s.Name, err)
 			}
 		}
+	}
+	if err := c.ValidateBrowser(); err != nil {
+		return err
 	}
 	if err := c.addBrowserServer(); err != nil {
 		return err

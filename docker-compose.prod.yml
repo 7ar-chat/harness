@@ -14,12 +14,24 @@
 #   SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASSWORD / SMTP_FROM   (optional) the mail server for that notice (port 587 STARTTLS
 #                           by default, 465 TLS); SMTP_FROM is the sender, e.g. "Harness <noreply@${HARNESS_HOST}>".
 #   LLM_BASE_URL / LLM_API_KEY / LLM_MODELS / LLM_DEFAULT_MODEL
-#   DAYTONA_API_KEY         the Daytona API key sandboxes are created with (https://app.daytona.io, Keys)
-#   DAYTONA_API_URL / DAYTONA_TARGET / DAYTONA_SNAPSHOT   (optional) the API (default https://app.daytona.io/api), the
-#                           region, and the snapshot sandboxes start from (default: the account's default snapshot; it must
-#                           have bash, GNU coreutils, python3, git and ripgrep, see docs/sandbox-adapters.md section 3)
-#   SANDBOX_IMAGES          (optional) profile=image, e.g. work=harness-office. This deployment runs AGENT_PROFILE=coding, which has no
-#                           entry by default and so uses Daytona's default snapshot (or DAYTONA_SNAPSHOT).
+#   SANDBOX_BACKEND        where agents run: daytona (default), e2b or opensandbox. Switching is this one variable: the settings of
+#                           all three are passed through below, so keep each backend's variables set and change only this one.
+#     daytona:              DAYTONA_API_KEY (https://app.daytona.io, Keys); optional DAYTONA_API_URL (default https://app.daytona.io/api),
+#                           DAYTONA_TARGET (region) and DAYTONA_SNAPSHOT (the snapshot sandboxes start from; default: the account's
+#                           default snapshot, which must have bash, GNU coreutils, python3, git and ripgrep, see
+#                           docs/sandbox-adapters.md section 3). Tiers 1 and 2 restrict sandbox internet access.
+#     e2b:                  E2B_API_KEY; optional E2B_TEMPLATE (default "base") and E2B_DOMAIN (self-hosted E2B).
+#     opensandbox:          OPENSANDBOX_URL (the lifecycle server) and OPENSANDBOX_API_KEY; optional OPENSANDBOX_IMAGE (default
+#                           python:3.11-slim), OPENSANDBOX_USE_SERVER_PROXY and OPENSANDBOX_CREDENTIAL_PROXY.
+#   BROWSER_BACKEND         where the agent's browser runs, independent of SANDBOX_BACKEND: service (default: the browser container below,
+#                           HARNESS_BROWSER_URL), daytona, e2b or opensandbox (a browser sandbox on that provider per conversation,
+#                           from the browser-desktop image: live view, kept 20 minutes after last use) or none. The provider needs its
+#                           variables above and a sandbox image/template/snapshot named BROWSER_IMAGE (default harness-browser), built
+#                           from sandbox-image/browser-desktop. Browser sandboxes get open internet access whatever
+#                           SANDBOX_EGRESS_ALLOWLIST says. See docs/browser.md.
+#   SANDBOX_IMAGES          (optional) profile=image, e.g. work=harness-office. An image name belongs to one backend (a Daytona snapshot is
+#                           not an E2B template), so leave it empty when you switch backends and set DAYTONA_SNAPSHOT / E2B_TEMPLATE /
+#                           OPENSANDBOX_IMAGE instead. This deployment runs AGENT_PROFILE=coding, which has no entry by default.
 #   LLM_DISCOVER_MODELS     (optional, default true) add the provider's model list to LLM_MODELS at startup; false: LLM_MODELS only
 #   TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_USERNAME   (optional; run one replica only: the bot long-polls)
 #   SLACK_BOT_TOKEN / SLACK_SIGNING_SECRET   (optional; run one replica only) the Slack app's bot token (xoxb-) and signing
@@ -38,9 +50,8 @@
 #   SENTRY_BROWSER_DSN      (optional) errors raised in the browser UI, in a Sentry project of their own.
 #   UMAMI_URL / UMAMI_WEBSITE_ID   (optional) usage statistics with Umami; both or neither. The CSP allows only these.
 #
-# Sessions and the team data live on the harness-data volume (file store). Agents run in Daytona sandboxes, not in this
-# container, so it needs outbound HTTPS to the Daytona API and the model router must be reachable on dokploy-network.
-# (To go back to a self-hosted OpenSandbox server, see git history: SANDBOX_BACKEND=opensandbox with OPENSANDBOX_*.)
+# Sessions and the team data live on the harness-data volume (file store). Agents run in the sandbox backend's sandboxes, not
+# in this container, so it needs outbound HTTPS to that backend's API and the model router must be reachable on dokploy-network.
 services:
   harness-web:
     build: .
@@ -79,12 +90,23 @@ services:
       # offer every model the provider's GET /models reports (not only LLM_MODELS) in the UI and allow runs on them
       LLM_DISCOVER_MODELS: ${LLM_DISCOVER_MODELS:-true}
 
-      SANDBOX_BACKEND: daytona
-      DAYTONA_API_KEY: ${DAYTONA_API_KEY}
+      SANDBOX_BACKEND: ${SANDBOX_BACKEND:-daytona}
+      DAYTONA_API_KEY: ${DAYTONA_API_KEY:-}
       DAYTONA_API_URL: ${DAYTONA_API_URL:-https://app.daytona.io/api}
       DAYTONA_TARGET: ${DAYTONA_TARGET:-}
       DAYTONA_SNAPSHOT: ${DAYTONA_SNAPSHOT:-}
+      E2B_API_KEY: ${E2B_API_KEY:-}
+      E2B_TEMPLATE: ${E2B_TEMPLATE:-}
+      E2B_DOMAIN: ${E2B_DOMAIN:-}
+      OPENSANDBOX_URL: ${OPENSANDBOX_URL:-}
+      OPENSANDBOX_API_KEY: ${OPENSANDBOX_API_KEY:-}
+      OPENSANDBOX_IMAGE: ${OPENSANDBOX_IMAGE:-python:3.11-slim}
+      OPENSANDBOX_USE_SERVER_PROXY: ${OPENSANDBOX_USE_SERVER_PROXY:-false}
+      OPENSANDBOX_CREDENTIAL_PROXY: ${OPENSANDBOX_CREDENTIAL_PROXY:-false}
       SANDBOX_IMAGES: ${SANDBOX_IMAGES:-}
+      BROWSER_BACKEND: ${BROWSER_BACKEND:-service}
+      BROWSER_IMAGE: ${BROWSER_IMAGE:-harness-browser}
+      BROWSER_IDLE_MINUTES: ${BROWSER_IDLE_MINUTES:-20}
       # deny by default (required in production). Daytona tiers 3 and 4 enforce this list per sandbox; on tiers 1 and 2 the
       # account's own restricted policy applies instead (it already covers the hosts below) and the adapter logs a warning.
       # Set SANDBOX_EGRESS_ALLOWLIST in the Dokploy environment to add package mirrors, your API, ... (domains OR CIDRs).

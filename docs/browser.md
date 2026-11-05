@@ -9,7 +9,31 @@ work like finding jobs and filling in application forms.
 [Playwright MCP server](https://github.com/microsoft/playwright-mcp). `HARNESS_BROWSER_URL` (default `http://browser:8931/mcp`)
 adds it to the agent's tools as the MCP server `browser`. Empty it to turn the browser off.
 
-**Why it is a service and not part of the sandbox.** The sandbox's network is deny-by-default (Daytona tiers 1 and 2 allow
+### Choosing where the browser runs: `BROWSER_BACKEND`
+
+The code sandboxes (`SANDBOX_BACKEND`) and the browser are chosen separately, so the code can run on Daytona while the
+browser runs on E2B:
+
+| `BROWSER_BACKEND` | The browser is |
+|---|---|
+| `service` (default) | the always-on container above, at `HARNESS_BROWSER_URL`. Its state does not carry from one message to the next |
+| `daytona`, `e2b`, `opensandbox` | a sandbox on that provider, one per conversation, started on the first use and deleted after `BROWSER_IDLE_MINUTES` (20) without use. Image `BROWSER_IMAGE` (default `harness-browser`: a Daytona snapshot, an E2B template or an OpenSandbox image of that name), built from [`sandbox-image/browser-desktop`](../sandbox-image/browser-desktop/README.md) |
+| `none` | no browser |
+
+A browser sandbox is a headed Chromium that a person can watch and take over (noVNC) with the Playwright MCP server on it, so
+the page, the cookies and a half-filled form are still there in the conversation's next message. Its user's documents are
+copied to `/docs/<tag>/` (the path `documents_list` reports) when it starts and when the library changes. The provider's
+access token (Daytona's preview token, E2B's traffic token) is sent with every MCP request; it never reaches the model.
+
+Browser sandboxes get **open internet access** whatever `SANDBOX_EGRESS_ALLOWLIST` says for the code sandboxes (private and
+link-local ranges stay denied), because a browser must reach any site. The provider must be able to expose a port of a
+sandbox (Daytona preview links, E2B ports and OpenSandbox endpoints can). Daytona tiers 1 and 2 restrict sandbox internet
+access to a fixed list of hosts, so there `BROWSER_BACKEND=daytona` cannot reach job sites; use `e2b` or the `service`.
+
+The sandboxes are tracked in the memory of one harness process: with several replicas each keeps its own, and a restart
+leaves the running ones to the provider's own sandbox timeout (`SANDBOX_TIMEOUT_SECONDS`).
+
+**Why the default is a service and not part of the code sandbox.** The sandbox's network is deny-by-default (Daytona tiers 1 and 2 allow
 package registries, Git hosts and AI APIs only), and a browser has to reach job boards. The MCP calls come from the harness
 process, so the sandbox rules do not apply to them.
 
@@ -50,6 +74,9 @@ under `/docs`, so treat the library as readable by the people running agents on 
 
 | Variable | Default | |
 |---|---|---|
-| `HARNESS_BROWSER_URL` | `http://browser:8931/mcp` (production compose) | MCP endpoint of the browser service; empty: no browser |
+| `HARNESS_BROWSER_URL` | `http://browser:8931/mcp` (production compose) | MCP endpoint of the browser service (`BROWSER_BACKEND=service`); empty: no browser |
+| `BROWSER_BACKEND` | `service` | `service`, `daytona`, `e2b`, `opensandbox` or `none`: where the browser runs, independently of `SANDBOX_BACKEND` |
+| `BROWSER_IMAGE` | `harness-browser` | image/template/snapshot of browser sandboxes on the provider named by `BROWSER_BACKEND` |
+| `BROWSER_IDLE_MINUTES` | `20` | minutes a conversation's browser sandbox is kept after its last use |
 | `HARNESS_DOCUMENTS_DIR` | `/data/documents` (production compose) | where the library is stored; empty: no library |
 | `HARNESS_DOCUMENTS_BROWSER_ROOT` | `/docs` | where the browser service sees that directory |

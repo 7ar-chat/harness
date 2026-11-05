@@ -10,12 +10,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/ai/llm/llmtest"
 	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/sandbox"
 	"github.com/7ar-chat/harness/core/sandbox/sandboxtest"
 	"github.com/7ar-chat/harness/engine/tools"
 	_ "github.com/7ar-chat/harness/mcpfeature"
@@ -226,5 +228,100 @@ func TestAServerFromTheDynamicSourceCannotReachALoopbackAddress(t *testing.T) {
 	}
 	if hit {
 		t.Fatal("the loopback server received a request")
+	}
+}
+
+// browserBox is a sandbox of a fake provider whose "browser" port is a real MCP server.
+type browserBox struct {
+	sandbox.Sandbox
+	url string
+}
+
+func (b browserBox) ID() string { return "browser-1" }
+func (b browserBox) Exec(context.Context, sandbox.ExecRequest) (sandbox.ExecResult, error) {
+	return sandbox.ExecResult{}, nil // browser-up started, the ready file exists
+}
+func (b browserBox) MkdirAll(context.Context, string) error     { return nil }
+func (b browserBox) Healthy(context.Context) bool               { return true }
+func (b browserBox) Gone(context.Context) bool                  { return false }
+func (b browserBox) Renew(context.Context, time.Duration) error { return nil }
+func (b browserBox) Endpoint(context.Context, int) (sandbox.Endpoint, error) {
+	return sandbox.Endpoint{URL: b.url, Headers: map[string]string{"X-Traffic": "secret"}}, nil
+}
+
+type browserBackend struct{ url string }
+
+func (b browserBackend) Create(context.Context, sandbox.CreateOptions) (sandbox.Instance, error) {
+	return browserBox{url: b.url}, nil
+}
+func (browserBackend) Connect(context.Context, string) (sandbox.Instance, error) {
+	return nil, sandbox.ErrNoSandbox
+}
+func (browserBackend) Kill(context.Context, string) error { return nil }
+
+func TestTheBrowserRunsInASandboxOfAnotherProviderThanTheCode(t *testing.T) {
+	// Arrange: code sandboxes on one provider (the test backend), the browser on another (a fake whose port is an MCP server)
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	server := mcp.NewServer(&mcp.Implementation{Name: "pw", Version: "1"}, nil)
+	type nav struct {
+		URL string `json:"url"`
+	}
+	mcp.AddTool(server, &mcp.Tool{Name: "browser_navigate", Description: "Go to a page."},
+		func(_ context.Context, _ *mcp.CallToolRequest, in nav) (*mcp.CallToolResult, any, error) {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "at " + in.URL}}}, nil, nil
+		})
+	mcp.AddTool(server, &mcp.Tool{Name: "browser_evaluate", Description: "Run code in the page."},
+		func(_ context.Context, _ *mcp.CallToolRequest, _ nav) (*mcp.CallToolResult, any, error) {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ran"}}}, nil, nil
+		})
+	var sawToken bool
+	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Traffic") == "secret" {
+			sawToken = true
+		}
+		handler.ServeHTTP(w, r)
+	}))
+	t.Cleanup(ts.Close)
+	t.Setenv("LLM_PROVIDER", "openai")
+	t.Setenv("LLM_MODELS", "gpt-test")
+	t.Setenv("SANDBOX_BACKEND", "daytona")
+	t.Setenv("BROWSER_BACKEND", "e2b")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Act
+	h, err := harness.New(harness.Options{
+		Config: cfg, Models: llmtest.Factory{M: llmtest.New()}, Backend: sandboxtest.NewBackend(),
+		BrowserBackend: browserBackend{url: ts.URL},
+		Features:       []harness.Feature{harness.Sandbox(), harness.MCP(), harness.Browser()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, cleanup, err := h.Agent.Tools.Tools(context.Background(), tools.RunContext{ThreadID: "t", RunID: "r", Login: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	defer h.Browser.Close()
+
+	// Assert: the safe tools of the browser are offered, the unsafe one is not, and the provider's token was presented
+	var names []string
+	for _, tl := range list {
+		info, _ := tl.Info(context.Background())
+		names = append(names, info.Name)
+	}
+	all := strings.Join(names, ",")
+	if !strings.Contains(all, "browser__browser_navigate") {
+		t.Fatalf("tools %v, want the browser's navigate tool", names)
+	}
+	if strings.Contains(all, "browser_evaluate") {
+		t.Fatalf("tools %v: browser_evaluate must not be offered", names)
+	}
+	if !sawToken {
+		t.Error("the MCP requests must carry the provider's access headers")
 	}
 }

@@ -19,6 +19,20 @@ daytona exec my-browser -- sh -c 'setsid browser-up >/tmp/browser.log 2>&1 &'
 `browser-up` options (environment): `SCREEN` (default `1366x900x24`), `START_URL`, `PROFILE_DIR` (default
 `/data/profile`; put a Daytona volume there and a login survives the sandbox).
 
+## Using it from the harness: `BROWSER_BACKEND`
+
+With `BROWSER_BACKEND=daytona|e2b|opensandbox` the harness starts one of these sandboxes per conversation itself (it runs
+`browser-up`, waits for `/tmp/browser.ready`, and connects to port 8931), so none of the commands above is needed. The image
+is named by `BROWSER_IMAGE` (default `harness-browser`) and must exist on that provider:
+
+| Provider | Image | Built |
+|---|---|---|
+| Daytona | snapshot `harness-browser` | `daytona snapshot create` above (done and tested) |
+| E2B | template `harness-browser` | from this Dockerfile with the E2B CLI (`e2b template build`): **not done and not tested** |
+| OpenSandbox | image `harness-browser` | `docker build -t harness-browser sandbox-image/browser-desktop`: **not tested** |
+
+See [../../docs/browser.md](../../docs/browser.md).
+
 ## Tested on 2026-11-05 (Daytona eu, snapshot `harness-browser`, 2 CPU / 4 GB)
 
 | | |

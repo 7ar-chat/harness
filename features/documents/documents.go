@@ -365,11 +365,16 @@ func (s *Service) BrowserPath(login, name string) string {
 
 // CopyTo writes the user's documents to /workspace/documents of sb and returns the names written.
 func (s *Service) CopyTo(ctx context.Context, login string, sb sandbox.Sandbox, only string) ([]string, error) {
+	return s.CopyToDir(ctx, login, sb, WorkspaceDir, only)
+}
+
+// CopyToDir is CopyTo into another directory of the sandbox.
+func (s *Service) CopyToDir(ctx context.Context, login string, sb sandbox.Sandbox, dir, only string) ([]string, error) {
 	docs, err := s.List(login)
 	if err != nil {
 		return nil, err
 	}
-	if err := sb.MkdirAll(ctx, WorkspaceDir); err != nil {
+	if err := sb.MkdirAll(ctx, dir); err != nil {
 		return nil, err
 	}
 	var done []string
@@ -381,7 +386,7 @@ func (s *Service) CopyTo(ctx context.Context, login string, sb sandbox.Sandbox, 
 		if err != nil {
 			continue
 		}
-		if err := sb.WriteFile(ctx, path.Join(WorkspaceDir, d.Name), data); err != nil {
+		if err := sb.WriteFile(ctx, path.Join(dir, d.Name), data); err != nil {
 			return done, err
 		}
 		done = append(done, d.Name)

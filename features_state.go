@@ -2,7 +2,9 @@ package harness
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/7ar-chat/harness/engine/tools"
 	"github.com/7ar-chat/harness/features/artifacts"
 	"github.com/7ar-chat/harness/features/artifacts/workspace"
+	"github.com/7ar-chat/harness/features/browsersandbox"
 	"github.com/7ar-chat/harness/features/documents"
 	"github.com/7ar-chat/harness/features/goals"
 	"github.com/7ar-chat/harness/features/memory"
@@ -245,6 +248,32 @@ const BrowserServer = "browser"
 // (MCP_SERVERS) is configured. Without it, it contributes nothing.
 func Browser() Feature {
 	return builtin{FeatureBrowser, func(b *Builder) error {
+		if kind := b.Config.BrowserSandboxBackend(); kind != "" {
+			backend := b.Options.BrowserBackend
+			if backend == nil {
+				var err error
+				if backend, err = NewSandboxBackend(b.Config.BrowserSandboxConfig()); err != nil {
+					return fmt.Errorf("BROWSER_BACKEND=%s: %w", kind, err)
+				}
+			}
+			m := browsersandbox.New(backend)
+			if b.Documents != nil {
+				m.Docs = browserLibrary{b.Documents}
+			}
+			m.Idle = time.Duration(b.Config.BrowserIdleMinutes) * time.Minute
+			b.BrowserSandboxes = m
+			b.BrowserServers = func(ctx context.Context, threadID, login string) ([]config.MCPServer, error) {
+				servers, err := m.Servers(ctx, threadID, login)
+				out := make([]config.MCPServer, 0, len(servers))
+				for _, s := range servers {
+					out = append(out, config.MCPServer{Name: BrowserServer, URL: s.URL, Headers: s.Headers,
+						Tools: append([]string(nil), config.BrowserTools...), Origin: "BROWSER_BACKEND"})
+				}
+				return out, err
+			}
+			b.Section(func(context.Context, agent.Input) string { return prompts.Browser })
+			return nil
+		}
 		for _, s := range b.Config.MCPServers {
 			if s.Name == BrowserServer {
 				b.Section(func(context.Context, agent.Input) string { return prompts.Browser })
@@ -277,4 +306,25 @@ func memoryOptions(cfg *config.Config) memory.Options {
 		o.Embedder = &memory.OpenAIEmbedder{BaseURL: url, APIKey: key, ModelName: cfg.MemoryEmbeddingModel}
 	}
 	return o
+}
+
+// browserLibrary lets a browser sandbox read the user's documents: they are copied to /docs/<tag>/, where the browser's
+// file chooser and documents_list's browser path expect them.
+type browserLibrary struct{ svc *documents.Service }
+
+func (l browserLibrary) Signature(login string) (string, error) {
+	docs, err := l.svc.List(login)
+	if err != nil {
+		return "", err
+	}
+	var sig strings.Builder
+	for _, d := range docs {
+		fmt.Fprintf(&sig, "%s:%d:%d;", d.Name, d.Size, d.Modified.UnixNano())
+	}
+	return sig.String(), nil
+}
+
+func (l browserLibrary) CopyTo(ctx context.Context, login string, sb sandbox.Sandbox) error {
+	_, err := l.svc.CopyToDir(ctx, login, sb, path.Join(browsersandbox.DocsDir, documents.Tag(login)), "")
+	return err
 }

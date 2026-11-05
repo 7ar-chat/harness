@@ -26,6 +26,10 @@ type instance struct {
 	id    string
 	token string // envd access token, "" when the sandbox is not secured
 	envd  string // base URL of the envd agent
+	// traffic is the access token of the sandbox's ports ("" when the sandbox allows public traffic); domain is the
+	// E2B domain its ports are served under.
+	traffic string
+	domain  string
 	root  bool   // run commands as root (the creation bootstrap only)
 }
 
@@ -535,4 +539,19 @@ func (c *utf8Carry) flush() string {
 	s := string(c.rest)
 	c.rest = nil
 	return s
+}
+
+var _ sandbox.PortExposer = (*instance)(nil)
+
+// Endpoint implements sandbox.PortExposer: a port of the sandbox is served at https://<port>-<id>.<domain>, and a
+// sandbox that does not allow public traffic wants its traffic token in the e2b-traffic-access-token header.
+func (s *instance) Endpoint(_ context.Context, port int) (sandbox.Endpoint, error) {
+	if s.domain == "" {
+		return sandbox.Endpoint{}, errors.New("e2b: the sandbox's domain is unknown")
+	}
+	ep := sandbox.Endpoint{URL: fmt.Sprintf("https://%d-%s.%s", port, s.id, s.domain)}
+	if s.traffic != "" {
+		ep.Headers = map[string]string{"e2b-traffic-access-token": s.traffic}
+	}
+	return ep, nil
 }

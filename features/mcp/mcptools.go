@@ -48,6 +48,10 @@ type Provider struct {
 	// run's project or user). Every server it returns is treated as Untrusted. A failure is logged and the run
 	// goes on with the other servers; a server whose tool prefix is already taken is skipped.
 	Dynamic func(ctx context.Context, threadID, login string) ([]config.MCPServer, error)
+	// Trusted, when set, supplies servers the deployment itself started for the run (the browser sandbox of the
+	// conversation, BROWSER_BACKEND). They are connected as configured servers are: their address comes from a sandbox
+	// provider, not from a user. A failure is logged and the run goes on without them.
+	Trusted func(ctx context.Context, threadID, login string) ([]config.MCPServer, error)
 
 	// transport is the base round tripper of Untrusted servers (nil: one SafeTransport shared by the provider).
 	// Tests inject a loopback-capable one; production never sets it.
@@ -155,6 +159,26 @@ func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]ai.BaseToo
 		}
 		sessions = append(sessions, sess)
 		all = append(all, ts...)
+	}
+	if p.Trusted != nil {
+		own, err := p.Trusted(ctx, rc.ThreadID, rc.Login)
+		if err != nil {
+			slog.Warn("a server started for this run is unavailable, continuing without it", "run_id", rc.RunID, "error", err)
+		}
+		for _, s := range own {
+			prefix := toolPrefix(s.Name)
+			if prefixes[prefix] {
+				continue
+			}
+			prefixes[prefix] = true
+			ts, sess, err := p.connect(ctx, s, rc, taken)
+			if err != nil {
+				slog.Warn("mcp server unavailable, skipping", "server", s.Name, "run_id", rc.RunID, "error", err)
+				continue
+			}
+			sessions = append(sessions, sess)
+			all = append(all, ts...)
+		}
 	}
 	if p.Dynamic != nil {
 		dyn, err := p.Dynamic(ctx, rc.ThreadID, rc.Login)
