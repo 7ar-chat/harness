@@ -750,3 +750,20 @@ func TestGenerateReportsABodyThatBreaksMidRead(t *testing.T) {
 		t.Fatalf("out %+v err %v", out, err)
 	}
 }
+
+func TestAToolCallWithoutArgumentsIsSentWithAnEmptyObject(t *testing.T) {
+	// Arrange
+	m, got := serve(t, 200, "text/event-stream", sse(`{"choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}`))
+	call := ai.ToolCall{ID: "c1", Function: ai.FunctionCall{Name: "browser_snapshot"}}
+	history := []*ai.Message{ai.UserMessage("open it"), {Role: ai.RoleAssistant, ToolCalls: []ai.ToolCall{call}}}
+	// Act
+	sr, err := m.Stream(context.Background(), history)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drain(t, sr)
+	// Assert
+	if !strings.Contains(*got, `"arguments":"{}"`) {
+		t.Fatalf("request %s", *got)
+	}
+}

@@ -2,6 +2,7 @@ package openai
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/7ar-chat/harness/ai"
 )
@@ -51,7 +52,13 @@ func toWire(msgs []*ai.Message) []wireMessage {
 			if typ == "" {
 				typ = "function"
 			}
-			w.ToolCalls = append(w.ToolCalls, wireToolCall{ID: c.ID, Type: typ, Function: wireFunction{Name: c.Function.Name, Arguments: c.Function.Arguments}})
+			// A tool that takes no arguments is streamed with none; an omitted "arguments" reaches Anthropic
+			// (through a proxy) as a tool_use without "input", which it rejects with a 400 on every later turn.
+			args := c.Function.Arguments
+			if strings.TrimSpace(args) == "" {
+				args = "{}"
+			}
+			w.ToolCalls = append(w.ToolCalls, wireToolCall{ID: c.ID, Type: typ, Function: wireFunction{Name: c.Function.Name, Arguments: args}})
 		}
 		out = append(out, w)
 	}
