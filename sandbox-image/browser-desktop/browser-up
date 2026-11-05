@@ -1,0 +1,41 @@
+#!/bin/sh
+# Starts the visible browser stack and stays in the foreground (run it with `setsid browser-up &` or a Daytona session):
+#   Xvfb :99  ->  openbox  ->  Chromium (headed, CDP on 127.0.0.1:9222, profile in $PROFILE_DIR)
+#   x11vnc (127.0.0.1:5900)  ->  noVNC/websockify on :6080     the live view and take-over
+#   playwright-mcp on :8931, attached to that Chromium          the agent's tools
+# Environment: SCREEN (default 1366x900x24), PROFILE_DIR (default /data/profile: mount a volume there to keep logins),
+# START_URL (default about:blank).
+set -eu
+SCREEN="${SCREEN:-1366x900x24}"
+PROFILE_DIR="${PROFILE_DIR:-/data/profile}"
+START_URL="${START_URL:-about:blank}"
+W="${SCREEN%%x*}"; REST="${SCREEN#*x}"; H="${REST%%x*}"
+export DISPLAY=:99
+mkdir -p "$PROFILE_DIR" /out
+rm -f /tmp/.X99-lock
+
+pids=""
+run() { "$@" & pids="$pids $!"; }
+trap 'kill $pids 2>/dev/null || true' EXIT INT TERM
+
+run Xvfb :99 -screen 0 "$SCREEN" -nolisten tcp
+for i in $(seq 1 50); do xdpyinfo >/dev/null 2>&1 && break; sleep 0.2; done
+run openbox
+
+CHROME="$(find /ms-playwright -type f -name chrome -path '*chrome-linux*' | head -n1)"
+[ -n "$CHROME" ] || { echo "browser-up: no Chromium under /ms-playwright" >&2; exit 1; }
+run "$CHROME" --no-sandbox --disable-dev-shm-usage --no-first-run --no-default-browser-check \
+    --user-data-dir="$PROFILE_DIR" --remote-debugging-address=127.0.0.1 --remote-debugging-port=9222 \
+    --window-position=0,0 --window-size="$W,$H" --disable-features=Translate "$START_URL"
+for i in $(seq 1 100); do curl -fsS http://127.0.0.1:9222/json/version >/dev/null 2>&1 && break; sleep 0.2; done
+
+# Localhost only: the token-checked Daytona preview of :6080 is the way in.
+run x11vnc -display :99 -localhost -nopw -forever -shared -rfbport 5900 -quiet
+run websockify --web /usr/share/novnc 6080 127.0.0.1:5900
+
+run playwright-mcp --cdp-endpoint http://127.0.0.1:9222 --host 0.0.0.0 --port 8931 --allowed-hosts '*' \
+    --allow-unrestricted-file-access --output-dir /out --timeout-action 10000 --timeout-navigation 45000
+
+echo "browser-up: ready (view :6080/vnc.html, MCP :8931)"
+touch /tmp/browser.ready
+wait

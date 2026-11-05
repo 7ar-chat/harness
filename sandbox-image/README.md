@@ -8,6 +8,7 @@ container per thread, created by the harness (`sandbox.OpenSandbox`, selected by
 |---|---|
 | `Dockerfile` | The sandbox images (`OPENSANDBOX_IMAGE`), two targets sharing layers: `base` (what every sandbox needs) and `office` (base plus the Office/PDF/data toolchain, Python and Node; the default build). Optional extra CA certificates in `certs/`, mirrors through build args (see the header of the file). |
 | `browser/` | The browser service (`harness-browser`): headless Chromium behind the Playwright MCP server, run by `docker-compose.prod.yml` next to `harness-web`. See [../docs/browser.md](../docs/browser.md). |
+| `browser-desktop/` | A visible browser for a Daytona sandbox (`harness-browser` snapshot): headed Chromium on a virtual display, a noVNC live view and take-over (:6080) and the Playwright MCP server (:8931) on the same browser. Started on demand with `browser-up`. See [browser-desktop/README.md](browser-desktop/README.md). |
 | `steel/` | The Steel browser image (`harness-steel`) and its compose file: a Chromium the agent drives over a session API and CDP. Not a sandbox profile: it runs as its own service. See [steel/README.md](steel/README.md). |
 | `opensandbox.toml` | Lifecycle server configuration for a local Docker runtime. |
 
