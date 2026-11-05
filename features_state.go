@@ -271,17 +271,25 @@ func Browser() Feature {
 				}
 				return out, err
 			}
-			b.Section(func(context.Context, agent.Input) string { return prompts.Browser })
+			b.Section(browserSection)
 			return nil
 		}
 		for _, s := range b.Config.MCPServers {
 			if s.Name == BrowserServer {
-				b.Section(func(context.Context, agent.Input) string { return prompts.Browser })
+				b.Section(browserSection)
 				return nil
 			}
 		}
 		return nil
 	}}
+}
+
+// browserSection is the browser rules; the job-application mode has its own routine, so it gets only how to drive a page.
+func browserSection(_ context.Context, in agent.Input) string {
+	if in.Variant == prompts.Jobs {
+		return prompts.BrowserBasics
+	}
+	return prompts.Browser
 }
 
 // memoryOptions maps the HARNESS_MEMORY_* settings to the memory service's options.

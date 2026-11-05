@@ -14,6 +14,7 @@ import (
 //	PUT    /api/me/jobs/profile {profile} → profile
 //	POST   /api/me/jobs/boards {url|ats,slug,name} → {profile, openJobs}
 //	POST   /api/me/jobs/scan              → {boards, fetched, matched, added, closed, errors}
+//	POST   /api/me/jobs/thread            → {threadId}   (the job-search conversation, created on first use: the agent runs in job mode there)
 //	PATCH  /api/me/jobs/{id} {status,note} → job    (approve, skip, or report an outcome: the person's word)
 //
 // Without HARNESS_JOBS_DIR the harness has no job search and these answer 404.
@@ -23,6 +24,7 @@ func (s *server) routeJobs() {
 	s.Route("PUT /me/jobs/profile", s.putJobProfile)
 	s.Route("POST /me/jobs/boards", s.addJobBoard)
 	s.Route("POST /me/jobs/scan", s.scanJobs)
+	s.Route("POST /me/jobs/thread", s.jobThread)
 	s.Route("PATCH /me/jobs/{id}", s.patchJob)
 }
 
@@ -164,4 +166,16 @@ func (s *server) patchJob(w http.ResponseWriter, r *http.Request, c Caller) {
 		return
 	}
 	writeJSON(w, http.StatusOK, j)
+}
+
+func (s *server) jobThread(w http.ResponseWriter, r *http.Request, c Caller) {
+	if !s.hasJobs(w) {
+		return
+	}
+	id, err := s.H.JobThread(r.Context(), c.Actor)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"threadId": id})
 }

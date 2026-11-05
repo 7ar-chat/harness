@@ -1,8 +1,9 @@
 import { formatDistanceToNowStrict } from "date-fns";
-import { Check, ExternalLink, Plus, RefreshCw, X } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { Bot, Check, ExternalLink, Plus, RefreshCw, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { isUnsupported } from "@/api/client";
-import { useAddJobBoard, useJobs, useSaveJobProfile, useScanJobs, useSetJobStatus, type Job, type JobProfile } from "@/api/queries";
+import { useAddJobBoard, useJobs, useOpenJobThread, useSaveJobProfile, useScanJobs, useSetJobStatus, type Job, type JobProfile } from "@/api/queries";
 import { Empty, ErrorState, ListSkeleton } from "@/components/app/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -207,13 +208,20 @@ function draft(p: JobProfile) {
 
 export function JobsPage() {
   const q = useJobs();
+  const open = useOpenJobThread();
+  const navigate = useNavigate();
   const [group, setGroup] = useState("queued");
   const shell = (children: React.ReactNode) => (
     <ScrollArea className="h-full">
       <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-8">
-        <header className="space-y-1">
-          <h1 className="text-xl font-semibold">Jobs</h1>
-          <p className="text-sm text-muted-foreground">Your assistant looks for roles that fit you and applies for you. You decide how much freedom it has.</p>
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <h1 className="text-xl font-semibold">Jobs</h1>
+            <p className="text-sm text-muted-foreground">Your job-search agent looks for roles that fit you and applies for you. You decide how much freedom it has.</p>
+          </div>
+          <Button variant="outline" disabled={open.isPending} onClick={() => open.mutate(undefined, { onSuccess: (r) => void navigate({ to: "/t/$threadId", params: { threadId: r.threadId } }) })}>
+            <Bot /> Talk to the job agent
+          </Button>
         </header>
         {children}
       </div>

@@ -48,6 +48,9 @@ type Harness struct {
 	// PromptVariant is the prompt variant of a model (LLM_PROMPT_VARIANTS;
 	// nil: prompts.Default).
 	PromptVariant func(model string) string
+	// RunVariant picks the prompt variant of one run, over the model's: a conversation that is in a mode of its own
+	// (the job-application agent) gets that mode's prompt. "" keeps the model's variant. Nil: never overrides.
+	RunVariant func(ctx context.Context, run *store.Run) string
 	// ToolHooks observe tool results (artifact snapshots).
 	ToolHooks []ToolHook
 	// RunStart hooks run before the first step of every run but compactions

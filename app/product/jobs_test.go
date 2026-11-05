@@ -90,3 +90,13 @@ func TestJobSearchIsAbsentWithoutADirectory(t *testing.T) {
 		t.Fatalf("status = %d, want 404", got)
 	}
 }
+
+func TestJobSearchHasOneConversationPerUser(t *testing.T) {
+	r := jobsRig(t)
+	a := body(t, r.do("POST", "/api/me/jobs/thread", "alice", ""))["threadId"]
+	again := body(t, r.do("POST", "/api/me/jobs/thread", "alice", ""))["threadId"]
+	b := body(t, r.do("POST", "/api/me/jobs/thread", "bob", ""))["threadId"]
+	if a == nil || a != again || a == b {
+		t.Fatalf("alice %v then %v, bob %v", a, again, b)
+	}
+}

@@ -345,6 +345,7 @@ export const useJobs = () => useQuery({ queryKey: jobsKey, queryFn: () => api.ge
 export const useSaveJobProfile = () => useAction((p: JobProfile) => api.put<JobProfile>("/me/jobs/profile", p), () => [jobsKey], "Saved");
 export const useAddJobBoard = () => useAction((url: string) => api.post<{ openJobs: number }>("/me/jobs/boards", { url }), () => [jobsKey], "Board added");
 export const useScanJobs = () => useAction(() => api.post<{ added: number; boards: number; errors?: string[] }>("/me/jobs/scan"), () => [jobsKey]);
+export const useOpenJobThread = () => useAction(() => api.post<{ threadId: string }>("/me/jobs/thread"), () => []);
 export const useSetJobStatus = () => useAction((v: { id: string; status: string }) => api.patch<Job>(`/me/jobs/${v.id}`, { status: v.status }), () => [jobsKey]);
 export const useDisconnect = (kind: "github" | "telegram" | "slack") => useAction(() => api.del(`/connectors/${kind}`), () => [["connectors"]], "Disconnected");
 export const useTelegramLink = () => useAction(() => api.post<{ code: string; url: string; expiresAt: string }>("/connectors/telegram/link"), () => [["connectors"]]);

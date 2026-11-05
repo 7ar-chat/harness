@@ -43,6 +43,7 @@ func jobsWorker(t *testing.T, turns int) (*jobWorker, context.Context) {
 	t.Cleanup(board.Close)
 	svc := jobhunt.New(t.TempDir())
 	svc.Bases = map[string]string{jobhunt.Greenhouse: board.URL}
+	h.Jobs = svc
 	return &jobWorker{svc: svc, h: h, model: "gpt-test", now: time.Now}, ctx
 }
 
@@ -76,7 +77,7 @@ func TestTheJobWorkerScansAndWakesTheAgentOncePerRoundInTheDaysConversation(t *t
 		t.Fatalf("%+v %+v", st1, st2)
 	}
 	th, err := w.h.Store.GetThread(ctx, "ann", st1.ThreadID)
-	if err != nil || !strings.HasPrefix(th.Title, "Job search ") {
+	if err != nil || th.Title != JobThreadTitle {
 		t.Fatalf("%+v %v", th, err)
 	}
 	if c, _ := w.svc.Counts("ann"); c[jobhunt.StatusNew] != 1 {
@@ -104,15 +105,18 @@ func TestTheJobWorkerLeavesAlonePeopleWhoDidNotTurnItOnAndRoundsWithNothingToDo(
 	}
 }
 
-func TestTheJobSectionAsksForTheProfileUntilThereIsOne(t *testing.T) {
+func TestTheJobSectionCarriesTheStateInJobModeAndPointsThereElsewhere(t *testing.T) {
 	svc := jobhunt.New(t.TempDir())
-	if s := jobSection(svc, "ann"); !strings.Contains(s, "tell you the roles") {
+	if s := jobSection(svc, "ann", true); !strings.Contains(s, "has not set up") {
 		t.Fatal(s)
 	}
 	if _, err := svc.SetProfile("ann", jobhunt.Profile{Titles: []string{"go dev"}, Mode: jobhunt.ModeAuto}); err != nil {
 		t.Fatal(err)
 	}
-	if s := jobSection(svc, "ann"); !strings.Contains(s, "Mode: auto") || !strings.Contains(s, "go dev") {
+	if s := jobSection(svc, "ann", true); !strings.Contains(s, "Mode: auto") || !strings.Contains(s, "go dev") {
+		t.Fatal(s)
+	}
+	if s := jobSection(svc, "ann", false); !strings.Contains(s, "Jobs page") || strings.Contains(s, "go dev") {
 		t.Fatal(s)
 	}
 }

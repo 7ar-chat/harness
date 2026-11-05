@@ -80,7 +80,8 @@ type Service struct {
 	// Now is the clock (nil: time.Now).
 	Now func() time.Time
 
-	mu sync.Mutex
+	mu      sync.Mutex
+	threads map[string]string // user tag → job-search thread (cache of state.json)
 }
 
 // New returns a service storing under dir.

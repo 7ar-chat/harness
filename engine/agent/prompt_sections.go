@@ -61,6 +61,11 @@ func (a *Agent) variantOf(model string) string {
 // injected untrusted text.
 func (st *runState) buildPrompt(ctx context.Context, now time.Time) {
 	st.in.Variant = st.a.variantOf(st.in.Run.Model)
+	if f := st.a.Harness.RunVariant; f != nil {
+		if v := f(ctx, st.in.Run); v != "" {
+			st.in.Variant = prompts.Resolve(v)
+		}
+	}
 	tainted := &atomic.Bool{}
 	sctx := context.WithValue(ctx, taintKey{}, tainted)
 	vision := st.a.Harness.Vision != nil && st.a.Harness.Vision(st.in.Run.Model)

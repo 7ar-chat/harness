@@ -16,7 +16,7 @@ func TestNames_ListsEveryVariantSorted(t *testing.T) {
 	names := prompts.Names()
 
 	// Assert
-	want := []string{prompts.Coding, prompts.DeepSeek, prompts.Default, prompts.GPT56}
+	want := []string{prompts.Coding, prompts.DeepSeek, prompts.Default, prompts.GPT56, prompts.Jobs}
 	if !slices.Equal(names, want) {
 		t.Fatalf("Names() = %v, want %v", names, want)
 	}

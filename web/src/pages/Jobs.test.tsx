@@ -7,7 +7,7 @@ import { renderApp } from "@/test/render";
 const profile = { enabled: false, mode: "queue", titles: ["go"], minScore: 4.5, queueScore: 4, dailyCap: 10, companies: [{ name: "Acme", ats: "greenhouse", slug: "acme" }] };
 const job = (over: object) => ({ id: "j1", company: "Acme", title: "Go Engineer", location: "Paris", url: "https://x.test/1", status: "queued", score: 4.3, reason: "Fits the Go work", seen: "2026-11-05T10:00:00Z", ...over });
 const page = () => within(screen.getByRole("main"));
-const overview = (jobs: object[], counts = { queued: 1 }) => ({ profile, counts, jobs });
+const overview = (jobs: object[], counts: Record<string, number> = { queued: 1 }) => ({ profile, counts, jobs });
 
 describe("JobsPage", () => {
   it("shows what waits for you and approves a job on Apply", async () => {
@@ -31,6 +31,14 @@ describe("JobsPage", () => {
     expect(body.titles).toEqual(["go", "rust"]);
     expect(body.enabled).toBe(true);
     expect(body.mode).toBe("queue");
+  });
+
+  it("opens the job agent's own conversation", async () => {
+    const m = mockFetch({ ...shellRoutes(), "GET /api/me/jobs": overview([], {}), "POST /api/me/jobs/thread": { threadId: "jt1" }, "GET /api/threads/jt1": reply(404) });
+    await renderApp("/jobs");
+    fireEvent.click(await page().findByRole("button", { name: /Talk to the job agent/ }));
+    await waitFor(() => expect(m.find("POST", "/api/me/jobs/thread")).toHaveLength(1));
+    await waitFor(() => expect(window.location.hash).toContain("/t/jt1"));
   });
 
   it("says so when the server has no job search", async () => {

@@ -12,6 +12,7 @@ import (
 	"github.com/7ar-chat/harness/coding/sandboxtools"
 	"github.com/7ar-chat/harness/config"
 	"github.com/7ar-chat/harness/core/sandbox"
+	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/engine/agent"
 	"github.com/7ar-chat/harness/engine/runtime"
 	"github.com/7ar-chat/harness/engine/tools"
@@ -112,6 +113,7 @@ type Builder struct {
 	checker   agent.Checker
 	deliver   agent.DeliverableSource
 	mutators  []func(*agent.Harness)
+	variants  []func(ctx context.Context, run *store.Run) string
 	endOfRun  []runtime.Hook
 	jobs      []runtime.Job
 	purger    runtime.Purger
@@ -203,6 +205,12 @@ func (b *Builder) SetChecker(c agent.Checker, d agent.DeliverableSource) error {
 // (an escape hatch for what the other methods do not cover). Mutators run in
 // installation order.
 func (b *Builder) Configure(f func(*agent.Harness)) { b.mutators = append(b.mutators, f) }
+
+// RunVariant puts conversations in a mode of their own: f returns the prompt variant (see package prompts) for a run, or ""
+// to leave the model's. The first feature that returns one wins.
+func (b *Builder) RunVariant(f func(ctx context.Context, run *store.Run) string) {
+	b.variants = append(b.variants, f)
+}
 
 // EndOfRun adds a hook run at the end of every run, before Options.Hooks.
 func (b *Builder) EndOfRun(h runtime.Hook) { b.endOfRun = append(b.endOfRun, h) }
@@ -385,6 +393,17 @@ func (b *Builder) applyTo(hs *agent.Harness) {
 	hs.Images, hs.Answers = b.images, b.answers
 	hs.Checker, hs.Deliverables = b.checker, b.deliver
 	hs.BeforeTool = append(hs.BeforeTool, b.before...)
+	if len(b.variants) > 0 {
+		variants := b.variants
+		hs.RunVariant = func(ctx context.Context, run *store.Run) string {
+			for _, f := range variants {
+				if v := f(ctx, run); v != "" {
+					return v
+				}
+			}
+			return ""
+		}
+	}
 	for _, f := range b.mutators {
 		f(hs)
 	}

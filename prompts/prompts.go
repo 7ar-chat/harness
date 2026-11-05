@@ -21,6 +21,8 @@ const (
 	DeepSeek = "deepseek"
 	// Coding is the software-engineering prompt (AGENT_PROFILE=coding).
 	Coding = "coding"
+	// Jobs is the job-application agent, selected per conversation (see jobs.go).
+	Jobs = "jobs"
 )
 
 // Part is an optional section of the prompt that a variant may leave out.
@@ -44,6 +46,7 @@ var registry = map[string]variant{
 	GPT56:    {base: gpt56Base, parts: map[Part]bool{Memory: true, Git: true, Web: true}},
 	DeepSeek: {base: deepseekBase, parts: map[Part]bool{Memory: true, Git: true, Web: true}},
 	Coding:   {base: codingBase, parts: map[Part]bool{Memory: true, Web: true}},
+	Jobs:     {base: jobsBase, parts: map[Part]bool{Memory: true, Web: true}},
 }
 
 // Names lists the variants, sorted.
