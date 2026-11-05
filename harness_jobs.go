@@ -12,6 +12,8 @@ type (
 	JobItem = jobhunt.Job
 	// JobPatch changes a job.
 	JobPatch = jobhunt.Patch
+	// JobQuestion is something the search asked the person, or an answer it learned.
+	JobQuestion = jobhunt.Question
 	// JobScanResult is what a scan found.
 	JobScanResult = jobhunt.ScanResult
 )

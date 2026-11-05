@@ -128,6 +128,20 @@ type updateIn struct {
 	UserApproved bool     `json:"userApproved,omitempty" jsonschema_description:"true only when the person told you in this conversation to apply to this job"`
 }
 
+type answersOut struct {
+	Questions []Question `json:"questions"`
+}
+
+type askIn struct {
+	Question string `json:"question" jsonschema_description:"One clear question, in the person's language"`
+	JobID    string `json:"jobId,omitempty" jsonschema_description:"The job that needs the answer, if any"`
+}
+
+type rememberIn struct {
+	Question string `json:"question" jsonschema_description:"The question as a form or you would ask it (e.g. 'Notice period')"`
+	Answer   string `json:"answer"`
+}
+
 type claimOut struct {
 	Job      Job      `json:"job"`
 	Allowed  bool     `json:"allowed"`
@@ -284,6 +298,39 @@ func (p Provider) Tools(_ context.Context, rc tools.RunContext) ([]ai.BaseTool, 
 				}))
 		},
 	}
+	steps = append(steps,
+		func() error {
+			return add(ai.InferTool("jobs_answers", "Read everything you have learned about the person that no document says (notice period, salary figure, visa details, motivation...) and the questions still open. Read it before filling a form; marks new answers as read.",
+				func(_ context.Context, _ noIn) (answersOut, error) {
+					qs, err := svc.Questions(login)
+					if err != nil {
+						return answersOut{}, fail(err)
+					}
+					_ = svc.MarkSeen(login)
+					return answersOut{Questions: qs}, nil
+				}))
+		},
+		func() error {
+			return add(ai.InferTool("jobs_ask", "Ask the person something you need and cannot find in their documents or earlier answers. If the same question was asked before, you get its answer (or the fact that it is still open). It never blocks you: queue the job that needs the answer (jobs_release, status queued) and go on with the next one; the person answers on the Jobs page or in this conversation and a later round resumes.",
+				func(_ context.Context, in askIn) (Question, error) {
+					q, err := svc.Ask(login, in.Question, in.JobID)
+					if err != nil {
+						return q, fail(err)
+					}
+					return q, nil
+				}))
+		},
+		func() error {
+			return add(ai.InferTool("jobs_remember", "Save an answer the person gave you in the conversation, with the question it answers, so no later form asks again. Save facts and preferences they stated; never your own guesses.",
+				func(_ context.Context, in rememberIn) (Question, error) {
+					q, err := svc.Remember(login, in.Question, in.Answer)
+					if err != nil {
+						return q, fail(err)
+					}
+					return q, nil
+				}))
+		},
+	)
 	for _, f := range steps {
 		if err := f(); err != nil {
 			return nil, nil, err

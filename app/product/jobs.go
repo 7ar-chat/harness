@@ -25,6 +25,8 @@ func (s *server) routeJobs() {
 	s.Route("POST /me/jobs/boards", s.addJobBoard)
 	s.Route("POST /me/jobs/scan", s.scanJobs)
 	s.Route("POST /me/jobs/thread", s.jobThread)
+	s.Route("POST /me/jobs/questions/{id}", s.answerJobQuestion)
+	s.Route("DELETE /me/jobs/questions/{id}", s.forgetJobQuestion)
 	s.Route("PATCH /me/jobs/{id}", s.patchJob)
 }
 
@@ -80,7 +82,15 @@ func (s *server) listJobs(w http.ResponseWriter, r *http.Request, c Caller) {
 	if jobs == nil {
 		jobs = []harness.JobItem{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"profile": p, "counts": counts, "jobs": jobs})
+	qs, err := svc.Questions(c.Actor)
+	if err != nil {
+		jobFail(w, err)
+		return
+	}
+	if qs == nil {
+		qs = []harness.JobQuestion{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"profile": p, "counts": counts, "jobs": jobs, "questions": qs})
 }
 
 func orAll(status string) string {
@@ -172,10 +182,39 @@ func (s *server) jobThread(w http.ResponseWriter, r *http.Request, c Caller) {
 	if !s.hasJobs(w) {
 		return
 	}
-	id, err := s.H.JobThread(r.Context(), c.Actor)
+	id, started, err := s.H.StartJobSearch(r.Context(), c.Actor)
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"threadId": id})
+	writeJSON(w, http.StatusOK, map[string]any{"threadId": id, "started": started})
+}
+
+func (s *server) answerJobQuestion(w http.ResponseWriter, r *http.Request, c Caller) {
+	if !s.hasJobs(w) {
+		return
+	}
+	var body struct {
+		Answer string `json:"answer"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	q, err := s.H.Jobs.Answer(c.Actor, r.PathValue("id"), body.Answer)
+	if err != nil {
+		jobFail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, q)
+}
+
+func (s *server) forgetJobQuestion(w http.ResponseWriter, r *http.Request, c Caller) {
+	if !s.hasJobs(w) {
+		return
+	}
+	if err := s.H.Jobs.Forget(c.Actor, r.PathValue("id")); err != nil {
+		jobFail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

@@ -369,3 +369,52 @@ func TestToolsRefuseToLoosenTheLimitsWithoutTheUsersWord(t *testing.T) {
 		t.Fatalf("%+v %v", got, err)
 	}
 }
+
+func TestAnswersAreAskedOnceKeptAndMarkedFreshUntilRead(t *testing.T) {
+	svc := New(t.TempDir())
+	// Act
+	q, err := svc.Ask("ann", "Notice period?", "j1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, _ := svc.Ask("ann", "  notice PERIOD ", "")
+	open, fresh, _ := svc.AnswerCounts("ann")
+	// Assert: the same words are the same question
+	if again.ID != q.ID || open != 1 || fresh != 0 {
+		t.Fatalf("%+v %d %d", again, open, fresh)
+	}
+	if _, err := svc.Answer("ann", q.ID, "one month"); err != nil {
+		t.Fatal(err)
+	}
+	if open, fresh, _ = svc.AnswerCounts("ann"); open != 0 || fresh != 1 {
+		t.Fatalf("%d %d", open, fresh)
+	}
+	if got, _ := svc.Ask("ann", "Notice period?", ""); got.Answer != "one month" {
+		t.Fatalf("an asked question must return its answer: %+v", got)
+	}
+	if err := svc.MarkSeen("ann"); err != nil {
+		t.Fatal(err)
+	}
+	if _, fresh, _ = svc.AnswerCounts("ann"); fresh != 0 {
+		t.Fatal(fresh)
+	}
+	// what the person said in the chat is saved with its question, and another person sees none of it
+	if _, err := svc.Remember("ann", "Salary floor", "70k EUR"); err != nil {
+		t.Fatal(err)
+	}
+	if qs, _ := svc.Questions("ann"); len(qs) != 2 {
+		t.Fatalf("%+v", qs)
+	}
+	if qs, _ := svc.Questions("bob"); len(qs) != 0 {
+		t.Fatalf("%+v", qs)
+	}
+	if _, err := svc.Answer("ann", "nope", "x"); err == nil {
+		t.Fatal("unknown question")
+	}
+	if err := svc.Forget("ann", q.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Ask("ann", "", ""); err == nil {
+		t.Fatal("empty question")
+	}
+}

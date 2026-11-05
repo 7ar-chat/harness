@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Bot, Check, ExternalLink, Plus, RefreshCw, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { isUnsupported } from "@/api/client";
-import { useAddJobBoard, useJobs, useOpenJobThread, useSaveJobProfile, useScanJobs, useSetJobStatus, type Job, type JobProfile } from "@/api/queries";
+import { useAddJobBoard, useAnswerJobQuestion, useForgetJobQuestion, useJobs, useOpenJobThread, useSaveJobProfile, useScanJobs, useSetJobStatus, type Job, type JobProfile, type JobQuestion } from "@/api/queries";
 import { Empty, ErrorState, ListSkeleton } from "@/components/app/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -206,21 +206,80 @@ function draft(p: JobProfile) {
   };
 }
 
+/** What the agent asked and what it learned. The open ones come first: answering one lets the search go on with the jobs that waited. */
+function QuestionsCard({ questions }: { questions: JobQuestion[] }) {
+  const answer = useAnswerJobQuestion();
+  const forget = useForgetJobQuestion();
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const openQs = questions.filter((x) => !x.answer);
+  const known = questions.filter((x) => x.answer);
+  if (!questions.length) return null;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{openQs.length ? `The agent needs ${openQs.length} answer${openQs.length > 1 ? "s" : ""}` : "What the agent learned about you"}</CardTitle>
+        <CardDescription>Answer once; every later application reuses it. The search keeps going on other jobs while a question waits.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {openQs.map((x) => (
+          <form
+            key={x.id}
+            className="space-y-1"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const a = (draft[x.id] ?? "").trim();
+              if (a) answer.mutate({ id: x.id, answer: a });
+            }}
+          >
+            <Label htmlFor={`q-${x.id}`}>{x.text}</Label>
+            <div className="flex gap-2">
+              <Input id={`q-${x.id}`} value={draft[x.id] ?? ""} onChange={(e) => setDraft({ ...draft, [x.id]: e.target.value })} />
+              <Button type="submit" disabled={answer.isPending || !(draft[x.id] ?? "").trim()}>
+                Save
+              </Button>
+            </div>
+          </form>
+        ))}
+        {known.length > 0 && (
+          <details>
+            <summary className="cursor-pointer text-sm text-muted-foreground">{known.length} saved answer{known.length > 1 ? "s" : ""}</summary>
+            <ul className="mt-2 space-y-1 text-sm">
+              {known.map((x) => (
+                <li key={x.id} className="flex items-start justify-between gap-2">
+                  <span>
+                    <span className="font-medium">{x.text}</span>: {x.answer}
+                  </span>
+                  <Button variant="ghost" size="icon" aria-label={`Forget ${x.text}`} onClick={() => forget.mutate(x.id)}>
+                    <X />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function JobsPage() {
   const q = useJobs();
   const open = useOpenJobThread();
   const navigate = useNavigate();
   const [group, setGroup] = useState("queued");
+  const fresh = !!q.data && !(q.data.profile.titles ?? []).length;
   const shell = (children: React.ReactNode) => (
     <ScrollArea className="h-full">
       <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-8">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
             <h1 className="text-xl font-semibold">Jobs</h1>
-            <p className="text-sm text-muted-foreground">Your job-search agent looks for roles that fit you and applies for you. You decide how much freedom it has.</p>
+            <p className="text-sm text-muted-foreground">
+              Your job-search agent reads your CV, finds companies and roles by itself, applies, and asks you only what it cannot know. You decide how much freedom it has.
+            </p>
           </div>
           <Button variant="outline" disabled={open.isPending} onClick={() => open.mutate(undefined, { onSuccess: (r) => void navigate({ to: "/t/$threadId", params: { threadId: r.threadId } }) })}>
-            <Bot /> Talk to the job agent
+            <Bot /> {fresh ? "Set up from my CV" : "Talk to the job agent"}
           </Button>
         </header>
         {children}
@@ -230,12 +289,18 @@ export function JobsPage() {
   if (q.error && isUnsupported(q.error)) return shell(<p className="text-sm text-muted-foreground">This server has no job search.</p>);
   if (q.error) return shell(<ErrorState error={q.error} />);
   if (!q.data) return shell(<ListSkeleton />);
-  const { profile, counts, jobs } = q.data;
+  const { profile, counts, jobs, questions } = q.data;
   const g = GROUPS.find((x) => x.key === group) ?? GROUPS[0]!;
   const shown = jobs.filter((j) => g.statuses.includes(j.status));
   return shell(
     <>
-      <ProfileCard profile={profile} />
+      <QuestionsCard questions={questions ?? []} />
+      <details className="rounded-lg border p-3">
+        <summary className="cursor-pointer text-sm font-medium">What the agent learned about your search (edit)</summary>
+        <div className="mt-3">
+          <ProfileCard profile={profile} />
+        </div>
+      </details>
       <Tabs value={group} onValueChange={setGroup}>
         <TabsList>
           {GROUPS.map((x) => (

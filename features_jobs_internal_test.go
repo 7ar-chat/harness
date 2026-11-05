@@ -95,6 +95,9 @@ func TestTheJobWorkerLeavesAlonePeopleWhoDidNotTurnItOnAndRoundsWithNothingToDo(
 		Companies: []jobhunt.Company{{Name: "Acme", ATS: jobhunt.Greenhouse, Slug: "acme"}}}); err != nil {
 		t.Fatal(err)
 	}
+	if err := w.svc.SetRunState("cy", jobhunt.RunState{Discovered: w.now()}); err != nil { // discovered today: nothing is due
+		t.Fatal(err)
+	}
 	if err := w.run(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -118,5 +121,46 @@ func TestTheJobSectionCarriesTheStateInJobModeAndPointsThereElsewhere(t *testing
 	}
 	if s := jobSection(svc, "ann", false); !strings.Contains(s, "Jobs page") || strings.Contains(s, "go dev") {
 		t.Fatal(s)
+	}
+}
+
+func TestTheJobWorkerAsksForDiscoveryOncePerDayAndWakesOnAFreshAnswer(t *testing.T) {
+	w, ctx := jobsWorker(t, 1)
+	if _, err := w.svc.SetProfile("dee", jobhunt.Profile{Enabled: true, Titles: []string{"plumber"}}); err != nil {
+		t.Fatal(err)
+	}
+	// Act: no boards, nothing to judge, never discovered: the agent is woken to look for boards by itself
+	if err := w.one(ctx, "dee"); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := w.svc.RunState("dee")
+	if st.Runs != 1 || st.Discovered.IsZero() {
+		t.Fatalf("%+v", st)
+	}
+	// the same day, nothing new: quiet
+	for end := time.Now().Add(10 * time.Second); time.Now().Before(end); time.Sleep(20 * time.Millisecond) {
+		if th, _ := w.h.Store.GetThread(ctx, "dee", st.ThreadID); th != nil && th.ActiveRun == nil {
+			break
+		}
+	}
+	if err := w.one(ctx, "dee"); err != nil {
+		t.Fatal(err)
+	}
+	if st2, _ := w.svc.RunState("dee"); st2.Runs != 1 {
+		t.Fatalf("%+v", st2)
+	}
+	// the person answers a question: that is work
+	q, err := w.svc.Ask("dee", "Notice period?", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.svc.Answer("dee", q.ID, "one month"); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.one(ctx, "dee"); err != nil {
+		t.Fatal(err)
+	}
+	if st3, _ := w.svc.RunState("dee"); st3.Runs != 2 {
+		t.Fatalf("%+v", st3)
 	}
 }

@@ -335,17 +335,29 @@ export interface Job {
   seen: string;
   appliedAt?: string;
 }
+/** Something the job agent asked the person (no answer yet), or an answer it learned and keeps for later forms. */
+export interface JobQuestion {
+  id: string;
+  text: string;
+  answer?: string;
+  jobId?: string;
+  asked: string;
+  answered?: string;
+}
 export interface JobsOverview {
   profile: JobProfile;
   counts: Record<string, number>;
   jobs: Job[];
+  questions: JobQuestion[];
 }
 const jobsKey = ["jobs"] as const;
 export const useJobs = () => useQuery({ queryKey: jobsKey, queryFn: () => api.get<JobsOverview>("/me/jobs"), retry: false, refetchInterval: 30000 });
 export const useSaveJobProfile = () => useAction((p: JobProfile) => api.put<JobProfile>("/me/jobs/profile", p), () => [jobsKey], "Saved");
 export const useAddJobBoard = () => useAction((url: string) => api.post<{ openJobs: number }>("/me/jobs/boards", { url }), () => [jobsKey], "Board added");
 export const useScanJobs = () => useAction(() => api.post<{ added: number; boards: number; errors?: string[] }>("/me/jobs/scan"), () => [jobsKey]);
-export const useOpenJobThread = () => useAction(() => api.post<{ threadId: string }>("/me/jobs/thread"), () => []);
+export const useOpenJobThread = () => useAction(() => api.post<{ threadId: string; started: boolean }>("/me/jobs/thread"), () => [jobsKey]);
+export const useAnswerJobQuestion = () => useAction((v: { id: string; answer: string }) => api.post<JobQuestion>(`/me/jobs/questions/${v.id}`, { answer: v.answer }), () => [jobsKey], "Saved");
+export const useForgetJobQuestion = () => useAction((id: string) => api.del(`/me/jobs/questions/${id}`), () => [jobsKey]);
 export const useSetJobStatus = () => useAction((v: { id: string; status: string }) => api.patch<Job>(`/me/jobs/${v.id}`, { status: v.status }), () => [jobsKey]);
 export const useDisconnect = (kind: "github" | "telegram" | "slack") => useAction(() => api.del(`/connectors/${kind}`), () => [["connectors"]], "Disconnected");
 export const useTelegramLink = () => useAction(() => api.post<{ code: string; url: string; expiresAt: string }>("/connectors/telegram/link"), () => [["connectors"]]);

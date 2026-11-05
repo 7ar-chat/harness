@@ -1,6 +1,9 @@
 package jobhunt
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"time"
+)
 
 // RunState remembers the user's job-search conversation (one for good: the mode lives in it) and how many rounds the
 // host started in it today.
@@ -9,6 +12,9 @@ type RunState struct {
 	ThreadID string `json:"threadId"`
 	Day      string `json:"day"`
 	Runs     int    `json:"runs"`
+	// Discovered is when the agent was last asked to look for new boards and roles; it is asked again each day, so the
+	// search does not depend on a list somebody typed once.
+	Discovered time.Time `json:"discovered,omitzero"`
 }
 
 // RunState returns the user's autonomous-search state.

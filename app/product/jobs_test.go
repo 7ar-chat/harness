@@ -100,3 +100,28 @@ func TestJobSearchHasOneConversationPerUser(t *testing.T) {
 		t.Fatalf("alice %v then %v, bob %v", a, again, b)
 	}
 }
+
+func TestJobSearchQuestionsAreAnsweredByThePersonAndPrivate(t *testing.T) {
+	r := jobsRig(t)
+	q, err := r.h.Jobs.Ask("alice", "Notice period?", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := body(t, r.do("GET", "/api/me/jobs", "alice", ""))["questions"].([]any)
+	if len(list) != 1 {
+		t.Fatalf("%v", list)
+	}
+	if got := r.do("POST", "/api/me/jobs/questions/"+q.ID, "bob", `{"answer":"x"}`).StatusCode; got != 404 {
+		t.Fatalf("another person must not answer: %d", got)
+	}
+	if got := r.do("POST", "/api/me/jobs/questions/"+q.ID, "alice", `{"answer":""}`).StatusCode; got != 400 {
+		t.Fatalf("empty answer: %d", got)
+	}
+	out := body(t, r.do("POST", "/api/me/jobs/questions/"+q.ID, "alice", `{"answer":"one month"}`))
+	if out["answer"] != "one month" {
+		t.Fatalf("%v", out)
+	}
+	if got := r.do("DELETE", "/api/me/jobs/questions/"+q.ID, "alice", "").StatusCode; got != 204 {
+		t.Fatal(got)
+	}
+}

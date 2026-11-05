@@ -41,6 +41,22 @@ describe("JobsPage", () => {
     await waitFor(() => expect(window.location.hash).toContain("/t/jt1"));
   });
 
+  it("shows what the agent asks and saves the answer", async () => {
+    const q = { id: "q1", text: "Notice period?", asked: "2026-11-05T10:00:00Z" };
+    const m = mockFetch({ ...shellRoutes(), "GET /api/me/jobs": { ...overview([], {}), questions: [q] }, "POST /api/me/jobs/questions/q1": { ...q, answer: "one month" } });
+    await renderApp("/jobs");
+    fireEvent.change(await page().findByLabelText("Notice period?"), { target: { value: "one month" } });
+    fireEvent.submit(page().getByLabelText("Notice period?").closest("form")!);
+    await waitFor(() => expect(m.find("POST", "/api/me/jobs/questions/q1")).toHaveLength(1));
+    expect(m.find("POST", "/api/me/jobs/questions/q1")[0]?.body).toEqual({ answer: "one month" });
+  });
+
+  it("offers to set the search up from the CV when there is no profile yet", async () => {
+    mockFetch({ ...shellRoutes(), "GET /api/me/jobs": { ...overview([], {}), profile: { ...profile, titles: [], companies: [] } } });
+    await renderApp("/jobs");
+    expect(await page().findByRole("button", { name: /Set up from my CV/ })).toBeTruthy();
+  });
+
   it("says so when the server has no job search", async () => {
     mockFetch({ ...shellRoutes(), "GET /api/me/jobs": reply(404, { error: { code: "not_found", message: "no" } }) });
     await renderApp("/jobs");

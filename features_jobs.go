@@ -19,6 +19,9 @@ import (
 // maxJobRunsPerDay bounds how often the search wakes the agent for one user.
 const maxJobRunsPerDay = 12
 
+// discoverEvery is how often a scheduled round includes looking for new boards.
+const discoverEvery = 24 * time.Hour
+
 // JobThreadTitle is the title of a user's job-search conversation.
 const JobThreadTitle = "Job search"
 
@@ -110,7 +113,7 @@ func jobSection(svc *jobhunt.Service, login string, inJobs bool) string {
 	}
 	p, err := svc.Profile(login)
 	if err != nil || (len(p.Titles) == 0 && len(p.Companies) == 0 && !p.Enabled) {
-		return "<job_search>\nThe person has not set up their search yet: start by asking for what jobs_profile lacks.\n</job_search>"
+		return "<job_search>\nThe person has not set up their search yet: build the profile yourself from their CV and website (first-time routine), ask only for what you cannot find.\n</job_search>"
 	}
 	counts, _ := svc.Counts(login)
 	var b strings.Builder
@@ -164,15 +167,22 @@ func (w *jobWorker) one(ctx context.Context, login string) error {
 	if err != nil {
 		return err
 	}
-	todo := counts[jobhunt.StatusNew] + counts[jobhunt.StatusApproved]
-	if todo == 0 {
-		return nil
-	}
-	threadID, err := w.h.JobThread(ctx, login)
+	_, fresh, err := w.svc.AnswerCounts(login)
 	if err != nil {
 		return err
 	}
 	st, err := w.svc.RunState(login)
+	if err != nil {
+		return err
+	}
+	now := w.now()
+	// Discovery is the agent's job, not a list the person types: it looks for boards and roles from the profile every day.
+	discover := st.Discovered.IsZero() || now.Sub(st.Discovered) >= discoverEvery
+	todo := counts[jobhunt.StatusNew] + counts[jobhunt.StatusApproved] + fresh
+	if todo == 0 && !discover {
+		return nil
+	}
+	threadID, err := w.h.JobThread(ctx, login)
 	if err != nil {
 		return err
 	}
@@ -185,9 +195,13 @@ func (w *jobWorker) one(ctx context.Context, login string) error {
 		return nil
 	}
 	msg := fmt.Sprintf("Scheduled round (nobody is watching right now; the person reads the result later). "+
-		"There are %d new jobs to judge and %d approved ones to apply to. Do a round as described: read jobs_profile, judge the new jobs, "+
-		"apply only to approved ones through jobs_claim, and finish with a short summary of what you did and what needs the person.",
-		counts[jobhunt.StatusNew], counts[jobhunt.StatusApproved])
+		"There are %d new jobs to judge, %d approved ones to apply to and %d new answers from the person. Do a round as described: read jobs_profile and jobs_answers, "+
+		"judge the new jobs, apply only to approved ones through jobs_claim, resume the queued jobs whose question is now answered, and finish with a short summary of what you did and what needs the person.",
+		counts[jobhunt.StatusNew], counts[jobhunt.StatusApproved], fresh)
+	if discover {
+		msg += " This round includes discovery: look for companies and boards that fit the profile and add them (jobs_track_company); do not ask the person for a list."
+		st.Discovered = now
+	}
 	if _, err := w.h.Send(ctx, login, st.ThreadID, msg, RunOptions{Model: w.model}); err != nil {
 		if errors.Is(err, store.ErrRunActive) { // the last round is still working: the next one will see its results
 			return nil
@@ -196,4 +210,25 @@ func (w *jobWorker) one(ctx context.Context, login string) error {
 	}
 	st.Runs++
 	return w.svc.SetRunState(login, st)
+}
+
+// StartJobSearch opens the user's job-search conversation and, when the search has no profile yet, starts the first-time
+// routine in it: the agent reads the CV and website, builds the profile and asks only what it cannot find. It reports
+// whether a run was started. A run already working in the conversation is left alone.
+func (h *Harness) StartJobSearch(ctx context.Context, login string) (threadID string, started bool, err error) {
+	if threadID, err = h.JobThread(ctx, login); err != nil {
+		return "", false, err
+	}
+	p, err := h.Jobs.Profile(login)
+	if err != nil || len(p.Titles) > 0 {
+		return threadID, false, err
+	}
+	msg := "Set up my job search. Read my CV and website from my documents (if there is no CV, ask me for one or a link and nothing else), " +
+		"build my profile from them, then ask me once, in one short message, only what you cannot find: where I can work and visa needs, a salary floor, " +
+		"companies to avoid, and whether you prepare applications for my approval or send them yourself. Then find companies and roles yourself; I will not give you a list."
+	_, err = h.Send(ctx, login, threadID, msg, RunOptions{Model: h.cfg.LLMDefaultModel})
+	if errors.Is(err, store.ErrRunActive) {
+		return threadID, false, nil
+	}
+	return threadID, err == nil, err
 }
