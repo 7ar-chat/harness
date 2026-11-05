@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { AdminPage } from "@/pages/Admin";
 import { Dashboard } from "@/pages/Dashboard";
 import { MemoryPage } from "@/pages/Memory";
-import { CapabilitiesPage, ConnectorsPage, ProfilePage, profileSections, ReferencesPage, type ProfileSection } from "@/pages/Profile";
+import { CapabilitiesPage, ConnectorsPage, ProfilePage, ReferencesPage } from "@/pages/Profile";
 import { ProjectPage } from "@/pages/ProjectPage";
 import { SessionPage, SupervisorPage } from "@/pages/SessionPage";
 import { FeedProvider } from "@/lib/feed";
@@ -91,7 +91,6 @@ const routeTree = root.addChildren([
     getParentRoute: () => root,
     path: "/profile",
     component: ProfilePage,
-    validateSearch: (s: Record<string, unknown>): { tab?: ProfileSection } => ({ tab: profileSections.find((t) => t === s.tab) }),
   }),
   createRoute({ getParentRoute: () => root, path: "/references", component: ReferencesPage }),
   createRoute({ getParentRoute: () => root, path: "/connectors", component: ConnectorsPage }),

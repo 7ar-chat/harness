@@ -1,7 +1,7 @@
 import { Logo } from "@/components/app/Logo";
 import { identifyUser } from "@/lib/telemetry";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "@tanstack/react-router";
-import { Bot, Brain, ChevronRight, ChevronsUpDown, FileText, LayoutDashboard, Link2, Plug, LogOut, Monitor, Moon, Plus, Search, SlidersHorizontal, Sun, Trash2, UserCog, Users, WifiOff } from "lucide-react";
+import { Bot, Brain, ChevronRight, ChevronsUpDown, FileText, LayoutDashboard, Link2, Plug, LogOut, Monitor, Moon, Plus, Search, Sun, Trash2, UserCog, Users, WifiOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getDevUser, setDevUser } from "@/api/client";
 import { supervisorQuery, useAdminUsers, useDeleteThread, useMe, useMemoryStats, useOverview, useSeen } from "@/api/queries";
@@ -144,13 +144,8 @@ function UserMenu() {
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link to="/profile" search={{ tab: "profile" }}>
-            <UserCog /> Profile
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/profile" search={{ tab: "preferences" }}>
-            <SlidersHorizontal /> Preferences
+          <Link to="/profile">
+            <UserCog /> Settings
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
