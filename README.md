@@ -5,6 +5,7 @@
 [![ci](https://github.com/7ar-chat/harness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/7ar-chat/harness/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/7ar-chat/harness.svg)](https://pkg.go.dev/github.com/7ar-chat/harness)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://app.codspeed.io/7ar-chat/harness?utm_source=badge)
 
 An open, embeddable agent harness written in Go: a ReAct loop whose tools run in a **sandbox** (a local directory or a remote
 [OpenSandbox](https://github.com/alibaba/OpenSandbox) container), streaming

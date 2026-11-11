@@ -1,0 +1,35 @@
+name: codspeed
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  # lets CodSpeed trigger a backtest run to build the initial performance history
+  workflow_dispatch:
+
+concurrency:
+  group: codspeed-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write # OpenID Connect authentication with CodSpeed
+
+jobs:
+  benchmarks:
+    name: Run benchmarks
+    runs-on: codspeed-macro
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # the Go benchmarks of the root module (store journal, history rebuild, long sessions) and of the ai module
+      # (token estimation, compaction, stream concatenation), through the go.work workspace
+      - name: Run the benchmarks
+        uses: CodSpeedHQ/action@v5
+        with:
+          mode: walltime
+          run: go test -run='^$' -bench=. ./adapters/store/filestore ./engine/agent ./longtest ./ai/...
