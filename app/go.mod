@@ -16,6 +16,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/redis/go-redis/v9 v9.23.0
+	golang.org/x/crypto v0.55.0
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/sys v0.48.0
 )

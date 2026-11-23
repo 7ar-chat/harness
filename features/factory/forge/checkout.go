@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/7ar-chat/harness/core/factory"
+	"github.com/7ar-chat/harness/core/githost"
 	"github.com/7ar-chat/harness/core/sandbox"
 	"github.com/7ar-chat/harness/engine/agent"
 )
@@ -37,6 +38,34 @@ func validRef(s string) bool {
 // .git/hooks never runs with the token in its environment.
 const gitWithToken = `git -c credential.helper= -c 'credential.helper=!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f' -c core.hooksPath=/dev/null`
 
+// gitWithUserToken is gitWithToken for the other code hosts, whose HTTPS user name is not fixed (GIT_USER).
+const gitWithUserToken = `git -c credential.helper= -c 'credential.helper=!f() { echo username="$GIT_USER"; echo "password=$GH_TOKEN"; }; f' -c core.hooksPath=/dev/null`
+
+// gitxPrelude defines gitx, which runs git with the one credential the command was given: a token (GH_TOKEN, with
+// GIT_USER as the user name) through gitWithToken, or an SSH key (GIT_SSH_KEY with the host's GIT_KNOWN_HOSTS) written
+// to a private temporary directory that is removed when git ends. The secrets are taken out of the environment at
+// once, so only gitx commands ever see them. ssh ignores the user's ssh config and refuses a host key that is not in
+// the registered list.
+const gitxPrelude = `export GIT_TERMINAL_PROMPT=0
+TOK="${GH_TOKEN:-}"
+SSHKEY="${GIT_SSH_KEY:-}"
+unset GH_TOKEN GIT_SSH_KEY
+gitx() {
+  if [ -n "$SSHKEY" ]; then
+    kd=$(mktemp -d)
+    ( umask 077; printf '%s\n' "$SSHKEY" > "$kd/key"; printf '%s\n' "${GIT_KNOWN_HOSTS:-}" > "$kd/known_hosts" )
+    rc=0
+    GIT_SSH_COMMAND="ssh -F /dev/null -i $kd/key -o IdentitiesOnly=yes -o UserKnownHostsFile=$kd/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=20" git -c core.hooksPath=/dev/null "$@" || rc=$?
+    rm -rf "$kd"
+    return $rc
+  elif [ -n "$TOK" ]; then
+    GH_TOKEN="$TOK" ` + gitWithUserToken + ` "$@"
+  else
+    git "$@"
+  fi
+}
+`
+
 // Checkout clones the repository of a factory task into the sandbox of its
 // thread, on the task's branch, and pushes that branch on the host's behalf.
 //
@@ -51,7 +80,48 @@ type Checkout struct {
 	// Session names the repository and branches of a chat session that is no task (its checkout was made by the
 	// host); Push uses it for such a thread. Nil: only task threads push.
 	Session func(ctx context.Context, threadID string) *factory.ThreadInfo
+	// Hosts serves the repositories of other code hosts ("host/path" ids): the registered hosts and the
+	// credential of the thread's user. Nil: only GitHub.com repositories are checked out.
+	Hosts githost.Resolver
 }
+
+type repoAccess = githost.Access
+
+// access resolves the URL and the credential of repo for login.
+func (c *Checkout) access(ctx context.Context, repo, login string) (repoAccess, error) {
+	host, _, ok := githost.SplitRepo(repo)
+	if !ok {
+		return repoAccess{}, fmt.Errorf("invalid repository %q", repo)
+	}
+	if host == "" {
+		a := repoAccess{URL: repoURL(repo), Env: map[string]string{}}
+		if t := c.token(ctx, repo); t != "" {
+			a.Env["GH_TOKEN"] = t
+			a.Secrets = []string{t}
+		}
+		return a, nil
+	}
+	return githost.HostAccess(ctx, c.Hosts, repo, login)
+}
+
+// checkRepoAny accepts a GitHub "owner/name" or a "host/group/project" id of another host.
+func checkRepoAny(repo string) error {
+	host, path, ok := githost.SplitRepo(repo)
+	if !ok {
+		return fmt.Errorf("invalid repository %q (want owner/name or host/path)", repo)
+	}
+	if host == "" {
+		return checkRepo(repo)
+	}
+	for _, seg := range strings.Split(path, "/") {
+		if !reSeg.MatchString(seg) || seg == "." || seg == ".." || strings.Contains(seg, "..") {
+			return fmt.Errorf("invalid repository %q", repo)
+		}
+	}
+	return nil
+}
+
+var reSeg = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
 func (c *Checkout) dir() string {
 	if c.Dir != "" {
@@ -122,7 +192,12 @@ gitx() {
     git "$@"
   fi
 }
-if [ -e "$REPO_DIR/.git" ] && [ ! -d "$REPO_DIR/.git" ]; then
+` + setupBody
+
+// hostSetupScript is setupScript for the other code hosts: gitx also speaks SSH and names the HTTPS user.
+const hostSetupScript = "set -e\n" + gitxPrelude + setupBody
+
+const setupBody = `if [ -e "$REPO_DIR/.git" ] && [ ! -d "$REPO_DIR/.git" ]; then
   echo "$REPO_DIR/.git is not a directory: the checkout is a linked worktree of another repository"
   exit 3
 fi
@@ -147,6 +222,13 @@ else
 fi
 `
 
+func setupScriptFor(repo string) string {
+	if githost.IsQualified(repo) {
+		return hostSetupScript
+	}
+	return setupScript
+}
+
 // Setup checks the thread's repository out into sb and returns a notice for
 // the model. It does nothing (and returns "") for a thread that is not for a
 // repository. On the branch of a retried task the earlier attempts' commits
@@ -157,7 +239,7 @@ func (c *Checkout) Setup(ctx context.Context, threadID string, sb sandbox.Sandbo
 		return ""
 	}
 	dir := c.dir()
-	if err := checkRepo(ti.Repo); err != nil {
+	if err := checkRepoAny(ti.Repo); err != nil {
 		return "Repository not checked out: " + err.Error()
 	}
 	if ti.Branch == "" || !validRef(ti.Branch) {
@@ -169,20 +251,24 @@ func (c *Checkout) Setup(ctx context.Context, threadID string, sb sandbox.Sandbo
 	if ti.Branch == ti.BaseBranch {
 		return "Repository not checked out: the task's branch is its base branch, which an agent must not push to."
 	}
+	acc, err := c.access(ctx, ti.Repo, ti.Login)
+	if err != nil {
+		return "Repository not checked out: " + Redact(err.Error())
+	}
 	env := withIsolatedConfig(map[string]string{
-		"REPO_URL":      repoURL(ti.Repo),
-		"EXPECT_URL":    repoURL(ti.Repo),
+		"REPO_URL":      acc.URL,
+		"EXPECT_URL":    acc.URL,
 		"REPO_DIR":      dir,
 		"BASE_BRANCH":   ti.BaseBranch,
 		"THREAD_BRANCH": ti.Branch,
 	})
-	token := c.token(ctx, ti.Repo)
-	if token != "" {
-		env["GH_TOKEN"] = token
+	for k, v := range acc.Env {
+		env[k] = v
 	}
+	token := firstSecret(acc.Secrets)
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	out, res, err := execOut(cctx, sb, sandbox.ExecRequest{Command: setupScript, Env: env, Timeout: 5 * time.Minute})
+	out, res, err := execOut(cctx, sb, sandbox.ExecRequest{Command: setupScriptFor(ti.Repo), Env: env, Timeout: 5 * time.Minute})
 	if err != nil || res.ExitCode != 0 {
 		slog.Warn("forge checkout: clone failed", "thread_id", threadID, "exit", res.ExitCode, "error", Redact(fmt.Sprint(err), token))
 		msg := strings.TrimSpace(Redact(out, token))
@@ -260,7 +346,7 @@ func (c *Checkout) Push(ctx context.Context, threadID string, sb sandbox.Sandbox
 	if ti == nil {
 		return PushResult{}, errors.New("this thread has no repository to push")
 	}
-	if err := checkRepo(ti.Repo); err != nil {
+	if err := checkRepoAny(ti.Repo); err != nil {
 		return PushResult{}, err
 	}
 	branch, base := ti.Branch, ti.BaseBranch
@@ -276,8 +362,15 @@ func (c *Checkout) Push(ctx context.Context, threadID string, sb sandbox.Sandbox
 	case isProtected(branch, protected):
 		return PushResult{}, fmt.Errorf("refusing to push the protected branch %s: switch to your own branch", branch)
 	}
-	token := c.token(ctx, ti.Repo)
+	acc, err := c.access(ctx, ti.Repo, ti.Login)
+	if err != nil {
+		return PushResult{}, errors.New(Redact(err.Error()))
+	}
+	token := firstSecret(acc.Secrets)
 	if token == "" {
+		if githost.IsQualified(ti.Repo) {
+			return PushResult{}, fmt.Errorf("no access token or SSH key for %s to push with: add one in Profile, Git access", strings.SplitN(ti.Repo, "/", 2)[0])
+		}
 		return PushResult{}, errors.New("no repository token is available to push with")
 	}
 	dir := c.dir()
@@ -308,13 +401,12 @@ func (c *Checkout) Push(ctx context.Context, threadID string, sb sandbox.Sandbox
 	// factory's own task branch: after a conflict the agent rebases, and the
 	// rebased history must be pushable. The lease still refuses to overwrite a
 	// commit this checkout has not seen.
-	cmd := "set -e\ncd \"$REPO_DIR\"\n" + guardScript + gitWithToken + " -C " + shellQuote(dir) +
+	cmd := "set -e\ncd \"$REPO_DIR\"\n" + guardScript + pushPrelude(ti.Repo) + "gitx -C " + shellQuote(dir) +
 		" push --force-with-lease origin HEAD:refs/heads/" + branch
 	pctx, pcancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer pcancel()
 	out, res, err = execOut(pctx, sb, sandbox.ExecRequest{Command: cmd, Timeout: 5 * time.Minute,
-		Env: withIsolatedConfig(map[string]string{"GH_TOKEN": token, "GIT_TERMINAL_PROMPT": "0",
-			"REPO_DIR": dir, "EXPECT_URL": repoURL(ti.Repo)})})
+		Env: withIsolatedConfig(pushEnv(acc, dir))})
 	if err != nil {
 		return PushResult{}, fmt.Errorf("git push: %s", Redact(err.Error(), token))
 	}
@@ -322,6 +414,31 @@ func (c *Checkout) Push(ctx context.Context, threadID string, sb sandbox.Sandbox
 		return PushResult{}, errors.New(pushError("git push failed (exit "+strconv.Itoa(res.ExitCode)+")", out, token))
 	}
 	return PushResult{Branch: branch, Ahead: ahead, Dirty: dirty}, nil
+}
+
+// pushPrelude defines gitx for the publishing command: GitHub's own helper, or the multi-host one.
+func pushPrelude(repo string) string {
+	if githost.IsQualified(repo) {
+		return gitxPrelude
+	}
+	return `export GIT_TERMINAL_PROMPT=0
+gitx() { ` + gitWithToken + ` "$@"; }
+`
+}
+
+func pushEnv(acc repoAccess, dir string) map[string]string {
+	env := map[string]string{"GIT_TERMINAL_PROMPT": "0", "REPO_DIR": dir, "EXPECT_URL": acc.URL}
+	for k, v := range acc.Env {
+		env[k] = v
+	}
+	return env
+}
+
+func firstSecret(s []string) string {
+	if len(s) == 0 {
+		return ""
+	}
+	return s[0]
 }
 
 // withIsolatedConfig keeps the user-level and system git config out of the

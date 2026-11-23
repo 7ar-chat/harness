@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/7ar-chat/harness/core/factory"
+	"github.com/7ar-chat/harness/core/githost"
 	"github.com/7ar-chat/harness/core/sandbox"
 	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/engine/agent"
@@ -44,6 +45,10 @@ type FactoryOptions struct {
 	Forge factory.Forge
 	// Auth mints repository tokens for cloning and pushing and for the forge client (required with Forge).
 	Auth factory.RepoAuth
+	// Hosts serves repositories of code hosts other than GitHub.com ("host/path" ids: GitLab, Gitea, plain git):
+	// the registered hosts and the credential of a user. Forge routes by repository (forge.Multi); the checkout
+	// uses Hosts to clone and push with the thread's user's token or SSH key. Nil: GitHub.com only.
+	Hosts githost.Resolver
 	// ReviewModel is the model of the reviewer that gates every merge. Set, it
 	// must differ from the model that wrote the change (the gate refuses to approve
 	// its own author's work). Empty, the default model reviews: weaker, because a
@@ -467,7 +472,7 @@ func FactoryFeature(o FactoryOptions) Feature {
 				MergeMethod: o.MergeMethod, AllowNoChecks: o.AllowNoChecks, Every: o.LoopEvery, Settle: o.Settle,
 			})
 			onEvent = f.Loop.OnEvent
-			checkout := &forge.Checkout{Auth: o.Auth, Store: o.Store}
+			checkout := &forge.Checkout{Auth: o.Auth, Store: o.Store, Hosts: o.Hosts}
 			if o.AdoptSession != nil {
 				checkout.Session = func(ctx context.Context, threadID string) *factory.ThreadInfo {
 					ad, err := o.AdoptSession(ctx, threadID)

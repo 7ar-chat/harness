@@ -503,3 +503,45 @@ export const useRequirementSettings = (pid: string, enabled = true) =>
   useQuery({ queryKey: [...reqKey(pid), "settings"], queryFn: () => api.get<RequirementSettings>(`/projects/${pid}/requirements/settings`), enabled, retry: false });
 export const usePutRequirementSettings = (pid: string) =>
   useAction((s: Omit<RequirementSettings, "projectId">) => api.put<RequirementSettings>(`/projects/${pid}/requirements/settings`, s), () => [reqKey(pid)], "Saved");
+
+// ---- code hosts besides GitHub (GitLab, Gitea, plain git) ----
+
+const hostsKey = ["git-hosts"] as const;
+/** The registered hosts with the caller's own credentials; null when this server has the feature off. */
+export const useGitHosts = () =>
+  useQuery({
+    queryKey: hostsKey,
+    queryFn: async () => {
+      try {
+        const l = await api.get<import("./generated").GitHostList>("/git-hosts");
+        return l.enabled ? l : null;
+      } catch (e) {
+        if (isUnsupported(e)) return null;
+        throw e;
+      }
+    },
+    retry: false,
+  });
+export interface GitHostInput {
+  name: string;
+  kind: string;
+  baseUrl?: string;
+  sshHost?: string;
+  sshPort?: number;
+  knownHosts?: string[];
+  serviceToken?: string;
+  serviceUsername?: string;
+  clearServiceToken?: boolean;
+}
+export const useSaveGitHost = () => useAction((h: GitHostInput) => api.post<import("./generated").GitHost>("/admin/git-hosts", h), () => [hostsKey], "Git host saved");
+export const useDeleteGitHost = () => useAction((name: string) => api.del(`/admin/git-hosts/${encodeURIComponent(name)}`), () => [hostsKey], "Git host removed");
+export const useScanGitHostKeys = () => useMutation({ mutationFn: (name: string) => api.post<{ knownHosts: string[] }>(`/admin/git-hosts/${encodeURIComponent(name)}/scan-keys`), onError: toastError });
+export const useSetGitToken = () =>
+  useAction((v: { host: string; token: string; username?: string }) => api.put(`/me/git-hosts/${encodeURIComponent(v.host)}/token`, { token: v.token, username: v.username }), () => [hostsKey], "Token saved");
+export const useDeleteGitToken = () => useAction((host: string) => api.del(`/me/git-hosts/${encodeURIComponent(host)}/token`), () => [hostsKey], "Token removed");
+export const useMakeGitSSHKey = () =>
+  useAction((host: string) => api.post<{ publicKey: string; fingerprint: string }>(`/me/git-hosts/${encodeURIComponent(host)}/ssh-key`), () => [hostsKey], "SSH key created");
+export const useDeleteGitSSHKey = () => useAction((host: string) => api.del(`/me/git-hosts/${encodeURIComponent(host)}/ssh-key`), () => [hostsKey], "SSH key removed");
+/** Imports the open issues of the project's repository, whichever host it is on (GitHub, GitLab, Gitea). */
+export const useImportIssues = (pid: string) =>
+  useAction((label: string) => api.post<RequirementImport>(`/projects/${pid}/requirements/import/issues`, label ? { label } : {}), () => [reqKey(pid)]);

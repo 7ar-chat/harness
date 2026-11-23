@@ -66,6 +66,9 @@ LLM_MODELS=claude-sonnet-5-5 LLM_DEFAULT_MODEL=claude-sonnet-5-5 harness
 
 **Web.** `harness-web -local` serves the same agent with a browser UI at `http://127.0.0.1:8080/`.
 
+**The whole team app, one command.** `./start.sh` runs Postgres, Redis, a sign-in and harness-web in Docker with secrets of its
+own and an admin account: see [docs/quickstart.md](docs/quickstart.md).
+
 **Embedded in Go.**
 
 ```go

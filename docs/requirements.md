@@ -23,6 +23,7 @@ PATCH  /api/projects/{pid}/requirements/{rid}                 member
 DELETE /api/projects/{pid}/requirements/{rid}                 owner
 POST   /api/projects/{pid}/requirements/{rid}/dispatch        member  {policy?, budget?}
 POST   /api/projects/{pid}/requirements/import/github         member  {label?}: open issues, deduped by issue number
+POST   /api/projects/{pid}/requirements/import/issues         member  {label?}: the same from the repository's own host: GitHub, or a registered GitLab / Gitea (the caller's token); source kinds github_issue, gitlab_issue, gitea_issue
 GET|PUT /api/projects/{pid}/requirements/settings             PUT: owner  {autoDispatch, policy?, budget?}
 POST   /api/threads/{id}/requirement                          {requirementId}: links the conversation
 ```

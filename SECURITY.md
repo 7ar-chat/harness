@@ -15,9 +15,13 @@ The harness runs an agent that executes commands and calls tools on behalf of us
 - **The sandbox**: anything that lets agent-run code reach the host, another user's sandbox or an internal service.
 - **Server-side request forgery**: the guarded transport for user-supplied MCP servers (`features/mcp`, `SafeTransport`) and any other
   place the server fetches a URL a user chose.
-- **Secrets**: stored connector tokens and marketplace keys (sealed with `HARNESS_SECRET_KEY`), GitHub App tokens, anything returned
-  by an API that should not be.
-- **Authentication and authorisation**: project roles, thread ownership, the OIDC session, the webhook signature check.
+- **Secrets**: stored connector tokens and marketplace keys (sealed with `HARNESS_SECRET_KEY`), per-user git host tokens and SSH keys
+  (sealed the same way, never returned or logged), GitHub App tokens, anything returned by an API that should not be.
+- **Git host trust**: reaching a git host an administrator did not register (clone, push, API), an SSH connection that accepts a host key
+  that is not registered, a token sent to another host.
+- **Authentication and authorisation**: project roles, thread ownership, the OIDC session, the webhook signature check, and the trusted
+  gateway headers (`HARNESS_TRUST_IDENTITY_HEADERS`: identity headers must be refused without the shared secret; deploy the server so that only the
+  gateway can reach it, see docs/team.md).
 - **The agent factory**: ways to make an unattended run push to a protected branch, merge without the gate, touch protected paths,
   or exceed its budget. Prompt injection that bypasses the policy layer counts; a model simply being wrong does not.
 

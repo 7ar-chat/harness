@@ -11,6 +11,7 @@ import (
 
 	"github.com/7ar-chat/harness/core/blobs"
 	"github.com/7ar-chat/harness/core/capabilities"
+	"github.com/7ar-chat/harness/core/githost"
 	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/core/store"
 )
@@ -96,7 +97,12 @@ func validRepoURL(u string) bool {
 		return true
 	}
 	p, err := url.Parse(u)
-	return err == nil && (p.Scheme == "https" || p.Scheme == "ssh" || p.Scheme == "git") && p.Host != ""
+	if err == nil && (p.Scheme == "https" || p.Scheme == "ssh" || p.Scheme == "git") && p.Host != "" {
+		return true
+	}
+	// git@host:group/project.git, the form every code host shows for SSH
+	_, ok := githost.ParseRepoURL(u)
+	return ok && !strings.Contains(u, "://")
 }
 
 // MaxExtraRepos is how many repositories a project can have besides its main one.

@@ -1,0 +1,147 @@
+# The whole team app on one machine, from one command:   ./start.sh      (see docs/quickstart.md)
+#
+# start.sh writes the .env this file reads (unique secrets, the admin login, your model provider) and the Dex
+# configuration in quickstart/dex.yaml, then runs `docker compose -f docker-compose.quickstart.yml up -d`.
+# Nothing here is published beyond 127.0.0.1.
+#
+#   postgres   the team and session data
+#   redis      the live feed between processes
+#   dex        the sign-in (OpenID Connect), with the admin account start.sh created
+#   harness-web  the app: API + UI, and the agent runs (the agent's commands run inside this container; for
+#              a stronger sandbox set SANDBOX_BACKEND and OPENSANDBOX_URL in .env, see docs/quickstart.md)
+#   rustfs     (optional, profile "s3": QUICKSTART_S3=1 in .env) S3-compatible storage for artifacts and attachments
+#
+# harness-web shares Dex's network namespace so that "localhost:5556" is the same issuer URL for the browser and
+# for the server (the OIDC issuer must match what the browser is redirected to). The image is built from this
+# checkout unless HARNESS_IMAGE names a published one (then `./start.sh pull` fetches it).
+name: harness
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: harness
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run ./start.sh, it creates .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-15432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harness -d harness"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    volumes:
+      - redisdata:/data
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-16379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  dex:
+    image: dexidp/dex:v2.41.1
+    restart: unless-stopped
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    volumes:
+      - ./quickstart/dex.yaml:/etc/dex/config.yaml:ro
+    ports:
+      - "127.0.0.1:5556:5556"
+      - "${WEB_BIND:-127.0.0.1:8080}:8080" # harness-web, published here because it shares this container's network
+
+  harness-web:
+    image: ${HARNESS_IMAGE:-harness-web:local}
+    build: .
+    network_mode: "service:dex"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      dex:
+        condition: service_started
+    restart: on-failure
+    # -team: login, projects, shared sessions. -local: the agent's commands run in this container.
+    command: ["-team", "-local", "-addr", "0.0.0.0:8080"]
+    environment:
+      HARNESS_ALLOW_LOCAL_SANDBOX: "1"
+      HARNESS_PUBLIC_URL: http://localhost:8080
+      HARNESS_SECRET_KEY: ${HARNESS_SECRET_KEY:?run ./start.sh, it creates .env}
+      HARNESS_ADMINS: ${HARNESS_ADMINS:-}
+      POSTGRES_HOST: postgres
+      POSTGRES_SSLMODE: disable
+      POSTGRES_DB: harness
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: redis
+      OIDC_ISSUER: http://localhost:5556/dex
+      OIDC_CLIENT_ID: harness
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      OIDC_REDIRECT_URL: http://localhost:8080/auth/callback
+      OIDC_LOGIN_CLAIM: name
+      OIDC_SESSION_KEY: ${OIDC_SESSION_KEY}
+      # your model provider (start.sh asks; any OpenAI-compatible endpoint)
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODELS: ${LLM_MODELS:-}
+      LLM_DEFAULT_MODEL: ${LLM_DEFAULT_MODEL:-}
+      LLM_DISCOVER_MODELS: ${LLM_DISCOVER_MODELS:-true}
+      # memory: proposals after each run, kept at once
+      HARNESS_MEMORY_EXTRACT: "true"
+      HARNESS_MEMORY_EXTRACT_AUTOCONFIRM: "true"
+      # a stronger sandbox than this container: SANDBOX_BACKEND=opensandbox and OPENSANDBOX_URL / OPENSANDBOX_API_KEY in .env
+      SANDBOX_BACKEND: ${SANDBOX_BACKEND:-local}
+      OPENSANDBOX_URL: ${OPENSANDBOX_URL:-}
+      OPENSANDBOX_API_KEY: ${OPENSANDBOX_API_KEY:-}
+      SANDBOX_EGRESS_ALLOWLIST: ${SANDBOX_EGRESS_ALLOWLIST:-}
+      # optional integrations; empty is off
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:-}
+      GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+      FACTORY: ${FACTORY:-}
+      FACTORY_WEBHOOK_SECRET: ${FACTORY_WEBHOOK_SECRET:-}
+      FACTORY_REVIEW_MODEL: ${FACTORY_REVIEW_MODEL:-}
+      FACTORY_NO_REVIEW: ${FACTORY_NO_REVIEW:-}
+      # S3 storage (profile "s3")
+      ARTIFACTS_S3_ENDPOINT: ${ARTIFACTS_S3_ENDPOINT:-}
+      ARTIFACTS_S3_BUCKET: ${ARTIFACTS_S3_BUCKET:-}
+      ARTIFACTS_S3_CREATE_BUCKET: ${ARTIFACTS_S3_CREATE_BUCKET:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    volumes:
+      - state:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  rustfs:
+    profiles: ["s3"]
+    image: rustfs/rustfs:latest
+    restart: unless-stopped
+    environment:
+      RUSTFS_ACCESS_KEY: ${AWS_ACCESS_KEY_ID:-}
+      RUSTFS_SECRET_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    volumes:
+      - s3data:/data
+    ports:
+      - "127.0.0.1:9000:9000"
+
+volumes:
+  pgdata:
+  redisdata:
+  s3data:
+  state:

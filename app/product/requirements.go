@@ -31,6 +31,7 @@ import (
 //	DELETE /api/projects/{pid}/requirements/{rid}                      → 204                                  (owner)
 //	POST   /api/projects/{pid}/requirements/{rid}/dispatch {policy?,budget?} → 202 Requirement                (member)
 //	POST   /api/projects/{pid}/requirements/import/github {label?}     → {imported, skipped, requirements}    (member)
+//	POST   /api/projects/{pid}/requirements/import/issues {label?}     → {imported, skipped, requirements}    (member; from the repository's own host: GitHub, GitLab, Gitea; see githosts.go)
 //	GET    /api/projects/{pid}/requirements/settings                   → RequirementSettings
 //	PUT    /api/projects/{pid}/requirements/settings {autoDispatch,policy?,budget?} → RequirementSettings      (owner)
 //	POST   /api/threads/{id}/requirement {requirementId}               → Requirement   (links the conversation)
@@ -81,6 +82,7 @@ func (s *server) routeRequirements() {
 	s.Route("GET /projects/{pid}/requirements/settings", s.getRequirementSettings)
 	s.Route("PUT /projects/{pid}/requirements/settings", s.putRequirementSettings)
 	s.Route("POST /projects/{pid}/requirements/import/github", s.importRequirements)
+	s.Route("POST /projects/{pid}/requirements/import/issues", s.importIssues)
 	s.Route("GET /projects/{pid}/requirements/{rid}", s.getRequirement)
 	s.Route("PATCH /projects/{pid}/requirements/{rid}", s.patchRequirement)
 	s.Route("DELETE /projects/{pid}/requirements/{rid}", s.deleteRequirement)

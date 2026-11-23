@@ -7,7 +7,9 @@ import (
 
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/adapters/store/factorystore"
+	"github.com/7ar-chat/harness/adapters/store/githoststore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore"
+	"github.com/7ar-chat/harness/adapters/store/teamstore"
 	"github.com/7ar-chat/harness/app/factoryenv"
 	"github.com/7ar-chat/harness/app/product"
 	"github.com/7ar-chat/harness/config"
@@ -37,6 +39,7 @@ func factoryFeatures(getenv func(string) string, standalone bool) func(context.C
 			return nil, nil, err
 		}
 		var fs factory.Store
+		var hosts *product.GitHosts // GitLab, Gitea and plain git hosts: only with Postgres and a secret key
 		release := func() {}
 		if !standalone {
 			pool, err := pgstore.NewPool(ctx, cfg.PostgresDSN(), cfg.DBPoolMaxConns, cfg.PingDBAtStartup)
@@ -45,8 +48,14 @@ func factoryFeatures(getenv func(string) string, standalone bool) func(context.C
 			}
 			release = pool.Close
 			fs = factorystore.NewPG(pool, nil)
+			if key := product.SecretKeyFromEnv(getenv); len(key) > 0 {
+				if hosts, err = product.NewGitHosts(githoststore.NewPG(pool, nil), teamstore.NewPG(pool), key); err != nil {
+					release()
+					return nil, nil, err
+				}
+			}
 		}
-		o, err := factoryOptions(getenv, cfg, fs, gh)
+		o, err := factoryOptionsWithHosts(getenv, cfg, fs, gh, hosts)
 		if err != nil {
 			release()
 			return nil, nil, err
@@ -59,7 +68,11 @@ func factoryFeatures(getenv func(string) string, standalone bool) func(context.C
 // factoryOptions is what a worker installs: the FACTORY_* settings of the web tier, except that the dispatcher,
 // the scheduler and the pull request loop run only when FACTORY_RUN=1, and nothing of the product is attached.
 func factoryOptions(getenv func(string) string, cfg *config.Config, fs factory.Store, gh *product.GitHubApp) (harness.FactoryOptions, error) {
-	w, _, err := factoryenv.FromEnv(getenv, cfg, fs, gh, nil)
+	return factoryOptionsWithHosts(getenv, cfg, fs, gh, nil)
+}
+
+func factoryOptionsWithHosts(getenv func(string) string, cfg *config.Config, fs factory.Store, gh *product.GitHubApp, hosts *product.GitHosts) (harness.FactoryOptions, error) {
+	w, _, err := factoryenv.FromEnvWithHosts(getenv, cfg, fs, gh, nil, hosts)
 	if err != nil {
 		return harness.FactoryOptions{}, err
 	}

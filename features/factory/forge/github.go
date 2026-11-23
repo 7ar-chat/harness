@@ -42,6 +42,8 @@ type APIError struct {
 	Message string
 	// RateLimited marks a 429 or a 403 caused by the primary or secondary rate limit.
 	RateLimited bool
+	// Provider names the code host in the message ("" is github).
+	Provider string
 }
 
 // Error implements error.
@@ -50,7 +52,11 @@ func (e *APIError) Error() string {
 	if msg == "" {
 		msg = http.StatusText(e.Status)
 	}
-	return fmt.Sprintf("github: %s %s: %d: %s", e.Method, e.Path, e.Status, msg)
+	provider := e.Provider
+	if provider == "" {
+		provider = "github"
+	}
+	return fmt.Sprintf("%s: %s %s: %d: %s", provider, e.Method, e.Path, e.Status, msg)
 }
 
 // Is matches the sentinels by status.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/7ar-chat/harness/adapters/redisx"
 	"github.com/7ar-chat/harness/adapters/store/capstore"
 	"github.com/7ar-chat/harness/adapters/store/factorystore"
+	"github.com/7ar-chat/harness/adapters/store/githoststore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
 	"github.com/7ar-chat/harness/adapters/store/reqstore"
@@ -22,6 +24,7 @@ import (
 	"github.com/7ar-chat/harness/config"
 	"github.com/7ar-chat/harness/core/capabilities"
 	"github.com/7ar-chat/harness/core/factory"
+	"github.com/7ar-chat/harness/core/githost"
 	"github.com/7ar-chat/harness/core/requirements"
 	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/core/store"
@@ -57,6 +60,8 @@ type built struct {
 	reqs requirements.Store
 	// roles is the store of the roles of projects and users (team mode only); the harness resolves them through it.
 	roles roles.Store
+	// githosts serves the code hosts besides GitHub.com (team mode with a secret key).
+	githosts *product.GitHosts
 	// skills serves the connections of skills that need an account (nil without the marketplace).
 	skills *product.SkillAPI
 	// bus shares the live feed between replicas: set in team mode when REDIS_HOST is.
@@ -75,6 +80,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 	var caps capabilities.Store
 	var reqs requirements.Store
 	var rs roles.Store
+	var ghr githost.Registry
 	_, havePG := os.LookupEnv("POSTGRES_HOST")
 	switch {
 	case team && havePG:
@@ -92,6 +98,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		caps = capstore.NewPG(pool, nil)
 		reqs = reqstore.NewPG(pool, nil)
 		rs = rolestore.NewPG(pool, nil)
+		ghr = githoststore.NewPG(pool, nil)
 	case durable || team:
 		st, err := harness.OpenLocalStore(cfg.LocalStateDir)
 		if err != nil {
@@ -125,6 +132,12 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 				return nil, fmt.Errorf("open the roles store: %w", err)
 			}
 			rs = rlf
+			gf, err := githoststore.Open(filepath.Join(stateDir(cfg), "githosts.json"), nil)
+			if err != nil {
+				_ = closers.Close()
+				return nil, fmt.Errorf("open the git hosts registry: %w", err)
+			}
+			ghr = gf
 		}
 	}
 	b := &built{team: ts, closer: closers}
@@ -190,6 +203,17 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		}
 		o.MemoryUserKey = product.MemoryUserKey(ts, o.Store.ListMessages)
 		o.MemoryShared = product.MemoryShared
+		if ghr != nil {
+			if key := product.SecretKeyFromEnv(os.Getenv); len(key) > 0 {
+				if b.githosts, err = product.NewGitHosts(ghr, ts, key); err != nil {
+					_ = closers.Close()
+					return nil, err
+				}
+				b.githosts.EgressAllowlist = cfg.SandboxEgressAllowlist
+			} else {
+				slog.Warn("git hosts (GitLab, Gitea, plain git) are off: they need HARNESS_SECRET_KEY to seal tokens and SSH keys")
+			}
+		}
 		b.sup = product.NewSupervisor(ts)
 		o.Tools = append(o.Tools, b.sup.Tools())
 		features := harness.ProfileNamed(cfg.AgentProfile)
@@ -200,8 +224,8 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		features = append(features, b.preview.Feature())
 		features = append(features, product.RequirementsFeature(reqs))
 		o.Features = append(features, b.sup.Feature(),
-			(&product.RepoCheckout{Team: ts, GitHub: gh, Factory: fs, Brokered: cfg.OpenSandboxCredentialProxy && cfg.SandboxBackendName() == config.BackendOpenSandbox}).Feature())
-		if fo, enabled, err := factoryenv.FromEnv(os.Getenv, cfg, fs, gh, ts); err != nil {
+			(&product.RepoCheckout{Team: ts, GitHub: gh, Factory: fs, Hosts: hostResolver(b.githosts), Brokered: cfg.OpenSandboxCredentialProxy && cfg.SandboxBackendName() == config.BackendOpenSandbox}).Feature())
+		if fo, enabled, err := factoryenv.FromEnvWithHosts(os.Getenv, cfg, fs, gh, ts, b.githosts); err != nil {
 			_ = closers.Close()
 			return nil, err
 		} else if enabled {
@@ -259,3 +283,11 @@ func (m multiCloser) Close() error {
 type poolCloser struct{ f func() }
 
 func (p poolCloser) Close() error { p.f(); return nil }
+
+// hostResolver is the git hosts as a resolver, nil when they are off (a typed nil must not reach the interface).
+func hostResolver(g *product.GitHosts) githost.Resolver {
+	if g == nil {
+		return nil
+	}
+	return g
+}

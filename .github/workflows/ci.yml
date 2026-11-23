@@ -194,3 +194,12 @@ jobs:
           OPENSANDBOX_URL: http://opensandbox:8080
           OPENSANDBOX_API_KEY: ci
           OPENSANDBOX_IMAGE: example/sandbox:latest
+      - name: validate docker-compose.quickstart.yml and test the installer
+        run: |
+          docker compose -f docker-compose.quickstart.yml config --quiet
+          scripts/install_test.sh
+        env:
+          POSTGRES_PASSWORD: ci
+          HARNESS_SECRET_KEY: ci
+          OIDC_CLIENT_SECRET: ci
+          OIDC_SESSION_KEY: ci
