@@ -13,6 +13,7 @@ import { ImportEntry } from "@/components/app/github-import";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 interface Row extends ThreadSummary {
   projectName: string;
@@ -38,10 +39,10 @@ export function SessionCard({ t }: { t: Row }) {
     }
   };
   return (
-    <Card className={needsYou(t.status) ? "border-warning/60" : undefined}>
+    <Card className={cn("relative transition-colors hover:bg-accent/40 focus-within:ring-2 focus-within:ring-ring", needsYou(t.status) && "border-warning/60")}>
       <CardHeader className="pb-2">
         <CardTitle className="flex items-start justify-between gap-2 text-sm">
-          <Link to="/t/$threadId" params={{ threadId: t.id }} className="min-w-0 truncate hover:underline">
+          <Link to="/t/$threadId" params={{ threadId: t.id }} className="min-w-0 truncate hover:underline after:absolute after:inset-0 after:content-[''] focus-visible:outline-none">
             {t.title || "(untitled)"}
           </Link>
           <StatusBadge status={t.status} />
@@ -61,7 +62,7 @@ export function SessionCard({ t }: { t: Row }) {
             <div>
               Wants to run <code>{t.pendingTool || "a tool"}</code>
             </div>
-            <div className="flex gap-2">
+            <div className="relative z-10 flex gap-2">
               <Button size="sm" disabled={busy} onClick={() => void decide("approve")}>
                 <Check /> Approve
               </Button>

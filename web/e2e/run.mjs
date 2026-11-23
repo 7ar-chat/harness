@@ -779,6 +779,20 @@ async function main() {
     if (failures.length) throw new Error(failures.join("\n"));
   });
 
+  await step("h6. a session card on the dashboard opens its session when clicked anywhere, not only on the title", async () => {
+    const hp = (await post("/projects", { name: "E2E cards" })).id;
+    const th = await post("/threads", { title: "E2E clickable card", projectId: hp });
+    await page.goto(`${base}/#/`);
+    const card = page.locator("div", { has: page.getByRole("link", { name: "E2E clickable card" }) }).filter({ hasText: "Last activity" }).last();
+    await visible(card, "the session's card");
+    // A real click on the card's own text, away from the title link. The link's overlay covers the text, so
+    // playwright's element click (which refuses covered targets) is not the way: click the point, as a person does.
+    const box = await card.getByText(/^Last activity/).boundingBox();
+    if (!box) throw new Error("the card text has no box");
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await poll(() => page.url().endsWith(`#/t/${th.id}`), "the card click to open the session");
+  });
+
   // Opt-in: E2E_SHOTS=<dir> saves screenshots of the main surfaces (not a scenario, nothing is asserted).
   if (process.env.E2E_SHOTS) {
     const dir = process.env.E2E_SHOTS;
