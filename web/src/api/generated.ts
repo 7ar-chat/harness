@@ -36,6 +36,11 @@ export interface Author {
 
 export type AuthorKind = "user" | "supervisor" | "system";
 
+export interface Budget {
+  maxUsd?: number;
+  maxTokens?: number;
+}
+
 export interface CapabilityFieldView {
   key: string;
   label: string;
@@ -102,6 +107,78 @@ export interface ConnectorPending {
   expiresAt: string;
 }
 
+export interface FactoryReport {
+  ProjectID: string;
+  Since: string;
+  Total: Spend;
+  ByState: Record<string, number>;
+  Top: TaskSpend[];
+}
+
+export type FactoryState = "pending" | "ready" | "running" | "review" | "blocked" | "done" | "failed" | "cancelled";
+
+export interface FactoryTask {
+  id: string;
+  projectId?: string;
+  owner: string;
+  title: string;
+  spec: string;
+  role?: string;
+  source: Source;
+  state: FactoryState;
+  blockedReason?: string;
+  error?: string;
+  result?: string;
+  parentId?: string;
+  dependsOn?: string[];
+  labels?: string[];
+  priority?: number;
+  notBefore?: string;
+  threadId?: string;
+  runId?: string;
+  model?: string;
+  repo?: string;
+  baseBranch?: string;
+  branch?: string;
+  pr?: PullRequest;
+  autoMerge?: boolean;
+  attempts: number;
+  maxAttempts?: number;
+  policy?: string;
+  budget?: Budget;
+  spent: Spend;
+  fingerprints?: string[];
+  feedback?: string;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt?: string;
+}
+
+export interface FactoryTaskEvent {
+  id: number;
+  taskId: string;
+  kind: string;
+  text: string;
+  data?: Record<string, unknown>;
+  at: string;
+}
+
+export interface FactoryTrigger {
+  id: string;
+  projectId?: string;
+  owner: string;
+  name: string;
+  kind: string;
+  schedule?: string;
+  event?: string;
+  match?: Record<string, string>;
+  template: Template;
+  enabled: boolean;
+  nextFireAt?: string;
+  lastFiredAt?: string;
+  createdAt: string;
+}
+
 export interface FeedEvent {
   type: FeedType;
   projectId?: string;
@@ -113,7 +190,7 @@ export interface FeedEvent {
   at: string;
 }
 
-export type FeedType = "thread.created" | "thread.updated" | "thread.deleted" | "run.started" | "run.finished" | "message.sent" | "member.changed" | "project.changed" | "memory.changed";
+export type FeedType = "thread.created" | "thread.updated" | "thread.deleted" | "run.started" | "run.finished" | "message.sent" | "member.changed" | "project.changed" | "memory.changed" | "task.created" | "task.updated" | "task.blocked";
 
 export type FileType = "file" | "directory";
 
@@ -132,6 +209,28 @@ export interface GithubStatus {
   installUrl?: string;
   repo?: string;
   message?: string;
+}
+
+export interface InboxDoc {
+  tasks: InboxTask[];
+  threads: InboxThread[];
+  count: number;
+}
+
+export interface InboxTask {
+  kind: "blocked" | "review";
+  projectId: string;
+  projectName: string;
+  role: string;
+  task: FactoryTask;
+  reason?: string;
+  lastEvent?: FactoryTaskEvent;
+}
+
+export interface InboxThread {
+  projectId?: string;
+  projectName: string;
+  thread: ThreadSummary;
 }
 
 export interface Invite {
@@ -375,6 +474,12 @@ export interface ProjectWithRole extends Project {
   role: Role;
 }
 
+export interface PullRequest {
+  number?: number;
+  url?: string;
+  headSha?: string;
+}
+
 export interface QuestionOption {
   label: string;
   description?: string;
@@ -455,9 +560,44 @@ export interface SkillFieldView {
   value?: string;
 }
 
+export interface Source {
+  kind: string;
+  key?: string;
+  url?: string;
+}
+
+export interface Spend {
+  usd: number;
+  tokens: number;
+  runs: number;
+  unpriced?: number;
+}
+
 export interface SupervisorSettings {
   watch: boolean;
   stuckMinutes: number;
+}
+
+export interface TaskSpend {
+  ID: string;
+  Title: string;
+  State: FactoryState;
+  Spent: Spend;
+}
+
+export interface Template {
+  title: string;
+  spec: string;
+  role?: string;
+  policy?: string;
+  model?: string;
+  repo?: string;
+  baseBranch?: string;
+  budget?: Budget;
+  maxAttempts?: number;
+  autoMerge?: boolean;
+  labels?: string[];
+  priority?: number;
 }
 
 export interface Thread extends ThreadBase {

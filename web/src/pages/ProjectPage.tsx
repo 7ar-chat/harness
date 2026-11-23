@@ -25,6 +25,7 @@ import { isUnread } from "@/lib/unread";
 import { Download, FileText } from "lucide-react";
 import { Board } from "./Board";
 import { MemoryManager } from "./Memory";
+import { TasksTab } from "./Tasks";
 
 const ago = (iso: string) => `${formatDistanceToNowStrict(new Date(iso))} ago`;
 
@@ -335,6 +336,7 @@ export function ProjectPage() {
             </TabsTrigger>
             <TabsTrigger value="capabilities">Capabilities</TabsTrigger>
             <TabsTrigger value="audit">Audit</TabsTrigger>
+            <TabsTrigger value="tasks">Tasks</TabsTrigger>
             {owner ? <TabsTrigger value="settings">Settings</TabsTrigger> : null}
           </TabsList>
           <TabsContent value="board" className="mt-4">
@@ -369,6 +371,9 @@ export function ProjectPage() {
           </TabsContent>
           <TabsContent value="audit" className="mt-4">
             <Audit pid={projectId} />
+          </TabsContent>
+          <TabsContent value="tasks" className="mt-4">
+            <TasksTab projectId={projectId} role={p.role} />
           </TabsContent>
           {owner ? (
             <TabsContent value="settings" className="mt-4">

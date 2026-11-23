@@ -1,9 +1,10 @@
 import { Logo } from "@/components/app/Logo";
 import { identifyUser } from "@/lib/telemetry";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "@tanstack/react-router";
-import { Bot, Brain, Briefcase, ChevronRight, ChevronsUpDown, FileText, LayoutDashboard, Link2, Plug, LogOut, Monitor, Moon, Plus, Search, Sun, Trash2, UserCog, Users, WifiOff } from "lucide-react";
+import { Bot, Brain, Briefcase, ChevronRight, ChevronsUpDown, FileText, Inbox, LayoutDashboard, Link2, Plug, LogOut, Monitor, Moon, Plus, Search, Sun, Trash2, UserCog, Users, WifiOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getDevUser, setDevUser } from "@/api/client";
+import { useNeedsReview } from "@/api/factory";
 import { supervisorQuery, useAdminUsers, useDeleteThread, useMe, useMemoryStats, useOverview, useSeen } from "@/api/queries";
 import type { OverviewProject, ThreadSummary } from "@/api/types";
 import { useQuery } from "@tanstack/react-query";
@@ -201,6 +202,7 @@ function AppSidebar({ openId, openProject }: { openId?: string; openProject?: st
   const { newSession, newProject, openPalette } = useDialogs();
   const { conn } = useFeed();
   const loc = useLocation();
+  const needsReview = useNeedsReview().data?.count ?? 0;
   const personal = (overview?.personal ?? []).filter((t) => t.kind !== "supervisor").sort(byRecent);
   const svSummary = overview?.personal.find((t) => t.kind === "supervisor");
   const svStatus = svSummary?.status ?? supervisor?.status ?? "idle";
@@ -241,6 +243,18 @@ function AppSidebar({ openId, openProject }: { openId?: string; openProject?: st
               <Link to="/supervisor" onClick={close}>
                 <Bot /> My assistant
                 <StatusDot status={svStatus} className="ml-auto" />
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={loc.pathname === "/inbox"}>
+              <Link to="/inbox" onClick={close}>
+                <Inbox /> Needs review
+                {needsReview ? (
+                  <span className="ml-auto rounded-full bg-warning px-1.5 text-[10px] text-black" aria-label={`${needsReview} waiting for you`}>
+                    {needsReview}
+                  </span>
+                ) : null}
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -313,6 +327,7 @@ function Palette({ open, setOpen }: { open: boolean; setOpen: (o: boolean) => vo
           <CommandItem onSelect={go(() => void navigate({ to: "/" }))}>Dashboard</CommandItem>
           <CommandItem onSelect={go(() => void navigate({ to: "/supervisor" }))}>My assistant</CommandItem>
           <CommandItem onSelect={go(() => void navigate({ to: "/memory" }))}>My memory</CommandItem>
+          <CommandItem onSelect={go(() => void navigate({ to: "/inbox" }))}>Needs review</CommandItem>
           <CommandItem onSelect={go(() => void navigate({ to: "/jobs" }))}>Jobs</CommandItem>
           <CommandItem onSelect={go(() => void navigate({ to: "/references" }))}>References</CommandItem>
           <CommandItem onSelect={go(() => void navigate({ to: "/connectors" }))}>Connectors</CommandItem>

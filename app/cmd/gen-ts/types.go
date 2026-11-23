@@ -5,7 +5,9 @@ import (
 	"slices"
 
 	"github.com/7ar-chat/harness/app/product"
+	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/features/factory/budget"
 	"github.com/7ar-chat/harness/features/memory"
 	"github.com/7ar-chat/harness/hosts/client"
 )
@@ -35,6 +37,11 @@ func roots() []root {
 		// The "memory" object of the memory tools' results; the memory pages' entry (product.memoryEntryView) is
 		// the same document plus content, proposal and source thread.
 		{"MemoryToolEntry", memory.Entry{}},
+		// The agent factory: tasks, their history, triggers and the spend report.
+		{"FactoryTask", factory.Task{}},
+		{"FactoryTaskEvent", factory.TaskEvent{}},
+		{"FactoryTrigger", factory.Trigger{}},
+		{"FactoryReport", budget.Report{}},
 	}
 	wire := product.WireTypes()
 	for _, name := range slices.Sorted(maps.Keys(wire)) {
@@ -60,7 +67,8 @@ func enums() []enum {
 		{"ConnectorKind", []string{"github", "telegram", "slack"}},
 		{"MemoryStatus", []string{store.MemoryActive, store.MemoryPending, store.MemoryDeleted}},
 		{"FeedType", []string{"thread.created", "thread.updated", "thread.deleted", "run.started", "run.finished", "message.sent",
-			"member.changed", "project.changed", "memory.changed"}},
+			"member.changed", "project.changed", "memory.changed", "task.created", "task.updated", "task.blocked"}},
+		{"FactoryState", []string{string(factory.StatePending), string(factory.StateReady), string(factory.StateRunning), string(factory.StateReview), string(factory.StateBlocked), string(factory.StateDone), string(factory.StateFailed), string(factory.StateCancelled)}},
 	}
 }
 
@@ -93,6 +101,9 @@ func overrides() map[string]string {
 		"product.threadSummary.status":     "ThreadStatus",
 		"product.connectorView.kind":       "ConnectorKind",
 		"product.FeedEvent.type":           "FeedType",
+		"factory.Task.state":               "FactoryState",
+		"budget.TaskSpend.State":           "FactoryState",
+		"product.inboxTask.kind":           "\"blocked\" | \"review\"",
 	}
 }
 

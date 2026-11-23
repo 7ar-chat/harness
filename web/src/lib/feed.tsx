@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { openSse } from "@/lib/sse";
 import { cue, soundFor } from "@/lib/sound";
 import { qk, useMe } from "@/api/queries";
+import { fk } from "@/api/factory";
 import type { FeedEvent, Overview, ThreadStatus } from "@/api/types";
 
 type Conn = "connecting" | "live" | "offline";
@@ -62,7 +63,10 @@ export function FeedProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const refresh = () => {
       window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(() => void qc.invalidateQueries({ queryKey: qk.overview }), 250);
+      timer.current = window.setTimeout(() => {
+        void qc.invalidateQueries({ queryKey: qk.overview });
+        void qc.invalidateQueries({ queryKey: fk.inbox });
+      }, 250);
     };
     const handle = (ev: FeedEvent) => {
       const mine = ev.actor !== undefined && ev.actor === meRef.current;
@@ -75,6 +79,7 @@ export function FeedProvider({ children }: { children: ReactNode }) {
         void qc.invalidateQueries({ queryKey: qk.me });
         if (ev.projectId) void qc.invalidateQueries({ queryKey: ["project", ev.projectId] });
       }
+      if (ev.type === "task.created" || ev.type === "task.updated" || ev.type === "task.blocked") void qc.invalidateQueries({ queryKey: fk.all });
       if (ev.type === "memory.changed" || ev.type === "run.finished") void qc.invalidateQueries({ queryKey: ["memory"] });
       const sound = soundFor(ev, { me: meRef.current, watching: document.hasFocus() && !document.hidden ? openThread.current : undefined });
       if (sound) cue(sound);

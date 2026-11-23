@@ -1,9 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { formatDistanceToNowStrict } from "date-fns";
-import { Check, FolderPlus, LayoutDashboard, Plus, X } from "lucide-react";
+import { Check, FolderPlus, Inbox, LayoutDashboard, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/api/client";
+import { useNeedsReview } from "@/api/factory";
 import { qk, toastError, useOverview } from "@/api/queries";
 import type { Thread, ThreadStatus, ThreadSummary } from "@/api/types";
 import { Empty, ErrorState, ListSkeleton, StatusBadge, isActive, needsYou } from "@/components/app/common";
@@ -85,6 +86,7 @@ export function SessionCard({ t }: { t: Row }) {
 export function Dashboard() {
   const { data, isLoading, error, refetch } = useOverview();
   const { newProject, newSession, importGithub } = useDialogs();
+  const needsReview = useNeedsReview().data?.count ?? 0;
   if (isLoading) return <ListSkeleton rows={5} />;
   if (error || !data) return <ErrorState error={error} retry={() => void refetch()} />;
   const rows: Row[] = [
@@ -104,6 +106,15 @@ export function Dashboard() {
             <Plus /> New session
           </Button>
         </div>
+        {needsReview ? (
+          <Link to="/inbox" className="flex items-center gap-2 rounded-lg border border-warning/60 bg-warning/10 p-3 text-sm hover:bg-warning/20">
+            <Inbox className="size-4" />
+            <span>
+              {needsReview} {needsReview === 1 ? "item needs" : "items need"} your review
+            </span>
+            <span className="ml-auto text-xs underline">Open the inbox</span>
+          </Link>
+        ) : null}
         {!data.projects.length && !data.personal.length ? (
           <Empty icon={<FolderPlus className="size-10" />} title="Create your first project">
             <p>A project is a repository whose sessions, memory and members are shared with your team.</p>

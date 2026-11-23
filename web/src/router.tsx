@@ -9,6 +9,7 @@ import { Empty, ErrorState, Spinner } from "@/components/app/common";
 import { Button } from "@/components/ui/button";
 import { AdminPage } from "@/pages/Admin";
 import { Dashboard } from "@/pages/Dashboard";
+import { InboxPage } from "@/pages/Inbox";
 import { JobsPage } from "@/pages/Jobs";
 import { MemoryPage } from "@/pages/Memory";
 import { CapabilitiesPage, ConnectorsPage, ProfilePage, ReferencesPage } from "@/pages/Profile";
@@ -74,7 +75,7 @@ const root = createRootRoute({
   ),
 });
 
-const tabs = ["board", "overview", "members", "memory", "capabilities", "audit", "settings"] as const;
+const tabs = ["board", "overview", "members", "memory", "capabilities", "audit", "tasks", "settings"] as const;
 type Tab = (typeof tabs)[number];
 
 const routeTree = root.addChildren([
@@ -85,7 +86,7 @@ const routeTree = root.addChildren([
     getParentRoute: () => root,
     path: "/p/$projectId",
     component: ProjectPage,
-    validateSearch: (s: Record<string, unknown>): { tab?: Tab } => ({ tab: tabs.find((t) => t === s.tab) }),
+    validateSearch: (s: Record<string, unknown>): { tab?: Tab; task?: string } => ({ tab: tabs.find((t) => t === s.tab), task: typeof s.task === "string" && s.task ? s.task : undefined }),
   }),
   createRoute({ getParentRoute: () => root, path: "/memory", component: MemoryPage }),
   createRoute({
@@ -95,6 +96,7 @@ const routeTree = root.addChildren([
   }),
   createRoute({ getParentRoute: () => root, path: "/references", component: ReferencesPage }),
   createRoute({ getParentRoute: () => root, path: "/jobs", component: JobsPage }),
+  createRoute({ getParentRoute: () => root, path: "/inbox", component: InboxPage }),
   createRoute({ getParentRoute: () => root, path: "/connectors", component: ConnectorsPage }),
   createRoute({ getParentRoute: () => root, path: "/capabilities", component: CapabilitiesPage }),
   createRoute({ getParentRoute: () => root, path: "/admin", component: AdminPage }),
