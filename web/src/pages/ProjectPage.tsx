@@ -4,7 +4,7 @@ import { ExternalLink, GitBranch, Plus, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { isOwner, canWrite, downloadText, ApiError } from "@/api/client";
 import {
-  useAudit, useSeen, useDeleteProject, useGithub, useImportAgents, useMemoryStats, toastError, useInvite, useInvites, useMe, useMembers, useOverview, useProject, useRecheckGithub, useRemoveMember, useRevokeInvite, useSetMember, useUpdateProject,
+  useAudit, useSeen, useDeleteProject, useGithub, useImportAgents, toastError, useInvite, useInvites, useMe, useMembers, useOverview, useProject, useRecheckGithub, useRemoveMember, useRevokeInvite, useSetMember, useUpdateProject,
 } from "@/api/queries";
 import type { Role } from "@/api/types";
 import { Empty, ErrorState, ListSkeleton, RoleBadge, StatusDot, UserAvatar } from "@/components/app/common";
@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useGithubConnector } from "@/components/app/github-import";
 import { CapabilitiesPanel } from "@/components/app/capabilities";
@@ -263,13 +263,11 @@ function Audit({ pid }: { pid: string }) {
 export function ProjectPage() {
   const { projectId } = useParams({ from: "/p/$projectId" });
   const { tab } = useSearch({ from: "/p/$projectId" });
-  const navigate = useNavigate();
   const project = useProject(projectId);
   const overview = useOverview().data;
   const seen = useSeen();
   const self = useMe().data?.user.login ?? "";
   const { newSession } = useDialogs();
-  const stats = useMemoryStats({ project: projectId });
   const importAgents = useImportAgents(projectId);
   const { ready: ghReady } = useGithubConnector();
   if (project.isLoading) return <ListSkeleton />;
@@ -279,7 +277,7 @@ export function ProjectPage() {
   const threads = (overview?.projects.find((x) => x.id === projectId)?.threads ?? []).filter((t) => t.kind !== "supervisor").sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return (
     <ScrollArea className="h-full">
-      <div className="space-y-6 p-4 md:p-8">
+      <div className="space-y-4 p-4 md:p-6">
         <div className="flex flex-wrap items-start gap-3">
           <div className="min-w-0 flex-1">
             <h1 className="flex items-center gap-2 text-xl font-semibold">
@@ -330,29 +328,12 @@ export function ProjectPage() {
             ) : null}
           </div>
         </div>
-        <Tabs value={tab ?? "board"} onValueChange={(t) => void navigate({ to: "/p/$projectId", params: { projectId }, search: { tab: t as "overview" }, replace: true })}>
-          <TabsList className="flex-wrap">
-            <TabsTrigger value="board">Board</TabsTrigger>
-            <TabsTrigger value="overview">Sessions</TabsTrigger>
-            <TabsTrigger value="members">Members</TabsTrigger>
-            <TabsTrigger value="memory" className="gap-1.5">
-              Memory
-              {stats.data?.pending ? <span className="rounded-full bg-warning px-1.5 text-[10px] text-black" aria-label={`${stats.data.pending} to review`}>{stats.data.pending}</span> : null}
-            </TabsTrigger>
-            <TabsTrigger value="requirements">Requirements</TabsTrigger>
-            <TabsTrigger value="capabilities">Capabilities</TabsTrigger>
-            <TabsTrigger value="roles">Roles</TabsTrigger>
-            <TabsTrigger value="schedules">Schedules</TabsTrigger>
-            <TabsTrigger value="usage">Usage</TabsTrigger>
-            <TabsTrigger value="workflows">Workflows</TabsTrigger>
-            <TabsTrigger value="audit">Audit</TabsTrigger>
-            <TabsTrigger value="tasks">Tasks</TabsTrigger>
-            {owner ? <TabsTrigger value="settings">Settings</TabsTrigger> : null}
-          </TabsList>
-          <TabsContent value="board" className="mt-4">
+        {/* The tab strip is the shell's: the explorer and the editor tabs choose the section, the address holds it. */}
+        <Tabs value={tab ?? "board"}>
+          <TabsContent value="board" className="mt-0">
             <Board projectId={projectId} />
           </TabsContent>
-          <TabsContent value="overview" className="mt-4 space-y-4">
+          <TabsContent value="overview" className="mt-0 space-y-4">
             <Github pid={projectId} owner={owner} />
             {threads.length ? (
               <ul className="divide-y rounded-lg border">
@@ -370,38 +351,38 @@ export function ProjectPage() {
               <Empty title="No sessions yet">Start one to put an agent on this project.</Empty>
             )}
           </TabsContent>
-          <TabsContent value="members" className="mt-4">
+          <TabsContent value="members" className="mt-0">
             <Members pid={projectId} owner={owner} self={self} />
           </TabsContent>
-          <TabsContent value="memory" className="mt-4">
+          <TabsContent value="memory" className="mt-0">
             <MemoryManager project={projectId} compact readOnly={!canWrite(p.role)} />
           </TabsContent>
-          <TabsContent value="requirements" className="mt-4">
+          <TabsContent value="requirements" className="mt-0">
             <Requirements projectId={projectId} role={p.role} />
           </TabsContent>
-          <TabsContent value="capabilities" className="mt-4">
+          <TabsContent value="capabilities" className="mt-0">
             <CapabilitiesPanel scope={{ kind: "project", projectId, canEdit: owner }} />
           </TabsContent>
-          <TabsContent value="roles" className="mt-4">
+          <TabsContent value="roles" className="mt-0">
             <RolesPanel projectId={projectId} canEdit={canWrite(p.role)} />
           </TabsContent>
-          <TabsContent value="schedules" className="mt-4">
+          <TabsContent value="schedules" className="mt-0">
             <SchedulesPanel projectId={projectId} canEdit={canWrite(p.role)} />
           </TabsContent>
-          <TabsContent value="usage" className="mt-4">
+          <TabsContent value="usage" className="mt-0">
             <UsagePanel projectId={projectId} />
           </TabsContent>
-          <TabsContent value="workflows" className="mt-4">
+          <TabsContent value="workflows" className="mt-0">
             <WorkflowsPanel projectId={projectId} role={p.role} />
           </TabsContent>
-          <TabsContent value="audit" className="mt-4">
+          <TabsContent value="audit" className="mt-0">
             <Audit pid={projectId} />
           </TabsContent>
-          <TabsContent value="tasks" className="mt-4">
+          <TabsContent value="tasks" className="mt-0">
             <TasksTab projectId={projectId} role={p.role} />
           </TabsContent>
           {owner ? (
-            <TabsContent value="settings" className="mt-4">
+            <TabsContent value="settings" className="mt-0">
               <Settings pid={projectId} />
             </TabsContent>
           ) : null}

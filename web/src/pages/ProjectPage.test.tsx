@@ -60,25 +60,25 @@ describe("ProjectPage", () => {
     expect(within(page().getByRole("region", { name: "Ready" })).getByRole("link", { name: /Explain the retry logic/ })).toBeTruthy();
   });
 
-  it("gives owners a Settings tab and writers a New session button; viewers get neither", async () => {
+  it("gives owners a Settings entry and writers a New session button; viewers get neither", async () => {
     mockFetch(routes("owner"));
     const owner = await renderApp("/p/p1");
     await screen.findByRole("heading", { name: /payments/ });
-    expect(screen.getByRole("tab", { name: "Settings" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Settings" })).toBeTruthy();
     expect(page().getByRole("button", { name: /New session/ })).toBeTruthy();
     owner.unmount();
 
     mockFetch(routes("member"));
     const member = await renderApp("/p/p1");
     await screen.findByRole("heading", { name: /payments/ });
-    expect(screen.queryByRole("tab", { name: "Settings" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();
     expect(page().getByRole("button", { name: /New session/ })).toBeTruthy();
     member.unmount();
 
     mockFetch(routes("viewer"));
     await renderApp("/p/p1");
     await screen.findByRole("heading", { name: /payments/ });
-    expect(screen.queryByRole("tab", { name: "Settings" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();
     expect(page().queryByRole("button", { name: /New session/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Import AGENTS.md/ })).toBeNull();
   });
@@ -87,9 +87,9 @@ describe("ProjectPage", () => {
     mockFetch(routes("owner"));
     const { router } = await renderApp("/p/p1");
     await screen.findByRole("heading", { name: /payments/ });
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Members" }), { button: 0 });
-    fireEvent.click(screen.getByRole("tab", { name: "Members" }));
+    fireEvent.click(screen.getByRole("link", { name: "Members & access" }));
     await waitFor(() => expect(router.state.location.search).toEqual({ tab: "members" }));
+    expect(screen.getByRole("tab", { name: "Members & access", selected: true })).toBeTruthy();
     expect(await screen.findByText("Alice Doe")).toBeTruthy();
   });
 

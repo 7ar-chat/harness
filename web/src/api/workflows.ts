@@ -34,7 +34,7 @@ export const issuesOf = (e: unknown): WorkflowIssues["issues"] => (e instanceof 
 const base = (pid: string) => `/projects/${pid}/workflows`;
 
 /** The project's workflows, or null when this server has no workflows (404/501). */
-export const useWorkflows = (pid: string) =>
+export const useWorkflows = (pid: string, enabled = true) =>
   useQuery({
     queryKey: wk.list(pid),
     queryFn: async () => {
@@ -47,6 +47,7 @@ export const useWorkflows = (pid: string) =>
     },
     retry: false,
     staleTime: 15_000,
+    enabled: enabled && !!pid,
   });
 
 export const useWorkflowTemplates = (enabled = true) =>

@@ -11,8 +11,9 @@ import { fk } from "@/api/factory";
 import type { FeedEvent, Overview, ThreadStatus } from "@/api/types";
 
 type Conn = "connecting" | "live" | "offline";
-const FeedCtx = createContext<{ conn: Conn; notifyPermission: NotificationPermission | "unsupported"; askNotify: () => void }>({
+const FeedCtx = createContext<{ conn: Conn; events: FeedEvent[]; notifyPermission: NotificationPermission | "unsupported"; askNotify: () => void }>({
   conn: "connecting",
+  events: [],
   notifyPermission: "unsupported",
   askNotify: () => {},
 });
@@ -57,6 +58,7 @@ export function FeedProvider({ children }: { children: ReactNode }) {
   const openThread = useRef<string>();
   openThread.current = /^\/t\/([^/]+)/.exec(pathname)?.[1];
   const [conn, setConn] = useState<Conn>("connecting");
+  const [events, setEvents] = useState<FeedEvent[]>([]); // newest first: the bottom panel feed
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
   const timer = useRef<number>();
 
@@ -69,6 +71,7 @@ export function FeedProvider({ children }: { children: ReactNode }) {
       }, 250);
     };
     const handle = (ev: FeedEvent) => {
+      setEvents((l) => [ev, ...l].slice(0, 60));
       const mine = ev.actor !== undefined && ev.actor === meRef.current;
       if (ev.threadId && (ev.type === "run.started" || ev.type === "run.finished" || ev.type === "message.sent" || ev.type === "thread.updated")) {
         qc.setQueryData<Overview>(qk.overview, (o) => (o ? patchOverview(o, ev) : o));
@@ -125,5 +128,5 @@ export function FeedProvider({ children }: { children: ReactNode }) {
     if (typeof Notification === "undefined") return;
     void Notification.requestPermission().then(setPerm);
   };
-  return <FeedCtx.Provider value={{ conn, notifyPermission: perm, askNotify }}>{children}</FeedCtx.Provider>;
+  return <FeedCtx.Provider value={{ conn, events, notifyPermission: perm, askNotify }}>{children}</FeedCtx.Provider>;
 }

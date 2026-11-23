@@ -44,10 +44,7 @@ const routes = (role: "owner" | "member", list: unknown = [github, docs, linear,
 };
 const open = async (role: "owner" | "member", list?: unknown, extra?: Record<string, unknown>) => {
   const m = mockFetch(routes(role, list, extra));
-  await renderApp("/p/p1");
-  const tab = await screen.findByRole("tab", { name: "Capabilities" });
-  fireEvent.mouseDown(tab, { button: 0 });
-  fireEvent.click(tab);
+  await renderApp("/p/p1?tab=capabilities");
   return m;
 };
 const card = async (title: string) => within((await screen.findByRole("heading", { name: title })).closest("[data-slot=row]") as HTMLElement);

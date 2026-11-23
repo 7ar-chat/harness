@@ -98,25 +98,54 @@ describe("Dashboard", () => {
 });
 
 describe("app shell", () => {
-  it("lists my projects and personal sessions in the sidebar and marks needs-attention counts", async () => {
+  it("shows the selected project's sessions and what needs you in the explorer, and the personal space apart", async () => {
     const o = overview({
       personal: [thread("p1", { title: "Scratch notes" })],
-      projects: [{ ...project("pr", { name: "payments" }), threads: [thread("t1", { title: "Flaky test", status: "failed" }), thread("t2", { title: "Done", status: "idle" })] }],
+      projects: [{ ...project("pr", { name: "payments" }), threads: [thread("t1", { title: "Flaky test", status: "waiting_approval" }), thread("t2", { title: "Done", status: "idle" })] }],
     });
-    mockFetch({ ...shellRoutes(o, me({ projects: [project("pr", { name: "payments" })] })), "GET /api/projects/pr/members": [] });
+    const waiting = thread("t1", { title: "Flaky test", status: "waiting_approval" });
+    mockFetch({
+      ...shellRoutes(o, me({ projects: [project("pr", { name: "payments" })] })),
+      "GET /api/projects/pr/members": [],
+      "GET /api/needs-review": { tasks: [], gates: [], threads: [{ projectId: "pr", projectName: "payments", thread: waiting }], count: 1 },
+    });
     await renderApp("/");
-    const nav = await screen.findByRole("link", { name: /payments/ });
-    expect(nav.getAttribute("href")).toBe("/#/p/pr");
-    expect(within(nav).getByText("1")).toBeTruthy(); // one session needs a person
-    expect(screen.getAllByRole("link", { name: /Scratch notes/ }).length).toBeGreaterThan(0);
+    const nav = within(await screen.findByRole("navigation", { name: "Explorer" }));
+    expect((await screen.findByRole("button", { name: "Switch project" })).textContent).toContain("payments");
+    const needs = within(nav.getByRole("region", { name: "Needs you" }));
+    expect((await needs.findByRole("link", { name: /Flaky test/ })).getAttribute("href")).toBe("/#/t/t1");
+    expect(nav.getByRole("region", { name: "Sessions" })).toBeTruthy();
+    expect(nav.getByRole("link", { name: /Scratch notes/ }).getAttribute("href")).toBe("/#/t/p1");
+    expect(nav.getByRole("link", { name: "Workflows & runs" }).getAttribute("href")).toBe("/#/p/pr?tab=workflows");
+    expect(nav.getByLabelText("1 waiting for you")).toBeTruthy(); // the inbox count
   });
 
   it("offers read-only members no 'new session' action", async () => {
     const o = overview({ projects: [{ ...project("pr", { name: "ro", role: "viewer" }), threads: [] }, { ...project("pw", { name: "rw", role: "member" }), threads: [] }] });
     mockFetch(shellRoutes(o));
-    await renderApp("/");
-    await screen.findByRole("link", { name: /rw/ });
-    expect(screen.getByLabelText("New session in rw")).toBeTruthy();
+    const a = await renderApp("/p/pw");
+    expect(await screen.findByLabelText("New session in rw")).toBeTruthy();
+    a.unmount();
+    await renderApp("/p/pr");
+    await screen.findByRole("button", { name: "Switch project" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch project" }).textContent).toContain("ro"));
     expect(screen.queryByLabelText("New session in ro")).toBeNull();
+  });
+
+  it("opens each place it is sent to as a tab, focuses a known one, and closes tabs", async () => {
+    const o = overview({ projects: [{ ...project("pr", { name: "payments" }), threads: [thread("t1", { title: "Flaky test" })] }] });
+    mockFetch({ ...shellRoutes(o), "GET /api/projects/pr": project("pr", { name: "payments" }), "GET /api/threads/t1": { ...thread("t1"), messages: [], activeRun: null, pendingApproval: null, pendingQuestion: null } });
+    const { router } = await renderApp("/");
+    const strip = within(await screen.findByRole("tablist", { name: "Open editors" }));
+    expect(strip.getByRole("tab", { name: "Dashboard", selected: true })).toBeTruthy();
+    fireEvent.click(screen.getByRole("link", { name: "Members & access" }));
+    await waitFor(() => expect(strip.getByRole("tab", { name: "Members & access", selected: true })).toBeTruthy());
+    expect(strip.getAllByRole("tab")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("link", { name: "Members & access" })); // focusing it again adds nothing
+    expect(strip.getAllByRole("tab")).toHaveLength(2);
+    fireEvent.click(strip.getByRole("tab", { name: "Dashboard" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/"));
+    fireEvent.click(strip.getByRole("button", { name: "Close Members & access" }));
+    await waitFor(() => expect(strip.getAllByRole("tab")).toHaveLength(1));
   });
 });

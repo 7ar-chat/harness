@@ -69,7 +69,7 @@ describe("the Executors card in Settings", () => {
   it("shows nothing when the server has no executors", async () => {
     mockFetch({ ...routes(), "GET /api/executors": new Response(null, { status: 404 }) });
     await renderApp("/profile");
-    await screen.findByText("Settings");
+    await screen.findByRole("heading", { name: "Settings" });
     expect(screen.queryByRole("list", { name: "Executors" })).toBeNull();
   });
 });
