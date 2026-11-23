@@ -12,6 +12,7 @@ import { DialogsProvider } from "./dialogs";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { BottomPanel } from "./shell/BottomPanel";
 import { ShellProvider, useNarrow, type PanelTab, type ShellState } from "./shell/context";
+import { clamp, ResizeHandle } from "./shell/ResizeHandle";
 import { EditorTabs } from "./shell/EditorTabs";
 import { ExplorerBody } from "./shell/Explorer";
 import { Palette, ProjectSwitcher } from "./shell/Palette";
@@ -45,6 +46,8 @@ function Shell({ login, palette, setPalette, switcher, setSwitcher }: { login: s
   const [panelChoice, setPanelChoice] = usePersisted<boolean | null>("7ar.ui.panel.v2", null);
   const panelD = panelChoice ?? needsCount > 0;
   const setPanelD = useCallback((v: boolean | ((p: boolean) => boolean)) => setPanelChoice(typeof v === "function" ? v(panelD) : v), [panelD, setPanelChoice]);
+  const [explorerW, setExplorerW] = usePersisted("7ar.ui.explorerW", 272);
+  const [panelH, setPanelH] = usePersisted("7ar.ui.panelH", 178);
   const [drawer, setDrawer] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [panelTab, setPanelTabState] = usePersisted<PanelTab>("7ar.ui.panelTab", "needs");
@@ -119,9 +122,12 @@ function Shell({ login, palette, setPalette, switcher, setSwitcher }: { login: s
       <div className="flex h-svh min-h-0 flex-col overflow-hidden bg-shell text-foreground">
         <div className="flex min-h-0 flex-1">
           {!narrow && explorerD ? (
-            <aside aria-label="Explorer panel" className="flex w-[272px] shrink-0 flex-col border-r bg-sidebar">
-              <ExplorerBody />
-            </aside>
+            <>
+              <aside aria-label="Explorer panel" style={{ width: clamp(explorerW, 200, 480) }} className="flex shrink-0 flex-col border-r bg-sidebar">
+                <ExplorerBody />
+              </aside>
+              <ResizeHandle orientation="vertical" label="Resize explorer" value={clamp(explorerW, 200, 480)} min={200} max={480} initial={272} onChange={setExplorerW} />
+            </>
           ) : null}
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="flex shrink-0 border-b bg-panel">
@@ -142,9 +148,12 @@ function Shell({ login, palette, setPalette, switcher, setSwitcher }: { login: s
           </div>
         </div>
         {!narrow && panelD ? (
-          <div className="h-[178px] shrink-0 border-t">
-            <BottomPanel onClose={() => setPanelD(false)} />
-          </div>
+          <>
+            <ResizeHandle orientation="horizontal" label="Resize panel" value={clamp(panelH, 100, 480)} min={100} max={480} initial={178} onChange={setPanelH} className="border-t" />
+            <div style={{ height: clamp(panelH, 100, 480) }} className="shrink-0">
+              <BottomPanel onClose={() => setPanelD(false)} />
+            </div>
+          </>
         ) : null}
         <StatusBar />
       </div>
