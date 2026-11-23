@@ -2,6 +2,8 @@
 *.out
 /bin/
 .env
+# the quickstart's sign-in config (an admin password hash and the client secret), written by start.sh
+/quickstart/
 .claude/
 bin/
 

@@ -10,6 +10,7 @@ import { Spinner, UserAvatar } from "@/components/app/common";
 import { CapabilitiesPanel } from "@/components/app/capabilities";
 import { ReferencesPanel } from "@/components/app/documents";
 import { GithubMark, ImportGithubDialog } from "@/components/app/github-import";
+import { GitAccess } from "@/components/app/githosts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -430,6 +431,7 @@ export function ProfilePage() {
           <ProfileCard />
           <ExecutorsCard />
           <Preferences />
+          <GitAccess />
         </div>
       </div>
     </ScrollArea>

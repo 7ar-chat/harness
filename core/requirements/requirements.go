@@ -41,6 +41,8 @@ func (s Status) Closed() bool { return s == StatusDone || s == StatusRejected }
 const (
 	SourceManual      = "manual"
 	SourceGitHubIssue = "github_issue"
+	SourceGitLabIssue = "gitlab_issue"
+	SourceGiteaIssue  = "gitea_issue"
 )
 
 // Origin says where a requirement came from. A GitHub issue is identified by Repo and Number, unique per project.
@@ -53,10 +55,39 @@ type Origin struct {
 
 // Key is the identity of the source inside a project ("" for a manual requirement, which has none).
 func (s Origin) Key() string {
-	if s.Kind != SourceGitHubIssue || s.Repo == "" || s.Number <= 0 {
+	if s.Repo == "" || s.Number <= 0 {
 		return ""
 	}
-	return "github:issue:" + strings.ToLower(s.Repo) + "#" + strconv.Itoa(s.Number)
+	var provider string
+	switch s.Kind {
+	case SourceGitHubIssue:
+		provider = "github"
+	case SourceGitLabIssue:
+		provider = "gitlab"
+	case SourceGiteaIssue:
+		provider = "gitea"
+	default:
+		return ""
+	}
+	return provider + ":issue:" + strings.ToLower(s.Repo) + "#" + strconv.Itoa(s.Number)
+}
+
+// Issue is an issue of a code host, as an IssueSource lists it.
+type Issue struct {
+	Number int
+	Title  string
+	Body   string
+	URL    string
+	Author string
+	Labels []string
+}
+
+// IssueSource lists the open issues of one repository of a code host (GitHub, GitLab, Gitea): the provider the
+// requirements import reads. Source is the Origin.Kind the imported requirements get. The repository is the id the
+// provider knows ("owner/name", or "host/group/project").
+type IssueSource interface {
+	Source() string
+	OpenIssues(ctx context.Context, repo, label string, max int) ([]Issue, error)
 }
 
 // LinkedPR is the pull request that delivers the requirement. State is open, merged or closed.

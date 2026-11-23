@@ -51,7 +51,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	user := fs.String("user", "local", "user login of the single local user")
 	devUsers := fs.Bool("dev-users", false, "team mode on a loopback address: act as the user named by the X-Harness-User header (development only)")
 	check := fs.String("factory-check", "", "check the agent factory's setup against GitHub for this repository (owner/name) and exit: read-only, prints [ OK ]/[WARN]/[FAIL] per check, exit 1 on a failure")
-	team := fs.Bool("team", getenv("OIDC_ISSUER") != "" || getenv("GITHUB_LOGIN_CLIENT_ID") != "" || getenv("HARNESS_TEAM") == "1", "team mode: login, projects, shared threads (env OIDC_ISSUER, GITHUB_LOGIN_CLIENT_ID or HARNESS_TEAM=1)")
+	team := fs.Bool("team", getenv("OIDC_ISSUER") != "" || getenv("GITHUB_LOGIN_CLIENT_ID") != "" || getenv("HARNESS_TEAM") == "1" || getenv("HARNESS_TRUST_IDENTITY_HEADERS") == "1", "team mode: login, projects, shared threads (env OIDC_ISSUER, GITHUB_LOGIN_CLIENT_ID or HARNESS_TEAM=1)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -70,7 +70,14 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if err != nil {
 		return fail(stderr, err)
 	}
-	hasLogin := oidcCfg != nil || ghLogin != nil
+	trusted, err := product.TrustedHeadersFromEnv(getenv)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	if trusted != nil && !*team {
+		return fail(stderr, errors.New("HARNESS_TRUST_IDENTITY_HEADERS needs team mode (-team or HARNESS_TEAM=1)"))
+	}
+	hasLogin := oidcCfg != nil || ghLogin != nil || trusted != nil
 	if !isLoopback(*addr) && token == "" && !hasLogin {
 		return fail(stderr, fmt.Errorf("refusing to listen on %s without HARNESS_WEB_TOKEN: set a token, configure a login (OIDC_ISSUER or GITHUB_LOGIN_CLIENT_ID), or bind a loopback address", *addr))
 	}
@@ -145,6 +152,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		prod.Capabilities, prod.MCPTester, prod.SkillAPI = bt.caps, mcpTester("web"), bt.skills
 	}
 	prod.Roles, prod.Executors = bt.roles, bt.executors
+	prod.GitHosts = bt.githosts
+	prod.TrustIdentityHeaders = trusted
 	if bt.wfs != nil {
 		prod.Workflows = bt.wfs
 		if f := h.FactoryOf(); f != nil {

@@ -90,6 +90,12 @@ type Options struct {
 	// without it a workflow can be designed but not run.
 	Workflows      workflows.Store
 	WorkflowEngine workflows.Engine
+	// GitHosts serves the code hosts besides GitHub.com (see githosts.go): the admin's list of allowed hosts and the
+	// users' tokens and SSH keys. The same value is given to the factory (FactoryOptions.Hosts). Nil: no routes.
+	GitHosts *GitHosts
+	// TrustIdentityHeaders makes the server take the signed-in user from the headers of a trusted gateway (see
+	// trustedheaders.go). Nil: off.
+	TrustIdentityHeaders *TrustedHeaders
 }
 
 type server struct {
@@ -122,7 +128,26 @@ func New(h *harness.Harness, api httpapi.Options, o Options) (http.Handler, erro
 }
 
 // Setup implements httpapi.Extension: it creates the logins (OIDC and GitHub) and takes their session as the authenticator.
+// With Options.TrustIdentityHeaders, requests that come through the trusted gateway are authenticated by their headers
+// first (see trustedheaders.go).
 func (s *server) Setup(o *httpapi.Options, mux *http.ServeMux) error {
+	if err := s.setupLogins(o, mux); err != nil {
+		return err
+	}
+	if th := s.opt.TrustIdentityHeaders; th != nil {
+		if s.team == nil {
+			return errors.New("product: trusted identity headers need Options.Team")
+		}
+		ta, err := newTrustedAuth(*th, o.Authenticate, s.admitApproved)
+		if err != nil {
+			return err
+		}
+		o.Authenticate = ta.authenticate
+	}
+	return nil
+}
+
+func (s *server) setupLogins(o *httpapi.Options, mux *http.ServeMux) error {
 	if s.opt.OIDC == nil && s.opt.GitHubLogin == nil {
 		return nil
 	}
@@ -221,6 +246,7 @@ func (s *server) Install(hs *httpapi.Server) error {
 	s.routeSchedules()
 	s.routeUsage()
 	s.routeWorkflows()
+	s.routeGitHosts()
 	if s.opt.Supervisor != nil {
 		s.sup = s.opt.Supervisor
 		s.routeSupervisor()

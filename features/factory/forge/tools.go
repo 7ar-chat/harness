@@ -9,6 +9,7 @@ import (
 
 	"github.com/7ar-chat/harness/ai"
 	"github.com/7ar-chat/harness/core/factory"
+	"github.com/7ar-chat/harness/core/githost"
 	"github.com/7ar-chat/harness/engine/tools"
 )
 
@@ -179,6 +180,7 @@ func (p *toolProvider) openPR(ctx context.Context, threadID string, in openPRInp
 	if err != nil {
 		return "", err
 	}
+	ctx = githost.WithLogin(ctx, firstNonEmptyStr(s.ti.Login, s.task.Owner))
 	title := strings.TrimSpace(in.Title)
 	if title == "" {
 		return "", tools.Errorf("title must not be empty")
@@ -328,6 +330,7 @@ func (p *toolProvider) prStatus(ctx context.Context, threadID string) (string, e
 	if err != nil {
 		return "", err
 	}
+	ctx = githost.WithLogin(ctx, firstNonEmptyStr(s.ti.Login, s.task.Owner))
 	pr, err := p.pr(ctx, s)
 	if err != nil {
 		return "", err
@@ -387,6 +390,7 @@ func (p *toolProvider) ciLog(ctx context.Context, threadID, name string) (string
 	if err != nil {
 		return "", err
 	}
+	ctx = githost.WithLogin(ctx, firstNonEmptyStr(s.ti.Login, s.task.Owner))
 	pr, err := p.pr(ctx, s)
 	if err != nil {
 		return "", err
@@ -445,6 +449,7 @@ func (p *toolProvider) prComments(ctx context.Context, threadID string) (string,
 	if err != nil {
 		return "", err
 	}
+	ctx = githost.WithLogin(ctx, firstNonEmptyStr(s.ti.Login, s.task.Owner))
 	if s.task.PR.Number == 0 {
 		return "", tools.Errorf("no pull request yet: commit your work and call open_pr")
 	}

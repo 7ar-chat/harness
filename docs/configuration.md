@@ -366,6 +366,9 @@ names are read); the model, sandbox and storage settings keep their descriptive 
 | Variable | Default | Meaning |
 |---|---|---|
 | `HARNESS_PRODUCTION` | unset | Any non-empty value turns production mode on (stricter startup checks); unset is debug mode |
+| `HARNESS_TRUST_IDENTITY_HEADERS` | unset | `1`: take the signed-in user from the headers of a trusted gateway (read by `harness-web`, team mode); needs `HARNESS_IDENTITY_HEADER_SECRET`, see [team.md](team.md#enterprise-sign-in-through-a-trusted-gateway) |
+| `HARNESS_IDENTITY_HEADER_SECRET`, `HARNESS_IDENTITY_SECRET_HEADER` | unset, `X-Harness-Gateway-Secret` | the shared secret (16 characters at least) and the name of the header that carries it; identity headers without it are refused |
+| `HARNESS_IDENTITY_LOGIN_HEADER`, `HARNESS_IDENTITY_EMAIL_HEADER`, `HARNESS_IDENTITY_NAME_HEADER` | `X-Forwarded-User`, `X-Forwarded-Email`, `X-Forwarded-Name` | the headers that carry the user's login, email and display name |
 | `HARNESS_WORKSPACE_CHECKPOINTS` | `true` | Local Git checkpoint of `/workspace` before every turn, with per-file history, diff and restore |
 | `HARNESS_WORKSPACE_CHECKPOINT_MAX_FILE_BYTES` | `20971520` | Files larger than this are kept out of the checkpoints (`<= 0`: no limit) |
 | `HARNESS_GIT_ARCHIVE_MAX_BYTES` | `52428800` | Largest `.git` archive stored after a run (a bigger one is not archived) |

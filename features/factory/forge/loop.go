@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/7ar-chat/harness/core/factory"
+	"github.com/7ar-chat/harness/core/githost"
 )
 
 // Loop defaults.
@@ -340,6 +341,7 @@ func (l *Loop) evaluate(ctx context.Context, t factory.Task, force bool) (err er
 		return nil
 	}
 	defer l.release(t.ID)
+	ctx = githost.WithLogin(ctx, t.Owner) // the tokens of the task's owner reach a GitLab or Gitea host
 
 	started := l.Now()
 	e := &eval{l: l, t: t, force: force}

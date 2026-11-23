@@ -15,6 +15,7 @@ import (
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/core/blobs"
 	"github.com/7ar-chat/harness/core/factory"
+	"github.com/7ar-chat/harness/core/githost"
 	"github.com/7ar-chat/harness/core/sandbox"
 	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/engine/agent"
@@ -36,6 +37,9 @@ import (
 type RepoCheckout struct {
 	Team   store.TeamStore
 	GitHub *GitHubApp
+	// Hosts, when set, clones the repositories that live on a registered GitLab, Gitea or git host with the thread
+	// owner's token or SSH key (see githosts.go). Nil: such repositories are cloned anonymously over https.
+	Hosts githost.Resolver
 	// Factory, when set, names the threads an agent factory task owns (factory.Store.GetThreadInfo has one for
 	// them). The factory clones its own checkout on its own branch and never gives the agent a credential, so this
 	// checkout leaves those threads alone: it would otherwise clone a second time, write the installation token into
@@ -247,8 +251,16 @@ func cloneURLOf(raw string) (string, error) {
 const setupScript = `set -e
 mkdir -p /workspace/.work
 if [ ! -d "$REPO_DIR/.git" ]; then
-  if [ -n "${GH_TOKEN:-}" ]; then
-    AUTH="Authorization: Basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
+  if [ -n "${GIT_SSH_KEY:-}" ]; then
+    kd=$(mktemp -d)
+    ( umask 077; printf '%s\n' "$GIT_SSH_KEY" > "$kd/key"; printf '%s\n' "${GIT_KNOWN_HOSTS:-}" > "$kd/known_hosts" )
+    rc=0
+    GIT_SSH_COMMAND="ssh -F /dev/null -i $kd/key -o IdentitiesOnly=yes -o UserKnownHostsFile=$kd/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=20" \
+      git clone ${REPO_BRANCH:+--branch "$REPO_BRANCH"} -- "$REPO_URL" "$REPO_DIR" || rc=$?
+    rm -rf "$kd"
+    [ "$rc" = 0 ] || exit "$rc"
+  elif [ -n "${GH_TOKEN:-}" ]; then
+    AUTH="Authorization: Basic $(printf '%s:%s' "${GIT_USER:-x-access-token}" "$GH_TOKEN" | base64 | tr -d '\n')"
     git -c "http.extraheader=$AUTH" clone ${REPO_BRANCH:+--branch "$REPO_BRANCH"} -- "$REPO_URL" "$REPO_DIR"
   else
     git clone ${REPO_BRANCH:+--branch "$REPO_BRANCH"} -- "$REPO_URL" "$REPO_DIR"
@@ -288,10 +300,11 @@ func (rc *RepoCheckout) setup(ctx context.Context, threadID string, sb sandbox.S
 		rc.writeCredentials(ctx, sb, p, token)
 	}
 	all := append([]repoCheckout{{URL: p.RepoURL, Dir: RepoDir}}, extraCheckouts(p)...)
+	owner := rc.threadOwner(ctx, threadID)
 	var notes []string
 	anyOK := false
 	for i, rp := range all {
-		repoURL, err := cloneURLOf(rp.URL)
+		repoURL, hostEnv, hostSecrets, err := rc.cloneTarget(ctx, rp.URL, owner)
 		if err != nil {
 			if i == 0 {
 				notes = append(notes, "Project repository not checked out: "+err.Error())
@@ -309,6 +322,9 @@ func (rc *RepoCheckout) setup(ctx context.Context, threadID string, sb sandbox.S
 		if token != "" && !broker && github {
 			env["GH_TOKEN"] = token
 		}
+		for k, v := range hostEnv {
+			env[k] = v
+		}
 		cctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		var out strings.Builder
 		res, err := sb.Exec(cctx, sandbox.ExecRequest{Command: setupScript, Env: env, Timeout: 5 * time.Minute,
@@ -316,7 +332,7 @@ func (rc *RepoCheckout) setup(ctx context.Context, threadID string, sb sandbox.S
 		cancel()
 		if err != nil || res.ExitCode != 0 {
 			slog.Warn("project repo: checkout failed", "thread", threadID, "repo", rp.URL, "exit", res.ExitCode, "error", err)
-			msg := strings.TrimSpace(redact(out.String(), token))
+			msg := strings.TrimSpace(redact(out.String(), append([]string{token}, hostSecrets...)...))
 			if len(msg) > 400 {
 				msg = msg[len(msg)-400:]
 			}
@@ -400,11 +416,39 @@ func brokeredGitHubRepos(repos [][2]string, token string) sandbox.CredentialSet 
 	}
 }
 
-func redact(s, token string) string {
-	if token == "" {
-		return s
+func redact(s string, secrets ...string) string {
+	for _, token := range secrets {
+		if token != "" {
+			s = strings.ReplaceAll(s, token, "***")
+		}
 	}
-	return strings.ReplaceAll(s, token, "***")
+	return s
+}
+
+// threadOwner is the login whose credentials the thread's repositories are cloned with.
+func (rc *RepoCheckout) threadOwner(ctx context.Context, threadID string) string {
+	meta, err := rc.Team.GetThreadMeta(ctx, threadID)
+	if err != nil {
+		return ""
+	}
+	return meta.Owner
+}
+
+// cloneTarget is the URL to clone raw from and the environment of the clone: GitHub and unregistered hosts as
+// cloneURLOf says, a repository of a registered host with the owner's credential (forge.HostAccess). secrets are the
+// literals to mask in what the clone prints.
+func (rc *RepoCheckout) cloneTarget(ctx context.Context, raw, owner string) (cloneURL string, env map[string]string, secrets []string, err error) {
+	if _, _, ok := ParseRepo(raw); !ok && rc.Hosts != nil {
+		if ref, ok := githost.ParseRepoURL(raw); ok && ref.Host != "" {
+			acc, aerr := githost.HostAccess(ctx, rc.Hosts, ref.Repo(), owner)
+			if aerr != nil {
+				return "", nil, nil, aerr
+			}
+			return acc.URL, acc.Env, acc.Secrets, nil
+		}
+	}
+	u, err := cloneURLOf(raw)
+	return u, nil, nil, err
 }
 
 // repoRefresh renews the sandbox's GitHub credentials at the start of a run.

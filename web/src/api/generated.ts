@@ -236,6 +236,35 @@ export type FeedType = "thread.created" | "thread.updated" | "thread.deleted" | 
 
 export type FileType = "file" | "directory";
 
+export interface GitCredential {
+  hasToken: boolean;
+  username?: string;
+  hasSshKey: boolean;
+  publicKey?: string;
+  fingerprint?: string;
+}
+
+export interface GitHost {
+  name: string;
+  kind: string;
+  baseUrl: string;
+  sshHost?: string;
+  sshPort?: number;
+  knownHosts: string[];
+  note?: string;
+  api: boolean;
+  hasServiceToken: boolean;
+  egress: string[];
+  egressBlocked: string[];
+  credential: GitCredential;
+}
+
+export interface GitHostList {
+  enabled: boolean;
+  hosts: GitHost[];
+  admin: boolean;
+}
+
 export interface GithubRepo {
   fullName: string;
   private: boolean;

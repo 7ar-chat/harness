@@ -41,6 +41,34 @@ cookie; set it, or sessions end at every restart.
 The web app has its own sign-in page: it lists the configured ways to sign in (`GET /auth/providers`) and a visitor
 without a session lands on it instead of being redirected.
 
+## Enterprise sign-in through a trusted gateway
+
+A company that already authenticates people in front of its internal apps (oauth2-proxy, Pomerium, Cloudflare Access, an
+API gateway in front of the identity provider) can pass who the person is in request headers, next to or instead of OIDC:
+
+```sh
+HARNESS_TRUST_IDENTITY_HEADERS=1                 # turn it on (team mode); the server refuses to start without the secret
+HARNESS_IDENTITY_HEADER_SECRET=<32+ random chars> # the gateway sends it in X-Harness-Gateway-Secret on every request
+HARNESS_IDENTITY_LOGIN_HEADER=X-Forwarded-User    # the user's login (required); default shown
+HARNESS_IDENTITY_EMAIL_HEADER=X-Forwarded-Email   # optional; default shown
+HARNESS_IDENTITY_NAME_HEADER=X-Forwarded-Name     # optional display name; default shown
+HARNESS_IDENTITY_SECRET_HEADER=X-Harness-Gateway-Secret   # the name of the header that carries the secret
+```
+
+- A request is accepted as the named user only when it carries the shared secret (compared in constant time). Identity
+  headers with **no** secret, or a wrong one, answer `401`: they are never read as anonymous and never fall through to the
+  cookie login, so a client that reaches the server around the gateway cannot choose who it is. The secret must be at
+  least 16 characters.
+- A request with neither the secret nor the login header goes on to the session cookie (OIDC or GitHub sign-in, when
+  configured), so both can run together; without them it is `401`.
+- The first request of a person creates their account, **approved** (the gateway already admitted them); later changes of
+  email or name are recorded. `HARNESS_ADMINS` names the administrators by login or email as usual. The login is lower-cased
+  and must be one token without spaces.
+- **The server must be reachable only through the gateway** (a private network, a firewall rule, or the gateway as the only
+  published port). The shared secret is the only proof that a request came through it; rotate it by changing both sides.
+  The gateway must also strip any identity headers a client sends itself before adding its own.
+- With only this login configured, the server no longer needs `HARNESS_WEB_TOKEN` to listen on a public address.
+
 ## Sign-up with GitHub, and approval
 
 Set `GITHUB_LOGIN_CLIENT_ID` and `GITHUB_LOGIN_CLIENT_SECRET` (a GitHub **OAuth App**, not the GitHub App below; its
@@ -63,6 +91,43 @@ callback URL is `$HARNESS_PUBLIC_URL/auth/signin/github/callback`, and `HARNESS_
   requests still appear in the panel.
 
 Accounts without a picture get a generated avatar.
+
+## Git hosts: GitLab, Gitea and plain git
+
+Besides GitHub (through the GitHub App), projects can live on **GitLab**, **Gitea / Forgejo** and any plain git host over
+HTTPS or SSH. It needs team mode and `HARNESS_SECRET_KEY` (tokens and SSH keys are sealed with it, like the connectors); the
+migration `0800_git_hosts.sql` adds the registry table (without Postgres it is `githosts.json` beside `team.json`).
+
+**Git host trust (Admin, Git hosts).** An administrator registers the hosts that may be used: the host name, its kind
+(`gitlab`, `gitea`, `git`), the web address, the SSH host and port if they differ, and the **SSH host keys** (`known_hosts`
+lines; *Read keys from the host* fetches them with the server's own SSH client for you to compare with what the host
+publishes). An optional shared **service token** serves people who saved none of their own. Nothing else can be reached:
+
+- a clone, fetch or push of a repository whose host is not registered is refused before any command runs (the repository
+  is `host/group/project`; GitHub.com keeps `owner/name`);
+- the GitLab and Gitea API clients only talk to the registered web address, never follow a redirect to another host, and
+  send the token of the user on whose behalf they act;
+- SSH connections use `StrictHostKeyChecking=yes` against the registered keys only, ignore the user's ssh config, and a host
+  with no registered key is not reached over SSH;
+- the page lists the host names the sandbox needs for each host and warns when `SANDBOX_EGRESS_ALLOWLIST` does not include them
+  (the sandbox's network policy stays yours to configure: the registry cannot open a firewall).
+
+**Profile, Git access.** Each person keeps a personal access token and/or an SSH key per host. A token is checked against
+the host (`GET /user`) and sealed; an SSH key is generated on the server (ed25519), the **public key is shown** to add to the
+account on the host and the private key never leaves the server in clear. Tokens and keys are never returned by any
+endpoint, never logged, and masked in every tool result and error (`forge.Redact`, which also knows `glpat-` tokens). The
+clone and push get them through the environment of the one command that needs them (never the command line, never a file
+that outlives it); the agent holds no push credential.
+
+**What the agent can do.** On a GitLab or Gitea repository `open_pr` (a merge request there), `pr_status`, `ci_log` and
+`pr_comments` work as on GitHub: `forge.Multi` routes each repository to its provider behind the same `factory.Forge`
+interface, and the pull request loop (CI, review, merge) runs on them too. GitLab CI is read from the head commit's
+pipeline jobs and the failing job's trace; Gitea reports through commit statuses (its API serves no job logs, so `ci_log`
+is empty there). Rebase merges merge as a merge commit on GitLab; Gitea takes squash, merge and rebase. A plain git host has
+no API: the branch is pushed and a person opens the change. **Requirements** import issues from a project's repository on
+any of them (`POST /api/projects/{pid}/requirements/import/issues`, dedupe by host, repository and issue number).
+
+A project's repository URL may be `https://host/group/project`, `ssh://git@host:port/group/project` or `git@host:group/project.git`.
 
 ## GitHub
 
@@ -257,6 +322,11 @@ replica, or the local file store), exactly as before.
 `password`) and `harness-web -local` on http://localhost:8080 with OIDC login (`OIDC_LOGIN_CLAIM=name`, so the
 logins are `alice` and `bob`). A user's first login registers them; projects can then be shared by invite or by
 login. With `-local` in team mode every session gets its own local sandbox directory.
+
+## One command
+
+`./start.sh` installs and runs the whole app on one machine (Postgres, Redis, Dex, harness-web) and writes a `.env` with
+unique secrets: see [quickstart.md](quickstart.md).
 
 ## Docker Compose
 

@@ -19,6 +19,7 @@ var secretPatterns = []struct {
 	{regexp.MustCompile(`(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----`), mask},
 	{regexp.MustCompile(`\bgh[pousr]_[A-Za-z0-9]{20,}\b`), mask},
 	{regexp.MustCompile(`\bgithub_pat_[A-Za-z0-9_]{20,}\b`), mask},
+	{regexp.MustCompile(`\bgl(?:pat|dt|ptt|rt)-[A-Za-z0-9_-]{16,}`), mask},
 	{regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{20,}\b`), mask},
 	{regexp.MustCompile(`\b(?:A3T|AKIA|ASIA)[A-Z0-9]{16}\b`), mask},
 	{regexp.MustCompile(`(?i)(authorization:\s*(?:(?:bearer|basic|token)\s+)?)\S+`), "${1}" + mask},

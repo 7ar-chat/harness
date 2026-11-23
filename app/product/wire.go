@@ -62,5 +62,8 @@ func WireTypes() map[string]any {
 		"WorkflowRun":          workflows.Run{},
 		"WorkflowRunDetail":    WorkflowRunDetail{},
 		"WorkflowIssues":       WorkflowIssues{},
+		"GitHostList":          gitHostList{},
+		"GitHost":              gitHostView{},
+		"GitCredential":        gitCredentialView{},
 	}
 }

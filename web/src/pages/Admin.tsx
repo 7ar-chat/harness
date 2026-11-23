@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useAdminUsers, useDecideUser, useMe } from "@/api/queries";
 import type { AdminUser, UserStatus } from "@/api/types";
 import { Empty, ErrorState, ListSkeleton, UserAvatar } from "@/components/app/common";
+import { GitHostsAdmin } from "@/components/app/githosts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -53,6 +54,7 @@ function UserRow({ u }: { u: AdminUser }) {
 export function AdminPage() {
   const me = useMe().data;
   const [status, setStatus] = useState<UserStatus>("pending");
+  const [section, setSection] = useState<"users" | "hosts">("users");
   const isAdmin = !!me?.admin;
   const users = useAdminUsers(status, { enabled: isAdmin });
   if (!isAdmin) {
@@ -66,6 +68,16 @@ export function AdminPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4 md:p-6">
+        <Tabs value={section} onValueChange={(v) => setSection(v as "users" | "hosts")}>
+          <TabsList aria-label="Admin sections">
+            <TabsTrigger value="users">Users</TabsTrigger>
+            <TabsTrigger value="hosts">Git hosts</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {section === "hosts" ? (
+          <GitHostsAdmin />
+        ) : (
+          <>
         <div>
           <h1 className="text-lg font-semibold">Users</h1>
           <p className="text-sm text-muted-foreground">Approve or reject the people who signed up.</p>
@@ -91,6 +103,8 @@ export function AdminPage() {
               <UserRow key={u.login} u={u} />
             ))}
           </ul>
+        )}
+          </>
         )}
       </div>
     </div>

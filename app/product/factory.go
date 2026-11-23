@@ -14,6 +14,7 @@ import (
 
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/core/factory"
+	"github.com/7ar-chat/harness/core/githost"
 	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/hosts/client"
 	"github.com/7ar-chat/harness/hosts/inproc"
@@ -82,6 +83,9 @@ func (e *FactoryEscalator) bind(s *server) {
 type FactoryHooks struct {
 	// Team is the store the thread's project link is written to.
 	Team store.TeamStore
+	// Hosts, when set, lets a chat session of a project whose repository is on a registered GitLab, Gitea or git host
+	// open change requests (the GitHub App is not needed for those).
+	Hosts githost.Resolver
 
 	mu sync.Mutex
 	s  *server
@@ -117,11 +121,22 @@ func (h *FactoryHooks) AdoptSession(ctx context.Context, threadID string) (*harn
 		return nil, nil // a personal thread, a supervisor thread, an unknown thread: no repository
 	}
 	p, err := h.Team.GetProject(ctx, meta.ProjectID)
-	if err != nil || p.GitHubInstallation == 0 {
+	if err != nil {
 		return nil, nil
 	}
 	repo := projectRepo(p)
 	if repo == "" {
+		return nil, nil
+	}
+	if githost.IsQualified(repo) {
+		if h.Hosts == nil {
+			return nil, nil
+		}
+		host, _, _ := githost.SplitRepo(repo)
+		if _, err := h.Hosts.Host(ctx, host); err != nil {
+			return nil, nil // a host nobody registered is not reached
+		}
+	} else if p.GitHubInstallation == 0 {
 		return nil, nil
 	}
 	owner := firstNonEmpty(meta.CreatedBy, meta.Owner)
@@ -590,6 +605,10 @@ func (s *server) listTriggers(w http.ResponseWriter, r *http.Request, c Caller) 
 func projectRepo(p *store.Project) string {
 	if o, n, ok := ParseRepo(p.RepoURL); ok {
 		return o + "/" + n
+	}
+	// A repository on another code host is "host/path"; whether the host is registered is the forge's business.
+	if ref, ok := githost.ParseRepoURL(p.RepoURL); ok && ref.Host != "" {
+		return ref.Repo()
 	}
 	return ""
 }

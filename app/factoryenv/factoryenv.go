@@ -57,6 +57,13 @@ type Wiring struct {
 // st is the task store (nil: in memory, nothing survives the process; harness-web passes a file-backed or Postgres one). team links the threads of a task to its project; nil leaves them private
 // to the owner, which is what a process without the team store wants.
 func FromEnv(getenv func(string) string, cfg *config.Config, st factory.Store, gh *product.GitHubApp, team store.TeamStore) (Wiring, bool, error) {
+	return FromEnvWithHosts(getenv, cfg, st, gh, team, nil)
+}
+
+// FromEnvWithHosts is FromEnv for a deployment that also works with GitLab, Gitea or plain git hosts: hosts (nil: none)
+// is the registry of the allowed hosts and the users' credentials. The forge then routes each repository to its host,
+// and the checkout clones and pushes with the task owner's token or SSH key.
+func FromEnvWithHosts(getenv func(string) string, cfg *config.Config, st factory.Store, gh *product.GitHubApp, team store.TeamStore, hosts *product.GitHosts) (Wiring, bool, error) {
 	var w Wiring
 	if getenv("FACTORY") != "1" {
 		return w, false, nil
@@ -139,12 +146,22 @@ func FromEnv(getenv func(string) string, cfg *config.Config, st factory.Store, g
 			slog.Warn("FACTORY_REVIEW_MODEL is not set: the default model reviews its own work; set a different model for an independent review")
 		}
 	}
+	if hosts != nil {
+		o.Hosts = hosts
+		if o.Auth == nil {
+			o.Auth = noRepoAuth{} // GitHub.com is not configured: its repositories have no token, the hosts' repositories use theirs
+		}
+		o.Forge = &forge.Multi{GitHub: o.Forge, Hosts: hosts}
+	}
 	if len(o.WebhookSecret) == 0 {
 		slog.Warn("FACTORY without FACTORY_WEBHOOK_SECRET: GitHub deliveries will be refused")
 	}
 	w.Escalator = &product.FactoryEscalator{}
 	o.Escalator = w.Escalator
 	w.Hooks = &product.FactoryHooks{Team: team}
+	if hosts != nil {
+		w.Hooks.Hosts = hosts
+	}
 	o.OnSpawn = w.Hooks.OnSpawn
 	o.AdoptSession = w.Hooks.AdoptSession
 	o.DeliverToSession = w.Hooks.DeliverToSession
@@ -153,6 +170,11 @@ func FromEnv(getenv func(string) string, cfg *config.Config, st factory.Store, g
 	w.Options = o
 	return w, true, nil
 }
+
+// noRepoAuth is the RepoAuth of a deployment without a GitHub App: no token.
+type noRepoAuth struct{}
+
+func (noRepoAuth) Token(context.Context, string) (string, error) { return "", nil }
 
 // GitHubFromEnv builds the GitHub App from GITHUB_APP_ID, GITHUB_APP_SLUG and
 // GITHUB_APP_PRIVATE_KEY (PEM) or GITHUB_APP_PRIVATE_KEY_FILE; nil when no App is set.

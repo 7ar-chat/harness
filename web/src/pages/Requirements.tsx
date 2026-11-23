@@ -7,6 +7,8 @@ import {
   useDeleteRequirement,
   useDispatchRequirement,
   useGithub,
+  useGitHosts,
+  useImportIssues,
   useImportRequirements,
   usePatchRequirement,
   usePutRequirementSettings,
@@ -294,6 +296,8 @@ export function Requirements({ projectId, role }: { projectId: string; role: Rol
   const list = useRequirements(projectId);
   const github = useGithub(projectId);
   const importIssues = useImportRequirements(projectId);
+  const hostIssues = useImportIssues(projectId);
+  const gitHosts = useGitHosts();
   const [status, setStatus] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState("");
@@ -332,6 +336,14 @@ export function Requirements({ projectId, role }: { projectId: string; role: Rol
               </Button>
             </>
           ) : null}
+          {canWork && !github.data?.connected && gitHosts.data?.hosts.some((h) => h.api) ? (
+            <>
+              <Input aria-label="Import label" placeholder="label (optional)" value={importLabel} onChange={(e) => setImportLabel(e.target.value)} className="w-36" />
+              <Button variant="outline" size="sm" disabled={hostIssues.isPending} onClick={() => hostIssues.mutate(importLabel.trim())}>
+                Import from git host
+              </Button>
+            </>
+          ) : null}
           {canWork ? (
             <Button size="sm" onClick={() => setEditing({})}>
               <Plus className="size-4" aria-hidden /> New requirement
@@ -339,9 +351,9 @@ export function Requirements({ projectId, role }: { projectId: string; role: Rol
           ) : null}
         </div>
       </div>
-      {importIssues.data ? (
+      {importIssues.data || hostIssues.data ? (
         <p role="status" className="text-sm text-muted-foreground">
-          Imported {importIssues.data.imported} issue(s), skipped {importIssues.data.skipped} already known.
+          Imported {(hostIssues.data ?? importIssues.data)!.imported} issue(s), skipped {(hostIssues.data ?? importIssues.data)!.skipped} already known.
         </p>
       ) : null}
 
