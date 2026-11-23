@@ -390,6 +390,7 @@ export function ProjectPage() {
           </TabsContent>
           <TabsContent value="usage" className="mt-4">
             <UsagePanel projectId={projectId} />
+          </TabsContent>
           <TabsContent value="workflows" className="mt-4">
             <WorkflowsPanel projectId={projectId} role={p.role} />
           </TabsContent>
