@@ -34,6 +34,7 @@ import (
 	"github.com/7ar-chat/harness/ai/llm"
 	"github.com/7ar-chat/harness/config"
 	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/core/sandbox"
 	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/engine/agent"
@@ -116,6 +117,9 @@ type Options struct {
 	// a database: the servers of the thread's project or of the user). They are merged after the configured
 	// ones, are treated as untrusted (config.MCPServer.Untrusted) and need package mcpfeature to be imported.
 	MCPServers MCPServersFunc
+	// Roles resolves the roles of projects and users: a run can take one on (RunOptions.Role), the delegate tool
+	// and factory tasks start sub-agents with them. Nil: only the builtin roles of the delegate catalogue.
+	Roles roles.Resolver
 }
 
 // MCPServersFunc returns the MCP servers a run may use besides the configured ones. An error is logged and the run
@@ -144,6 +148,7 @@ type Harness struct {
 	// Browser keeps the browser sandboxes of the conversations (nil unless BROWSER_BACKEND names a sandbox provider).
 	Browser *browsersandbox.Manager
 
+	roles        roles.Resolver
 	sandboxTools bool
 	redo         redoStacks
 	factory      *Factory
@@ -225,7 +230,7 @@ func New(o Options) (*Harness, error) {
 
 	h := &Harness{cfg: cfg, Store: st, Log: infra.Log, Queue: infra.Broker, Bus: infra.Broker,
 		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace, Memory: b.Memory, Documents: b.Documents, Jobs: b.Jobs, Browser: b.BrowserSandboxes,
-		sandboxTools: b.sandboxTools != nil}
+		sandboxTools: b.sandboxTools != nil, roles: o.Roles}
 	h.Agent = &agent.Agent{
 		Models: models, Tools: registry, Store: st, Steers: h.Bus,
 		MaxSteps: cfg.AgentMaxSteps, MaxToolOutputChars: cfg.AgentMaxToolOutputChars,
@@ -295,6 +300,13 @@ type RunOptions struct {
 	Author     string
 	AuthorKind string
 	OnBehalfOf string
+	// Role makes the run take on a role (by name, see Options.Roles): its prompt, tool limits, skills and MCP
+	// servers apply to this run only, and its model, reasoning effort, permission mode and read-only profile
+	// replace the settings above. An unknown or disabled role is ErrInvalidRequest.
+	Role string
+	// RoleRef is Role for a caller that already resolved it (the delegate tool, a factory task): the encoded
+	// reference (core/roles Ref.String). Its model and effort do not override the ones the caller chose.
+	RoleRef string
 }
 
 // Author identifies who sends a message or a steer.
@@ -337,6 +349,9 @@ func (h *Harness) NewThread(ctx context.Context, user, title string) (*store.Thr
 // run is executed by Run; follow it with Events.
 func (h *Harness) Send(ctx context.Context, user, threadID, text string, o RunOptions) (*store.Run, error) {
 	if err := h.ownsThread(ctx, user, threadID); err != nil {
+		return nil, err
+	}
+	if err := h.applyRole(ctx, user, threadID, &o); err != nil {
 		return nil, err
 	}
 	if o.Model == "" {

@@ -18,6 +18,7 @@ import (
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/core/capabilities"
 	"github.com/7ar-chat/harness/core/requirements"
+	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/hosts/client"
 	"github.com/7ar-chat/harness/hosts/httpapi"
@@ -73,14 +74,18 @@ type Options struct {
 	Requirements requirements.Store
 	// MCPTester lists a server's tools for the marketplace's "test" action (nil: the action answers 501).
 	MCPTester MCPTester
+	// Roles, with Team, serves the roles routes (see roles.go): the agent configurations of projects and users.
+	// Nil: no routes. The command gives the harness the same store through NewRoleRegistry.
+	Roles roles.Store
 }
 
 type server struct {
 	*httpapi.Server
-	opt  Options
-	team store.TeamStore
-	sup  *Supervisor
-	box  *secretBox
+	roles *RoleRegistry
+	opt   Options
+	team  store.TeamStore
+	sup   *Supervisor
+	box   *secretBox
 	// capBox seals the marketplace credentials (nil without a SecretKey).
 	capBox *secretBox
 	tg     *telegramBridge
@@ -192,6 +197,7 @@ func (s *server) Install(hs *httpapi.Server) error {
 	s.routeTeam()
 	s.routeAdmin()
 	s.routeCapabilities()
+	s.routeRoles()
 	s.routeFactory()
 	s.routeInbox()
 	s.routeBoard()

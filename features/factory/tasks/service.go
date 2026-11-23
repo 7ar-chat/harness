@@ -56,6 +56,9 @@ type Options struct {
 	// Roles resolves a role name to its prompt text and whether it runs read-only
 	// (nil: no role text, nothing read-only; ok false: an unknown role).
 	Roles func(role string) (instructions string, readOnly bool, ok bool)
+	// ResolveRole is asked before Roles, with the task (its project and owner decide which roles are in reach):
+	// the roles of a project or a user, defined at run time. ok false falls through to Roles.
+	ResolveRole func(ctx context.Context, t factory.Task, role string) (RoleSpec, bool)
 
 	DefaultPolicy      string
 	DefaultMaxAttempts int // 0: 3
@@ -214,6 +217,24 @@ func (s *Service) event(ctx context.Context, id, kind, text string, data map[str
 	}
 }
 
+// RoleSpec is a role resolved for a task: what the spawn request takes from it.
+type RoleSpec struct {
+	Instructions string
+	ReadOnly     bool
+	Model        string
+	Effort       string
+	Skills       []string
+	// Ref names the role in the role registry (see factory.SpawnRequest.RoleRef).
+	Ref string
+}
+
+func (s *Service) resolveRole(ctx context.Context, t factory.Task, role string) (RoleSpec, bool) {
+	if s.opts.ResolveRole == nil {
+		return RoleSpec{}, false
+	}
+	return s.opts.ResolveRole(ctx, t, role)
+}
+
 // Create adds a task: it validates the role and model, applies the service
 // defaults, and returns the existing task when t.Source.Key is known.
 func (s *Service) Create(ctx context.Context, t factory.Task) (*factory.Task, bool, error) {
@@ -221,7 +242,9 @@ func (s *Service) Create(ctx context.Context, t factory.Task) (*factory.Task, bo
 		return nil, false, fmt.Errorf("%w: task title", factory.ErrInvalid)
 	}
 	if t.Role != "" && s.opts.Roles != nil {
-		if _, _, ok := s.opts.Roles(t.Role); !ok {
+		if _, ok := s.resolveRole(ctx, t, t.Role); ok {
+			// a role of the task's project or owner
+		} else if _, _, ok := s.opts.Roles(t.Role); !ok {
 			return nil, false, fmt.Errorf("%w: unknown role %q", factory.ErrInvalid, t.Role)
 		}
 	}

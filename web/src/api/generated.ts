@@ -569,6 +569,54 @@ export interface ResumeRequest {
 
 export type Role = "owner" | "member" | "viewer";
 
+export interface RoleDoc {
+  scope: string;
+  scopeId?: string;
+  name: string;
+  title?: string;
+  description?: string;
+  prompt: string;
+  model?: string;
+  reasoningEffort?: string;
+  toolProfile?: string;
+  allowTools?: string[];
+  denyTools?: string[];
+  skills?: string[];
+  mcp?: string[];
+  permissionMode?: string;
+  enabled: boolean;
+  version: number;
+  builtin?: boolean;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  updatedBy?: string;
+}
+
+export interface RolePreview {
+  prompt: string;
+  mode: string;
+  model?: string;
+  reasoningEffort?: string;
+  skills?: string[];
+  askFirst: boolean;
+  notes?: string[];
+  allowTools?: string[];
+  denyTools?: string[];
+}
+
+export interface RoleVersion {
+  version: number;
+  role: RoleDoc;
+  changedBy?: string;
+  at: string;
+}
+
+export interface RoleView extends RoleDoc {
+  overrides?: boolean;
+  editable: boolean;
+}
+
 export interface Run {
   id: string;
   threadId: string;
@@ -599,6 +647,7 @@ export interface SendOptions {
   mode?: RunMode;
   attachments?: Attachment[];
   sandbox?: SandboxMode;
+  role?: string;
 }
 
 export interface SkillConnTest {

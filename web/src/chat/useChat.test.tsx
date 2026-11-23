@@ -74,6 +74,22 @@ describe("useChat", () => {
     expect(f.result.current.messages.at(-1)).toMatchObject({ role: "assistant", live: true, parts: [{ kind: "text", text: "Hello" }] });
   });
 
+  it("sends the role and the skills picked with @ as settings of the run,", async () => {
+    // Arrange
+    const f = setup({
+      "GET /api/threads/t1": thread(),
+      "POST /api/threads/t1/runs": { id: "r1", threadId: "t1", status: "running" },
+      "GET /api/runs/r1/events": () => sse([{ id: 1, ev: { type: "RUN_STARTED", runId: "r1" } }]),
+    });
+    await waitFor(() => expect(f.result.current.thread.isSuccess).toBe(true));
+    // Act
+    await act(async () => {
+      await f.result.current.send("write it", [], { role: "docs", skills: ["review", "writing"] });
+    });
+    // Assert
+    expect(f.f.find("POST", "/api/threads/t1/runs")[0]?.body).toEqual({ message: "write it", model: "m1", interactive: true, mode: "build", role: "docs", skills: ["review", "writing"] });
+  });
+
   it("when the run finishes it reloads the thread so the persisted messages replace the stream", async () => {
     let threads = 0;
     const f = setup({

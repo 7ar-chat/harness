@@ -113,6 +113,18 @@ An agent can call `delegate{role, task}` to run a full sub-agent (own thread, sa
 report, or `delegate_many` to run up to 3 in parallel. Read-only roles run in plan mode. Depth is limited to 2 and a
 run to 24 delegations; a delegated run's spend is booked on the task.
 
+Roles are not only the five builtin ones. A project (or a user) defines roles of its own (`core/roles`, stored by
+`adapters/store/rolestore`, served under `/api/projects/{pid}/roles` and `/api/me/roles`): a prompt, a model, a reasoning
+effort, tool limits (read-only, allow and deny lists, MCP servers), skills to load, a permission mode, an enabled flag and a
+version history (the last 10). `delegate`, `delegate_many` and a task's `role` ask the registry first
+(`Options.Roles`, supplied by the product as a `roles.Resolver`: personal over project over builtin; a project role of
+the same name replaces a builtin; a disabled one hides it) and fall back to the builtin catalogue. A delegated registry role
+does not copy its prompt into the thread: the sub-run records a reference (`SpawnRequest.RoleRef`) and the roles feature
+renders the prompt and applies the tool limits when it executes, in whichever process that is. A chat run can take a role
+too (`RunOptions.Role`, `role` in `POST /threads/{id}/runs`, the composer's `@`): the role's model, effort, permission
+mode and skills replace the run's, its prompt joins the system prompt and its tool limits filter the tool set for that
+run only.
+
 ## Running it: `harness-web`
 
 Team mode, a GitHub App and Postgres are the production shape (`docs/team.md`). Then:

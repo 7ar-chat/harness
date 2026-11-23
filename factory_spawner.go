@@ -66,7 +66,7 @@ func (s *FactorySpawner) Spawn(ctx context.Context, req factory.SpawnRequest) (*
 			s.OnSpawn(ctx, th.ID, *t, req)
 		}
 	}
-	opts := RunOptions{Model: model, Interactive: req.Interactive}
+	opts := RunOptions{Model: model, Interactive: req.Interactive, ReasoningEffort: req.ReasoningEffort, Skills: req.Skills, RoleRef: req.RoleRef}
 	if req.ReadOnly {
 		opts.Mode = ModePlan
 	}

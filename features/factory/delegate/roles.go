@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/7ar-chat/harness/core/factory"
+	"github.com/7ar-chat/harness/core/roles"
 )
 
 // Role is a kind of sub-agent the delegate tool can start.
@@ -22,7 +23,27 @@ type Role struct {
 	ReadOnly bool
 	// Model "" uses the spawner's default model.
 	Model string
+	// Effort is the reasoning effort ("" for the model's default); Skills are loaded for the run.
+	Effort string
+	Skills []string
+	// Ref names the role in the role registry (core/roles) when the role came from there and its prompt, tool
+	// limits and MCP servers are applied by the run itself; empty for the builtin catalogue.
+	Ref string
 }
+
+// fromRegistry converts a role of the registry. A builtin entry of the registry is not converted (ok false): the
+// catalogue's own definition (which a host may have replaced) stays the one in force.
+func fromRegistry(r roles.Role) (Role, bool) {
+	if r.Builtin || r.Scope == roles.ScopeBuiltin {
+		return Role{}, false
+	}
+	return Role{Name: r.Name, Description: r.Description, Instructions: refPointer, ReadOnly: r.ReadOnly(),
+		Model: r.Model, Effort: r.ReasoningEffort, Skills: r.Skills, Ref: roles.RefOf(r).String()}, true
+}
+
+// refPointer stands for the prompt of a registry role in the thread's assignment: the run renders the prompt
+// itself, from the registry, in its own section.
+const refPointer = "Your role's instructions are in the Role section of your system prompt."
 
 // DefaultRoles is the built-in catalogue: planner, coder, reviewer, tester and explorer.
 func DefaultRoles() map[string]Role {

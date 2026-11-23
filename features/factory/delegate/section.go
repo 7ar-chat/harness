@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/7ar-chat/harness/core/factory"
+	coreroles "github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/engine/agent"
 )
 
@@ -84,11 +85,34 @@ func renderSection(ti *factory.ThreadInfo, roles map[string]Role) string {
 // for models that do not read the system prompt closely, so this is the short form.
 // The optional argument is the catalogue (default: DefaultRoles).
 func Roster(catalogue ...map[string]Role) agent.PromptSection {
-	roles := DefaultRoles()
-	if len(catalogue) > 0 && catalogue[0] != nil {
-		roles = catalogue[0]
+	var c map[string]Role
+	if len(catalogue) > 0 {
+		c = catalogue[0]
 	}
-	return func(_ context.Context, _ agent.Input) string {
+	return RosterWith(c, nil)
+}
+
+// RosterWith is Roster that also lists the roles the registry has for the thread of the run (nil: none).
+func RosterWith(catalogue map[string]Role, reg coreroles.Resolver) agent.PromptSection {
+	base := catalogue
+	if base == nil {
+		base = DefaultRoles()
+	}
+	return func(ctx context.Context, in agent.Input) string {
+		roles := base
+		if reg != nil && in.Run != nil {
+			if list, err := reg.Available(ctx, coreroles.Query{Login: in.Run.UserLogin, ThreadID: in.Run.ThreadID}); err == nil {
+				roles = make(map[string]Role, len(base)+len(list))
+				for k, r := range base {
+					roles[k] = r
+				}
+				for _, r := range list {
+					if dr, ok := fromRegistry(r); ok {
+						roles[r.Name] = dr
+					}
+				}
+			}
+		}
 		var b strings.Builder
 		b.WriteString("## Delegation\nYou can hand self-contained work to sub-agents with delegate (one) or delegate_many (several at once). Roles:\n")
 		for _, r := range sortedRoles(roles) {

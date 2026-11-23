@@ -76,7 +76,7 @@ func buildHarness(ctx context.Context, cfg *config.Config, o Options, m *metrics
 			ho.Store = pgstore.NewPG(pool)
 		}
 	}
-	if rdb != nil || o.Features != nil || o.MCPServers != nil {
+	if rdb != nil || o.Features != nil || o.MCPServers != nil || o.Roles != nil {
 		st := ho.Store
 		if st == nil { // harness.New defaults to a memory store; the event log and the features have to be over the same one
 			st = memstore.New()
@@ -106,6 +106,16 @@ func buildHarness(ctx context.Context, cfg *config.Config, o Options, m *metrics
 			return fail(fmt.Errorf("build the MCP servers source: %w", err))
 		}
 		ho.MCPServers = src
+	}
+	if o.Roles != nil {
+		res, release, err := o.Roles(ctx, cfg, ho.Store)
+		if release != nil {
+			cleanups = append(cleanups, release)
+		}
+		if err != nil {
+			return fail(fmt.Errorf("build the roles resolver: %w", err))
+		}
+		ho.Roles = res
 	}
 	h, err := harness.New(ho)
 	if err != nil {

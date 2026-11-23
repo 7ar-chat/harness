@@ -15,6 +15,7 @@ import (
 	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
 	"github.com/7ar-chat/harness/adapters/store/reqstore"
+	"github.com/7ar-chat/harness/adapters/store/rolestore"
 	"github.com/7ar-chat/harness/adapters/store/teamstore"
 	"github.com/7ar-chat/harness/app/factoryenv"
 	"github.com/7ar-chat/harness/app/product"
@@ -22,6 +23,7 @@ import (
 	"github.com/7ar-chat/harness/core/capabilities"
 	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/requirements"
+	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/features/artifacts"
 	"github.com/7ar-chat/harness/redisinfra"
@@ -53,6 +55,8 @@ type built struct {
 	caps capabilities.Store
 	// reqs is the requirements store (team mode only).
 	reqs requirements.Store
+	// roles is the store of the roles of projects and users (team mode only); the harness resolves them through it.
+	roles roles.Store
 	// skills serves the connections of skills that need an account (nil without the marketplace).
 	skills *product.SkillAPI
 	// bus shares the live feed between replicas: set in team mode when REDIS_HOST is.
@@ -70,6 +74,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 	var fs factory.Store
 	var caps capabilities.Store
 	var reqs requirements.Store
+	var rs roles.Store
 	_, havePG := os.LookupEnv("POSTGRES_HOST")
 	switch {
 	case team && havePG:
@@ -86,6 +91,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		fs = factorystore.NewPG(pool, nil)
 		caps = capstore.NewPG(pool, nil)
 		reqs = reqstore.NewPG(pool, nil)
+		rs = rolestore.NewPG(pool, nil)
 	case durable || team:
 		st, err := harness.OpenLocalStore(cfg.LocalStateDir)
 		if err != nil {
@@ -113,6 +119,12 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 				return nil, fmt.Errorf("open the requirements store: %w", err)
 			}
 			reqs = rf
+			rlf, err := rolestore.Open(filepath.Join(stateDir(cfg), "roles.json"), nil)
+			if err != nil {
+				_ = closers.Close()
+				return nil, fmt.Errorf("open the roles store: %w", err)
+			}
+			rs = rlf
 		}
 	}
 	b := &built{team: ts, closer: closers}
@@ -165,6 +177,10 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 			return nil, err
 		}
 		b.caps, b.reqs = caps, reqs
+		if rs != nil {
+			b.roles = rs
+			o.Roles = product.NewRoleRegistry(ts, rs)
+		}
 		if caps != nil {
 			if b.skills, err = product.NewSkillAPI(ts, caps, product.SecretKeyFromEnv(os.Getenv)); err != nil {
 				_ = closers.Close()

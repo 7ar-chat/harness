@@ -34,7 +34,7 @@ engine/                        the reusable intelligence
   eventlog/ queue/ approvals/   (interfaces and in-memory implementations only)
 coding/                        the coding toolset: sandboxtools (read/write/edit/search/exec/jobs), gitsafe, codecheck
 adapters/                      implementations of the ports
-  store/{memstore,filestore,pgstore,teamstore,factorystore,reqstore}   memory, durable local files, Postgres
+  store/{memstore,filestore,pgstore,teamstore,factorystore,capstore,reqstore,rolestore}   memory, durable local files, Postgres
   redisx/                      Redis: queue + bus, event log, coordinator, job list, skill installs
   sandbox/{local,opensandbox,backends}   your machine (trusted), OpenSandbox (remote), the SANDBOX_BACKEND registry
   blobs/s3blobs/               S3-compatible blob store

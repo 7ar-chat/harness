@@ -225,7 +225,7 @@ func (c *impl) Send(ctx context.Context, threadID, text string, o client.SendOpt
 	run, err := c.h.Send(ctx, c.user, threadID, text, harness.RunOptions{
 		Model: c.modelOr(o.Model), ReasoningEffort: o.ReasoningEffort, Skills: o.Skills, Interactive: o.Interactive,
 		Sandbox: harness.SandboxMode(o.Sandbox), Mode: harness.RunMode(o.Mode), Attachments: toAttachments(o.Attachments),
-		Author: c.author.Login, AuthorKind: c.author.Kind, OnBehalfOf: c.author.OnBehalfOf,
+		Author: c.author.Login, AuthorKind: c.author.Kind, OnBehalfOf: c.author.OnBehalfOf, Role: o.Role,
 	})
 	if err != nil {
 		return nil, mapErr(err)

@@ -336,6 +336,7 @@ func FactoryFeature(o FactoryOptions) Feature {
 				r, ok := roles[role]
 				return r.Instructions, r.ReadOnly, ok
 			},
+			ResolveRole:   taskRoleResolver(b.Options.Roles),
 			DefaultPolicy: defaultPolicy, DefaultMaxAttempts: o.MaxAttempts, DefaultBudget: o.DefaultBudget,
 			MaxConcurrent: o.MaxConcurrent, Backoff: o.Backoff, PollEvery: o.PollEvery,
 			CancelRun: func(ctx context.Context, runID string) error {
@@ -436,7 +437,7 @@ func FactoryFeature(o FactoryOptions) Feature {
 		b.StepNote(guard.StepNote())
 
 		b.AddTools(delegate.New(delegate.Options{
-			Spawner: spawner, Store: o.Store, Roles: roles, Models: cfg.LLMModels,
+			Spawner: spawner, Store: o.Store, Roles: roles, Registry: b.Options.Roles, Models: cfg.LLMModels,
 			Task: func(ctx context.Context, id string) (*factory.Task, error) { return o.Store.GetTask(ctx, id) },
 			OnSpend: func(ctx context.Context, taskID string, d factory.Spend) {
 				if _, err := o.Store.AddSpend(ctx, taskID, d); err != nil && !errors.Is(err, factory.ErrNotFound) {
@@ -445,7 +446,7 @@ func FactoryFeature(o FactoryOptions) Feature {
 			},
 		}))
 		b.Section(delegate.Section(o.Store, roles))
-		b.Section(delegate.Roster(roles))
+		b.Section(delegate.RosterWith(roles, b.Options.Roles))
 
 		var onEvent func(context.Context, factory.Event)
 		if o.Forge != nil {

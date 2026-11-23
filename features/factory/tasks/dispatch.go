@@ -105,7 +105,7 @@ func (s *Service) start(ctx context.Context, t factory.Task) (ok bool, err error
 		Attempts: &attempt,
 		ThreadID: new(string), RunID: new(string), // the previous attempt's run is not this one's
 	}
-	req := s.request(t, attempt)
+	req := s.request(ctx, t, attempt)
 	if t.Branch == "" && req.Branch != "" {
 		p.Branch = &req.Branch
 	}
@@ -165,14 +165,18 @@ func (s *Service) release(ctx context.Context, t *factory.Task) error {
 }
 
 // request builds the spawn request of an attempt.
-func (s *Service) request(t factory.Task, attempt int) factory.SpawnRequest {
+func (s *Service) request(ctx context.Context, t factory.Task, attempt int) factory.SpawnRequest {
 	role := t.Role
 	if role == "" {
 		role = factory.RoleCoder
 	}
 	var instructions string
 	var readOnly bool
-	if s.opts.Roles != nil {
+	spec, custom := s.resolveRole(ctx, t, role)
+	switch {
+	case custom:
+		instructions, readOnly = spec.Instructions, spec.ReadOnly
+	case s.opts.Roles != nil:
 		instructions, readOnly, _ = s.opts.Roles(role)
 	}
 	if s.opts.Variant != nil {
@@ -181,6 +185,9 @@ func (s *Service) request(t factory.Task, attempt int) factory.SpawnRequest {
 		}
 	}
 	model := t.Model
+	if model == "" {
+		model = spec.Model
+	}
 	if model == "" {
 		model = s.opts.DefaultModel
 	}
@@ -195,6 +202,7 @@ func (s *Service) request(t factory.Task, attempt int) factory.SpawnRequest {
 	return factory.SpawnRequest{
 		Login: t.Owner, Title: t.Title, Prompt: s.prompt(t, attempt, branch),
 		Model: model, Role: role, Instructions: instructions, ReadOnly: readOnly,
+		ReasoningEffort: spec.Effort, Skills: spec.Skills, RoleRef: spec.Ref,
 		Policy: policy, TaskID: t.ID,
 		Repo: t.Repo, BaseBranch: t.BaseBranch, Branch: branch,
 		Detach: true, Interactive: false,
