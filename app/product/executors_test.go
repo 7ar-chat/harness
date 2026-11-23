@@ -82,7 +82,7 @@ func TestExecutorsListBuiltinsAndProjectDefinitions(t *testing.T) {
 		t.Fatalf("create: %d %s", code, raw)
 	}
 	all := r.list("/api/executors?project="+r.project, "bob")
-	for _, n := range []string{"claude-code", "codex", "opencode", "mycli"} {
+	for _, n := range []string{"claude-code", "codex", "opencode", "omp", "mycli"} {
 		if _, ok := all[n]; !ok {
 			t.Errorf("missing %s in %v", n, all)
 		}
@@ -93,7 +93,7 @@ func TestExecutorsListBuiltinsAndProjectDefinitions(t *testing.T) {
 	if !r.list("/api/projects/"+r.project+"/executors", "alice")["mycli"].Editable {
 		t.Error("the owner can edit")
 	}
-	if got := r.list("/api/executors", "bob"); len(got) != 3 {
+	if got := r.list("/api/executors", "bob"); len(got) != 4 {
 		t.Errorf("without a project only the builtins: %v", got)
 	}
 	if code, _ := r.call("GET", "/api/executors?project="+r.project, "carol", ""); code != 403 && code != 404 {

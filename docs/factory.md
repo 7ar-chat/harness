@@ -363,7 +363,7 @@ and retries it, to be taken by another worker.
 ## External coding agents (executors)
 
 A role (`core/roles`) may name an *executor*: a CLI coding agent that runs inside the run's sandbox in place of the
-internal loop (`claude-code`, `codex`, `opencode`, or a command template a project's owner defines). The
+internal loop (`claude-code`, `codex`, `opencode`, `omp` (Oh My Pi), or a command template a project's owner defines). The
 `run_executor` tool (`features/executors`, installed with `harness.Executors`, before the factory) runs it
 non-interactively, streams its output as live tool output, enforces the timeout and the run's cancellation (the
 process dies with the sandbox call), reads its final summary and `git diff --stat`, books the cost the CLI reports
@@ -383,6 +383,13 @@ the task budget, and refuses to start once the budget is spent.
   prints, and never written to disk. The credential broker of the sandbox adds headers to HTTPS requests of the
   sandbox; it is not used here because the CLIs read their key from the environment.
 * Installing a missing CLI needs `install=true` on the call and `HARNESS_EXECUTORS_INSTALL=1` on the server.
+* `omp` (Oh My Pi, github.com/can1357/oh-my-pi, `bun install -g @oh-my-pi/pi-coding-agent`) is run as `omp -p ... </dev/null`
+  (stdin is closed because omp reads a non-terminal stdin to EOF before it starts). A headless omp cannot answer an
+  approval prompt, so the edit and full levels both use `--approval-mode yolo` and the sandbox is the boundary; the
+  read-only level is `--tools read,grep,glob --approval-mode always-ask`, which comes from the omp.sh docs' own
+  read-only example and has not been run against a real omp. Its JSON stream has no documented schema, so its output
+  is read as text and its spend is not booked. Keys it reads: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+  `OPENROUTER_API_KEY`, `GEMINI_API_KEY` and the two base URLs.
 
 ## Known limits
 

@@ -178,7 +178,7 @@ function RoleEditor({ pid, role, create, readOnly, onClose, onDuplicate }: { pid
             <Select value={d.executor || "internal"} onValueChange={(v) => set({ executor: v === "internal" ? "" : v })} disabled={readOnly}>
               <SelectTrigger aria-label="Executor"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="internal">7ar's own agent loop</SelectItem>
+                <SelectItem value="internal">7ar harness (built-in loop)</SelectItem>
                 {executorOptions.map((e) => (
                   <SelectItem key={e.name} value={e.name}>{e.title || e.name}{e.kind === "custom" ? " (project)" : ""}</SelectItem>
                 ))}

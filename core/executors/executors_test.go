@@ -19,6 +19,9 @@ func TestRenderBuiltins(t *testing.T) {
 		{Codex, LevelEdit, []string{"codex exec --json", "--sandbox workspace-write", `"$HARNESS_TASK"`}, nil},
 		{Codex, LevelReadOnly, []string{"--sandbox read-only"}, nil},
 		{OpenCode, LevelEdit, []string{`opencode run "$HARNESS_TASK"`}, []string{"{mode}"}},
+		{OMP, LevelEdit, []string{`omp -p`, "--approval-mode yolo", `"$HARNESS_TASK"`, "</dev/null"}, []string{"{mode}", "{task}"}},
+		{OMP, LevelFull, []string{"--approval-mode yolo"}, nil},
+		{OMP, LevelReadOnly, []string{"--tools read,grep,glob", "--approval-mode always-ask"}, []string{"yolo"}},
 	}
 	for _, c := range cases {
 		ex, ok := BuiltinNamed(c.name)

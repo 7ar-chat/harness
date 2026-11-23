@@ -1,5 +1,5 @@
 // Package executors is the vocabulary of external coding-agent executors: a CLI agent (Claude Code, Codex,
-// OpenCode, or a command a project defines) that 7ar runs non-interactively inside a run's sandbox, in place of
+// OpenCode, OMP, or a command a project defines) that 7ar runs non-interactively inside a run's sandbox, in place of
 // its own loop, under the same safety rails. It holds the types, the builtin adapters (the command of each CLI
 // and the parser of its output), the store port of the project-defined ones and the ports the product supplies.
 // features/executors runs them; the product serves and seals their credentials.
@@ -51,6 +51,7 @@ const (
 	ClaudeCode = "claude-code"
 	Codex      = "codex"
 	OpenCode   = "opencode"
+	OMP        = "omp"
 )
 
 // Limits.
@@ -253,6 +254,24 @@ func Builtins() []Executor {
 			Command:     `opencode run {task}`,
 			Binary:      "opencode", InstallCommand: "npm install -g opencode-ai",
 			CredentialEnv: []string{"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY"}, Parser: ParserText,
+		},
+		{
+			// From omp.sh/docs (cli, modes, approvals, env): -p prints the final assistant text and exits; a headless
+			// session cannot answer an approval prompt (the call fails), so the edit and full levels use yolo and the
+			// sandbox is the boundary; read-only is the read tools only. stdin is closed because omp reads a
+			// non-terminal stdin to EOF before it starts. Its JSON stream has no documented schema, so the output is
+			// read as text and no spend is booked.
+			Name: OMP, Title: "Oh My Pi (omp)", Kind: KindBuiltin, Enabled: true,
+			Description: "the Oh My Pi coding agent CLI (omp -p); output is read as plain text, so its spend is not counted",
+			Command:     `omp -p {mode} {task} </dev/null`,
+			ModeFlags: map[Level]string{
+				LevelReadOnly: `--tools read,grep,glob --approval-mode always-ask`,
+				LevelEdit:     `--approval-mode yolo`,
+				LevelFull:     `--approval-mode yolo`,
+			},
+			Binary: "omp", InstallCommand: "bun install -g @oh-my-pi/pi-coding-agent",
+			CredentialEnv: []string{"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_BASE_URL", "OPENAI_BASE_URL"},
+			Parser:        ParserText,
 		},
 	}
 }
