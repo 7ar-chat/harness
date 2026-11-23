@@ -481,7 +481,7 @@ func (m *DefaultManager) Acquire(ctx context.Context, threadID, login string) (S
 			return nil, ErrQuota
 		}
 	}
-	created, err := m.backend.Create(ctx, CreateOptions{Profile: m.opts.Profile, Metadata: map[string]string{
+	created, err := m.backend.Create(ctx, CreateOptions{Profile: ProfileFrom(ctx, m.opts.Profile), Metadata: map[string]string{
 		"work-thread": threadID,
 		"work-user":   UserTag(login),
 	}})
@@ -614,6 +614,25 @@ func Quiet(ctx context.Context) context.Context { return context.WithValue(ctx, 
 
 // Quieted reports a Quiet context.
 func Quieted(ctx context.Context) bool { v, _ := ctx.Value(quietKey{}).(bool); return v }
+
+type profileKey struct{}
+
+// WithProfile makes the Acquire that creates a sandbox with ctx use that profile (the runtime environment the
+// thread chose) instead of the deployment's. An empty profile changes nothing.
+func WithProfile(ctx context.Context, profile string) context.Context {
+	if profile == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, profileKey{}, profile)
+}
+
+// ProfileFrom is the profile WithProfile set on ctx, def when there is none.
+func ProfileFrom(ctx context.Context, def string) string {
+	if p, _ := ctx.Value(profileKey{}).(string); p != "" {
+		return p
+	}
+	return def
+}
 
 func noticeKey(threadID string) string { return "work:sbx:notice:" + threadID }
 

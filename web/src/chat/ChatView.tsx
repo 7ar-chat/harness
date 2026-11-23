@@ -15,6 +15,8 @@ import { toThreadMessage, type MessageCustom } from "./convert";
 import { MarkdownText, MemoryLinkContext, MemoryNote, PlainText, Reasoning, ToolCard, ToolGroup } from "./parts";
 import { MentionChips, MentionPicker, useMention, useMentionItems, type MentionItem } from "./MentionPicker";
 import { InterruptCard } from "./Prompts";
+import { ArtifactCard, ArtifactContext, type PublishedItem } from "./artifacts";
+import { QueueCard, useQueue } from "./queue";
 import { useChat, type RunSettings } from "./useChat";
 import { formatUsage } from "./usage";
 import { format } from "date-fns";
@@ -65,7 +67,7 @@ function AssistantMessage() {
         <span className="font-medium text-foreground">Agent</span>
       </div>
       <div className="min-w-0 pl-7">
-        <MessagePrimitive.Parts components={{ Text: MarkdownText, Reasoning, tools: { Fallback: ToolCard }, ToolGroup, Empty: Thinking, data: { by_name: { memory: ({ data }) => <MemoryNote data={data} /> } } }} />
+        <MessagePrimitive.Parts components={{ Text: MarkdownText, Reasoning, tools: { Fallback: ToolCard }, ToolGroup, Empty: Thinking, data: { by_name: { memory: ({ data }) => <MemoryNote data={data} />, artifact: ({ data }) => <ArtifactCard pub={data as PublishedItem} /> } } }} />
       </div>
     </MessagePrimitive.Root>
   );
@@ -137,7 +139,7 @@ function Composer({ running, readOnly, commands, items, chips, onChips }: { runn
       <ComposerPrimitive.Input
         rows={1}
         maxRows={8}
-        placeholder={readOnly ? "You have read-only access" : running ? "Steer the agent while it works…" : "Message the agent (Enter to send, Shift+Enter for a new line)"}
+        placeholder={readOnly ? "You have read-only access" : running ? "Queue a message for when the reply ends…" : "Message the agent (Enter to send, Shift+Enter for a new line)"}
         className="w-full resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
         aria-label="Message"
       />
@@ -150,7 +152,7 @@ function Composer({ running, readOnly, commands, items, chips, onChips }: { runn
         <div className="flex-1" />
         <ComposerPrimitive.Send asChild>
           <Button type="submit" size="sm">
-            <Send /> {running ? "Steer" : "Send"}
+            <Send /> {running ? "Queue" : "Send"}
           </Button>
         </ComposerPrimitive.Send>
       </div>
@@ -184,6 +186,7 @@ export function ChatView({ threadId, settings, readOnly, users, self, suggestion
   const chipsRef = useRef(chips);
   chipsRef.current = chips;
   const { messages, running, send, resume, cancel, interrupt, live, busy, thread } = chat;
+  const queue = useQueue(threadId);
 
   const onNew = useCallback(
     async (m: AppendMessage) => {
@@ -235,6 +238,7 @@ export function ChatView({ threadId, settings, readOnly, users, self, suggestion
 
   return (
     <MemoryLinkContext.Provider value={projectId}>
+    <ArtifactContext.Provider value={threadId}>
     <AssistantRuntimeProvider runtime={runtime}>
       <ThreadPrimitive.Root className="flex h-full min-h-0 flex-col">
         <DraftSync threadId={threadId} />
@@ -261,10 +265,12 @@ export function ChatView({ threadId, settings, readOnly, users, self, suggestion
             <span>{running ? `Running · ${live.steps} steps` : live.phase === "failed" ? "Last run failed" : live.phase === "cancelled" ? "Cancelled" : readOnly ? "Read-only" : "Idle"}</span>
             <span className="truncate">{usage}</span>
           </div>
+          <QueueCard items={queue.items} running={running} readOnly={readOnly} remove={queue.remove} sendNow={queue.sendNow} pending={queue.pending} />
           <Composer running={running} readOnly={readOnly} commands={commands} items={mentionItems} chips={chips} onChips={setChips} />
         </div>
       </ThreadPrimitive.Root>
     </AssistantRuntimeProvider>
+    </ArtifactContext.Provider>
     </MemoryLinkContext.Provider>
   );
 }

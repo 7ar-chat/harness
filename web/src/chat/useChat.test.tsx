@@ -112,19 +112,47 @@ describe("useChat", () => {
     expect(f.result.current.running).toBe(false);
   });
 
-  it("follows a run somebody else started, and a send during it steers instead of starting another", async () => {
+  it("follows a run somebody else started, and a send during it queues the message instead of starting another", async () => {
     const f = setup({
       "GET /api/threads/t1": thread({ activeRun: { id: "r7", status: "running" }, status: "running" }),
       "GET /api/runs/r7/events": () => new Response(new ReadableStream<Uint8Array>({ start() {} }), { status: 200 }),
-      "POST /api/runs/r7/steer": {},
+      "POST /api/threads/t1/queue": { item: { id: "q1", text: "also check x", createdAt: T } },
     });
     await waitFor(() => expect(f.result.current.running).toBe(true));
     await waitFor(() => expect(f.f.find("GET", "/api/runs/r7/events")).toHaveLength(1));
     await act(async () => {
       await f.result.current.send("also check x");
     });
-    expect(f.f.find("POST", "/api/runs/r7/steer")[0]?.body).toEqual({ text: "also check x" });
+    // The message waits server side with the settings of the composer; nothing steers or starts a run by itself.
+    expect(f.f.find("POST", "/api/threads/t1/queue")[0]?.body).toEqual({ message: "also check x", model: "m1", interactive: true, mode: "build" });
+    expect(f.f.find("POST", "/api/runs/r7/steer")).toHaveLength(0);
     expect(f.f.find("POST", "/api/threads/t1/runs")).toHaveLength(0);
+  });
+
+  it("follows the run a queued message started when the reply had just ended", async () => {
+    const f = setup({
+      "GET /api/threads/t1": thread({ activeRun: { id: "r7", status: "running" }, status: "running" }),
+      "GET /api/runs/r7/events": () => new Response(new ReadableStream<Uint8Array>({ start() {} }), { status: 200 }),
+      "POST /api/threads/t1/queue": { item: { id: "q1", text: "x", createdAt: T }, run: { id: "r8", threadId: "t1", status: "queued" } },
+      "GET /api/runs/r8/events": () => new Response(new ReadableStream<Uint8Array>({ start() {} }), { status: 200 }),
+    });
+    await waitFor(() => expect(f.result.current.running).toBe(true));
+    await act(async () => {
+      await f.result.current.send("x");
+    });
+    await waitFor(() => expect(f.result.current.live.runId).toBe("r8"));
+  });
+
+  it("refuses to queue an image behind a running reply", async () => {
+    const f = setup({
+      "GET /api/threads/t1": thread({ activeRun: { id: "r7", status: "running" }, status: "running" }),
+      "GET /api/runs/r7/events": () => new Response(new ReadableStream<Uint8Array>({ start() {} }), { status: 200 }),
+    });
+    await waitFor(() => expect(f.result.current.running).toBe(true));
+    await act(async () => {
+      await expect(f.result.current.send("look", [{ name: "a.png", mime: "image/png", data: "AAAA" }])).rejects.toThrow(/once the reply has ended/);
+    });
+    expect(f.f.find("POST", "/api/threads/t1/queue")).toHaveLength(0);
   });
 
   it("cancel posts to the active run, and does nothing when none is active", async () => {

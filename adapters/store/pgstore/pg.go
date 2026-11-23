@@ -535,3 +535,6 @@ func (s *PG) SetRunOutcome(ctx context.Context, id, status, errCode, errMsg stri
 		WHERE id = $1`, id, status, store.ErrorCodeFor(status, errCode), store.CleanText(errMsg))
 	return err
 }
+
+// Pool is the connection pool, for the stores that share this database (thread state).
+func (p *PG) Pool() *pgxpool.Pool { return p.pool }

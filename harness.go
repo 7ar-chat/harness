@@ -46,6 +46,7 @@ import (
 	"github.com/7ar-chat/harness/features/artifacts"
 	"github.com/7ar-chat/harness/features/artifacts/workspace"
 	"github.com/7ar-chat/harness/features/browsersandbox"
+	"github.com/7ar-chat/harness/features/chatqueue"
 	"github.com/7ar-chat/harness/features/documents"
 	"github.com/7ar-chat/harness/features/jobhunt"
 	"github.com/7ar-chat/harness/features/memory"
@@ -117,6 +118,10 @@ type Options struct {
 	// a database: the servers of the thread's project or of the user). They are merged after the configured
 	// ones, are treated as untrusted (config.MCPServer.Untrusted) and need package mcpfeature to be imported.
 	MCPServers MCPServersFunc
+	// ThreadState keeps the per-thread documents of the queue of waiting messages, the runtime environment and the
+	// published artifacts. Default: the one of the Store (Postgres table, a file next to the local store's journal,
+	// else memory); a host with several processes on its own store injects a shared one.
+	ThreadState store.ThreadStateStore
 	// Roles resolves the roles of projects and users: a run can take one on (RunOptions.Role), the delegate tool
 	// and factory tasks start sub-agents with them. Nil: only the builtin roles of the delegate catalogue.
 	Roles roles.Resolver
@@ -149,6 +154,10 @@ type Harness struct {
 	Documents *documents.Service
 	// Jobs is the job-search service (nil unless HARNESS_JOBS_DIR is set).
 	Jobs *jobhunt.Service
+	// ThreadState holds the per-thread documents (message queue, environment, published artifacts).
+	ThreadState store.ThreadStateStore
+	// Queued is the queue of messages sent while a reply was running.
+	Queued *chatqueue.Queue
 	// Browser keeps the browser sandboxes of the conversations (nil unless BROWSER_BACKEND names a sandbox provider).
 	Browser *browsersandbox.Manager
 
@@ -205,18 +214,27 @@ func New(o Options) (*Harness, error) {
 		features = profileOf(cfg)
 	}
 
+	ts := o.ThreadState
+	if ts == nil {
+		var err error
+		if ts, err = defaultThreadState(st); err != nil {
+			return nil, err
+		}
+	}
+	o.ThreadState = ts
 	b := newBuilder(o, cfg, st, models, blobs, infra)
 	var coord sandbox.Coordinator
 	var locks runtime.Locks
 	if infra.Coordinator != nil {
 		coord, locks = infra.Coordinator, infra.Coordinator
 	}
-	mgr := sandbox.NewManager(backend, st, coord, sandbox.ManagerOptions{
+	var mgr sandbox.Manager = sandbox.NewManager(backend, st, coord, sandbox.ManagerOptions{
 		Profile:    cfg.SandboxProfile(),
 		MaxPerUser: cfg.MaxSandboxesPerUser, Timeout: cfg.SandboxTimeout(),
 		UnhealthyRecreate: time.Duration(cfg.SandboxUnhealthyRecreate) * time.Second,
 		OnCreate:          b.onCreate,
 	})
+	mgr = envManager{Manager: mgr, ts: ts} // a thread creates its sandbox in the environment it chose
 	b.Sandboxes = mgr
 	if err := b.install(features); err != nil {
 		return nil, err
@@ -234,7 +252,7 @@ func New(o Options) (*Harness, error) {
 	}
 
 	h := &Harness{cfg: cfg, Store: st, Log: infra.Log, Queue: infra.Broker, Bus: infra.Broker,
-		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace, Memory: b.Memory, Documents: b.Documents, Jobs: b.Jobs, Browser: b.BrowserSandboxes,
+		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace, Memory: b.Memory, Documents: b.Documents, Jobs: b.Jobs, Browser: b.BrowserSandboxes, ThreadState: ts, Queued: &chatqueue.Queue{St: ts},
 		sandboxTools: b.sandboxTools != nil, roles: o.Roles, runGate: o.RunGate}
 	h.Agent = &agent.Agent{
 		Models: models, Tools: registry, Store: st, Steers: h.Bus,
@@ -259,7 +277,7 @@ func New(o Options) (*Harness, error) {
 		}})
 	h.Runtime = runtime.New(runtime.Options{
 		ID: id, Concurrency: cfg.RuntimeConcurrency, ShutdownGrace: time.Duration(cfg.RuntimeShutdownGrace) * time.Second,
-		Hooks:  append(append([]runtime.Hook{}, b.endOfRun...), o.Hooks...),
+		Hooks:  append(append(append([]runtime.Hook{}, b.endOfRun...), queueHook{h: h}), o.Hooks...),
 		Purger: b.purger,
 		Jobs:   jobs,
 	}, st, h.Log, infra.Broker, h.Bus, h.Agent, locks)

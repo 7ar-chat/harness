@@ -5,10 +5,11 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { toast } from "sonner";
 import { api } from "@/api/client";
 import { qk, threadQuery, toastError } from "@/api/queries";
-import type { Attachment, Author, ResumeRequest, Run, RunRequest, Thread } from "@/api/types";
+import type { Attachment, Author, QueueAck, ResumeRequest, Run, RunRequest, Thread } from "@/api/types";
 import { initialLive, reduceEvents, type AguiEvent, type Interrupt, type LiveState } from "@/lib/agui";
 import { openSse } from "@/lib/sse";
 import { messagesFromLive, messagesFromThread, type ChatMessage } from "./model";
+import { queueKey } from "./queue";
 
 type Action = { type: "begin"; runId: string } | { type: "event"; ev: AguiEvent } | { type: "done" } | { type: "clearInterrupt" };
 
@@ -81,6 +82,9 @@ export function useChat(threadId: string, settings: RunSettings, users: (login: 
         }
         void qc.invalidateQueries({ queryKey: qk.overview });
         void qc.invalidateQueries({ queryKey: ["files", threadId] });
+        void qc.invalidateQueries({ queryKey: ["published", threadId] });
+        void qc.invalidateQueries({ queryKey: ["environment", threadId] }); // the first run may have created the workspace
+        void qc.invalidateQueries({ queryKey: queueKey(threadId) }); // the server sends the next queued message by itself
         dispatch({ type: "done" });
       };
       closeRef.current = openSse({
@@ -120,7 +124,20 @@ export function useChat(threadId: string, settings: RunSettings, users: (login: 
       setBusy(true);
       try {
         if (runId) {
-          await api.post(`/runs/${runId}/steer`, { text });
+          // A reply is running: the message waits in the thread's queue (server side) and is sent when it ends.
+          if (attachments.length) throw new Error("Images can be sent once the reply has ended.");
+          const ack = await api.post<QueueAck>(`/threads/${threadId}/queue`, {
+            message: text,
+            model: settings.model || undefined,
+            reasoningEffort: settings.reasoningEffort || undefined,
+            interactive: settings.interactive,
+            mode: settings.mode,
+            sandbox: settings.sandbox,
+            role: pick.role || undefined,
+            skills: pick.skills?.length ? pick.skills : undefined,
+          } satisfies Omit<RunRequest, "attachments">);
+          if (ack.run) follow(ack.run.id); // the reply had just ended: the message started a run
+          void qc.invalidateQueries({ queryKey: queueKey(threadId) });
           return;
         }
         setPending({ id: "pending", role: "user", parts: [{ kind: "text", id: "p", text }], author: self });

@@ -32,12 +32,12 @@ func TestCodingProfileIsLeanerThanWorkByAtLeast40Percent(t *testing.T) {
 	if after*100 > codingBefore*60 {
 		t.Fatalf("coding overhead %d is not at least 40%% below the previous %d", after, codingBefore)
 	}
-	want := "execute_command,job_output,job_kill,read_file,search_files,write_file,edit_file,list_files,explore,update_plan,ask_user"
+	want := "execute_command,job_output,job_kill,read_file,search_files,write_file,edit_file,list_files,explore,update_plan,ask_user,publish_artifact"
 	if got := toolNames(coding); got != want {
 		t.Fatalf("coding tools = %s\nwant %s", got, want)
 	}
-	if len(work.Tools) != 20 {
-		t.Fatalf("the work profile has %d tools, want 20: %s", len(work.Tools), toolNames(work))
+	if len(work.Tools) != 21 {
+		t.Fatalf("the work profile has %d tools, want 21: %s", len(work.Tools), toolNames(work))
 	}
 }
 

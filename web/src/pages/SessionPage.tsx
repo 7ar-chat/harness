@@ -6,7 +6,9 @@ import { useCallback, useMemo, useState } from "react";
 import { ApiError, canWrite } from "@/api/client";
 import { supervisorQuery, threadQuery, useDeleteThread, useMe, useMembers, useModels, useOverview, useRenameThread, useSupervisorSettings, useSaveSupervisorSettings } from "@/api/queries";
 import type { Author, PlanItem } from "@/api/types";
+import { PublishedList } from "@/chat/artifacts";
 import { ChatView } from "@/chat/ChatView";
+import { EnvironmentControl } from "@/chat/environment";
 import { ErrorState, ListSkeleton, StatusBadge, UserAvatar } from "@/components/app/common";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
@@ -127,7 +129,12 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
         <TabsTrigger value="activity">Activity</TabsTrigger>
       </TabsList>
       <TabsContent value="files" className="min-h-0 flex-1 overflow-hidden">
-        <FilesPanel threadId={threadId} refreshKey={t.updatedAt + String(status.running)} />
+        <div className="flex h-full min-h-0 flex-col">
+          <PublishedList threadId={threadId} refreshKey={t.updatedAt + String(status.running)} />
+          <div className="min-h-0 flex-1">
+            <FilesPanel threadId={threadId} refreshKey={t.updatedAt + String(status.running)} />
+          </div>
+        </div>
       </TabsContent>
       {t.projectId ? (
         <TabsContent value="preview" className="min-h-0 flex-1 overflow-hidden">
@@ -219,6 +226,7 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
             <Switch id="interactive" checked={settings.interactive} onCheckedChange={(interactive) => setSettings({ interactive })} />
             <Label htmlFor="interactive" className="text-xs font-normal">Ask before risky tools</Label>
           </div>
+          {supervisor ? null : <EnvironmentControl threadId={threadId} projectId={t.projectId} readOnly={readOnly} />}
           {models && !models.models.length ? <span className="text-destructive">The server has no model configured, so runs cannot start.</span> : null}
         </div>
       </header>

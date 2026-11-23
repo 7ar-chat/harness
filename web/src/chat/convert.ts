@@ -1,6 +1,7 @@
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import type { ReadonlyJSONObject } from "assistant-stream/utils";
 import { parseArgs } from "@/lib/agui";
+import { publishedFromResult } from "./artifacts";
 import type { ChatMessage } from "./model";
 import type { ToolArtifact } from "./parts";
 
@@ -31,6 +32,9 @@ export function toThreadMessage(m: ChatMessage): ThreadMessageLike {
         case "memory":
           return { type: "data-memory" as const, id: p.id, data: { action: p.action, title: p.title, text: p.text, proposed: p.proposed } };
         case "tool": {
+          // A published artifact is a deliverable of the answer: a card of its own, not a step folded into "Worked".
+          const pub = p.name === "publish_artifact" && !p.isError ? publishedFromResult(p.result) : null;
+          if (pub) return { type: "data-artifact" as const, id: p.id, data: pub };
           const artifact: ToolArtifact = { output: p.output, ended: p.ended, sub: p.sub };
           return {
             type: "tool-call" as const,

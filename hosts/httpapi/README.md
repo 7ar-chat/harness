@@ -26,6 +26,9 @@ table with bodies is the doc comment of `hosts/httpapi/httpserver.go`):
 | `GET /api/threads/{id}/files?path=`, `.../files/download?path=` | list and download `/workspace` of the thread's sandbox (read-only, confined, `attachment`) |
 | `GET /api/runs/{id}`, `GET /api/runs/{id}/events?after=` | run state; AG-UI events as SSE, resumed with `Last-Event-ID` or `after` |
 | `POST /api/runs/{id}/cancel`, `/steer` | stop a run; add a message to a running one |
+| `POST`, `GET /api/threads/{id}/queue`, `DELETE .../queue/{qid}`, `POST .../queue/{qid}/send` | messages sent while a reply runs wait in a per-thread queue kept server side (thread-state store); the next one is sent as a run when the reply completes, in order, with the options it was queued with; `send` steers the running reply now (or sends at once when idle) |
+| `GET /api/environments`, `GET`/`PUT /api/threads/{id}/environment` | the runtime environments (sandbox profiles of the backend: name, kind, description, egress) and the one a thread uses; frozen (409) once the thread has a workspace; `POST /api/threads` takes `environment` |
+| `GET /api/threads/{id}/published`, `GET .../files/preview?path=` | artifacts the agent published with `publish_artifact`; a file served inline for a sandboxed frame (opaque origin CSP) |
 
 A foreign thread or run id is always a 404. **Auth**: `Options.Authenticate` (`func(*http.Request) (user string, err error)`)
 decides who calls; the default is one local user, with an optional static bearer token (`HARNESS_WEB_TOKEN`).
