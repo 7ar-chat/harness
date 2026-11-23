@@ -3,6 +3,7 @@
 import { Outlet, useLocation, useParams } from "@tanstack/react-router";
 import { PanelLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNeedsReview } from "@/api/factory";
 import { useMe, useOverview } from "@/api/queries";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { identifyUser } from "@/lib/telemetry";
@@ -39,7 +40,11 @@ function Shell({ login, palette, setPalette, switcher, setSwitcher }: { login: s
 
   // desktop: remembered; narrow: the explorer is a drawer and the panel a sheet, both closed until asked for
   const [explorerD, setExplorerD] = usePersisted("7ar.ui.explorer", true);
-  const [panelD, setPanelD] = usePersisted("7ar.ui.panel", true);
+  // The panel is collapsed until something needs the person; an explicit open or close is remembered and wins from then on.
+  const needsCount = useNeedsReview().data?.count ?? 0;
+  const [panelChoice, setPanelChoice] = usePersisted<boolean | null>("7ar.ui.panel.v2", null);
+  const panelD = panelChoice ?? needsCount > 0;
+  const setPanelD = useCallback((v: boolean | ((p: boolean) => boolean)) => setPanelChoice(typeof v === "function" ? v(panelD) : v), [panelD, setPanelChoice]);
   const [drawer, setDrawer] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [panelTab, setPanelTabState] = usePersisted<PanelTab>("7ar.ui.panelTab", "needs");
@@ -68,6 +73,7 @@ function Shell({ login, palette, setPalette, switcher, setSwitcher }: { login: s
     explorer: narrow ? drawer : explorerD,
     setExplorer,
     panel: narrow ? sheet : panelD,
+    needsCount,
     setPanel,
     panelTab,
     setPanelTab: setPanelTabState,

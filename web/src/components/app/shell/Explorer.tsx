@@ -1,5 +1,5 @@
 // The explorer: project switcher, what needs the person, sessions, work, setup, and the personal space.
-import { ChevronDown, ChevronRight, ChevronsUpDown, Inbox, LayoutDashboard, LogOut, Monitor, Moon, Plus, Sun, Trash2, UserCog, Users, Brain, WifiOff, Bot } from "lucide-react";
+import { Download, Ellipsis, FileText, ChevronDown, ChevronRight, ChevronsUpDown, Inbox, LayoutDashboard, LogOut, Monitor, Moon, Plus, Sun, Trash2, UserCog, Users, Brain, WifiOff, Bot } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { getDevUser, setDevUser } from "@/api/client";
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { StatusDot, UserAvatar } from "../common";
 import { useDialogs } from "../dialogs";
 import { NavLink, useShell } from "./context";
+import { useProjectActions } from "./projectActions";
 import { projectHref } from "./tabs";
 
 const byRecent = (a: ThreadSummary, b: ThreadSummary) => b.updatedAt.localeCompare(a.updatedAt);
@@ -180,6 +181,48 @@ const SetupLink = ({ pid, section, k, label, onNavigate, meta }: { pid: string; 
   </Row>
 );
 
+/** The project's actions (they used to be a header on every project page). */
+function ProjectMenu() {
+  const a = useProjectActions(useShell().projectId);
+  const { openSwitcher } = useShell();
+  const { project } = a ?? {};
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" aria-label="Project actions" className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[state=open]:bg-sidebar-accent">
+          <Ellipsis className="size-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        {a && project ? (
+          <>
+            <DropdownMenuLabel className="truncate">
+              {project.name} · {project.role}
+            </DropdownMenuLabel>
+            {a.canWrite ? (
+              <DropdownMenuItem onSelect={a.newSession}>
+                <Plus /> New session
+              </DropdownMenuItem>
+            ) : null}
+            {a.canWrite ? (
+              <DropdownMenuItem disabled={!a.canImport} title={a.importHint} onSelect={a.importAgents}>
+                <FileText /> Import AGENTS.md
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuItem onSelect={a.exportMemory}>
+              <Download /> Export MEMORY.md
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
+        <DropdownMenuItem onSelect={openSwitcher}>
+          <ChevronsUpDown /> Switch project <span className="ml-auto text-xs text-muted-foreground">⌘P</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
   const overview = useOverview().data;
   const review = useNeedsReview().data;
@@ -209,6 +252,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
           <span className="min-w-0 flex-1 truncate font-semibold text-foreground">{project?.name ?? (overview ? "Personal" : "7ar")}</span>
           {narrow ? null : <span className="shrink-0 text-[11px] text-muted-foreground">switch ⌘P</span>}
         </button>
+        <ProjectMenu />
         {conn === "offline" ? <WifiOff className="size-4 shrink-0 text-destructive" aria-label="Offline, reconnecting" /> : null}
       </div>
       <nav aria-label="Explorer" className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-2">

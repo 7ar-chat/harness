@@ -1,14 +1,13 @@
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { formatDistanceToNowStrict } from "date-fns";
-import { ExternalLink, GitBranch, Plus, RefreshCw } from "lucide-react";
+import { ExternalLink, Plus, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { isOwner, canWrite, downloadText, ApiError } from "@/api/client";
+import { isOwner, canWrite } from "@/api/client";
 import {
-  useAudit, useSeen, useDeleteProject, useGithub, useImportAgents, toastError, useInvite, useInvites, useMe, useMembers, useOverview, useProject, useRecheckGithub, useRemoveMember, useRevokeInvite, useSetMember, useUpdateProject,
+  useAudit, useSeen, useDeleteProject, useGithub, useInvite, useInvites, useMe, useMembers, useOverview, useProject, useRecheckGithub, useRemoveMember, useRevokeInvite, useSetMember, useUpdateProject,
 } from "@/api/queries";
 import type { Role } from "@/api/types";
 import { Empty, ErrorState, ListSkeleton, RoleBadge, StatusDot, UserAvatar } from "@/components/app/common";
-import { useDialogs } from "@/components/app/dialogs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,11 +17,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { useGithubConnector } from "@/components/app/github-import";
 import { CapabilitiesPanel } from "@/components/app/capabilities";
-import { toast } from "sonner";
 import { isUnread } from "@/lib/unread";
-import { Download, FileText } from "lucide-react";
 import { Board } from "./Board";
 import { MemoryManager } from "./Memory";
 import { TasksTab } from "./Tasks";
@@ -267,9 +263,6 @@ export function ProjectPage() {
   const overview = useOverview().data;
   const seen = useSeen();
   const self = useMe().data?.user.login ?? "";
-  const { newSession } = useDialogs();
-  const importAgents = useImportAgents(projectId);
-  const { ready: ghReady } = useGithubConnector();
   if (project.isLoading) return <ListSkeleton />;
   if (project.error || !project.data) return <ErrorState error={project.error} retry={() => void project.refetch()} />;
   const p = project.data;
@@ -278,63 +271,20 @@ export function ProjectPage() {
   return (
     <ScrollArea className="h-full">
       <div className="space-y-4 p-4 md:p-6">
-        <div className="flex flex-wrap items-start gap-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="flex items-center gap-2 text-lg font-semibold">
-              {p.name} <RoleBadge role={p.role} />
-            </h1>
-            {p.description ? <p className="mt-1 text-sm text-muted-foreground">{p.description}</p> : null}
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-              {p.repoUrl ? (
-                <a href={p.repoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">
-                  <ExternalLink className="size-3" /> {p.repoUrl}
-                </a>
-              ) : null}
-              {(p.extraRepos ?? []).map((u) => (
-                <a key={u} href={u} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">
-                  <ExternalLink className="size-3" /> {u}
-                </a>
-              ))}
-              {p.defaultBranch ? (
-                <span className="inline-flex items-center gap-1">
-                  <GitBranch className="size-3" /> {p.defaultBranch}
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {canWrite(p.role) ? (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={importAgents.isPending || !ghReady}
-                title={ghReady ? "Import AGENTS.md from the repository as a pinned memory" : "Connect GitHub (Profile) to import AGENTS.md"}
-                onClick={() =>
-                  importAgents.mutate(undefined, {
-                    onSuccess: (e) => toast.success(`Imported ${e.title || "AGENTS.md"} as a pinned memory`),
-                    onError: (e) => (e instanceof ApiError && e.status === 404 ? toast.info("No AGENTS.md found in the repository, or GitHub is not connected.") : toastError(e)),
-                  })
-                }
-              >
-                <FileText /> Import AGENTS.md
-              </Button>
-            ) : null}
-            <Button variant="outline" size="sm" onClick={() => downloadText(`/projects/${projectId}/memory/export`, "MEMORY.md").catch(toastError)}>
-              <Download /> Export MEMORY.md
-            </Button>
-            {canWrite(p.role) ? (
-              <Button size="sm" onClick={() => newSession(projectId)}>
-                <Plus /> New session
-              </Button>
-            ) : null}
-          </div>
-        </div>
         {/* The tab strip is the shell's: the explorer and the editor tabs choose the section, the address holds it. */}
         <Tabs value={tab ?? "board"}>
           <TabsContent value="board" className="mt-0">
             <Board projectId={projectId} />
           </TabsContent>
           <TabsContent value="overview" className="mt-0 space-y-4">
+            {p.description ? <p className="text-sm text-muted-foreground">{p.description}</p> : null}
+            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+              {[p.repoUrl, ...(p.extraRepos ?? [])].filter(Boolean).map((u) => (
+                <a key={u} href={u} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">
+                  <ExternalLink className="size-3" /> {u}
+                </a>
+              ))}
+            </div>
             <Github pid={projectId} owner={owner} />
             {threads.length ? (
               <ul className="divide-y rounded-lg border">

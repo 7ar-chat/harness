@@ -14,7 +14,7 @@ const Btn = ({ pressed, className, ...p }: { pressed?: boolean } & React.ButtonH
 );
 
 export function StatusBar() {
-  const { projectId, explorer, setExplorer, panel, setPanel } = useShell();
+  const { projectId, explorer, setExplorer, panel, setPanel, needsCount } = useShell();
   const overview = useOverview().data;
   const me = useMe().data?.user;
   const envs = useEnvironments().data;
@@ -45,6 +45,11 @@ export function StatusBar() {
       <Btn pressed={panel} onClick={() => setPanel((v) => !v)} aria-label="Toggle panel (Ctrl/Cmd+J)" title="Toggle panel (Ctrl/Cmd+J)" className="ml-auto md:ml-0">
         <PanelBottom className="size-3.5" />
         <span className="hidden sm:inline">Panel</span>
+        {needsCount ? (
+          <span className="rounded-full bg-statusbar-foreground px-1.5 text-[10px] font-semibold text-statusbar" aria-label={`${needsCount} waiting for you`}>
+            {needsCount}
+          </span>
+        ) : null}
       </Btn>
     </footer>
   );

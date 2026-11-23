@@ -6,6 +6,7 @@ import { useTheme } from "@/lib/theme";
 import { StatusDot } from "../common";
 import { useDialogs } from "../dialogs";
 import { useShell } from "./context";
+import { useProjectActions } from "./projectActions";
 import { useTabLabel } from "./EditorTabs";
 import { PROJECT_SECTIONS, projectHref, type EditorTab } from "./tabs";
 
@@ -43,6 +44,7 @@ export function Palette({ open, setOpen }: { open: boolean; setOpen: (o: boolean
     fn();
   };
   const project = overview?.projects.find((p) => p.id === projectId);
+  const pa = useProjectActions(projectId);
   const sessions = useMemo(() => [...(overview?.personal ?? []).map((t) => ({ t, project: "Personal" })), ...(overview?.projects ?? []).flatMap((p) => p.threads.map((t) => ({ t, project: p.name })))], [overview]);
   return (
     <CommandDialog open={open} onOpenChange={setOpen} title="Search" description="Jump to a session, tab or project, or run a command">
@@ -75,6 +77,8 @@ export function Palette({ open, setOpen }: { open: boolean; setOpen: (o: boolean
         <CommandGroup heading="Actions">
           <CommandItem onSelect={go(() => newSession(project?.id))}>New session</CommandItem>
           <CommandItem onSelect={go(newProject)}>New project</CommandItem>
+          {pa?.canWrite ? <CommandItem onSelect={go(pa.importAgents)} disabled={!pa.canImport}>Import AGENTS.md into the project memory</CommandItem> : null}
+          {pa ? <CommandItem onSelect={go(pa.exportMemory)}>Export the project's MEMORY.md</CommandItem> : null}
           <CommandItem onSelect={go(() => setTheme(resolvedTheme === "dark" ? "light" : "dark"))}>Toggle theme</CommandItem>
           <CommandItem onSelect={go(() => setExplorer((v) => !v))}>
             Toggle explorer <CommandShortcut>⌘B</CommandShortcut>

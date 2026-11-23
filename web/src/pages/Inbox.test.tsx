@@ -59,7 +59,7 @@ describe("Inbox", () => {
     const it = (id: string) => ({ kind: "blocked" as const, projectId: "p1", projectName: "payments", role: "owner", task: task(id) });
     mockFetch({ ...shellRoutes(), "GET /api/needs-review": doc({ count: 2, tasks: [it("a"), it("b")] }) });
     await renderApp("/");
-    expect(await screen.findByLabelText("2 waiting for you")).toBeTruthy();
+    expect((await screen.findAllByLabelText("2 waiting for you")).length).toBeGreaterThan(0); // the explorer and the status bar
     expect((await page().findByRole("link", { name: /2 items need your review/ })).getAttribute("href")).toBe("/#/inbox");
   });
   it("shows the workflow gates that wait for the caller and decides them inline", async () => {

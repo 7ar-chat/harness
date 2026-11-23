@@ -1,21 +1,21 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { ModelPicker } from "@/components/app/ModelPicker";
-import { Bot, GitBranch, Pencil, PanelRight, Square, Trash2 } from "lucide-react";
+import { Bot, ChevronDown, ChevronUp, GitBranch, Pencil, SlidersHorizontal, Square, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { ApiError, canWrite } from "@/api/client";
 import { supervisorQuery, threadQuery, useDeleteThread, useMe, useMembers, useModels, useOverview, useRenameThread, useSupervisorSettings, useSaveSupervisorSettings } from "@/api/queries";
 import type { Author, PlanItem } from "@/api/types";
 import { PublishedList } from "@/chat/artifacts";
 import { ChatView } from "@/chat/ChatView";
-import { EnvironmentControl } from "@/chat/environment";
+import { EnvironmentControl, useEnvironments } from "@/chat/environment";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ErrorState, ListSkeleton, StatusBadge, UserAvatar } from "@/components/app/common";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -84,7 +84,8 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
   const del = useDeleteThread();
   const qc = useQueryClient();
   const isMobile = useIsMobile();
-  const [sheet, setSheet] = useState(false);
+  const [details, setDetails] = useState(false);
+  const envs = useEnvironments().data;
   const [pickedTab, setTab] = useState<string>();
   const [confirm, setConfirm] = useState(false);
   const [status, setStatus] = useState<{ running: boolean; cancel: () => void; plan?: PlanItem[] }>({ running: false, cancel: () => {} });
@@ -186,21 +187,10 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="shrink-0 space-y-2 border-b px-3 py-2">
+      <header className="shrink-0 space-y-1.5 border-b px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
           {supervisor ? <Bot className="size-5" /> : null}
           {supervisor ? <h1 className="text-base font-semibold">My assistant</h1> : <TitleEditor id={threadId} title={t.title} editable={!readOnly} />}
-          <StatusBadge status={t.status} />
-          {project ? (
-            <Link to="/p/$projectId" params={{ projectId: project.id }} search={{ tab: undefined }} className="text-xs text-muted-foreground hover:underline">
-              {project.name}
-            </Link>
-          ) : null}
-          {t.branch ? (
-            <span className="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-0.5 text-xs">
-              <GitBranch className="size-3" /> {t.branch}
-            </span>
-          ) : null}
           <div className="ml-auto flex items-center gap-2">
             <div className="flex -space-x-1.5">
               {participants.slice(0, 5).map((a) => (
@@ -212,17 +202,37 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
                 <Square /> Cancel
               </Button>
             ) : null}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button size="icon" variant="ghost" className="size-8" aria-label="Run settings">
+                  <SlidersHorizontal />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-64 space-y-3 text-xs">
+                <div className="space-y-1.5">
+                  <div className="font-medium">Mode</div>
+                  <Tabs value={settings.mode} onValueChange={(m) => setSettings({ mode: m === "plan" ? "plan" : "build" })}>
+                    <TabsList className="h-7">
+                      <TabsTrigger value="build" className="px-2 text-xs">Build</TabsTrigger>
+                      <TabsTrigger value="plan" className="px-2 text-xs">Plan</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch id="interactive" checked={settings.interactive} onCheckedChange={(interactive) => setSettings({ interactive })} />
+                  <Label htmlFor="interactive" className="text-xs font-normal">Ask before risky tools</Label>
+                </div>
+              </PopoverContent>
+            </Popover>
             {!supervisor && canDelete ? (
               <Button size="icon" variant="ghost" className="size-8" aria-label="Delete session" onClick={() => setConfirm(true)}>
                 <Trash2 />
               </Button>
             ) : null}
-            <Button size="icon" variant="ghost" className="size-8 md:hidden" aria-label="Open side panel" onClick={() => setSheet(true)}>
-              <PanelRight />
-            </Button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          {role ? <span className="rounded-md bg-secondary px-2 py-0.5 font-mono" title="Your role in this project">role {role}</span> : null}
           <ModelPicker
             models={models?.models ?? []}
             value={settings.model ?? ""}
@@ -231,34 +241,29 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
             disabled={!models?.models.length}
             placeholder={models && !models.models.length ? "No model configured" : "Model"}
           />
-          <Tabs value={settings.mode} onValueChange={(m) => setSettings({ mode: m === "plan" ? "plan" : "build" })}>
-            <TabsList className="h-7">
-              <TabsTrigger value="build" className="px-2 text-xs">Build</TabsTrigger>
-              <TabsTrigger value="plan" className="px-2 text-xs">Plan</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <div className="flex items-center gap-2">
-            <Switch id="interactive" checked={settings.interactive} onCheckedChange={(interactive) => setSettings({ interactive })} />
-            <Label htmlFor="interactive" className="text-xs font-normal">Ask before risky tools</Label>
-          </div>
-          {supervisor ? null : <EnvironmentControl threadId={threadId} projectId={t.projectId} readOnly={readOnly} />}
+          {supervisor ? null : envs?.selectable ? <EnvironmentControl threadId={threadId} projectId={t.projectId} readOnly={readOnly} /> : <span className="rounded-md bg-secondary px-2 py-0.5 font-mono">sandbox {envs?.default ?? "default"}</span>}
+          {settings.mode === "plan" ? <span className="rounded-md bg-secondary px-2 py-0.5 font-mono">plan mode</span> : null}
+          <StatusBadge status={t.status} />
+          {t.branch ? (
+            <span className="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-0.5 font-mono">
+              <GitBranch className="size-3" /> {t.branch}
+            </span>
+          ) : null}
           {models && !models.models.length ? <span className="text-destructive">The server has no model configured, so runs cannot start.</span> : null}
         </div>
       </header>
       <div className="min-h-0 flex-1">
         {isMobile ? (
-          <>
-            {chat}
-            <Sheet open={sheet} onOpenChange={setSheet}>
-              <SheetContent side="right" className="w-[92vw] p-0 sm:max-w-md">
-                <SheetHeader className="sr-only">
-                  <SheetTitle>Session details</SheetTitle>
-                  <SheetDescription>Files, plan, memory and activity</SheetDescription>
-                </SheetHeader>
-                {side}
-              </SheetContent>
-            </Sheet>
-          </>
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="min-h-0 flex-1">{chat}</div>
+            <section aria-label="Session details" className="shrink-0 border-t bg-panel">
+              <button type="button" aria-expanded={details} onClick={() => setDetails(!details)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-muted-foreground">
+                {details ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+                Diff, files, plan, memory and activity
+              </button>
+              {details ? <div className="h-[42vh] border-t">{side}</div> : null}
+            </section>
+          </div>
         ) : (
           <ResizablePanelGroup orientation="horizontal">
             <ResizablePanel defaultSize="68%" minSize="35%">

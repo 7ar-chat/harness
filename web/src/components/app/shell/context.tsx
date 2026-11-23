@@ -15,6 +15,8 @@ export interface ShellState {
   explorer: boolean;
   setExplorer: (v: boolean | ((p: boolean) => boolean)) => void;
   panel: boolean;
+  /** Items waiting for the person (the status bar badges the Panel button with it). */
+  needsCount: number;
   setPanel: (v: boolean | ((p: boolean) => boolean)) => void;
   panelTab: PanelTab;
   setPanelTab: (t: PanelTab) => void;
