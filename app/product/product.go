@@ -70,6 +70,10 @@ type Options struct {
 	Capabilities capabilities.Store
 	// MCPTester lists a server's tools for the marketplace's "test" action (nil: the action answers 501).
 	MCPTester MCPTester
+	// Schedules, with Team, serves scheduled agent tasks and fires them (see schedules.go). Nil: no routes, nothing runs.
+	Schedules *SchedulesOptions
+	// Usage, with Team, serves the usage report and the spend caps (see usage.go). Nil: no routes.
+	Usage *UsageOptions
 }
 
 type server struct {
@@ -87,6 +91,8 @@ type server struct {
 	ghl    *githubLogin
 	// active caches the sign-up state of the accounts (see signup.go).
 	active activeCache
+	// sched is the scheduler of scheduled agent tasks (nil without Options.Schedules).
+	sched *schedulerState
 }
 
 // New returns the HTTP handler: the API of h with the product on top.
@@ -191,6 +197,8 @@ func (s *server) Install(hs *httpapi.Server) error {
 	s.routeCapabilities()
 	s.routeFactory()
 	s.routeBoard()
+	s.routeSchedules()
+	s.routeUsage()
 	if s.opt.Supervisor != nil {
 		s.sup = s.opt.Supervisor
 		s.routeSupervisor()

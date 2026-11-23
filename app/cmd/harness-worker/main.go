@@ -69,7 +69,7 @@ func run(ctx context.Context, args []string, stderr io.Writer) int {
 		return 1
 	}
 	o.Config = cfg
-	o.Features = factoryFeatures(os.Getenv, o.Standalone)
+	o.Features = withUsage(factoryFeatures(os.Getenv, o.Standalone), o.Standalone)
 	o.MCPServers = marketplaceServers(os.Getenv, o.Standalone)
 	if err := worker.Run(ctx, o); err != nil {
 		fmt.Fprintln(stderr, "harness-worker:", err)

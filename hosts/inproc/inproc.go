@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"path"
 	"sort"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/7ar-chat/harness/adapters/store/filestore"
 	"github.com/7ar-chat/harness/core/sandbox"
 	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/core/usage"
 	"github.com/7ar-chat/harness/engine/queue"
 	"github.com/7ar-chat/harness/hosts/client"
 )
@@ -77,6 +79,8 @@ func mapErr(err error) error {
 		return client.ErrNotFound
 	case errors.Is(err, store.ErrConflict), errors.Is(err, store.ErrRunActive), errors.Is(err, store.ErrNoPendingQuestion):
 		return client.ErrConflict
+	case errors.Is(err, usage.ErrCapReached):
+		return client.Wrap(&client.Error{Status: http.StatusPaymentRequired, Code: "spend_cap_reached"}, err.Error(), err)
 	case errors.Is(err, harness.ErrInvalidRequest):
 		return client.Wrap(client.ErrInvalidRequest, err.Error(), err)
 	case errors.Is(err, queue.ErrSteersClosed):

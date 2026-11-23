@@ -160,7 +160,7 @@ func SpendOf(usage []agui.Usage, fallbackModel string, price func(string) (model
 		if price != nil {
 			info, ok = price(name)
 		}
-		if usd, priced := modelinfo.Cost(info, modelinfo.Usage{In: u.InputTokens, Out: u.OutputTokens, Cached: u.CachedInputTokens, Prompt: u.InputTokens}); ok && priced {
+		if usd, priced := modelinfo.Cost(info, modelinfo.Usage{In: u.InputTokens, Out: u.OutputTokens, Cached: u.CachedInputTokens, Written: u.CacheWriteTokens, Prompt: u.InputTokens}); ok && priced {
 			s.USD += usd
 		} else {
 			s.Unpriced++

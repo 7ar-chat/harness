@@ -25,6 +25,8 @@ import { isUnread } from "@/lib/unread";
 import { Download, FileText } from "lucide-react";
 import { Board } from "./Board";
 import { MemoryManager } from "./Memory";
+import { SchedulesPanel } from "./Schedules";
+import { UsagePanel } from "./Usage";
 
 const ago = (iso: string) => `${formatDistanceToNowStrict(new Date(iso))} ago`;
 
@@ -334,6 +336,8 @@ export function ProjectPage() {
               {stats.data?.pending ? <span className="rounded-full bg-warning px-1.5 text-[10px] text-black" aria-label={`${stats.data.pending} to review`}>{stats.data.pending}</span> : null}
             </TabsTrigger>
             <TabsTrigger value="capabilities">Capabilities</TabsTrigger>
+            <TabsTrigger value="schedules">Schedules</TabsTrigger>
+            <TabsTrigger value="usage">Usage</TabsTrigger>
             <TabsTrigger value="audit">Audit</TabsTrigger>
             {owner ? <TabsTrigger value="settings">Settings</TabsTrigger> : null}
           </TabsList>
@@ -366,6 +370,12 @@ export function ProjectPage() {
           </TabsContent>
           <TabsContent value="capabilities" className="mt-4">
             <CapabilitiesPanel scope={{ kind: "project", projectId, canEdit: owner }} />
+          </TabsContent>
+          <TabsContent value="schedules" className="mt-4">
+            <SchedulesPanel projectId={projectId} canEdit={canWrite(p.role)} />
+          </TabsContent>
+          <TabsContent value="usage" className="mt-4">
+            <UsagePanel projectId={projectId} />
           </TabsContent>
           <TabsContent value="audit" className="mt-4">
             <Audit pid={projectId} />

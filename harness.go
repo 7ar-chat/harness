@@ -116,6 +116,10 @@ type Options struct {
 	// a database: the servers of the thread's project or of the user). They are merged after the configured
 	// ones, are treated as untrusted (config.MCPServer.Untrusted) and need package mcpfeature to be imported.
 	MCPServers MCPServersFunc
+	// RunGate, when set, is asked before every run starts (Send): a non-nil error refuses the run and is returned by
+	// Send as it is. A host uses it to enforce spend caps (features/usageledger.Gate); user is the login the thread is
+	// stored under.
+	RunGate func(ctx context.Context, user, threadID string) error
 }
 
 // MCPServersFunc returns the MCP servers a run may use besides the configured ones. An error is logged and the run
@@ -145,6 +149,7 @@ type Harness struct {
 	Browser *browsersandbox.Manager
 
 	sandboxTools bool
+	runGate      func(ctx context.Context, user, threadID string) error
 	redo         redoStacks
 	factory      *Factory
 }
@@ -225,7 +230,7 @@ func New(o Options) (*Harness, error) {
 
 	h := &Harness{cfg: cfg, Store: st, Log: infra.Log, Queue: infra.Broker, Bus: infra.Broker,
 		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace, Memory: b.Memory, Documents: b.Documents, Jobs: b.Jobs, Browser: b.BrowserSandboxes,
-		sandboxTools: b.sandboxTools != nil}
+		sandboxTools: b.sandboxTools != nil, runGate: o.RunGate}
 	h.Agent = &agent.Agent{
 		Models: models, Tools: registry, Store: st, Steers: h.Bus,
 		MaxSteps: cfg.AgentMaxSteps, MaxToolOutputChars: cfg.AgentMaxToolOutputChars,
@@ -338,6 +343,11 @@ func (h *Harness) NewThread(ctx context.Context, user, title string) (*store.Thr
 func (h *Harness) Send(ctx context.Context, user, threadID, text string, o RunOptions) (*store.Run, error) {
 	if err := h.ownsThread(ctx, user, threadID); err != nil {
 		return nil, err
+	}
+	if h.runGate != nil {
+		if err := h.runGate(ctx, user, threadID); err != nil {
+			return nil, err
+		}
 	}
 	if o.Model == "" {
 		return nil, fmt.Errorf("%w: model is required", ErrInvalidRequest)

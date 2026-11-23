@@ -1,5 +1,7 @@
 package product
 
+import "github.com/7ar-chat/harness/core/schedule"
+
 // WireTypes returns a zero value of every JSON document this package's routes send to the web app, by the
 // name of its TypeScript type. cmd/gen-ts reflects over them to generate web/src/api/generated.ts, so a new
 // or changed view struct belongs here (a route that builds its answer from a map has no type to list: keep the answers named structs).
@@ -32,5 +34,10 @@ func WireTypes() map[string]any {
 		"SkillConnView":        SkillConnView{},
 		"SkillFieldView":       SkillFieldView{},
 		"SkillConnTest":        SkillConnTest{},
+		"ScheduleView":         scheduleView{},
+		"ScheduleRun":          schedule.Run{},
+		"SchedulePreview":      schedulePreview{},
+		"UsageView":            usageView{},
+		"UsageCap":             capView{},
 	}
 }

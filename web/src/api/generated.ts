@@ -414,7 +414,63 @@ export interface RunRequest extends SendOptions {
 
 export type RunStatus = "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
 
+export interface RunUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  costUsd: number;
+  unpriced?: number;
+}
+
 export type SandboxMode = "auto" | "on" | "off";
+
+export interface Schedule {
+  id: string;
+  projectId?: string;
+  owner: string;
+  runAs: string;
+  name: string;
+  prompt: string;
+  cron: string;
+  timezone: string;
+  model?: string;
+  policy?: string;
+  timeoutMinutes: number;
+  reuseSession?: boolean;
+  threadId?: string;
+  enabled: boolean;
+  nextRunAt?: string;
+  lastRunAt?: string;
+  lastStatus?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SchedulePreview {
+  times: string[];
+}
+
+export interface ScheduleRun {
+  id: string;
+  scheduleId: string;
+  fireAt: string;
+  trigger: string;
+  status: string;
+  threadId?: string;
+  agentRunId?: string;
+  error?: string;
+  startedBy: string;
+  startedAt: string;
+  finishedAt?: string;
+  deadline: string;
+  usage: RunUsage;
+}
+
+export interface ScheduleView extends Schedule {
+  lastRun?: ScheduleRun;
+  canEdit: boolean;
+}
 
 export interface SendOptions {
   model?: string;
@@ -507,6 +563,42 @@ export interface ToolCall {
 export interface ToolCallFunction {
   name: string;
   arguments: string;
+}
+
+export interface UsageCap {
+  monthlyUsd: number;
+  spentUsd: number;
+  ratio: number;
+  warn: boolean;
+  reached: boolean;
+}
+
+export interface UsageRow extends UsageTotals {
+  key: string;
+}
+
+export interface UsageTotals {
+  runs: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  costUsd: number;
+  unpriced: number;
+}
+
+export interface UsageView {
+  scope: string;
+  projectId?: string;
+  from: string;
+  to: string;
+  group: string;
+  total: UsageTotals;
+  bySource: Record<string, UsageTotals>;
+  rows: UsageRow[];
+  titles?: Record<string, string>;
+  cap: UsageCap;
+  canSetCap: boolean;
 }
 
 export interface User {

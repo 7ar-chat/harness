@@ -13,7 +13,9 @@ import { JobsPage } from "@/pages/Jobs";
 import { MemoryPage } from "@/pages/Memory";
 import { CapabilitiesPage, ConnectorsPage, ProfilePage, ReferencesPage } from "@/pages/Profile";
 import { ProjectPage } from "@/pages/ProjectPage";
+import { SchedulesPage } from "@/pages/Schedules";
 import { SessionPage, SupervisorPage } from "@/pages/SessionPage";
+import { UsagePage } from "@/pages/Usage";
 import { FeedProvider } from "@/lib/feed";
 import { reportError } from "@/lib/telemetry";
 
@@ -74,7 +76,7 @@ const root = createRootRoute({
   ),
 });
 
-const tabs = ["board", "overview", "members", "memory", "capabilities", "audit", "settings"] as const;
+const tabs = ["board", "overview", "members", "memory", "capabilities", "schedules", "usage", "audit", "settings"] as const;
 type Tab = (typeof tabs)[number];
 
 const routeTree = root.addChildren([
@@ -95,6 +97,8 @@ const routeTree = root.addChildren([
   }),
   createRoute({ getParentRoute: () => root, path: "/references", component: ReferencesPage }),
   createRoute({ getParentRoute: () => root, path: "/jobs", component: JobsPage }),
+  createRoute({ getParentRoute: () => root, path: "/schedules", component: SchedulesPage }),
+  createRoute({ getParentRoute: () => root, path: "/usage", component: UsagePage }),
   createRoute({ getParentRoute: () => root, path: "/connectors", component: ConnectorsPage }),
   createRoute({ getParentRoute: () => root, path: "/capabilities", component: CapabilitiesPage }),
   createRoute({ getParentRoute: () => root, path: "/admin", component: AdminPage }),

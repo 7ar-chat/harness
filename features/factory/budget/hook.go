@@ -118,7 +118,7 @@ func (g *Guard) spendOf(usage []agui.Usage, fallbackModel string) factory.Spend 
 		}
 		// The usage is per model over the whole run, so the prompt size that picks
 		// the price tier is the best available estimate of the largest prompt.
-		usd, ok := modelinfo.Cost(info, modelinfo.Usage{In: u.InputTokens, Out: u.OutputTokens, Cached: u.CachedInputTokens, Prompt: u.InputTokens})
+		usd, ok := modelinfo.Cost(info, modelinfo.Usage{In: u.InputTokens, Out: u.OutputTokens, Cached: u.CachedInputTokens, Written: u.CacheWriteTokens, Prompt: u.InputTokens})
 		if priced && ok {
 			s.USD += usd
 		} else {

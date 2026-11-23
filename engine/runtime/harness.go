@@ -34,14 +34,13 @@ type Finish struct {
 // AddUsage counts a hook's model call in the run's RUN_FINISHED usage (A-25).
 func (f *Finish) AddUsage(u agui.Usage) { f.extra = append(f.extra, u) }
 
-// withUsage adds the hooks' usage to a terminal event's usage (per model).
-func (f *Finish) withUsage(final agui.Event) agui.Event {
-	usage, ok := final["usage"].([]agui.Usage)
-	if !ok || len(f.extra) == 0 {
-		return final
-	}
+// TotalUsage is the run's usage per model as RUN_FINISHED will report it: the agent's own plus the model calls of the
+// hooks that ran before (titles, goal judge). A hook that runs last, such as the usage ledger, reads the final figure here.
+func (f *Finish) TotalUsage() []agui.Usage { return mergeUsage(f.Result.Usage, f.extra) }
+
+func mergeUsage(usage, extra []agui.Usage) []agui.Usage {
 	merged := append([]agui.Usage(nil), usage...)
-	for _, u := range f.extra {
+	for _, u := range extra {
 		found := false
 		for i := range merged {
 			if merged[i].Model == u.Model {
@@ -50,6 +49,7 @@ func (f *Finish) withUsage(final agui.Event) agui.Event {
 				merged[i].TotalTokens += u.TotalTokens
 				merged[i].ReasoningTokens += u.ReasoningTokens
 				merged[i].CachedInputTokens += u.CachedInputTokens
+				merged[i].CacheWriteTokens += u.CacheWriteTokens
 				found = true
 				break
 			}
@@ -58,7 +58,16 @@ func (f *Finish) withUsage(final agui.Event) agui.Event {
 			merged = append(merged, u)
 		}
 	}
-	final["usage"] = merged
+	return merged
+}
+
+// withUsage adds the hooks' usage to a terminal event's usage (per model).
+func (f *Finish) withUsage(final agui.Event) agui.Event {
+	usage, ok := final["usage"].([]agui.Usage)
+	if !ok || len(f.extra) == 0 {
+		return final
+	}
+	final["usage"] = mergeUsage(usage, f.extra)
 	return final
 }
 
