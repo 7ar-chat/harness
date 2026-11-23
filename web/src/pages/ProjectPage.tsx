@@ -28,6 +28,8 @@ import { MemoryManager } from "./Memory";
 import { TasksTab } from "./Tasks";
 import { Requirements } from "./Requirements";
 import { RolesPanel } from "./Roles";
+import { SchedulesPanel } from "./Schedules";
+import { UsagePanel } from "./Usage";
 
 const ago = (iso: string) => `${formatDistanceToNowStrict(new Date(iso))} ago`;
 
@@ -339,6 +341,8 @@ export function ProjectPage() {
             <TabsTrigger value="requirements">Requirements</TabsTrigger>
             <TabsTrigger value="capabilities">Capabilities</TabsTrigger>
             <TabsTrigger value="roles">Roles</TabsTrigger>
+            <TabsTrigger value="schedules">Schedules</TabsTrigger>
+            <TabsTrigger value="usage">Usage</TabsTrigger>
             <TabsTrigger value="audit">Audit</TabsTrigger>
             <TabsTrigger value="tasks">Tasks</TabsTrigger>
             {owner ? <TabsTrigger value="settings">Settings</TabsTrigger> : null}
@@ -378,6 +382,12 @@ export function ProjectPage() {
           </TabsContent>
           <TabsContent value="roles" className="mt-4">
             <RolesPanel projectId={projectId} canEdit={canWrite(p.role)} />
+          </TabsContent>
+          <TabsContent value="schedules" className="mt-4">
+            <SchedulesPanel projectId={projectId} canEdit={canWrite(p.role)} />
+          </TabsContent>
+          <TabsContent value="usage" className="mt-4">
+            <UsagePanel projectId={projectId} />
           </TabsContent>
           <TabsContent value="audit" className="mt-4">
             <Audit pid={projectId} />

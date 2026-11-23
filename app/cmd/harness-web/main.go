@@ -135,6 +135,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		prod.Factory = *bt.factory
 	}
 	prod.Requirements = bt.reqs
+	if bt.usage != nil {
+		prod.Usage = &product.UsageOptions{Store: bt.usage}
+		prod.Schedules = &product.SchedulesOptions{Store: bt.sched, Locker: bt.locker, Price: bt.price, Context: hctx,
+			NoRun: getenv("HARNESS_SCHEDULES_RUN") == "0"}
+	}
 	if bt.caps != nil {
 		prod.Capabilities, prod.MCPTester, prod.SkillAPI = bt.caps, mcpTester("web"), bt.skills
 	}

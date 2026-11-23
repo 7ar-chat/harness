@@ -77,6 +77,10 @@ type Options struct {
 	// Roles, with Team, serves the roles routes (see roles.go): the agent configurations of projects and users.
 	// Nil: no routes. The command gives the harness the same store through NewRoleRegistry.
 	Roles roles.Store
+	// Schedules, with Team, serves scheduled agent tasks and fires them (see schedules.go). Nil: no routes, nothing runs.
+	Schedules *SchedulesOptions
+	// Usage, with Team, serves the usage report and the spend caps (see usage.go). Nil: no routes.
+	Usage *UsageOptions
 }
 
 type server struct {
@@ -95,6 +99,8 @@ type server struct {
 	ghl    *githubLogin
 	// active caches the sign-up state of the accounts (see signup.go).
 	active activeCache
+	// sched is the scheduler of scheduled agent tasks (nil without Options.Schedules).
+	sched *schedulerState
 }
 
 // New returns the HTTP handler: the API of h with the product on top.
@@ -202,6 +208,8 @@ func (s *server) Install(hs *httpapi.Server) error {
 	s.routeInbox()
 	s.routeBoard()
 	s.routeRequirements()
+	s.routeSchedules()
+	s.routeUsage()
 	if s.opt.Supervisor != nil {
 		s.sup = s.opt.Supervisor
 		s.routeSupervisor()

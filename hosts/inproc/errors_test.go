@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/core/sandbox"
 	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/core/usage"
 	"github.com/7ar-chat/harness/engine/queue"
 	"github.com/7ar-chat/harness/hosts/client"
 )
@@ -36,6 +38,17 @@ func TestMapErrTranslatesEngineErrorsToTheAPIErrorsFrontEndsTest(t *testing.T) {
 				t.Fatalf("mapErr(%v) = %v, want %s (%d)", tc.in, got, tc.want.Code, tc.want.Status)
 			}
 		})
+	}
+}
+
+func TestMapErrAnswersASpendCapWith402AndItsOwnMessage(t *testing.T) {
+	cause := fmt.Errorf("starting: %w", &usage.CapError{Scope: usage.ScopeProject, ID: "p1", CapUSD: 10, SpentUSD: 10.5})
+
+	got := mapErr(cause)
+
+	e := client.AsError(got)
+	if e == nil || e.Status != 402 || e.Code != "spend_cap_reached" || !strings.Contains(e.Message, "monthly spend cap") || !errors.Is(got, usage.ErrCapReached) {
+		t.Fatalf("mapErr = %#v", e)
 	}
 }
 

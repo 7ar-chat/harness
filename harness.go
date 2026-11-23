@@ -120,6 +120,10 @@ type Options struct {
 	// Roles resolves the roles of projects and users: a run can take one on (RunOptions.Role), the delegate tool
 	// and factory tasks start sub-agents with them. Nil: only the builtin roles of the delegate catalogue.
 	Roles roles.Resolver
+	// RunGate, when set, is asked before every run starts (Send): a non-nil error refuses the run and is returned by
+	// Send as it is. A host uses it to enforce spend caps (features/usageledger.Gate); user is the login the thread is
+	// stored under.
+	RunGate func(ctx context.Context, user, threadID string) error
 }
 
 // MCPServersFunc returns the MCP servers a run may use besides the configured ones. An error is logged and the run
@@ -150,6 +154,7 @@ type Harness struct {
 
 	roles        roles.Resolver
 	sandboxTools bool
+	runGate      func(ctx context.Context, user, threadID string) error
 	redo         redoStacks
 	factory      *Factory
 }
@@ -230,7 +235,7 @@ func New(o Options) (*Harness, error) {
 
 	h := &Harness{cfg: cfg, Store: st, Log: infra.Log, Queue: infra.Broker, Bus: infra.Broker,
 		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace, Memory: b.Memory, Documents: b.Documents, Jobs: b.Jobs, Browser: b.BrowserSandboxes,
-		sandboxTools: b.sandboxTools != nil, roles: o.Roles}
+		sandboxTools: b.sandboxTools != nil, roles: o.Roles, runGate: o.RunGate}
 	h.Agent = &agent.Agent{
 		Models: models, Tools: registry, Store: st, Steers: h.Bus,
 		MaxSteps: cfg.AgentMaxSteps, MaxToolOutputChars: cfg.AgentMaxToolOutputChars,
@@ -353,6 +358,11 @@ func (h *Harness) Send(ctx context.Context, user, threadID, text string, o RunOp
 	}
 	if err := h.applyRole(ctx, user, threadID, &o); err != nil {
 		return nil, err
+	}
+	if h.runGate != nil {
+		if err := h.runGate(ctx, user, threadID); err != nil {
+			return nil, err
+		}
 	}
 	if o.Model == "" {
 		return nil, fmt.Errorf("%w: model is required", ErrInvalidRequest)

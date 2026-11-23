@@ -306,6 +306,7 @@ func (st *runState) addUsage(msg *ai.Message) {
 	}
 	u := msg.ResponseMeta.Usage
 	st.usage.CachedInputTokens += u.PromptTokenDetails.CachedTokens
+	st.usage.CacheWriteTokens += u.PromptTokenDetails.CacheWriteTokens
 	st.usage.InputTokens += u.PromptTokens
 	st.usage.OutputTokens += u.CompletionTokens
 	st.usage.TotalTokens += u.TotalTokens

@@ -364,6 +364,7 @@ func (st *runState) addModelUsage(name string, msg *ai.Message) {
 	u.TotalTokens += r.TotalTokens
 	u.ReasoningTokens += r.CompletionTokenDetails.ReasoningTokens
 	u.CachedInputTokens += r.PromptTokenDetails.CachedTokens
+	u.CacheWriteTokens += r.PromptTokenDetails.CacheWriteTokens
 }
 
 // AddSubagentUsage implements tools.LiveEmitter: the sub-agent's usage joins the

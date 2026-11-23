@@ -49,6 +49,9 @@ type Tier struct {
 // including the cached ones; reasoning tokens are part of Out.
 type Usage struct {
 	In, Out, Cached int
+	// Written is the part of In written to the provider's prompt cache (billed at the cache-write price, else the
+	// input price). It is not part of Cached.
+	Written int
 	// Prompt is the size of the largest single prompt, which selects the price
 	// tier (0: the base prices).
 	Prompt int
@@ -61,16 +64,20 @@ func Cost(i Info, u Usage) (usd float64, ok bool) {
 	if !i.Priced {
 		return 0, false
 	}
-	in, out, cr := i.InputPerToken, i.OutputPerToken, i.CacheReadPerToken
+	in, out, cr, cw := i.InputPerToken, i.OutputPerToken, i.CacheReadPerToken, i.CacheWritePerToken
 	if t := i.Tier; t != nil && t.Above > 0 && u.Prompt > t.Above {
-		in, out, cr = orElse(t.Input, in), orElse(t.Output, out), orElse(t.CacheRead, cr)
+		in, out, cr, cw = orElse(t.Input, in), orElse(t.Output, out), orElse(t.CacheRead, cr), orElse(t.CacheWrite, cw)
 	}
 	if cr <= 0 {
 		cr = in
 	}
+	if cw <= 0 {
+		cw = in
+	}
 	cached := min(max(u.Cached, 0), max(u.In, 0))
-	fresh := max(u.In, 0) - cached
-	return float64(fresh)*in + float64(cached)*cr + float64(max(u.Out, 0))*out, true
+	written := min(max(u.Written, 0), max(u.In, 0)-cached)
+	fresh := max(u.In, 0) - cached - written
+	return float64(fresh)*in + float64(cached)*cr + float64(written)*cw + float64(max(u.Out, 0))*out, true
 }
 
 func orElse(v, def float64) float64 {

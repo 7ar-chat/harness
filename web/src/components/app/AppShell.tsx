@@ -1,7 +1,7 @@
 import { Logo } from "@/components/app/Logo";
 import { identifyUser } from "@/lib/telemetry";
 import { Link, Outlet, useLocation, useNavigate, useParams } from "@tanstack/react-router";
-import { Bot, Brain, Briefcase, ChevronRight, ChevronsUpDown, FileText, Inbox, LayoutDashboard, Link2, Plug, LogOut, Monitor, Moon, Plus, Search, Sun, Trash2, UserCog, Users, WifiOff } from "lucide-react";
+import { Bot, Brain, Briefcase, CalendarClock, ChartColumn, ChevronRight, ChevronsUpDown, FileText, Inbox, LayoutDashboard, Link2, Plug, LogOut, Monitor, Moon, Plus, Search, Sun, Trash2, UserCog, Users, WifiOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getDevUser, setDevUser } from "@/api/client";
 import { useNeedsReview } from "@/api/factory";
@@ -258,7 +258,7 @@ function AppSidebar({ openId, openProject }: { openId?: string; openProject?: st
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          {([["/jobs", "Jobs", Briefcase], ["/references", "References", FileText], ["/connectors", "Connectors", Link2], ["/capabilities", "Capabilities", Plug]] as const).map(([to, label, Icon]) => (
+          {([["/jobs", "Jobs", Briefcase], ["/schedules", "Schedules", CalendarClock], ["/usage", "Usage", ChartColumn], ["/references", "References", FileText], ["/connectors", "Connectors", Link2], ["/capabilities", "Capabilities", Plug]] as const).map(([to, label, Icon]) => (
             <SidebarMenuItem key={to}>
               <SidebarMenuButton asChild isActive={loc.pathname === to}>
                 <Link to={to} onClick={close}>
@@ -329,6 +329,8 @@ function Palette({ open, setOpen }: { open: boolean; setOpen: (o: boolean) => vo
           <CommandItem onSelect={go(() => void navigate({ to: "/memory" }))}>My memory</CommandItem>
           <CommandItem onSelect={go(() => void navigate({ to: "/inbox" }))}>Needs review</CommandItem>
           <CommandItem onSelect={go(() => void navigate({ to: "/jobs" }))}>Jobs</CommandItem>
+          <CommandItem onSelect={go(() => void navigate({ to: "/schedules" }))}>Scheduled tasks</CommandItem>
+          <CommandItem onSelect={go(() => void navigate({ to: "/usage" }))}>Usage</CommandItem>
           <CommandItem onSelect={go(() => void navigate({ to: "/references" }))}>References</CommandItem>
           <CommandItem onSelect={go(() => void navigate({ to: "/connectors" }))}>Connectors</CommandItem>
           <CommandItem onSelect={go(() => void navigate({ to: "/capabilities" }))}>Capabilities</CommandItem>

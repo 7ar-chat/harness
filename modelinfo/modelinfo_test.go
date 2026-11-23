@@ -183,3 +183,21 @@ func TestCostOfAnUnpricedModelIsUnknownAndOfAFreeModelIsZero(t *testing.T) {
 		t.Fatalf("junk %v free %v %v", junkOK, usd, freeOK)
 	}
 }
+
+func TestCostBillsCacheWritesAtTheirOwnPrice(t *testing.T) {
+	info := Info{Priced: true, InputPerToken: 3e-6, OutputPerToken: 15e-6, CacheReadPerToken: 0.3e-6, CacheWritePerToken: 3.75e-6}
+
+	got, ok := Cost(info, Usage{In: 1000, Out: 100, Cached: 600, Written: 200})
+
+	want := 200*3e-6 + 600*0.3e-6 + 200*3.75e-6 + 100*15e-6
+	if !ok || !near(got, want) {
+		t.Fatalf("cost = %v, want %v", got, want)
+	}
+	// Without a cache-write price the input price applies, so a caller that reports writes changes nothing.
+	info.CacheWritePerToken = 0
+	plain, _ := Cost(info, Usage{In: 1000, Out: 100, Cached: 600})
+	billed, _ := Cost(info, Usage{In: 1000, Out: 100, Cached: 600, Written: 200})
+	if !near(plain, billed) {
+		t.Fatalf("a write billed at the input price changed the total: %v vs %v", plain, billed)
+	}
+}

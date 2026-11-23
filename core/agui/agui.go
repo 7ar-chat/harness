@@ -86,6 +86,8 @@ type Usage struct {
 	ReasoningTokens int    `json:"reasoningTokens"`
 	// CachedInputTokens are input tokens served from the provider's prompt cache (0 when not reported).
 	CachedInputTokens int `json:"cachedInputTokens"`
+	// CacheWriteTokens are input tokens written to the provider's prompt cache (0 when not reported or not billed apart).
+	CacheWriteTokens int `json:"cacheWriteTokens,omitempty"`
 }
 
 // RunFinishedEvent builds RUN_FINISHED with outcome success|cancelled.

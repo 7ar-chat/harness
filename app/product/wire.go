@@ -2,6 +2,7 @@ package product
 
 import "github.com/7ar-chat/harness/core/requirements"
 import "github.com/7ar-chat/harness/core/roles"
+import "github.com/7ar-chat/harness/core/schedule"
 
 // WireTypes returns a zero value of every JSON document this package's routes send to the web app, by the
 // name of its TypeScript type. cmd/gen-ts reflects over them to generate web/src/api/generated.ts, so a new
@@ -46,5 +47,10 @@ func WireTypes() map[string]any {
 		"RoleDoc":              roles.Role{}, // the document inside a RoleView (named so it does not collide with the Role enum)
 		"RoleVersion":          RoleVersion{},
 		"RolePreview":          RolePreview{},
+		"ScheduleView":         scheduleView{},
+		"ScheduleRun":          schedule.Run{},
+		"SchedulePreview":      schedulePreview{},
+		"UsageView":            usageView{},
+		"UsageCap":             capView{},
 	}
 }

@@ -16,16 +16,24 @@ import (
 	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
 	"github.com/7ar-chat/harness/adapters/store/reqstore"
 	"github.com/7ar-chat/harness/adapters/store/rolestore"
+	"github.com/7ar-chat/harness/adapters/store/schedstore"
 	"github.com/7ar-chat/harness/adapters/store/teamstore"
+	"github.com/7ar-chat/harness/adapters/store/usagestore"
 	"github.com/7ar-chat/harness/app/factoryenv"
 	"github.com/7ar-chat/harness/app/product"
+	"github.com/7ar-chat/harness/app/usageenv"
 	"github.com/7ar-chat/harness/config"
 	"github.com/7ar-chat/harness/core/capabilities"
 	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/requirements"
 	"github.com/7ar-chat/harness/core/roles"
+	"github.com/7ar-chat/harness/core/schedule"
 	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/core/usage"
 	"github.com/7ar-chat/harness/features/artifacts"
+	"github.com/7ar-chat/harness/features/schedules"
+	"github.com/7ar-chat/harness/features/usageledger"
+	"github.com/7ar-chat/harness/modelinfo"
 	"github.com/7ar-chat/harness/redisinfra"
 )
 
@@ -60,7 +68,14 @@ type built struct {
 	// skills serves the connections of skills that need an account (nil without the marketplace).
 	skills *product.SkillAPI
 	// bus shares the live feed between replicas: set in team mode when REDIS_HOST is.
-	bus    product.FeedBus
+	bus product.FeedBus
+	// usage is the ledger and the spend caps, sched the scheduled tasks (team mode only); locker shares the
+	// scheduler's tick between replicas when there is Redis.
+	usage  usage.Store
+	sched  schedule.Store
+	locker schedules.Locker
+	// price prices runs (nil: tokens only).
+	price  func(string) (modelinfo.Info, bool)
 	closer io.Closer
 }
 
@@ -75,6 +90,8 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 	var caps capabilities.Store
 	var reqs requirements.Store
 	var rs roles.Store
+	var us usage.Store
+	var ss schedule.Store
 	_, havePG := os.LookupEnv("POSTGRES_HOST")
 	switch {
 	case team && havePG:
@@ -92,6 +109,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		caps = capstore.NewPG(pool, nil)
 		reqs = reqstore.NewPG(pool, nil)
 		rs = rolestore.NewPG(pool, nil)
+		us, ss = usagestore.NewPG(pool, nil), schedstore.NewPG(pool, nil)
 	case durable || team:
 		st, err := harness.OpenLocalStore(cfg.LocalStateDir)
 		if err != nil {
@@ -125,6 +143,18 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 				return nil, fmt.Errorf("open the roles store: %w", err)
 			}
 			rs = rlf
+			uf, err := usagestore.Open(filepath.Join(stateDir(cfg), "usage"))
+			if err != nil {
+				_ = closers.Close()
+				return nil, fmt.Errorf("open the usage ledger: %w", err)
+			}
+			closers = append(closers, uf)
+			sf, err := schedstore.Open(filepath.Join(stateDir(cfg), "schedules.json"))
+			if err != nil {
+				_ = closers.Close()
+				return nil, fmt.Errorf("open the schedule store: %w", err)
+			}
+			us, ss = uf, sf
 		}
 	}
 	b := &built{team: ts, closer: closers}
@@ -139,6 +169,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 			}
 		}
 		b.bus = redisx.NewFeedBus(rdb)
+		b.locker = redisx.NewCoordinator(rdb)
 	}
 	if ts != nil && cfg.LocalSandbox() {
 		be, err := teamLocalBackend(cfg)
@@ -172,6 +203,15 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		}
 		b.github = gh
 		o.MemoryKey = product.MemoryKey(ts)
+		if us != nil {
+			// Every finished run is booked (priced) and a run that would start over a monthly cap is refused. The hook
+			// is the last one: it reads the usage of the title and goal hooks too.
+			b.usage, b.sched, b.price = us, ss, usageenv.Price(cfg)
+			o.Hooks = append(o.Hooks, usageledger.Hook(usageledger.Options{
+				Store: us, Price: b.price, Resolve: product.UsageAttribution(ts, ss, fs),
+			}))
+			o.RunGate = usageledger.Gate(us, product.UsageGateResolver(ts), nil)
+		}
 		if err := installMarketplace(ctx, &o, ts, caps); err != nil {
 			_ = closers.Close()
 			return nil, err
