@@ -1,7 +1,7 @@
 // The "Tasks" tab of a project: the agent factory's tasks, triggers and spend report.
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { formatDistanceToNowStrict } from "date-fns";
-import { ExternalLink, GitPullRequest, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, GitPullRequest, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { isUnsupported } from "@/api/client";
 import {
@@ -18,7 +18,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -209,18 +208,19 @@ function TaskBody({ projectId, detail, canWrite }: { projectId: string; detail: 
   );
 }
 
-function TaskDrawer({ projectId, taskId, canWrite, onClose }: { projectId: string; taskId?: string; canWrite: boolean; onClose: () => void }) {
+function TaskInline({ projectId, taskId, canWrite, onBack }: { projectId: string; taskId: string; canWrite: boolean; onBack: () => void }) {
   const q = useTask(projectId, taskId);
   return (
-    <Sheet open={!!taskId} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full gap-3 sm:max-w-xl">
-        <SheetHeader>
-          <SheetTitle>{q.data?.task.title ?? "Task"}</SheetTitle>
-          <SheetDescription>{q.data ? `Created ${ago(q.data.task.createdAt)} by ${q.data.task.owner}` : "Task details"}</SheetDescription>
-        </SheetHeader>
+    <div className="space-y-3">
+      <Button variant="ghost" size="sm" onClick={onBack}>
+        <ArrowLeft /> Tasks
+      </Button>
+      <section aria-label="Task detail" className="mx-auto max-w-3xl space-y-1">
+        <h2 className="text-base font-semibold">{q.data?.task.title ?? "Task"}</h2>
+        <p className="text-xs text-muted-foreground">{q.data ? `Created ${ago(q.data.task.createdAt)} by ${q.data.task.owner}` : "Task details"}</p>
         {q.isLoading ? <ListSkeleton rows={3} /> : q.error || !q.data ? <ErrorState error={q.error} retry={() => void q.refetch()} /> : <TaskBody projectId={projectId} detail={q.data} canWrite={canWrite} />}
-      </SheetContent>
-    </Sheet>
+      </section>
+    </div>
   );
 }
 
@@ -374,7 +374,7 @@ function TaskList({ projectId, role }: { projectId: string; role: Role }) {
   const navigate = useNavigate();
   // The open task is in the address (?task=), so the inbox and a shared link land on it.
   const openId = useSearch({ from: "/p/$projectId" }).task;
-  const setOpenId = (task?: string) => void navigate({ to: "/p/$projectId", params: { projectId }, search: { tab: "tasks", task }, replace: true });
+  const setOpenId = (task?: string) => void navigate({ to: "/p/$projectId", params: { projectId }, search: { tab: "tasks", task }, });
   const [creating, setCreating] = useState(false);
   const canWrite = role !== "viewer";
   if (tasks.isLoading) return <ListSkeleton />;
@@ -385,6 +385,8 @@ function TaskList({ projectId, role }: { projectId: string; role: Role }) {
   const all = tasks.data ?? [];
   const f = FILTERS.find((x) => x.id === filter) ?? FILTERS[0]!;
   const shown = all.filter((t) => f.match(t.state));
+  // An open task is shown in its own tab, inline: no drawer over the list.
+  if (openId) return <TaskInline projectId={projectId} taskId={openId} canWrite={canWrite} onBack={() => setOpenId(undefined)} />;
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -421,7 +423,6 @@ function TaskList({ projectId, role }: { projectId: string; role: Role }) {
       ) : (
         <Empty title={all.length ? "No task in this state" : "No tasks yet"}>{all.length ? null : "Create one to put an agent to work unattended."}</Empty>
       )}
-      <TaskDrawer projectId={projectId} taskId={openId} canWrite={canWrite} onClose={() => setOpenId(undefined)} />
       <CreateTaskDialog projectId={projectId} owner={role === "owner"} open={creating} onOpenChange={setCreating} existing={all} />
     </div>
   );

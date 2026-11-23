@@ -47,7 +47,7 @@ describe("Tasks tab", () => {
       },
     });
     await renderApp("/p/p1?tab=tasks&task=a");
-    const d = within(await screen.findByRole("dialog"));
+    const d = within(await screen.findByRole("region", { name: "Task detail" }));
     expect(await d.findByText("2 of 3")).toBeTruthy();
     expect(d.getByText(/\$1\.50 of \$5\.00/)).toBeTruthy();
     expect(d.getByRole("link", { name: /#42/ }).getAttribute("href")).toBe("https://github.com/x/y/pull/42");
@@ -61,7 +61,7 @@ describe("Tasks tab", () => {
     const t = task("a", { state: "blocked", blockedReason: "budget reached", budget: { maxUsd: 2 } });
     const m = mockFetch({ ...routes("owner", [t]), "GET /api/projects/p1/tasks/a": { task: t, events: [] }, "POST /api/projects/p1/tasks/a/resume": reply(202) });
     await renderApp("/p/p1?tab=tasks&task=a");
-    const d = within(await screen.findByRole("dialog"));
+    const d = within(await screen.findByRole("region", { name: "Task detail" }));
     fireEvent.change(await d.findByLabelText("Feedback"), { target: { value: "try the other API" } });
     fireEvent.change(d.getByLabelText("Budget in USD"), { target: { value: "6" } });
     fireEvent.click(d.getByRole("button", { name: "Resume" }));

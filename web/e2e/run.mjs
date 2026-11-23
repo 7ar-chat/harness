@@ -417,7 +417,7 @@ async function main() {
     // the state filter and the detail dialog show it
     await page.getByRole("group", { name: "Filter by state" }).getByRole("button", { name: /^Done/ }).click();
     await main.getByText("Say hello", { exact: true }).click();
-    await visible(page.getByRole("dialog").getByRole("link", { name: /agent's session/ }), "the link to the agent's session");
+    await visible(page.getByRole("region", { name: "Task detail" }).getByRole("link", { name: /agent's session/ }), "the link to the agent's session");
   });
 
   await step("g4. the inbox lists a session that waits for an approval and clears when it is approved", async () => {

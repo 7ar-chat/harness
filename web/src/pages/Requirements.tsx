@@ -1,6 +1,6 @@
 // The project's requirements: what the project wants done, followed from the idea to the merged pull request.
-import { Link } from "@tanstack/react-router";
-import { AlertTriangle, ExternalLink, GitPullRequest, Pencil, Plus, Trash2 } from "lucide-react";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { AlertTriangle, ArrowLeft, ExternalLink, GitPullRequest, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   useCreateRequirement,
@@ -300,7 +300,10 @@ export function Requirements({ projectId, role }: { projectId: string; role: Rol
   const gitHosts = useGitHosts();
   const [status, setStatus] = useState<string>("all");
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState("");
+  // The open requirement is in the address (?req=): it is its own editor tab, and a shared link lands on it.
+  const navigate = useNavigate();
+  const selected = useSearch({ from: "/p/$projectId" }).req ?? "";
+  const setSelected = (req: string) => void navigate({ to: "/p/$projectId", params: { projectId }, search: { tab: "requirements", req: req || undefined } });
   const [editing, setEditing] = useState<{ requirement?: Requirement } | null>(null);
   const [importLabel, setImportLabel] = useState("");
   const items = list.data ?? [];
@@ -318,6 +321,16 @@ export function Requirements({ projectId, role }: { projectId: string; role: Rol
   if (list.error) return <ErrorState error={list.error} retry={() => void list.refetch()} />;
   if (list.data === null) return <Empty title="Requirements are not enabled">This server does not track requirements.</Empty>;
   const canWork = role !== "viewer";
+  if (selected)
+    return (
+      <div className="space-y-3">
+        <Button variant="ghost" size="sm" onClick={() => setSelected("")}>
+          <ArrowLeft /> Requirements
+        </Button>
+        <Detail projectId={projectId} id={selected} role={role} onEdit={(r) => setEditing({ requirement: r })} onGone={() => setSelected("")} />
+        <EditDialog projectId={projectId} requirement={editing?.requirement} open={editing !== null} onOpenChange={(o) => !o && setEditing(null)} />
+      </div>
+    );
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -411,12 +424,8 @@ export function Requirements({ projectId, role }: { projectId: string; role: Rol
               </li>
             ))}
           </ul>
-          <div>
-            {selected && items.some((r) => r.id === selected) ? (
-              <Detail projectId={projectId} id={selected} role={role} onEdit={(r) => setEditing({ requirement: r })} onGone={() => setSelected("")} />
-            ) : (
-              <p className="p-4 text-sm text-muted-foreground">Select a requirement to see what works on it.</p>
-            )}
+          <div className="hidden md:block">
+            <p className="p-4 text-sm text-muted-foreground">Open a requirement to see what works on it. It opens in its own tab.</p>
           </div>
         </div>
       )}

@@ -88,11 +88,12 @@ const routeTree = root.addChildren([
     getParentRoute: () => root,
     path: "/p/$projectId",
     component: ProjectPage,
-    validateSearch: (s: Record<string, unknown>): { tab?: Tab; task?: string; wf?: string; run?: string } => ({
+    validateSearch: (s: Record<string, unknown>): { tab?: Tab; task?: string; wf?: string; run?: string; req?: string } => ({
       tab: tabs.find((t) => t === s.tab),
       task: typeof s.task === "string" && s.task ? s.task : undefined,
       wf: typeof s.wf === "string" && s.wf ? s.wf : undefined,
       run: typeof s.run === "string" && s.run ? s.run : undefined,
+      req: typeof s.req === "string" && s.req ? s.req : undefined,
     }),
   }),
   createRoute({ getParentRoute: () => root, path: "/memory", component: MemoryPage }),

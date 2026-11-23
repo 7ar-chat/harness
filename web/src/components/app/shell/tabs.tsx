@@ -4,7 +4,7 @@ import { useLocation, useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readJSON, writeJSON } from "@/lib/persist";
 
-export type TabKind = "home" | "session" | "project" | "task" | "workflow" | "run" | "page";
+export type TabKind = "home" | "session" | "project" | "requirement" | "task" | "workflow" | "run" | "page";
 
 export interface EditorTab {
   /** Stable identity of a place: the same place always focuses the same tab. */
@@ -53,7 +53,7 @@ const PAGES: Record<string, string> = {
 export const pageTitle = (path: string) => PAGES[path];
 
 /** The href of a project place. */
-export function projectHref(projectId: string, section?: string, extra: { task?: string; wf?: string; run?: string } = {}) {
+export function projectHref(projectId: string, section?: string, extra: { task?: string; wf?: string; run?: string; req?: string } = {}) {
   const q = new URLSearchParams();
   if (section) q.set("tab", section);
   for (const [k, v] of Object.entries(extra)) if (v) q.set(k, v);
@@ -73,6 +73,8 @@ export function tabFor(pathname: string, search: Record<string, unknown>): Edito
     const task = str(search.task);
     const wf = str(search.wf);
     const run = str(search.run);
+    const req = str(search.req);
+    if (section === "requirements" && req) return { key: `p:${projectId}:req:${req}`, href: projectHref(projectId, "requirements", { req }), kind: "requirement", projectId, id: req, section };
     if (section === "tasks" && task) return { key: `p:${projectId}:task:${task}`, href: projectHref(projectId, "tasks", { task }), kind: "task", projectId, id: task, section };
     if (section === "workflows" && run) return { key: `p:${projectId}:run:${run}`, href: projectHref(projectId, "workflows", { run }), kind: "run", projectId, id: run, section };
     if (section === "workflows" && wf) return { key: `p:${projectId}:wf:${wf}`, href: projectHref(projectId, "workflows", { wf }), kind: "workflow", projectId, id: wf, section };

@@ -2,7 +2,7 @@
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTask } from "@/api/factory";
-import { useOverview } from "@/api/queries";
+import { useOverview, useRequirement } from "@/api/queries";
 import { useWorkflows } from "@/api/workflows";
 import { cn } from "@/lib/utils";
 import { StatusDot } from "../common";
@@ -11,6 +11,7 @@ import { PROJECT_SECTIONS, pageTitle, type EditorTab, type Tabs } from "./tabs";
 /** The words on a tab. Project places say which project when more than one project has a tab open. */
 export function useTabLabel(tab: EditorTab, multi: boolean): string {
   const overview = useOverview().data;
+  const req = useRequirement(tab.projectId ?? "", tab.kind === "requirement" ? (tab.id ?? "") : "").data?.requirement;
   const task = useTask(tab.projectId ?? "", tab.kind === "task" ? tab.id : undefined).data?.task.title;
   const wfs = useWorkflows(tab.kind === "workflow" ? (tab.projectId ?? "") : "").data;
   const pname = overview?.projects.find((p) => p.id === tab.projectId)?.name;
@@ -24,6 +25,8 @@ export function useTabLabel(tab: EditorTab, multi: boolean): string {
       const t = [...(overview?.personal ?? []), ...(overview?.projects ?? []).flatMap((p) => p.threads)].find((x) => x.id === tab.id);
       return t ? t.title || "(untitled)" : "Session";
     }
+    case "requirement":
+      return req ? `${req.source.number ? `#${req.source.number} ` : ""}${req.title}` : "Requirement";
     case "task":
       return `Task · ${task ?? "…"}`;
     case "workflow":
