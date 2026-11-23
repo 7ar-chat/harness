@@ -86,6 +86,12 @@ const (
 	// task's thread for good, so the dispatcher never starts a run for it and CI or review feedback is delivered to
 	// the session as a message.
 	SourceSession = "session"
+	// SourceWorkflow marks a task that a workflow run created for one of its steps (its labels name the run and
+	// the step: "workflow:<run id>", "wfnode:<node id>"); the workflows feature moves the run on when it ends.
+	SourceWorkflow = "workflow"
+	// LabelWorkflow and LabelWorkflowNode prefix those labels.
+	LabelWorkflow     = "workflow:"
+	LabelWorkflowNode = "wfnode:"
 )
 
 // Task event kinds (TaskEvent.Kind) and the Data keys the features agree on.

@@ -29,6 +29,7 @@ import (
 	"github.com/7ar-chat/harness/app/product"
 	"github.com/7ar-chat/harness/config"
 	"github.com/7ar-chat/harness/core/store"
+	wfengine "github.com/7ar-chat/harness/features/workflows"
 	"github.com/7ar-chat/harness/hosts/client"
 	"github.com/7ar-chat/harness/hosts/httpapi"
 	"github.com/7ar-chat/harness/modelinfo"
@@ -139,6 +140,17 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		prod.Capabilities, prod.MCPTester, prod.SkillAPI = bt.caps, mcpTester("web"), bt.skills
 	}
 	prod.Roles = bt.roles
+	if bt.wfs != nil {
+		prod.Workflows = bt.wfs
+		if f := h.FactoryOf(); f != nil {
+			// Workflow runs are factory tasks: the engine creates them through the task service and moves a run on
+			// when the factory's OnTaskState hook (and a slow poll, for what a restart missed) says a task moved.
+			eng := wfengine.New(wfengine.Options{Store: bt.wfs, Tasks: f.Tasks, Answer: f.Answer,
+				Requirement: product.RequirementText(bt.reqs)})
+			prod.WorkflowEngine = eng
+			go func() { _ = eng.Run(hctx) }()
+		}
+	}
 	if tok := getenv("TELEGRAM_BOT_TOKEN"); tok != "" && *team {
 		prod.Telegram = &product.Telegram{Token: tok, Username: strings.TrimPrefix(getenv("TELEGRAM_BOT_USERNAME"), "@")}
 	}

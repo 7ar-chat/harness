@@ -5,6 +5,8 @@ export class ApiError extends Error {
     public status: number,
     public code: string,
     message: string,
+    /** Problems the server listed with the error (a rejected workflow graph). */
+    public issues?: { nodeId?: string; field?: string; message: string }[],
   ) {
     super(message);
   }
@@ -69,8 +71,8 @@ export async function request<T>(method: string, path: string, body?: unknown): 
     /* not JSON */
   }
   if (!r.ok) {
-    const e = (json as { error?: { code?: string; message?: string } } | undefined)?.error;
-    throw new ApiError(r.status, e?.code ?? "error", e?.message ?? (r.statusText || `HTTP ${r.status}`));
+    const e = (json as { error?: { code?: string; message?: string; issues?: { nodeId?: string; field?: string; message: string }[] } } | undefined)?.error;
+    throw new ApiError(r.status, e?.code ?? "error", e?.message ?? (r.statusText || `HTTP ${r.status}`), Array.isArray(e?.issues) ? e.issues : undefined);
   }
   return json as T;
 }

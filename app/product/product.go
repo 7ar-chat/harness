@@ -20,6 +20,7 @@ import (
 	"github.com/7ar-chat/harness/core/requirements"
 	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/core/workflows"
 	"github.com/7ar-chat/harness/hosts/client"
 	"github.com/7ar-chat/harness/hosts/httpapi"
 )
@@ -77,6 +78,11 @@ type Options struct {
 	// Roles, with Team, serves the roles routes (see roles.go): the agent configurations of projects and users.
 	// Nil: no routes. The command gives the harness the same store through NewRoleRegistry.
 	Roles roles.Store
+	// Workflows, with Team, serves the workflow routes (see workflows.go): the procedures of projects and their
+	// runs. Nil: no routes. WorkflowEngine runs them (the command builds it over the factory's task service);
+	// without it a workflow can be designed but not run.
+	Workflows      workflows.Store
+	WorkflowEngine workflows.Engine
 }
 
 type server struct {
@@ -202,6 +208,7 @@ func (s *server) Install(hs *httpapi.Server) error {
 	s.routeInbox()
 	s.routeBoard()
 	s.routeRequirements()
+	s.routeWorkflows()
 	if s.opt.Supervisor != nil {
 		s.sup = s.opt.Supervisor
 		s.routeSupervisor()

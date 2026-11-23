@@ -10,7 +10,7 @@ const T = "2026-11-05T10:00:00Z";
 const task = (id: string, extra: Partial<FactoryTask> = {}): FactoryTask => ({
   id, projectId: "p1", owner: "alice", title: `Task ${id}`, spec: "x", source: { kind: "manual" }, state: "blocked", attempts: 1, spent: { usd: 0, tokens: 0, runs: 0 }, createdAt: T, updatedAt: T, ...extra,
 });
-const doc = (extra: Partial<InboxDoc> = {}): InboxDoc => ({ tasks: [], threads: [], count: 0, ...extra });
+const doc = (extra: Partial<InboxDoc> = {}): InboxDoc => ({ tasks: [], threads: [], gates: [], count: 0, ...extra });
 
 describe("Inbox", () => {
   it("lists blocked tasks, pull requests and waiting sessions", async () => {
@@ -61,5 +61,30 @@ describe("Inbox", () => {
     await renderApp("/");
     expect(await screen.findByLabelText("2 waiting for you")).toBeTruthy();
     expect((await page().findByRole("link", { name: /2 items need your review/ })).getAttribute("href")).toBe("/#/inbox");
+  });
+  it("shows the workflow gates that wait for the caller and decides them inline", async () => {
+    const m = mockFetch({
+      ...shellRoutes(),
+      "GET /api/needs-review": doc({
+        count: 1,
+        gates: [{ projectId: "p1", projectName: "payments", runId: "run1", workflowName: "Delivery", nodeId: "review", title: "Review the plan", approvers: ["role:member"], since: T, summary: "the plan so far" }],
+      }),
+      "POST /api/workflow-runs/run1/nodes/review/approve": { id: "run1" },
+      "POST /api/workflow-runs/run1/nodes/review/send-back": { id: "run1" },
+    });
+    await renderApp("/inbox");
+    expect(await page().findByText("the plan so far")).toBeTruthy();
+    expect(page().getByRole("link", { name: "Delivery: Review the plan" }).getAttribute("href")).toBe("/#/p/p1?tab=workflows&run=run1");
+
+    fireEvent.change(page().getByLabelText("Approval comment"), { target: { value: "ok" } });
+    fireEvent.click(page().getByRole("button", { name: "Approve" }));
+    await waitFor(() => expect(m.find("POST", "/api/workflow-runs/run1/nodes/review/approve")).toHaveLength(1));
+    expect(m.find("POST", "/api/workflow-runs/run1/nodes/review/approve")[0]?.body).toEqual({ comment: "ok" });
+
+    fireEvent.click(page().getByRole("button", { name: "Send back" }));
+    fireEvent.change(page().getByLabelText(/What must change/), { target: { value: "more detail" } });
+    fireEvent.click(page().getByRole("button", { name: "Send it back" }));
+    await waitFor(() => expect(m.find("POST", "/api/workflow-runs/run1/nodes/review/send-back")).toHaveLength(1));
+    expect(m.find("POST", "/api/workflow-runs/run1/nodes/review/send-back")[0]?.body).toEqual({ feedback: "more detail" });
   });
 });

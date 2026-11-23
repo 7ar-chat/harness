@@ -17,6 +17,7 @@ import (
 	"github.com/7ar-chat/harness/adapters/store/reqstore"
 	"github.com/7ar-chat/harness/adapters/store/rolestore"
 	"github.com/7ar-chat/harness/adapters/store/teamstore"
+	"github.com/7ar-chat/harness/adapters/store/workflowstore"
 	"github.com/7ar-chat/harness/app/factoryenv"
 	"github.com/7ar-chat/harness/app/product"
 	"github.com/7ar-chat/harness/config"
@@ -25,6 +26,7 @@ import (
 	"github.com/7ar-chat/harness/core/requirements"
 	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/core/workflows"
 	"github.com/7ar-chat/harness/features/artifacts"
 	"github.com/7ar-chat/harness/redisinfra"
 )
@@ -57,6 +59,8 @@ type built struct {
 	reqs requirements.Store
 	// roles is the store of the roles of projects and users (team mode only); the harness resolves them through it.
 	roles roles.Store
+	// wfs is the store of workflows and their runs (team mode only).
+	wfs workflows.Store
 	// skills serves the connections of skills that need an account (nil without the marketplace).
 	skills *product.SkillAPI
 	// bus shares the live feed between replicas: set in team mode when REDIS_HOST is.
@@ -75,6 +79,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 	var caps capabilities.Store
 	var reqs requirements.Store
 	var rs roles.Store
+	var wfs workflows.Store
 	_, havePG := os.LookupEnv("POSTGRES_HOST")
 	switch {
 	case team && havePG:
@@ -92,6 +97,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		caps = capstore.NewPG(pool, nil)
 		reqs = reqstore.NewPG(pool, nil)
 		rs = rolestore.NewPG(pool, nil)
+		wfs = workflowstore.NewPG(pool, nil)
 	case durable || team:
 		st, err := harness.OpenLocalStore(cfg.LocalStateDir)
 		if err != nil {
@@ -125,6 +131,12 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 				return nil, fmt.Errorf("open the roles store: %w", err)
 			}
 			rs = rlf
+			wff, err := workflowstore.Open(filepath.Join(stateDir(cfg), "workflows.json"), nil)
+			if err != nil {
+				_ = closers.Close()
+				return nil, fmt.Errorf("open the workflows store: %w", err)
+			}
+			wfs = wff
 		}
 	}
 	b := &built{team: ts, closer: closers}
@@ -176,7 +188,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 			_ = closers.Close()
 			return nil, err
 		}
-		b.caps, b.reqs = caps, reqs
+		b.caps, b.reqs, b.wfs = caps, reqs, wfs
 		if rs != nil {
 			b.roles = rs
 			o.Roles = product.NewRoleRegistry(ts, rs)
