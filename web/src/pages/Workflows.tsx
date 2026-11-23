@@ -1,7 +1,8 @@
 // The Workflows tab of a project: its procedures (SOPs) as versioned graphs, the builtin templates to start from, the designer, and
 // the runs with their live state and controls. A workflow is a graph of steps (an agent, a command, a human gate, another
 // workflow); a run turns each step into a factory task in dependency order.
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useProjectSearch } from "@/lib/place";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Copy, FilePlus2, Play, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -199,7 +200,7 @@ export function WorkflowsPanel({ projectId, role }: { projectId: string; role: R
   const list = useWorkflows(projectId);
   const create = useCreateWorkflow(projectId);
   const navigate = useNavigate();
-  const search = useSearch({ from: "/p/$projectId" });
+  const search = useProjectSearch();
   const [running, setRunning] = useState<Workflow>();
   const [section, setSection] = useState<"workflows" | "runs">(search.run ? "runs" : "workflows");
   const canEdit = role !== "viewer";

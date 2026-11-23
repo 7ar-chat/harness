@@ -1,6 +1,6 @@
 // The "Console" shell: an explorer on the left, editor tabs holding every page and session, a bottom panel and a status bar.
 // The URL still decides what is shown (hash routes), the shell only keeps the list of open tabs around it.
-import { Outlet, useLocation, useParams } from "@tanstack/react-router";
+import { useParams } from "@tanstack/react-router";
 import { PanelLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNeedsReview } from "@/api/factory";
@@ -9,13 +9,13 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { identifyUser } from "@/lib/telemetry";
 import { usePersisted } from "@/lib/persist";
 import { DialogsProvider } from "./dialogs";
-import { ErrorBoundary } from "./ErrorBoundary";
 import { BottomPanel } from "./shell/BottomPanel";
 import { ShellProvider, useNarrow, type PanelTab, type ShellState } from "./shell/context";
 import { clamp, ResizeHandle } from "./shell/ResizeHandle";
 import { EditorTabs } from "./shell/EditorTabs";
 import { ExplorerBody } from "./shell/Explorer";
 import { Palette, ProjectSwitcher } from "./shell/Palette";
+import { TabHost } from "./shell/TabHost";
 import { StatusBar } from "./shell/StatusBar";
 import { useEditorTabs } from "./shell/tabs";
 
@@ -34,7 +34,6 @@ export function AppShell() {
 
 function Shell({ login, palette, setPalette, switcher, setSwitcher }: { login: string; palette: boolean; setPalette: (v: boolean | ((p: boolean) => boolean)) => void; switcher: boolean; setSwitcher: (v: boolean) => void }) {
   const narrow = useNarrow();
-  const loc = useLocation();
   const params = useParams({ strict: false }) as { threadId?: string; projectId?: string };
   const overview = useOverview().data;
   const tabs = useEditorTabs(login);
@@ -140,11 +139,7 @@ function Shell({ login, palette, setPalette, switcher, setSwitcher }: { login: s
                 <EditorTabs tabs={tabs} />
               </div>
             </div>
-            <main aria-label="Editor" className="min-h-0 flex-1 overflow-hidden bg-background">
-              <ErrorBoundary reset={loc.pathname}>
-                <Outlet />
-              </ErrorBoundary>
-            </main>
+            <TabHost tabs={tabs} />
           </div>
         </div>
         {!narrow && panelD ? (

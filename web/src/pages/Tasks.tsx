@@ -1,5 +1,6 @@
 // The "Tasks" tab of a project: the agent factory's tasks, triggers and spend report.
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useProjectSearch } from "@/lib/place";
 import { formatDistanceToNowStrict } from "date-fns";
 import { ArrowLeft, ExternalLink, GitPullRequest, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -373,7 +374,7 @@ function TaskList({ projectId, role }: { projectId: string; role: Role }) {
   const [filter, setFilter] = useState("all");
   const navigate = useNavigate();
   // The open task is in the address (?task=), so the inbox and a shared link land on it.
-  const openId = useSearch({ from: "/p/$projectId" }).task;
+  const openId = useProjectSearch().task;
   const setOpenId = (task?: string) => void navigate({ to: "/p/$projectId", params: { projectId }, search: { tab: "tasks", task }, });
   const [creating, setCreating] = useState(false);
   const canWrite = role !== "viewer";

@@ -1,5 +1,6 @@
 // The project's requirements: what the project wants done, followed from the idea to the merged pull request.
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useProjectSearch } from "@/lib/place";
 import { AlertTriangle, ArrowLeft, ExternalLink, GitPullRequest, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -302,7 +303,7 @@ export function Requirements({ projectId, role }: { projectId: string; role: Rol
   const [search, setSearch] = useState("");
   // The open requirement is in the address (?req=): it is its own editor tab, and a shared link lands on it.
   const navigate = useNavigate();
-  const selected = useSearch({ from: "/p/$projectId" }).req ?? "";
+  const selected = useProjectSearch().req ?? "";
   const setSelected = (req: string) => void navigate({ to: "/p/$projectId", params: { projectId }, search: { tab: "requirements", req: req || undefined } });
   const [editing, setEditing] = useState<{ requirement?: Requirement } | null>(null);
   const [importLabel, setImportLabel] = useState("");

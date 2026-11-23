@@ -148,4 +148,20 @@ describe("app shell", () => {
     fireEvent.click(strip.getByRole("button", { name: "Close Members & access" }));
     await waitFor(() => expect(strip.getAllByRole("tab")).toHaveLength(1));
   });
+
+  it("keeps the recently used tabs mounted but hidden, one editor landmark, and drops the oldest beyond eight", async () => {
+    mockFetch(shellRoutes());
+    const { router } = await renderApp("/");
+    const hidden = () => document.querySelectorAll('[aria-hidden="true"][inert]').length;
+    await router.navigate({ href: "/jobs" });
+    await waitFor(() => expect(hidden()).toBe(1));
+    expect(screen.getAllByRole("main")).toHaveLength(1); // only the shown tab is the landmark
+    const more = ["/references", "/connectors", "/capabilities", "/schedules", "/usage", "/memory", "/profile", "/inbox"];
+    for (const [i, to] of more.entries()) {
+      await router.navigate({ href: to });
+      await waitFor(() => expect(hidden()).toBe(Math.min(i + 2, 7))); // eight are kept: seven hidden plus the shown one
+    }
+    await waitFor(() => expect(router.state.location.pathname).toBe("/inbox"));
+    expect(screen.getAllByRole("main")).toHaveLength(1);
+  });
 });

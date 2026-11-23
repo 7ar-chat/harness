@@ -1,4 +1,5 @@
-import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useProjectPlace } from "@/lib/place";
 import { formatDistanceToNowStrict } from "date-fns";
 import { ExternalLink, Plus, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -257,8 +258,8 @@ function Audit({ pid }: { pid: string }) {
 }
 
 export function ProjectPage() {
-  const { projectId } = useParams({ from: "/p/$projectId" });
-  const { tab } = useSearch({ from: "/p/$projectId" });
+  const { projectId, search } = useProjectPlace();
+  const tab = search.tab;
   const project = useProject(projectId);
   const overview = useOverview().data;
   const seen = useSeen();

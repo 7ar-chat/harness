@@ -308,6 +308,9 @@ export function SessionPage() {
   return <SessionView threadId={threadId} />;
 }
 
+/** A session tab: it is told its thread (the shell keeps several tabs mounted, the address only names the active one). */
+export const SessionTab = ({ threadId }: { threadId: string }) => <SessionView threadId={threadId} />;
+
 export function SupervisorPage() {
   const q = useQuery(supervisorQuery);
   if (q.isLoading) return <ListSkeleton rows={5} />;

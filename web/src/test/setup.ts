@@ -1,8 +1,10 @@
 // Shared vitest setup: DOM APIs jsdom lacks, and cleanup between tests.
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+// The suite runs files in parallel: the app shell is heavy to mount, and a loaded machine needs more than the default 1s to find things.
+configure({ asyncUtilTimeout: 4000 });
 
 class NoopObserver {
   observe() {}

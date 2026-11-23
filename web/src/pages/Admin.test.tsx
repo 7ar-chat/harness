@@ -23,7 +23,7 @@ describe("AdminPage", () => {
     });
     // Act
     await renderApp("/admin");
-    const row = (await screen.findByText("Carol", { selector: "main span" })).closest("li")!;
+    const row = (await screen.findByText("Carol", { selector: "[role=main] span" })).closest("li")!;
     expect(within(row).getByText("GitHub")).toBeTruthy();
     fireEvent.click(within(row).getByRole("button", { name: /Approve/ }));
     // Assert
