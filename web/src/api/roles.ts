@@ -20,6 +20,8 @@ export interface RoleBody {
   skills: string[];
   mcp: string[];
   permissionMode: string;
+  /** The external coding-agent executor that does the role's work ("" runs the internal loop). */
+  executor?: string;
   enabled: boolean;
   version?: number;
 }

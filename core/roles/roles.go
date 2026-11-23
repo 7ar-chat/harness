@@ -93,7 +93,10 @@ type Role struct {
 	MCP    []string `json:"mcp,omitempty"`
 	// PermissionMode is PermNormal (also ""), PermPlan or PermAsk.
 	PermissionMode string `json:"permissionMode,omitempty"`
-	Enabled        bool   `json:"enabled"`
+	// Executor, when set, names an external coding-agent CLI (core/executors: claude-code, codex, opencode or a
+	// project's custom one) that does this role's work in the sandbox in place of the internal loop.
+	Executor string `json:"executor,omitempty"`
+	Enabled  bool   `json:"enabled"`
 	// Version starts at 1 and grows with every change; older versions are kept (see Version).
 	Version   int       `json:"version"`
 	Builtin   bool      `json:"builtin,omitempty"`
@@ -174,7 +177,10 @@ func (r *Role) Validate() error {
 	r.Prompt = strings.TrimSpace(r.Prompt)
 	r.Model = strings.TrimSpace(r.Model)
 	r.ReasoningEffort = strings.TrimSpace(r.ReasoningEffort)
+	r.Executor = strings.TrimSpace(r.Executor)
 	switch {
+	case r.Executor != "" && !ValidName(r.Executor):
+		return invalid("the executor must be the name of an executor (a lower case slug)")
 	case !ValidName(r.Name):
 		return invalid("the name must be a lower case slug of at most 32 characters (letters, digits, -)")
 	case r.Scope != ScopeProject && r.Scope != ScopeUser:

@@ -126,6 +126,29 @@ export interface EnvironmentList {
   selectable: boolean;
 }
 
+export interface Executor {
+  name: string;
+  title?: string;
+  description?: string;
+  kind: string;
+  projectId?: string;
+  command: string;
+  modeFlags?: Record<string, string>;
+  binary: string;
+  installCommand?: string;
+  credentialEnv?: string[];
+  parser?: string;
+  enabled: boolean;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExecutorView extends Executor {
+  configured: boolean;
+  editable: boolean;
+}
+
 export interface FactoryReport {
   ProjectID: string;
   Since: string;
@@ -685,6 +708,7 @@ export interface RoleDoc {
   skills?: string[];
   mcp?: string[];
   permissionMode?: string;
+  executor?: string;
   enabled: boolean;
   version: number;
   builtin?: boolean;

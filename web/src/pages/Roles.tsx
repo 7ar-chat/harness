@@ -7,7 +7,9 @@ import { useCommands, useProjectCapabilities } from "@/api/queries";
 import {
   useCreateRole, useDeleteRole, useDuplicateRole, usePreviewRole, useRestoreRole, useRoleHistory, useRoles, useUpdateRole, type RoleBody,
 } from "@/api/roles";
-import type { RoleView } from "@/api/types";
+import { useExecutors } from "@/api/executors";
+import type { ExecutorView, RoleView } from "@/api/types";
+import { ProjectExecutors } from "@/pages/Executors";
 import { Empty, ErrorState, ListSkeleton } from "@/components/app/common";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -35,12 +37,12 @@ export const parseList = (s: string): string[] => [...new Set(s.split(/[\n,]/).m
 const listText = (l?: string[]) => (l ?? []).join(", ");
 
 const emptyDraft = (): RoleBody => ({
-  name: "", title: "", description: "", prompt: "", model: "", reasoningEffort: "", toolProfile: "", allowTools: [], denyTools: [], skills: [], mcp: [], permissionMode: "", enabled: true,
+  name: "", title: "", description: "", prompt: "", model: "", reasoningEffort: "", toolProfile: "", allowTools: [], denyTools: [], skills: [], mcp: [], permissionMode: "", executor: "", enabled: true,
 });
 
 const draftOf = (r: RoleView): RoleBody => ({
   name: r.name, title: r.title ?? "", description: r.description ?? "", prompt: r.prompt, model: r.model ?? "", reasoningEffort: r.reasoningEffort ?? "", toolProfile: r.toolProfile ?? "",
-  allowTools: r.allowTools ?? [], denyTools: r.denyTools ?? [], skills: r.skills ?? [], mcp: r.mcp ?? [], permissionMode: r.permissionMode ?? "", enabled: r.enabled, version: r.version,
+  allowTools: r.allowTools ?? [], denyTools: r.denyTools ?? [], skills: r.skills ?? [], mcp: r.mcp ?? [], permissionMode: r.permissionMode ?? "", executor: r.executor ?? "", enabled: r.enabled, version: r.version,
 });
 
 const SCOPE_LABEL: Record<string, string> = { builtin: "Builtin", project: "Project", user: "Personal" };
@@ -82,13 +84,17 @@ function RoleEditor({ pid, role, create, readOnly, onClose, onDuplicate }: { pid
   const [deny, setDeny] = useState(listText(role?.denyTools));
   const skillOptions = (useCommands().data ?? []).filter((c) => c.source === "skill").map((c) => c.name);
   const mcpOptions = (useProjectCapabilities(pid ?? "").data ?? []).filter((c) => c.enabled).map((c) => c.name);
+  // The executors in reach; one the role names that is gone is kept in the list so the editor does not lose it silently.
+  const executorList = (useExecutors(pid).data ?? []).filter((e) => e.enabled);
+  const executorOptions = role?.executor && !executorList.some((e) => e.name === role.executor) ? [...executorList, { name: role.executor, kind: "custom" } as ExecutorView] : executorList;
   const create_ = useCreateRole(pid);
   const update = useUpdateRole(pid);
   const preview = usePreviewRole(pid);
   const restore = useRestoreRole(pid);
   const history = useRoleHistory(pid, role && !create && !role.builtin ? role.name : undefined, role?.version);
   const [showHistory, setShowHistory] = useState(false);
-  const body = useMemo<RoleBody>(() => ({ ...d, allowTools: parseList(allow), denyTools: parseList(deny) }), [d, allow, deny]);
+  // An empty executor is left out of the body: a PUT replaces the role, so absent means the internal loop.
+  const body = useMemo<RoleBody>(() => ({ ...d, executor: d.executor || undefined, allowTools: parseList(allow), denyTools: parseList(deny) }), [d, allow, deny]);
   const problem = readOnly ? undefined : validateRole(body);
   const busy = create_.isPending || update.isPending;
   const editing = !create && !!role;
@@ -166,6 +172,19 @@ function RoleEditor({ pid, role, create, readOnly, onClose, onDuplicate }: { pid
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Executor</Label>
+            <Select value={d.executor || "internal"} onValueChange={(v) => set({ executor: v === "internal" ? "" : v })} disabled={readOnly}>
+              <SelectTrigger aria-label="Executor"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="internal">7ar's own agent loop</SelectItem>
+                {executorOptions.map((e) => (
+                  <SelectItem key={e.name} value={e.name}>{e.title || e.name}{e.kind === "custom" ? " (project)" : ""}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">An external coding agent that does this role&apos;s work in the sandbox, under the task&apos;s policy. Each person sets their own API key in Settings.</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -258,7 +277,7 @@ function RoleEditor({ pid, role, create, readOnly, onClose, onDuplicate }: { pid
 }
 
 function RoleRow({ r, onOpen, onEdit, onDuplicate, onDelete, onToggle, canEdit }: { r: RoleView; onOpen: () => void; onEdit: () => void; onDuplicate: () => void; onDelete: () => void; onToggle: (on: boolean) => void; canEdit: boolean }) {
-  const tools = [r.toolProfile === "read-only" ? "read-only" : "", r.allowTools?.length ? `${r.allowTools.length} allowed tools` : "", r.denyTools?.length ? `${r.denyTools.length} denied` : "", r.mcp?.length ? `MCP ${r.mcp.join(", ")}` : ""].filter(Boolean);
+  const tools = [r.executor ? `runs on ${r.executor}` : "", r.toolProfile === "read-only" ? "read-only" : "", r.allowTools?.length ? `${r.allowTools.length} allowed tools` : "", r.denyTools?.length ? `${r.denyTools.length} denied` : "", r.mcp?.length ? `MCP ${r.mcp.join(", ")}` : ""].filter(Boolean);
   return (
     <li className={cn("flex flex-wrap items-center gap-3 p-3", !r.enabled && "opacity-60")}>
       <div className="min-w-0 flex-1">
@@ -351,6 +370,7 @@ export function RolesPanel({ projectId, canEdit }: { projectId?: string; canEdit
           />
         ))}
       </ul>
+      {projectId ? <ProjectExecutors projectId={projectId} canEdit={canEdit} /> : null}
       {editing ? (
         <RoleEditor pid={projectId} role={editing.role} create={editing.create} readOnly={editing.readOnly} onClose={() => setEditing(null)} onDuplicate={copy} />
       ) : null}

@@ -144,7 +144,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if bt.caps != nil {
 		prod.Capabilities, prod.MCPTester, prod.SkillAPI = bt.caps, mcpTester("web"), bt.skills
 	}
-	prod.Roles = bt.roles
+	prod.Roles, prod.Executors = bt.roles, bt.executors
 	if bt.wfs != nil {
 		prod.Workflows = bt.wfs
 		if f := h.FactoryOf(); f != nil {

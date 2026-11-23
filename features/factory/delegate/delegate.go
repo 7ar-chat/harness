@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/7ar-chat/harness/ai"
+	"github.com/7ar-chat/harness/core/executors"
 	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/engine/tools"
@@ -63,6 +64,9 @@ type Options struct {
 	// OnSpend is told what each finished sub-run spent, for the thread's task
 	// (only when the thread has one). Optional.
 	OnSpend func(ctx context.Context, taskID string, d factory.Spend)
+	// Executors runs the roles that have an external executor (Role.Executor): the CLI works in the calling
+	// thread's sandbox under the thread's policy, in place of a sub-agent. Nil: such a role cannot be delegated to.
+	Executors executors.Runner
 }
 
 // Provider offers the delegate and delegate_many tools.
@@ -77,6 +81,7 @@ type Provider struct {
 	timeout  time.Duration
 	task     func(ctx context.Context, taskID string) (*factory.Task, error)
 	onSpend  func(ctx context.Context, taskID string, d factory.Spend)
+	executor executors.Runner
 	// branchSeq numbers isolated branches so two sub-agents never share one.
 	branchSeq atomic.Int64
 }
@@ -84,7 +89,7 @@ type Provider struct {
 // New returns a Provider; zero Options fields take their defaults.
 func New(o Options) *Provider {
 	p := &Provider{spawner: o.Spawner, store: o.Store, roles: o.Roles, registry: o.Registry, maxDepth: o.MaxDepth, parallel: o.MaxParallel,
-		models: o.Models, timeout: o.Timeout, task: o.Task, onSpend: o.OnSpend}
+		models: o.Models, timeout: o.Timeout, task: o.Task, onSpend: o.OnSpend, executor: o.Executors}
 	if p.roles == nil {
 		p.roles = DefaultRoles()
 	}
@@ -220,6 +225,9 @@ func rosterLines(catalogue map[string]Role) string {
 		fmt.Fprintf(&b, "- %s", r.Name)
 		if r.ReadOnly {
 			b.WriteString(" (read-only)")
+		}
+		if r.Executor != "" {
+			b.WriteString(" (runs on the external executor " + r.Executor + ")")
 		}
 		if r.Description != "" {
 			b.WriteString(": " + r.Description)
@@ -364,6 +372,9 @@ func (c *call) run(ctx context.Context, r Role, in input) string {
 	req := c.request(ctx, r, in)
 	sctx, cancel := context.WithTimeout(ctx, c.p.timeout)
 	defer cancel()
+	if r.Executor != "" {
+		return c.runExecutor(ctx, sctx, r, req)
+	}
 	res, err := c.p.spawner.Spawn(sctx, req)
 	if res != nil && req.TaskID != "" && c.p.onSpend != nil {
 		c.p.onSpend(ctx, req.TaskID, res.Usage)
@@ -377,6 +388,36 @@ func (c *call) run(ctx context.Context, r Role, in input) string {
 		return failure(r.Name, "the spawner returned no result", nil)
 	}
 	return render(r.Name, res)
+}
+
+// runExecutor hands a role that has an external executor to it: the CLI runs in the calling thread's sandbox, under
+// its policy, and its report is the delegation's report. Its spend is booked to the task by the runner.
+func (c *call) runExecutor(ctx, sctx context.Context, r Role, req factory.SpawnRequest) string {
+	if c.p.executor == nil {
+		return failure(r.Name, fmt.Sprintf("needs the external executor %q, which this server does not run", r.Executor), nil)
+	}
+	if req.Policy == factory.PolicySupervised {
+		// The policy engine asks a human before run_executor, but treats delegate as passive: a supervised task
+		// must not get past that question through a role.
+		return failure(r.Name, fmt.Sprintf("cannot run on the executor %q under the supervised policy: call run_executor yourself, which asks a human first", r.Executor), nil)
+	}
+	task := req.Prompt
+	if p := strings.TrimSpace(r.Prompt); p != "" {
+		task = p + "\n\n" + task
+	}
+	res, err := c.p.executor.Run(sctx, executors.Request{Login: req.Login, ThreadID: c.rc.ThreadID, Executor: r.Executor, Task: task,
+		ReadOnly: r.ReadOnly, Policy: req.Policy, TaskID: req.TaskID}, nil)
+	switch {
+	case err != nil && ctx.Err() == nil && errors.Is(sctx.Err(), context.DeadlineExceeded):
+		return failure(r.Name, fmt.Sprintf("timed out after %s and was cancelled", c.p.timeout), nil)
+	case err != nil:
+		return failure(r.Name, "did not complete: "+err.Error(), nil)
+	}
+	rep := executors.Render(res)
+	if res.Failed() {
+		return "DELEGATION FAILED: the " + r.Name + " role's executor did not succeed.\n" + rep
+	}
+	return clipReport(r.Name+" sub-agent report (executor "+r.Executor+")\n---\n"+rep, maxReportChars)
 }
 
 // request builds the SpawnRequest of one delegation from the calling thread.

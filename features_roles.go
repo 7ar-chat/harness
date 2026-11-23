@@ -175,6 +175,6 @@ func taskRoleResolver(res roles.Resolver) func(context.Context, factory.Task, st
 			return tasks.RoleSpec{}, false
 		}
 		return tasks.RoleSpec{Instructions: "Your role's instructions are in the Role section of your system prompt.", ReadOnly: r.ReadOnly(),
-			Model: r.Model, Effort: r.ReasoningEffort, Skills: r.Skills, Ref: roles.RefOf(*r).String()}, true
+			Model: r.Model, Effort: r.ReasoningEffort, Skills: r.Skills, Ref: roles.RefOf(*r).String(), Executor: r.Executor}, true
 	}
 }

@@ -73,6 +73,7 @@ type roleBody struct {
 	Skills          []string `json:"skills"`
 	MCP             []string `json:"mcp"`
 	PermissionMode  string   `json:"permissionMode"`
+	Executor        string   `json:"executor"`
 	Enabled         *bool    `json:"enabled"`
 	// Version is the version the editor started from; 0 skips the check.
 	Version int `json:"version"`
@@ -85,7 +86,7 @@ func (b roleBody) role(scope roles.Scope, scopeID, name string) roles.Role {
 	}
 	return roles.Role{Scope: scope, ScopeID: scopeID, Name: name, Title: b.Title, Description: b.Description, Prompt: b.Prompt,
 		Model: b.Model, ReasoningEffort: b.ReasoningEffort, ToolProfile: b.ToolProfile, AllowTools: b.AllowTools, DenyTools: b.DenyTools,
-		Skills: b.Skills, MCP: b.MCP, PermissionMode: b.PermissionMode, Enabled: enabled, Version: b.Version}
+		Skills: b.Skills, MCP: b.MCP, PermissionMode: b.PermissionMode, Executor: strings.ToLower(strings.TrimSpace(b.Executor)), Enabled: enabled, Version: b.Version}
 }
 
 // ---- the resolver ----
@@ -331,6 +332,9 @@ func (s *server) createRole(w http.ResponseWriter, r *http.Request, sc roleScope
 	}
 	name := strings.ToLower(strings.TrimSpace(body.Name))
 	_, builtin := s.roles.builtin[name]
+	if !s.roleExecutorOK(w, r, sc.query, strings.ToLower(strings.TrimSpace(body.Executor))) {
+		return
+	}
 	created, err := s.opt.Roles.Create(r.Context(), body.role(sc.scope, sc.id, name), sc.caller.Actor)
 	if err != nil {
 		roleFail(w, err)
@@ -353,6 +357,9 @@ func (s *server) putRole(w http.ResponseWriter, r *http.Request, sc roleScope) {
 	}
 	if body.Enabled == nil {
 		body.Enabled = &cur.Enabled
+	}
+	if !s.roleExecutorOK(w, r, sc.query, strings.ToLower(strings.TrimSpace(body.Executor))) {
+		return
 	}
 	updated, err := s.opt.Roles.Update(r.Context(), body.role(sc.scope, sc.id, name), sc.caller.Actor)
 	if err != nil {

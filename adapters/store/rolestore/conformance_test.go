@@ -247,6 +247,38 @@ func TestFileRefusesACorruptFile(t *testing.T) {
 	}
 }
 
+func TestExecutorFieldRoundTripsAndIsValidated(t *testing.T) {
+	eachStore(t, func(t *testing.T, s roles.Store) {
+		ctx := context.Background()
+		r := role("ext")
+		r.Executor = " claude-code "
+		created := must(s.Create(ctx, r, "alice"))
+		if created.Executor != "claude-code" {
+			t.Fatalf("created = %+v", created)
+		}
+		if got := must(s.Get(ctx, roles.ScopeProject, "p1", "ext")); got.Executor != "claude-code" {
+			t.Fatalf("get = %+v", got)
+		}
+		r.Executor = "codex"
+		if up := must(s.Update(ctx, r, "bob")); up.Executor != "codex" {
+			t.Fatalf("update = %+v", up)
+		}
+		hist := must(s.History(ctx, roles.ScopeProject, "p1", "ext"))
+		if len(hist) != 1 || hist[0].Role.Executor != "claude-code" {
+			t.Fatalf("history = %+v", hist)
+		}
+		r.Executor = ""
+		if up := must(s.Update(ctx, r, "bob")); up.Executor != "" {
+			t.Fatalf("cleared = %+v", up)
+		}
+		bad := role("bad")
+		bad.Executor = "Not A Slug"
+		if _, err := s.Create(ctx, bad, "alice"); !errors.Is(err, roles.ErrInvalid) {
+			t.Fatalf("invalid executor: %v", err)
+		}
+	})
+}
+
 func TestStoredValuesAreNotAliased(t *testing.T) {
 	s := rolestore.NewMem(nil)
 	ctx := context.Background()

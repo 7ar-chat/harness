@@ -8,6 +8,7 @@ import {
   TASK_STATE_LABEL, isTerminalState, useCancelTask, useCreateTask, useCreateTrigger, useDeleteTrigger, useFactoryReport, useLearning, useResumeTask, useTask, useTasks, useTriggers,
   type FactoryState, type FactoryTask, type FactoryTaskEvent, type LearningCluster, type LearningExperiment, type TaskDetail, type TriggerInput,
 } from "@/api/factory";
+import { useRoles } from "@/api/roles";
 import type { Role } from "@/api/types";
 import { Empty, ErrorState, ListSkeleton } from "@/components/app/common";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -233,6 +234,8 @@ const POLICIES = [
 
 function CreateTaskDialog({ projectId, owner, open, onOpenChange, existing }: { projectId: string; owner: boolean; open: boolean; onOpenChange: (o: boolean) => void; existing: FactoryTask[] }) {
   const create = useCreateTask(projectId);
+  // The project's own roles are offered too; one that names an external executor says so (the task then runs on that CLI).
+  const projectRoles = (useRoles(projectId).data ?? []).filter((r) => r.enabled && !ROLES.includes(r.name));
   const [f, setF] = useState({ title: "", spec: "", role: "coder", model: "", policy: "default", maxUsd: "", maxAttempts: "", autoMerge: false });
   const [deps, setDeps] = useState<string[]>([]);
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
@@ -290,8 +293,19 @@ function CreateTaskDialog({ projectId, owner, open, onOpenChange, existing }: { 
                       {r}
                     </SelectItem>
                   ))}
+                  {projectRoles.map((r) => (
+                    <SelectItem key={r.name} value={r.name}>
+                      {r.name}
+                      {r.executor ? ` (runs on ${r.executor})` : ""}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              {projectRoles.find((r) => r.name === f.role)?.executor ? (
+                <p className="text-xs text-muted-foreground">
+                  Runs on the external executor {projectRoles.find((r) => r.name === f.role)?.executor}, under the policy below. It uses your API key from Settings.
+                </p>
+              ) : null}
             </div>
             <div className="space-y-1">
               <Label htmlFor="task-model">Model</Label>

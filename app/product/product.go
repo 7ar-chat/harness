@@ -78,6 +78,9 @@ type Options struct {
 	// Roles, with Team, serves the roles routes (see roles.go): the agent configurations of projects and users.
 	// Nil: no routes. The command gives the harness the same store through NewRoleRegistry.
 	Roles roles.Store
+	// Executors, with Team, serves the external coding-agent executors and the sealed credentials users keep for them
+	// (see executors.go). Nil: no routes.
+	Executors *ExecutorAPI
 	// Schedules, with Team, serves scheduled agent tasks and fires them (see schedules.go). Nil: no routes, nothing runs.
 	Schedules *SchedulesOptions
 	// Usage, with Team, serves the usage report and the spend caps (see usage.go). Nil: no routes.
@@ -210,6 +213,7 @@ func (s *server) Install(hs *httpapi.Server) error {
 	s.routeAdmin()
 	s.routeCapabilities()
 	s.routeRoles()
+	s.routeExecutors()
 	s.routeFactory()
 	s.routeInbox()
 	s.routeBoard()
