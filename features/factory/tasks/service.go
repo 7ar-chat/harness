@@ -226,6 +226,9 @@ type RoleSpec struct {
 	Skills       []string
 	// Ref names the role in the role registry (see factory.SpawnRequest.RoleRef).
 	Ref string
+	// Executor names the external coding-agent CLI (core/executors) that does the role's work: the thread runs as
+	// its driver and calls run_executor.
+	Executor string
 }
 
 func (s *Service) resolveRole(ctx context.Context, t factory.Task, role string) (RoleSpec, bool) {

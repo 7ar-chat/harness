@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/7ar-chat/harness/core/executors"
 	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/sandbox"
 	"github.com/7ar-chat/harness/core/store"
@@ -436,8 +437,10 @@ func FactoryFeature(o FactoryOptions) Feature {
 		b.ToolHook(guard.ToolHook())
 		b.StepNote(guard.StepNote())
 
+		runner, _ := Lookup[executors.Runner](b) // set by the Executors feature when it is installed before this one
 		b.AddTools(delegate.New(delegate.Options{
-			Spawner: spawner, Store: o.Store, Roles: roles, Registry: b.Options.Roles, Models: cfg.LLMModels,
+			Executors: runner,
+			Spawner:   spawner, Store: o.Store, Roles: roles, Registry: b.Options.Roles, Models: cfg.LLMModels,
 			Task: func(ctx context.Context, id string) (*factory.Task, error) { return o.Store.GetTask(ctx, id) },
 			OnSpend: func(ctx context.Context, taskID string, d factory.Spend) {
 				if _, err := o.Store.AddSpend(ctx, taskID, d); err != nil && !errors.Is(err, factory.ErrNotFound) {

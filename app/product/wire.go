@@ -45,6 +45,7 @@ func WireTypes() map[string]any {
 		"RequirementImport":    RequirementImport{},
 		"RoleView":             RoleView{},
 		"RoleDoc":              roles.Role{}, // the document inside a RoleView (named so it does not collide with the Role enum)
+		"ExecutorView":         ExecutorView{},
 		"RoleVersion":          RoleVersion{},
 		"RolePreview":          RolePreview{},
 		"ScheduleView":         scheduleView{},

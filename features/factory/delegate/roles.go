@@ -29,6 +29,10 @@ type Role struct {
 	// Ref names the role in the role registry (core/roles) when the role came from there and its prompt, tool
 	// limits and MCP servers are applied by the run itself; empty for the builtin catalogue.
 	Ref string
+	// Executor names the external coding-agent CLI (core/executors) that does the role's work in place of a
+	// sub-agent; Prompt is then the role's own prompt text, handed to the CLI with the task.
+	Executor string
+	Prompt   string
 }
 
 // fromRegistry converts a role of the registry. A builtin entry of the registry is not converted (ok false): the
@@ -38,7 +42,8 @@ func fromRegistry(r roles.Role) (Role, bool) {
 		return Role{}, false
 	}
 	return Role{Name: r.Name, Description: r.Description, Instructions: refPointer, ReadOnly: r.ReadOnly(),
-		Model: r.Model, Effort: r.ReasoningEffort, Skills: r.Skills, Ref: roles.RefOf(r).String()}, true
+		Model: r.Model, Effort: r.ReasoningEffort, Skills: r.Skills, Ref: roles.RefOf(r).String(),
+		Executor: r.Executor, Prompt: r.Prompt}, true
 }
 
 // refPointer stands for the prompt of a registry role in the thread's assignment: the run renders the prompt

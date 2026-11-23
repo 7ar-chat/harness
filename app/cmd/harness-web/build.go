@@ -11,6 +11,7 @@ import (
 	"github.com/7ar-chat/harness/adapters/blobs/s3blobs"
 	"github.com/7ar-chat/harness/adapters/redisx"
 	"github.com/7ar-chat/harness/adapters/store/capstore"
+	"github.com/7ar-chat/harness/adapters/store/executorstore"
 	"github.com/7ar-chat/harness/adapters/store/factorystore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
@@ -24,6 +25,7 @@ import (
 	"github.com/7ar-chat/harness/app/usageenv"
 	"github.com/7ar-chat/harness/config"
 	"github.com/7ar-chat/harness/core/capabilities"
+	"github.com/7ar-chat/harness/core/executors"
 	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/requirements"
 	"github.com/7ar-chat/harness/core/roles"
@@ -65,6 +67,8 @@ type built struct {
 	reqs requirements.Store
 	// roles is the store of the roles of projects and users (team mode only); the harness resolves them through it.
 	roles roles.Store
+	// executors serves the external coding agents and their sealed credentials (nil without the marketplace).
+	executors *product.ExecutorAPI
 	// skills serves the connections of skills that need an account (nil without the marketplace).
 	skills *product.SkillAPI
 	// bus shares the live feed between replicas: set in team mode when REDIS_HOST is.
@@ -90,6 +94,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 	var caps capabilities.Store
 	var reqs requirements.Store
 	var rs roles.Store
+	var xs executors.Store
 	var us usage.Store
 	var ss schedule.Store
 	_, havePG := os.LookupEnv("POSTGRES_HOST")
@@ -109,6 +114,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		caps = capstore.NewPG(pool, nil)
 		reqs = reqstore.NewPG(pool, nil)
 		rs = rolestore.NewPG(pool, nil)
+		xs = executorstore.NewPG(pool, nil)
 		us, ss = usagestore.NewPG(pool, nil), schedstore.NewPG(pool, nil)
 	case durable || team:
 		st, err := harness.OpenLocalStore(cfg.LocalStateDir)
@@ -143,6 +149,12 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 				return nil, fmt.Errorf("open the roles store: %w", err)
 			}
 			rs = rlf
+			xf, err := executorstore.Open(filepath.Join(stateDir(cfg), "executors.json"), nil)
+			if err != nil {
+				_ = closers.Close()
+				return nil, fmt.Errorf("open the executors store: %w", err)
+			}
+			xs = xf
 			uf, err := usagestore.Open(filepath.Join(stateDir(cfg), "usage"))
 			if err != nil {
 				_ = closers.Close()
@@ -222,6 +234,12 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 			o.Roles = product.NewRoleRegistry(ts, rs)
 		}
 		if caps != nil {
+			// External coding agents (run_executor): installed before the factory feature, whose delegate tool finds it.
+			if b.executors, err = product.NewExecutorAPI(ts, caps, xs, product.SecretKeyFromEnv(os.Getenv)); err != nil {
+				_ = closers.Close()
+				return nil, err
+			}
+			b.executors.AllowInstall = os.Getenv("HARNESS_EXECUTORS_INSTALL") == "1"
 			if b.skills, err = product.NewSkillAPI(ts, caps, product.SecretKeyFromEnv(os.Getenv)); err != nil {
 				_ = closers.Close()
 				return nil, err
@@ -241,6 +259,9 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		features = append(features, product.RequirementsFeature(reqs))
 		o.Features = append(features, b.sup.Feature(),
 			(&product.RepoCheckout{Team: ts, GitHub: gh, Factory: fs, Brokered: cfg.OpenSandboxCredentialProxy && cfg.SandboxBackendName() == config.BackendOpenSandbox}).Feature())
+		if b.executors != nil && (cfg.SandboxEnabled() || o.Backend != nil) {
+			o.Features = append(o.Features, b.executors.Feature(fs))
+		}
 		if fo, enabled, err := factoryenv.FromEnv(os.Getenv, cfg, fs, gh, ts); err != nil {
 			_ = closers.Close()
 			return nil, err

@@ -184,6 +184,10 @@ func Classify(toolName, argsJSON string) Action {
 		return a
 	case passiveTools[toolName]:
 		return Action{Kind: KindRead}
+	case toolName == "run_executor":
+		// An external coding agent edits files and runs commands in the sandbox: an exec, which a supervised task
+		// asks a human about and the other policies allow. Its level (read-only, edit, full) follows the policy.
+		return Action{Kind: KindExec, Detail: "runs the external coding agent " + str("executor")}
 	case toolName == "job_kill":
 		return Action{Kind: KindExec, Detail: "stops a background job"}
 	case toolName == "open_pr":

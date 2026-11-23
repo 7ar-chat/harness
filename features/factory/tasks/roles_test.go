@@ -2,6 +2,7 @@ package tasks_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/7ar-chat/harness/core/factory"
@@ -40,6 +41,30 @@ func TestTaskRoleOfTheProjectIsAcceptedAndSpawnedWithItsSettings(t *testing.T) {
 	}
 	if len(asked) == 0 || asked[0].ProjectID != "p1" {
 		t.Errorf("the resolver was not given the task: %+v", asked)
+	}
+}
+
+func TestTaskOfARoleWithAnExecutorRunsAsItsDriver(t *testing.T) {
+	e := newEnv(t, func(o *tasks.Options) {
+		o.Roles = func(role string) (string, bool, bool) { return "builtin " + role, false, role == factory.RoleCoder }
+		o.ResolveRole = func(_ context.Context, _ factory.Task, role string) (tasks.RoleSpec, bool) {
+			if role != "fixer" {
+				return tasks.RoleSpec{}, false
+			}
+			return tasks.RoleSpec{Instructions: "see the role section", Executor: "claude-code", Ref: "role:project:fixer:p1"}, true
+		}
+	})
+
+	e.create(t, factory.Task{Role: "fixer", ProjectID: "p1"})
+	e.dispatch(t)
+
+	reqs := e.sp.requests()
+	if len(reqs) != 1 {
+		t.Fatalf("requests = %+v", reqs)
+	}
+	ins := reqs[0].Instructions
+	if !strings.Contains(ins, `run_executor with executor="claude-code"`) || !strings.Contains(ins, "see the role section") {
+		t.Errorf("instructions = %q", ins)
 	}
 }
 

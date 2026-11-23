@@ -884,7 +884,9 @@ func (m *SkillManifest) fieldNamed(k string) *SkillField {
 }
 
 // isSkillInstall reports an install that belongs to a skill connection, not to the marketplace's MCP servers.
-func isSkillInstall(name string) bool { return strings.HasPrefix(name, skillInstallPrefix) }
+func isSkillInstall(name string) bool {
+	return strings.HasPrefix(name, skillInstallPrefix) || strings.HasPrefix(name, executorInstallPrefix) // executors keep their credentials here too
+}
 
 // ---- the skills the product ships ----
 

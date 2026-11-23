@@ -105,6 +105,9 @@ const (
 	EventEscalated = "escalated"
 	EventLesson    = "lesson"
 	EventNote      = "note"
+	// EventExecutor records a run of an external coding-agent executor (core/executors): the executor, the level it
+	// ran at, its outcome and what it reported spending.
+	EventExecutor = "executor"
 	// EventContext records what a run was given (recalled memory entries, skills, prompt variant, model);
 	// EventOutcome records how the task ended, with that context, so the learning feature can attribute results.
 	EventContext = "context"

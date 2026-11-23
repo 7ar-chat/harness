@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/7ar-chat/harness/core/executors"
 	"github.com/7ar-chat/harness/core/factory"
 )
 
@@ -176,6 +177,9 @@ func (s *Service) request(ctx context.Context, t factory.Task, attempt int) fact
 	switch {
 	case custom:
 		instructions, readOnly = spec.Instructions, spec.ReadOnly
+		if spec.Executor != "" {
+			instructions = strings.TrimSpace(executors.DriverInstructions(spec.Executor) + "\n\n" + instructions)
+		}
 	case s.opts.Roles != nil:
 		instructions, readOnly, _ = s.opts.Roles(role)
 	}

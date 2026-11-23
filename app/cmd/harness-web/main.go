@@ -143,7 +143,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if bt.caps != nil {
 		prod.Capabilities, prod.MCPTester, prod.SkillAPI = bt.caps, mcpTester("web"), bt.skills
 	}
-	prod.Roles = bt.roles
+	prod.Roles, prod.Executors = bt.roles, bt.executors
 	if tok := getenv("TELEGRAM_BOT_TOKEN"); tok != "" && *team {
 		prod.Telegram = &product.Telegram{Token: tok, Username: strings.TrimPrefix(getenv("TELEGRAM_BOT_USERNAME"), "@")}
 	}

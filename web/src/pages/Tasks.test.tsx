@@ -94,6 +94,25 @@ describe("Tasks tab", () => {
     expect(m.find("POST", "/api/projects/p1/tasks")[0]?.body).toEqual({ title: "Fix flaky test", spec: "make it stable", budget: { maxUsd: 3 }, dependsOn: ["dep"] });
   });
 
+  it("offers the project's roles on the task dialog and says when one runs on an external executor", async () => {
+    const m = mockFetch({
+      ...routes("member"),
+      "GET /api/projects/p1/roles": [{ scope: "project", scopeId: "p1", name: "fixer", prompt: "x", enabled: true, version: 1, executor: "claude-code", editable: true, createdAt: T, updatedAt: T }],
+      "POST /api/projects/p1/tasks": task("n"),
+    });
+    await renderApp("/p/p1?tab=tasks");
+    fireEvent.click(await page().findByRole("button", { name: /New task/ }));
+    const d = within(await screen.findByRole("dialog"));
+    fireEvent.change(d.getByLabelText("Title"), { target: { value: "Port it" } });
+    fireEvent.change(d.getByLabelText("Spec"), { target: { value: "port the module" } });
+    fireEvent.click(d.getByRole("combobox", { name: "Role" }));
+    fireEvent.click(await screen.findByRole("option", { name: /fixer \(runs on claude-code\)/ }));
+    expect(d.getByText(/Runs on the external executor claude-code/)).toBeTruthy();
+    fireEvent.click(d.getByRole("button", { name: "Create task" }));
+    await waitFor(() => expect(m.find("POST", "/api/projects/p1/tasks")).toHaveLength(1));
+    expect(m.find("POST", "/api/projects/p1/tasks")[0]?.body).toMatchObject({ role: "fixer" });
+  });
+
   it("says so when the server has no agent factory", async () => {
     mockFetch({ ...routes(), "GET /api/projects/p1/tasks?limit=500": reply(404, { error: { code: "not_found", message: "no" } }) });
     await renderApp("/p/p1?tab=tasks");

@@ -360,6 +360,30 @@ If a worker dies mid-run, its run is interrupted by the runtime sweeper (`docs/e
 the stale heartbeat) and the tasks sweep, which runs in any process with the factory, records the attempt as failed
 and retries it, to be taken by another worker.
 
+## External coding agents (executors)
+
+A role (`core/roles`) may name an *executor*: a CLI coding agent that runs inside the run's sandbox in place of the
+internal loop (`claude-code`, `codex`, `opencode`, or a command template a project's owner defines). The
+`run_executor` tool (`features/executors`, installed with `harness.Executors`, before the factory) runs it
+non-interactively, streams its output as live tool output, enforces the timeout and the run's cancellation (the
+process dies with the sandbox call), reads its final summary and `git diff --stat`, books the cost the CLI reports
+(Claude Code's `total_cost_usd`, token counts for Codex; a CLI that reports nothing books an unpriced run) against
+the task budget, and refuses to start once the budget is spent.
+
+* Policy: the policy engine classifies `run_executor` as an exec, so a *supervised* task asks a human first and the
+  others do not. The CLI's level follows the task: read-only for a read-only role or plan run, edit under
+  supervised and sandboxed, full (no prompts inside the sandbox) under autonomous. A `policy` event (the level) and an
+  `executor` event (outcome, usage) are recorded on the task. The review gate and the protected-path and secret checks
+  inspect the diff whoever wrote it. `delegate` to an executor role is refused under the supervised policy.
+* A factory task of a role with an executor runs as its *driver*: the internal loop is told to call `run_executor`,
+  verify, commit and open the pull request.
+* Credentials: each user seals their own API key and base URL per executor (`PUT /api/me/executors/{name}/credentials`,
+  write-only), stored as capability installs named `exec_<name>` sealed with `HARNESS_SECRET_KEY`. They are passed in
+  the environment of that one process (only the variables the executor declares), redacted from everything the run
+  prints, and never written to disk. The credential broker of the sandbox adds headers to HTTPS requests of the
+  sandbox; it is not used here because the CLIs read their key from the environment.
+* Installing a missing CLI needs `install=true` on the call and `HARNESS_EXECUTORS_INSTALL=1` on the server.
+
 ## Known limits
 
 * The policy and the secret scan are heuristics. They are a seatbelt, not a boundary.
