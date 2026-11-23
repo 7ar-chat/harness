@@ -1,0 +1,251 @@
+package reqstore_test
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
+	"github.com/7ar-chat/harness/adapters/store/reqstore"
+	"github.com/7ar-chat/harness/core/requirements"
+)
+
+func newPG(t *testing.T, now func() time.Time) requirements.Store {
+	t.Helper()
+	dsn := os.Getenv("HARNESS_TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("HARNESS_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	schema := fmt.Sprintf("work_test_reqs_%d", time.Now().UnixNano())
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.ConnConfig.RuntimeParams["search_path"] = schema
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), "DROP SCHEMA "+schema+" CASCADE")
+		pool.Close()
+	})
+	if err := migrate.Run(ctx, pool, schema); err != nil {
+		t.Fatal(err)
+	}
+	return reqstore.NewPG(pool, now)
+}
+
+// eachStore runs fn against a fresh store of every backend (Postgres is skipped when unconfigured).
+func eachStore(t *testing.T, fn func(t *testing.T, s requirements.Store)) {
+	t.Helper()
+	tick := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	now := func() time.Time { tick = tick.Add(time.Second); return tick }
+	backends := []struct {
+		name string
+		open func(t *testing.T) requirements.Store
+	}{
+		{"mem", func(*testing.T) requirements.Store { return reqstore.NewMem(now) }},
+		{"file", func(t *testing.T) requirements.Store {
+			f, err := reqstore.Open(filepath.Join(t.TempDir(), "requirements.json"), now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return f
+		}},
+		{"pg", func(t *testing.T) requirements.Store { return newPG(t, now) }},
+	}
+	for _, b := range backends {
+		t.Run(b.name, func(t *testing.T) { fn(t, b.open(t)) })
+	}
+}
+
+func must[T any](v T, err error) func(*testing.T) T {
+	return func(t *testing.T) T {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+}
+
+func TestCreateGetUpdateDelete(t *testing.T) {
+	ctx := context.Background()
+	eachStore(t, func(t *testing.T, s requirements.Store) {
+		got, created, err := s.Create(ctx, requirements.Requirement{ProjectID: "p1", Title: "  Add dark mode ", Labels: []string{"ui", "UI", " "}, Author: "ann"})
+		if err != nil || !created {
+			t.Fatalf("create: %v %v", created, err)
+		}
+		if got.ID == "" || got.Status != requirements.StatusBacklog || got.Title != "Add dark mode" || len(got.Labels) != 1 || got.Source.Kind != requirements.SourceManual {
+			t.Fatalf("created: %+v", got)
+		}
+		if _, _, err := s.Create(ctx, requirements.Requirement{ProjectID: "p1"}); !errors.Is(err, requirements.ErrInvalid) {
+			t.Fatalf("empty title: %v", err)
+		}
+		if _, _, err := s.Create(ctx, requirements.Requirement{ProjectID: "p1", Title: "x", Status: "nope"}); !errors.Is(err, requirements.ErrInvalid) {
+			t.Fatalf("bad status: %v", err)
+		}
+		g, err := s.Get(ctx, got.ID)
+		if err != nil || g.Title != got.Title || !g.CreatedAt.Equal(got.CreatedAt) {
+			t.Fatalf("get: %+v %v", g, err)
+		}
+		if _, err := s.Get(ctx, "missing"); !errors.Is(err, requirements.ErrNotFound) {
+			t.Fatalf("get missing: %v", err)
+		}
+		st, title, pr, flag := requirements.StatusInProgress, "Dark mode", requirements.PullRequest{Number: 7, URL: "u", State: "open"}, "task failed"
+		u, err := s.Update(ctx, got.ID, requirements.Patch{Status: &st, Title: &title, PR: &pr, Flag: &flag, AddThreadID: "t1", AddTaskID: "k1"})
+		if err != nil || u.Status != st || u.Title != title || u.PR != pr || u.Flag != flag || len(u.ThreadIDs) != 1 || len(u.TaskIDs) != 1 || !u.UpdatedAt.After(got.UpdatedAt) {
+			t.Fatalf("update: %+v %v", u, err)
+		}
+		u, err = s.Update(ctx, got.ID, requirements.Patch{AddThreadID: "t1", AddTaskID: "k2"})
+		if err != nil || len(u.ThreadIDs) != 1 || len(u.TaskIDs) != 2 {
+			t.Fatalf("links are added once: %+v %v", u, err)
+		}
+		empty, bad := "", requirements.Status("nope")
+		if _, err := s.Update(ctx, got.ID, requirements.Patch{Title: &empty}); !errors.Is(err, requirements.ErrInvalid) {
+			t.Fatalf("empty title patch: %v", err)
+		}
+		if _, err := s.Update(ctx, got.ID, requirements.Patch{Status: &bad}); !errors.Is(err, requirements.ErrInvalid) {
+			t.Fatalf("bad status patch: %v", err)
+		}
+		if _, err := s.Update(ctx, "missing", requirements.Patch{}); !errors.Is(err, requirements.ErrNotFound) {
+			t.Fatalf("update missing: %v", err)
+		}
+		if err := s.Delete(ctx, got.ID); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Delete(ctx, got.ID); !errors.Is(err, requirements.ErrNotFound) {
+			t.Fatalf("delete twice: %v", err)
+		}
+	})
+}
+
+func TestListFilters(t *testing.T) {
+	ctx := context.Background()
+	eachStore(t, func(t *testing.T, s requirements.Store) {
+		mk := func(pid, title, body string, prio int, st requirements.Status, labels ...string) *requirements.Requirement {
+			r, _, err := s.Create(ctx, requirements.Requirement{ProjectID: pid, Title: title, Body: body, Priority: prio, Status: st, Labels: labels})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return r
+		}
+		a := mk("p1", "Login page", "oauth flow", 0, requirements.StatusBacklog, "auth")
+		mk("p1", "Billing", "stripe", 5, requirements.StatusReady, "money")
+		mk("p1", "Logout", "", 0, requirements.StatusDone, "Auth")
+		mk("p2", "Other project", "", 0, requirements.StatusBacklog)
+		if _, err := s.Update(ctx, a.ID, requirements.Patch{AddThreadID: "th", AddTaskID: "tk"}); err != nil {
+			t.Fatal(err)
+		}
+		titles := func(f requirements.Filter) string {
+			var out []string
+			rows, err := s.List(ctx, f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, r := range rows {
+				out = append(out, r.Title)
+			}
+			return fmt.Sprint(out)
+		}
+		for _, c := range []struct {
+			f    requirements.Filter
+			want string
+		}{
+			{requirements.Filter{ProjectID: "p1"}, "[Billing Logout Login page]"}, // priority, then newest
+			{requirements.Filter{ProjectID: "p1", Statuses: []requirements.Status{requirements.StatusDone, requirements.StatusReady}}, "[Billing Logout]"},
+			{requirements.Filter{ProjectID: "p1", Label: "auth"}, "[Logout Login page]"},
+			{requirements.Filter{ProjectID: "p1", Query: "STRIPE"}, "[Billing]"},
+			{requirements.Filter{ProjectID: "p1", Query: "log"}, "[Logout Login page]"},
+			{requirements.Filter{ThreadID: "th"}, "[Login page]"},
+			{requirements.Filter{TaskID: "tk"}, "[Login page]"},
+			{requirements.Filter{ProjectID: "p1", Limit: 1}, "[Billing]"},
+			{requirements.Filter{ProjectID: "nobody"}, "[]"},
+		} {
+			if got := titles(c.f); got != c.want {
+				t.Errorf("%+v: got %s want %s", c.f, got, c.want)
+			}
+		}
+	})
+}
+
+func TestImportDedupe(t *testing.T) {
+	ctx := context.Background()
+	eachStore(t, func(t *testing.T, s requirements.Store) {
+		src := requirements.Source{Kind: requirements.SourceGitHubIssue, Repo: "Acme/App", Number: 12, URL: "https://github.com/Acme/App/issues/12"}
+		a, created, err := s.Create(ctx, requirements.Requirement{ProjectID: "p1", Title: "Issue", Source: src})
+		if err != nil || !created {
+			t.Fatal(created, err)
+		}
+		b, created, err := s.Create(ctx, requirements.Requirement{ProjectID: "p1", Title: "Issue again", Source: requirements.Source{Kind: requirements.SourceGitHubIssue, Repo: "acme/app", Number: 12}})
+		if err != nil || created || b.ID != a.ID || b.Title != "Issue" {
+			t.Fatalf("dedupe: %+v %v %v", b, created, err)
+		}
+		if _, created, _ := s.Create(ctx, requirements.Requirement{ProjectID: "p2", Title: "Issue", Source: src}); !created {
+			t.Fatal("the same issue in another project is another requirement")
+		}
+		for i := 0; i < 2; i++ { // manual requirements never dedupe
+			if _, created, _ := s.Create(ctx, requirements.Requirement{ProjectID: "p1", Title: "same"}); !created {
+				t.Fatal("manual requirement deduped")
+			}
+		}
+	})
+}
+
+func TestSettings(t *testing.T) {
+	ctx := context.Background()
+	eachStore(t, func(t *testing.T, s requirements.Store) {
+		got := must(t, s.GetSettings(ctx, "p1"))
+		if got.AutoDispatch || got.ProjectID != "p1" {
+			t.Fatalf("default: %+v", got)
+		}
+		want := requirements.Settings{ProjectID: "p1", AutoDispatch: true, Policy: "sandboxed", Budget: requirements.Budget{MaxUSD: 2.5, MaxTokens: 1000}}
+		if err := s.PutSettings(ctx, want); err != nil {
+			t.Fatal(err)
+		}
+		if got := must(t, s.GetSettings(ctx, "p1")); got != want {
+			t.Fatalf("got %+v", got)
+		}
+		if other := must(t, s.GetSettings(ctx, "p2")); other.AutoDispatch {
+			t.Fatal("settings leaked")
+		}
+		if err := s.PutSettings(ctx, requirements.Settings{}); !errors.Is(err, requirements.ErrInvalid) {
+			t.Fatalf("no project: %v", err)
+		}
+	})
+}
+
+func TestFileSurvivesReopen(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "r.json")
+	f := must(t, reqstore.Open(path, nil))
+	r, _, err := f.Create(ctx, requirements.Requirement{ProjectID: "p", Title: "keep", ThreadIDs: []string{"t"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.PutSettings(ctx, requirements.Settings{ProjectID: "p", AutoDispatch: true}); err != nil {
+		t.Fatal(err)
+	}
+	g := must(t, reqstore.Open(path, nil))
+	back, err := g.Get(ctx, r.ID)
+	if err != nil || back.Title != "keep" || len(back.ThreadIDs) != 1 {
+		t.Fatalf("%+v %v", back, err)
+	}
+	if !must(t, g.GetSettings(ctx, "p")).AutoDispatch {
+		t.Fatal("settings lost")
+	}
+	if err := os.WriteFile(path, []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reqstore.Open(path, nil); err == nil {
+		t.Fatal("a corrupt file must be an error")
+	}
+}

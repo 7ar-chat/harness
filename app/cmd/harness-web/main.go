@@ -134,6 +134,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if bt.factory != nil {
 		prod.Factory = *bt.factory
 	}
+	prod.Requirements = bt.reqs
 	if bt.caps != nil {
 		prod.Capabilities, prod.MCPTester, prod.SkillAPI = bt.caps, mcpTester("web"), bt.skills
 	}

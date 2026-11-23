@@ -102,6 +102,11 @@ export interface ConnectorPending {
   expiresAt: string;
 }
 
+export interface DispatchBudget {
+  maxUsd?: number;
+  maxTokens?: number;
+}
+
 export interface FeedEvent {
   type: FeedType;
   projectId?: string;
@@ -140,6 +145,12 @@ export interface Invite {
   role: Role;
   invitedBy: string;
   createdAt: string;
+}
+
+export interface LinkedPR {
+  number?: number;
+  url?: string;
+  state?: string;
 }
 
 export interface Member {
@@ -292,6 +303,13 @@ export interface ModelList {
   info?: Record<string, ModelInfo>;
 }
 
+export interface Origin {
+  kind: string;
+  repo?: string;
+  number?: number;
+  url?: string;
+}
+
 export interface Overview {
   personal: ThreadSummary[];
   projects: OverviewProject[];
@@ -378,6 +396,58 @@ export interface ProjectWithRole extends Project {
 export interface QuestionOption {
   label: string;
   description?: string;
+}
+
+export interface Requirement {
+  id: string;
+  projectId: string;
+  title: string;
+  body?: string;
+  status: string;
+  priority?: number;
+  labels?: string[];
+  source: Origin;
+  author?: string;
+  threadIds?: string[];
+  taskIds?: string[];
+  pr?: LinkedPR;
+  flag?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RequirementDetail {
+  requirement: Requirement;
+  tasks: RequirementTask[];
+  threads: RequirementThread[];
+}
+
+export interface RequirementImport {
+  imported: number;
+  skipped: number;
+  requirements: Requirement[];
+}
+
+export interface RequirementSettings {
+  projectId: string;
+  autoDispatch: boolean;
+  policy?: string;
+  budget?: DispatchBudget;
+}
+
+export interface RequirementTask {
+  id: string;
+  title: string;
+  state: string;
+  prNumber?: number;
+  prUrl?: string;
+  reason?: string;
+}
+
+export interface RequirementThread {
+  id: string;
+  title: string;
+  status: string;
 }
 
 export interface ResumeRequest {

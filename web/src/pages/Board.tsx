@@ -31,6 +31,11 @@ function Card({ card }: { card: BoardCard }) {
           <StatusDot status={card.status} unread={unread} className="mt-1.5" />
           <span className={cn("min-w-0 flex-1 break-words", unread && "font-semibold")}>{card.title || "(untitled)"}</span>
         </div>
+        {card.requirementId ? (
+          <p className="mt-1.5 truncate pl-4 text-xs text-muted-foreground" title={card.requirementTitle}>
+            Requirement: {card.requirementTitle}
+          </p>
+        ) : null}
         {card.why ? <p className="mt-1.5 line-clamp-3 pl-4 text-xs text-muted-foreground">{card.why}</p> : null}
         <div className="mt-2 flex items-center gap-2 pl-4 text-xs text-muted-foreground">
           {card.prNumber ? (

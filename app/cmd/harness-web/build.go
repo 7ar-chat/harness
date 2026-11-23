@@ -14,12 +14,14 @@ import (
 	"github.com/7ar-chat/harness/adapters/store/factorystore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
+	"github.com/7ar-chat/harness/adapters/store/reqstore"
 	"github.com/7ar-chat/harness/adapters/store/teamstore"
 	"github.com/7ar-chat/harness/app/factoryenv"
 	"github.com/7ar-chat/harness/app/product"
 	"github.com/7ar-chat/harness/config"
 	"github.com/7ar-chat/harness/core/capabilities"
 	"github.com/7ar-chat/harness/core/factory"
+	"github.com/7ar-chat/harness/core/requirements"
 	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/features/artifacts"
 	"github.com/7ar-chat/harness/redisinfra"
@@ -49,6 +51,8 @@ type built struct {
 	factory *product.FactoryOptions
 	// caps is the marketplace store (team mode only); the harness already reads its servers through it.
 	caps capabilities.Store
+	// reqs is the requirements store (team mode only).
+	reqs requirements.Store
 	// skills serves the connections of skills that need an account (nil without the marketplace).
 	skills *product.SkillAPI
 	// bus shares the live feed between replicas: set in team mode when REDIS_HOST is.
@@ -65,6 +69,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 	var ts store.TeamStore
 	var fs factory.Store
 	var caps capabilities.Store
+	var reqs requirements.Store
 	_, havePG := os.LookupEnv("POSTGRES_HOST")
 	switch {
 	case team && havePG:
@@ -80,6 +85,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		o.Store, ts = pgstore.NewPG(pool), teamstore.NewPG(pool)
 		fs = factorystore.NewPG(pool, nil)
 		caps = capstore.NewPG(pool, nil)
+		reqs = reqstore.NewPG(pool, nil)
 	case durable || team:
 		st, err := harness.OpenLocalStore(cfg.LocalStateDir)
 		if err != nil {
@@ -101,6 +107,12 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 				return nil, fmt.Errorf("open the capabilities store: %w", err)
 			}
 			caps = cf
+			rf, err := reqstore.Open(filepath.Join(stateDir(cfg), "requirements.json"), nil)
+			if err != nil {
+				_ = closers.Close()
+				return nil, fmt.Errorf("open the requirements store: %w", err)
+			}
+			reqs = rf
 		}
 	}
 	b := &built{team: ts, closer: closers}
@@ -152,7 +164,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 			_ = closers.Close()
 			return nil, err
 		}
-		b.caps = caps
+		b.caps, b.reqs = caps, reqs
 		if caps != nil {
 			if b.skills, err = product.NewSkillAPI(ts, caps, product.SecretKeyFromEnv(os.Getenv)); err != nil {
 				_ = closers.Close()
@@ -170,6 +182,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		}
 		b.preview = &product.Preview{}
 		features = append(features, b.preview.Feature())
+		features = append(features, product.RequirementsFeature(reqs))
 		o.Features = append(features, b.sup.Feature(),
 			(&product.RepoCheckout{Team: ts, GitHub: gh, Factory: fs, Brokered: cfg.OpenSandboxCredentialProxy && cfg.SandboxBackendName() == config.BackendOpenSandbox}).Feature())
 		if fo, enabled, err := factoryenv.FromEnv(os.Getenv, cfg, fs, gh, ts); err != nil {

@@ -24,7 +24,7 @@ ai/                            module ai: how the agent talks to models and tool
   llm/        provider factory, OpenAI Responses + Anthropic Messages clients, retry, test doubles (llm/llmtest)
   compaction/ context estimation and summarisation
 core/                          module core: the vocabulary, no dependencies on the rest
-  agui/       AG-UI events           store/     domain types + persistence ports (Store, Full, TeamStore…)   factory/   factory tasks, triggers and ports
+  agui/       AG-UI events           store/     domain types + persistence ports (Store, Full, TeamStore…)   factory/   factory tasks, triggers and ports   requirements/   requirements tracking (docs/requirements.md)
   sandbox/    sandbox contract, manager, background-job port, sandboxtest (fake)   blobs/   content-store port
 config/ modelinfo/ engine/syncx prompts    settings, model table (module modelinfo), small helpers, prompt text
 engine/                        the reusable intelligence
@@ -34,7 +34,7 @@ engine/                        the reusable intelligence
   eventlog/ queue/ approvals/   (interfaces and in-memory implementations only)
 coding/                        the coding toolset: sandboxtools (read/write/edit/search/exec/jobs), gitsafe, codecheck
 adapters/                      implementations of the ports
-  store/{memstore,filestore,pgstore,teamstore,factorystore}   memory, durable local files, Postgres
+  store/{memstore,filestore,pgstore,teamstore,factorystore,reqstore}   memory, durable local files, Postgres
   redisx/                      Redis: queue + bus, event log, coordinator, job list, skill installs
   sandbox/{local,opensandbox,backends}   your machine (trusted), OpenSandbox (remote), the SANDBOX_BACKEND registry
   blobs/s3blobs/               S3-compatible blob store

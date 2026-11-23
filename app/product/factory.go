@@ -182,6 +182,12 @@ var stateLabel = map[factory.State]string{
 // task, "<title>: Running → In review". A task that blocks is announced by the escalator with its reason, so it is
 // left out here, and so is the adoption of a session (it is announced by its next move). Nothing is posted for a project without a channel.
 func (h *FactoryHooks) OnTaskState(t factory.Task, from, to factory.State) {
+	h.mu.Lock()
+	srv := h.s
+	h.mu.Unlock()
+	if srv != nil && from != to {
+		srv.requirementTaskMoved(t, to) // requirements follow their tasks (see requirements.go)
+	}
 	if to == factory.StateBlocked || t.ProjectID == "" || from == to || from == "" {
 		return
 	}
