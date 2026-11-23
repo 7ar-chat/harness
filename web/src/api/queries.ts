@@ -3,7 +3,7 @@ import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { api, ApiError, isUnsupported, putBytes } from "./client";
 import { isNewerVisit, loadLocalSeen, saveLocalSeen } from "@/lib/unread";
-import type { ThreadStatus } from "./generated";
+import type { ThreadStatus, Requirement, RequirementDetail, RequirementImport, RequirementSettings } from "./generated";
 import type {
   AdminUser, AuditEntry, AuthProvider, UserStatus, CapabilityAdd, CapabilityPut, CapabilityTestResult, CapabilityView, Connector, SkillConnTest, SkillConnView, GithubRepos, KnownUser, User, Command, GithubStatus, Invite, Me, Member, MemoryEntry, MemoryInput, MemoryList, MemoryStats, ModelList, Overview,
   PreviewInfo, Project, ProjectTemplate, ProjectWithRole, Role, Thread, WorkspaceFile,
@@ -112,6 +112,8 @@ export interface BoardCard {
   taskState?: string;
   prNumber?: number;
   prUrl?: string;
+  requirementId?: string;
+  requirementTitle?: string;
 }
 export interface BoardColumn {
   id: "ready" | "running" | "needs_you" | "review" | "done";
@@ -461,3 +463,43 @@ export const useDecideUser = () =>
     (v: { login: string; decision: "approve" | "reject" }) => api.post<AdminUser>(`/admin/users/${encodeURIComponent(v.login)}/${v.decision}`),
     () => [["admin", "users"]],
   );
+
+// ---- requirements ----
+
+const reqKey = (pid: string) => ["requirements", pid] as const;
+/** The project's requirements; null when this server has requirements tracking off. */
+export const useRequirements = (pid: string) =>
+  useQuery({
+    queryKey: [...reqKey(pid), "list"],
+    queryFn: async () => {
+      try {
+        return await api.get<Requirement[]>(`/projects/${pid}/requirements`);
+      } catch (e) {
+        if (isUnsupported(e)) return null;
+        throw e;
+      }
+    },
+    retry: false,
+  });
+export const useRequirement = (pid: string, id: string) =>
+  useQuery({ queryKey: [...reqKey(pid), "one", id], queryFn: () => api.get<RequirementDetail>(`/projects/${pid}/requirements/${id}`), enabled: !!id, retry: false });
+export interface RequirementInput {
+  title: string;
+  body?: string;
+  priority?: number;
+  labels?: string[];
+  status?: string;
+}
+export const useCreateRequirement = (pid: string) =>
+  useAction((b: RequirementInput) => api.post<Requirement>(`/projects/${pid}/requirements`, b), () => [reqKey(pid)], "Requirement created");
+export const usePatchRequirement = (pid: string) =>
+  useAction((v: { id: string; patch: Partial<RequirementInput> }) => api.patch<Requirement>(`/projects/${pid}/requirements/${v.id}`, v.patch), () => [reqKey(pid), ["board", pid]]);
+export const useDeleteRequirement = (pid: string) => useAction((id: string) => api.del(`/projects/${pid}/requirements/${id}`), () => [reqKey(pid)], "Requirement deleted");
+export const useDispatchRequirement = (pid: string) =>
+  useAction((id: string) => api.post<Requirement>(`/projects/${pid}/requirements/${id}/dispatch`, {}), () => [reqKey(pid), ["board", pid]], "Dispatched");
+export const useImportRequirements = (pid: string) =>
+  useAction((label: string) => api.post<RequirementImport>(`/projects/${pid}/requirements/import/github`, label ? { label } : {}), () => [reqKey(pid)]);
+export const useRequirementSettings = (pid: string, enabled = true) =>
+  useQuery({ queryKey: [...reqKey(pid), "settings"], queryFn: () => api.get<RequirementSettings>(`/projects/${pid}/requirements/settings`), enabled, retry: false });
+export const usePutRequirementSettings = (pid: string) =>
+  useAction((s: Omit<RequirementSettings, "projectId">) => api.put<RequirementSettings>(`/projects/${pid}/requirements/settings`, s), () => [reqKey(pid)], "Saved");

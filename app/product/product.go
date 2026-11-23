@@ -17,6 +17,7 @@ import (
 
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/core/capabilities"
+	"github.com/7ar-chat/harness/core/requirements"
 	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/hosts/client"
 	"github.com/7ar-chat/harness/hosts/httpapi"
@@ -68,6 +69,8 @@ type Options struct {
 	// catalog (seeded by the command from Catalog) and the installs of projects and users. Nil: no routes.
 	// Credentials a user fills in are sealed with SecretKey; without it a server that needs one cannot be set up.
 	Capabilities capabilities.Store
+	// Requirements, with Team, serves requirements tracking (see requirements.go). Nil: no routes.
+	Requirements requirements.Store
 	// MCPTester lists a server's tools for the marketplace's "test" action (nil: the action answers 501).
 	MCPTester MCPTester
 }
@@ -192,6 +195,7 @@ func (s *server) Install(hs *httpapi.Server) error {
 	s.routeFactory()
 	s.routeInbox()
 	s.routeBoard()
+	s.routeRequirements()
 	if s.opt.Supervisor != nil {
 		s.sup = s.opt.Supervisor
 		s.routeSupervisor()

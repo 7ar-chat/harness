@@ -26,6 +26,7 @@ import { Download, FileText } from "lucide-react";
 import { Board } from "./Board";
 import { MemoryManager } from "./Memory";
 import { TasksTab } from "./Tasks";
+import { Requirements } from "./Requirements";
 
 const ago = (iso: string) => `${formatDistanceToNowStrict(new Date(iso))} ago`;
 
@@ -334,6 +335,7 @@ export function ProjectPage() {
               Memory
               {stats.data?.pending ? <span className="rounded-full bg-warning px-1.5 text-[10px] text-black" aria-label={`${stats.data.pending} to review`}>{stats.data.pending}</span> : null}
             </TabsTrigger>
+            <TabsTrigger value="requirements">Requirements</TabsTrigger>
             <TabsTrigger value="capabilities">Capabilities</TabsTrigger>
             <TabsTrigger value="audit">Audit</TabsTrigger>
             <TabsTrigger value="tasks">Tasks</TabsTrigger>
@@ -365,6 +367,9 @@ export function ProjectPage() {
           </TabsContent>
           <TabsContent value="memory" className="mt-4">
             <MemoryManager project={projectId} compact readOnly={!canWrite(p.role)} />
+          </TabsContent>
+          <TabsContent value="requirements" className="mt-4">
+            <Requirements projectId={projectId} role={p.role} />
           </TabsContent>
           <TabsContent value="capabilities" className="mt-4">
             <CapabilitiesPanel scope={{ kind: "project", projectId, canEdit: owner }} />

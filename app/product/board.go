@@ -45,6 +45,9 @@ type BoardCard struct {
 	TaskState string `json:"taskState,omitempty"`
 	PRNumber  int    `json:"prNumber,omitempty"`
 	PRURL     string `json:"prUrl,omitempty"`
+	// RequirementID and RequirementTitle are the requirement the session or its task works on, when one is linked.
+	RequirementID    string `json:"requirementId,omitempty"`
+	RequirementTitle string `json:"requirementTitle,omitempty"`
 }
 
 type boardColumn struct {
@@ -106,6 +109,7 @@ func (s *server) board(w http.ResponseWriter, r *http.Request, c Caller) {
 			}
 		}
 	}
+	byReq := s.requirementsByThread(r.Context(), p.ID, byThread)
 	cols := make([]boardColumn, len(boardColumns))
 	idx := map[string]int{}
 	for i, bc := range boardColumns {
@@ -128,6 +132,9 @@ func (s *server) board(w http.ResponseWriter, r *http.Request, c Caller) {
 			if task.BlockedReason != "" {
 				card.Why = task.BlockedReason
 			}
+		}
+		if rq, ok := byReq[t.ID]; ok {
+			card.RequirementID, card.RequirementTitle = rq.ID, rq.Title
 		}
 		cols[idx[col]].Cards = append(cols[idx[col]].Cards, card)
 	}
