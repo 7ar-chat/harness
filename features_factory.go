@@ -161,6 +161,9 @@ type Factory struct {
 	Budget   *budget.Guard
 	Spawner  *FactorySpawner
 	Roles    map[string]delegate.Role
+	// Answer is the last assistant message of a thread: what a task that reached review (a pull request was
+	// opened) reported, which the task itself does not record until it is done.
+	Answer func(ctx context.Context, threadID string) (string, error)
 	// Dataset serves the learning dataset (one JSON line per finished task); nil without Learning. It does no
 	// authentication: mount it behind the host's own.
 	Dataset http.Handler
@@ -377,7 +380,14 @@ func FactoryFeature(o FactoryOptions) Feature {
 			},
 		})
 
-		f := &Factory{Store: o.Store, Tasks: svc, Budget: guard, Spawner: spawner, Roles: roles}
+		f := &Factory{Store: o.Store, Tasks: svc, Budget: guard, Spawner: spawner, Roles: roles,
+			Answer: func(ctx context.Context, threadID string) (string, error) {
+				msgs, err := st.ListMessages(ctx, threadID)
+				if err != nil {
+					return "", err
+				}
+				return lastAssistantText(msgs), nil
+			}}
 
 		// Order matters. The budget hook meters and may block a task before the
 		// tasks hook decides what the run's end means for it.

@@ -5,14 +5,16 @@ import (
 	"log/slog"
 	"net/http"
 	"sort"
+	"time"
 
 	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/core/workflows"
 )
 
 // The "Needs review" inbox: everything that waits on the caller, across projects.
 //
-//	GET /api/needs-review → {tasks, threads, count}
+//	GET /api/needs-review → {tasks, threads, gates, count}
 //
 // tasks are the factory tasks of the caller's projects (member or owner) that are blocked, or in review with an
 // open pull request; threads are the sessions waiting for an approval or an answer (from the overview). A
@@ -39,11 +41,27 @@ type inboxThread struct {
 	Thread      threadSummary `json:"thread"`
 }
 
+// inboxGate is a workflow gate that waits for a decision of the caller (an approver, or a project owner).
+type inboxGate struct {
+	ProjectID    string    `json:"projectId"`
+	ProjectName  string    `json:"projectName"`
+	RunID        string    `json:"runId"`
+	WorkflowName string    `json:"workflowName"`
+	NodeID       string    `json:"nodeId"`
+	Title        string    `json:"title"`
+	Approvers    []string  `json:"approvers"`
+	Since        time.Time `json:"since,omitzero"`
+	// Summary is what the step before the gate produced, to decide on.
+	Summary string `json:"summary,omitempty"`
+}
+
 // inboxDoc is the answer of GET /needs-review.
 type inboxDoc struct {
 	Tasks   []inboxTask   `json:"tasks"`
 	Threads []inboxThread `json:"threads"`
-	Count   int           `json:"count"`
+	// Gates are the workflow gates waiting for the caller.
+	Gates []inboxGate `json:"gates"`
+	Count int         `json:"count"`
 }
 
 func (s *server) routeInbox() {
@@ -56,7 +74,7 @@ func (s *server) needsReview(w http.ResponseWriter, r *http.Request, c Caller) {
 		fail(w, err)
 		return
 	}
-	doc := inboxDoc{Tasks: []inboxTask{}, Threads: []inboxThread{}}
+	doc := inboxDoc{Tasks: []inboxTask{}, Threads: []inboxThread{}, Gates: []inboxGate{}}
 	waiting := func(t threadSummary) bool {
 		return t.Status == "waiting_approval" || t.Status == "waiting_input"
 	}
@@ -77,6 +95,9 @@ func (s *server) needsReview(w http.ResponseWriter, r *http.Request, c Caller) {
 		if s.factory() != nil {
 			doc.Tasks = append(doc.Tasks, s.inboxTasks(r.Context(), p)...)
 		}
+		if s.opt.Workflows != nil {
+			doc.Gates = append(doc.Gates, s.inboxGates(r.Context(), p, c.Actor)...)
+		}
 	}
 	sort.SliceStable(doc.Threads, func(i, j int) bool { return doc.Threads[i].Thread.UpdatedAt.After(doc.Threads[j].Thread.UpdatedAt) })
 	sort.SliceStable(doc.Tasks, func(i, j int) bool {
@@ -86,8 +107,40 @@ func (s *server) needsReview(w http.ResponseWriter, r *http.Request, c Caller) {
 		}
 		return a.Task.UpdatedAt.After(b.Task.UpdatedAt)
 	})
-	doc.Count = len(doc.Tasks) + len(doc.Threads)
+	sort.SliceStable(doc.Gates, func(i, j int) bool { return doc.Gates[i].Since.After(doc.Gates[j].Since) })
+	doc.Count = len(doc.Tasks) + len(doc.Threads) + len(doc.Gates)
 	writeJSON(w, http.StatusOK, doc)
+}
+
+// inboxGates are the waiting gates of the project's active runs that the actor may decide.
+func (s *server) inboxGates(ctx context.Context, p overviewProject, actor string) []inboxGate {
+	runs, err := s.opt.Workflows.ListRuns(ctx, workflows.RunFilter{ProjectID: p.ID, States: []workflows.RunState{workflows.RunRunning, workflows.RunPaused}, Limit: 100})
+	if err != nil {
+		slog.Warn("product: listing a project's workflow runs for the inbox failed", "project", p.ID, "error", err)
+		return nil
+	}
+	var out []inboxGate
+	for _, run := range runs {
+		for _, st := range run.Steps {
+			n, ok := run.Node(st.NodeID)
+			if st.State != workflows.NodeWaiting || !ok || !mayDecide(n, actor, p.Role) {
+				continue
+			}
+			summary := ""
+			for _, d := range n.DependsOn {
+				if ds := run.Step(d); ds != nil && ds.Result != "" {
+					summary = ds.Result
+					break
+				}
+			}
+			if r := []rune(summary); len(r) > 1500 {
+				summary = string(r[:1500]) + "..."
+			}
+			out = append(out, inboxGate{ProjectID: p.ID, ProjectName: p.Name, RunID: run.ID, WorkflowName: run.WorkflowName,
+				NodeID: n.ID, Title: gateTitle(n), Approvers: nonNil(n.Approvers), Since: st.StartedAt, Summary: summary})
+		}
+	}
+	return out
 }
 
 // inboxTasks are the blocked tasks and the tasks in review with an open pull request of one project.

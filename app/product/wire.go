@@ -3,6 +3,7 @@ package product
 import "github.com/7ar-chat/harness/core/requirements"
 import "github.com/7ar-chat/harness/core/roles"
 import "github.com/7ar-chat/harness/core/schedule"
+import "github.com/7ar-chat/harness/core/workflows"
 
 // WireTypes returns a zero value of every JSON document this package's routes send to the web app, by the
 // name of its TypeScript type. cmd/gen-ts reflects over them to generate web/src/api/generated.ts, so a new
@@ -21,6 +22,7 @@ func WireTypes() map[string]any {
 		"InboxDoc":             inboxDoc{},
 		"InboxTask":            inboxTask{},
 		"InboxThread":          inboxThread{},
+		"InboxGate":            inboxGate{},
 		"OverviewProject":      overviewProject{},
 		"Connector":            connectorView{},
 		"ConnectorPending":     linkPending{},
@@ -52,5 +54,12 @@ func WireTypes() map[string]any {
 		"SchedulePreview":      schedulePreview{},
 		"UsageView":            usageView{},
 		"UsageCap":             capView{},
+		"Workflow":             workflows.Workflow{},
+		"WorkflowNode":         workflows.Node{},
+		"WorkflowVersion":      workflows.Version{},
+		"WorkflowTemplate":     workflows.Template{},
+		"WorkflowRun":          workflows.Run{},
+		"WorkflowRunDetail":    WorkflowRunDetail{},
+		"WorkflowIssues":       WorkflowIssues{},
 	}
 }

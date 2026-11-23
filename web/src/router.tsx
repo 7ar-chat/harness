@@ -77,7 +77,7 @@ const root = createRootRoute({
   ),
 });
 
-const tabs = ["board", "overview", "members", "memory", "capabilities", "roles", "schedules", "usage", "audit", "tasks", "requirements", "settings"] as const;
+const tabs = ["board", "overview", "members", "memory", "capabilities", "roles", "schedules", "usage", "audit", "tasks", "requirements", "workflows", "settings"] as const;
 type Tab = (typeof tabs)[number];
 
 const routeTree = root.addChildren([
@@ -88,7 +88,12 @@ const routeTree = root.addChildren([
     getParentRoute: () => root,
     path: "/p/$projectId",
     component: ProjectPage,
-    validateSearch: (s: Record<string, unknown>): { tab?: Tab; task?: string } => ({ tab: tabs.find((t) => t === s.tab), task: typeof s.task === "string" && s.task ? s.task : undefined }),
+    validateSearch: (s: Record<string, unknown>): { tab?: Tab; task?: string; wf?: string; run?: string } => ({
+      tab: tabs.find((t) => t === s.tab),
+      task: typeof s.task === "string" && s.task ? s.task : undefined,
+      wf: typeof s.wf === "string" && s.wf ? s.wf : undefined,
+      run: typeof s.run === "string" && s.run ? s.run : undefined,
+    }),
   }),
   createRoute({ getParentRoute: () => root, path: "/memory", component: MemoryPage }),
   createRoute({

@@ -4,11 +4,12 @@ import { formatDistanceToNowStrict } from "date-fns";
 import { ExternalLink, GitPullRequest, Inbox as InboxIcon } from "lucide-react";
 import { useState } from "react";
 import { useNeedsReview } from "@/api/factory";
-import type { InboxTask } from "@/api/types";
+import type { InboxGate, InboxTask } from "@/api/types";
 import { Empty, ErrorState, ListSkeleton } from "@/components/app/common";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { GateActions } from "@/components/workflows/RunView";
 import { SessionCard } from "./Dashboard";
 import { ResumeForm } from "./Tasks";
 
@@ -71,11 +72,43 @@ function TaskItem({ it }: { it: InboxTask }) {
   );
 }
 
+/** A workflow gate that waits for a decision: approve it, send the run back, or add context, without leaving the inbox. */
+export function GateItem({ it }: { it: InboxGate }) {
+  return (
+    <Card className="border-warning/60">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-start justify-between gap-2 text-sm">
+          <Link to="/p/$projectId" params={{ projectId: it.projectId }} search={{ tab: "workflows", run: it.runId }} className="min-w-0 truncate hover:underline">
+            {it.workflowName}: {it.title}
+          </Link>
+          <span className="shrink-0 text-xs font-normal text-muted-foreground">Workflow gate</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <span className="truncate">{it.projectName}</span>
+          {it.since ? <span className="ml-auto">{ago(it.since)}</span> : null}
+        </div>
+        {it.summary ? <p className="line-clamp-4 whitespace-pre-wrap rounded-md bg-muted p-2 text-foreground">{it.summary}</p> : null}
+        <div className="text-foreground">
+          <GateActions runId={it.runId} nodeId={it.nodeId} compact />
+        </div>
+        <Button size="sm" variant="ghost" asChild>
+          <Link to="/p/$projectId" params={{ projectId: it.projectId }} search={{ tab: "workflows", run: it.runId }}>
+            Open the run
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function InboxPage() {
   const q = useNeedsReview();
   if (q.isLoading) return <ListSkeleton rows={4} />;
   if (q.error || !q.data) return <ErrorState error={q.error} retry={() => void q.refetch()} />;
   const { tasks, threads, count } = q.data;
+  const gates = q.data.gates ?? [];
   return (
     <ScrollArea className="h-full">
       <div className="mx-auto max-w-6xl space-y-8 p-4 md:p-8">
@@ -84,6 +117,18 @@ export function InboxPage() {
           {count ? <span className="rounded-full bg-warning px-2 text-xs text-black">{count}</span> : null}
         </h1>
         {!count ? <Empty title="Nothing waits for you">Blocked tasks, pull requests to review and sessions that ask for you show up here.</Empty> : null}
+        {gates.length ? (
+          <section aria-labelledby="inbox-gates" className="space-y-3">
+            <h2 id="inbox-gates" className="text-sm font-medium text-muted-foreground">
+              Workflow gates ({gates.length})
+            </h2>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {gates.map((it) => (
+                <GateItem key={`${it.runId}/${it.nodeId}`} it={it} />
+              ))}
+            </div>
+          </section>
+        ) : null}
         {tasks.length ? (
           <section aria-labelledby="inbox-tasks" className="space-y-3">
             <h2 id="inbox-tasks" className="text-sm font-medium text-muted-foreground">

@@ -75,7 +75,8 @@ func enums() []enum {
 		{"ConnectorKind", []string{"github", "telegram", "slack"}},
 		{"MemoryStatus", []string{store.MemoryActive, store.MemoryPending, store.MemoryDeleted}},
 		{"FeedType", []string{"thread.created", "thread.updated", "thread.deleted", "run.started", "run.finished", "message.sent",
-			"member.changed", "project.changed", "memory.changed", "task.created", "task.updated", "task.blocked"}},
+			"member.changed", "project.changed", "memory.changed", "task.created", "task.updated", "task.blocked",
+			"requirement.changed", "workflow.changed", "workflow.run", "workflow.gate"}},
 		{"FactoryState", []string{string(factory.StatePending), string(factory.StateReady), string(factory.StateRunning), string(factory.StateReview), string(factory.StateBlocked), string(factory.StateDone), string(factory.StateFailed), string(factory.StateCancelled)}},
 	}
 }

@@ -209,7 +209,7 @@ export interface FeedEvent {
   at: string;
 }
 
-export type FeedType = "thread.created" | "thread.updated" | "thread.deleted" | "run.started" | "run.finished" | "message.sent" | "member.changed" | "project.changed" | "memory.changed" | "task.created" | "task.updated" | "task.blocked";
+export type FeedType = "thread.created" | "thread.updated" | "thread.deleted" | "run.started" | "run.finished" | "message.sent" | "member.changed" | "project.changed" | "memory.changed" | "task.created" | "task.updated" | "task.blocked" | "requirement.changed" | "workflow.changed" | "workflow.run" | "workflow.gate";
 
 export type FileType = "file" | "directory";
 
@@ -233,7 +233,20 @@ export interface GithubStatus {
 export interface InboxDoc {
   tasks: InboxTask[];
   threads: InboxThread[];
+  gates: InboxGate[];
   count: number;
+}
+
+export interface InboxGate {
+  projectId: string;
+  projectName: string;
+  runId: string;
+  workflowName: string;
+  nodeId: string;
+  title: string;
+  approvers: string[];
+  since?: string;
+  summary?: string;
 }
 
 export interface InboxTask {
@@ -252,12 +265,26 @@ export interface InboxThread {
   thread: ThreadSummary;
 }
 
+export interface Input {
+  name: string;
+  label?: string;
+  required?: boolean;
+  default?: string;
+  long?: boolean;
+}
+
 export interface Invite {
   projectId: string;
   email: string;
   role: Role;
   invitedBy: string;
   createdAt: string;
+}
+
+export interface Issue {
+  nodeId?: string;
+  field?: string;
+  message: string;
 }
 
 export interface LinkedPR {
@@ -416,6 +443,31 @@ export interface ModelList {
   info?: Record<string, ModelInfo>;
 }
 
+export interface NodeRun {
+  nodeId: string;
+  state: string;
+  round: number;
+  taskId?: string;
+  childRunId?: string;
+  taskState?: string;
+  result?: string;
+  error?: string;
+  outputs?: Record<string, string>;
+  prUrl?: string;
+  feedback?: string;
+  context?: string[];
+  manual?: boolean;
+  note?: string;
+  startedAt?: string;
+  finishedAt?: string;
+}
+
+export interface OnFailure {
+  action?: string;
+  target?: string;
+  maxRounds?: number;
+}
+
 export interface Origin {
   kind: string;
   repo?: string;
@@ -455,6 +507,11 @@ export interface PlanItem {
   id: string;
   title: string;
   status: string;
+}
+
+export interface Pos {
+  x: number;
+  y: number;
 }
 
 export interface PreviewInfo {
@@ -671,6 +728,14 @@ export interface Run {
   lastSeq: number;
   createdAt: string;
   sandbox?: string;
+}
+
+export interface RunEvent {
+  at: string;
+  kind: string;
+  nodeId?: string;
+  actor?: string;
+  text: string;
 }
 
 export type RunMode = "build" | "plan";
@@ -918,6 +983,102 @@ export interface User {
   avatarUrl: string;
   hasCustomAvatar: boolean;
   status?: string;
+}
+
+export interface Workflow {
+  id: string;
+  projectId: string;
+  name: string;
+  description?: string;
+  inputs?: Input[];
+  nodes: WorkflowNode[];
+  status: string;
+  version: number;
+  publishedVersion: number;
+  template?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkflowGateView {
+  nodeId: string;
+  title: string;
+  approvers: string[];
+  mayDecide: boolean;
+}
+
+export interface WorkflowIssues {
+  issues: Issue[];
+}
+
+export interface WorkflowNode {
+  id: string;
+  kind: string;
+  title?: string;
+  dependsOn?: string[];
+  pos: Pos;
+  role?: string;
+  prompt?: string;
+  model?: string;
+  policy?: string;
+  budget?: Budget;
+  outputs?: string[];
+  useRepo?: boolean;
+  waitMerge?: boolean;
+  command?: string;
+  approvers?: string[];
+  workflowId?: string;
+  inputs?: Record<string, string>;
+  onFailure?: OnFailure;
+}
+
+export interface WorkflowRun {
+  id: string;
+  projectId: string;
+  workflowId: string;
+  workflowName: string;
+  workflowVersion: number;
+  graph: WorkflowNode[];
+  inputs?: Record<string, string>;
+  requirementId?: string;
+  owner: string;
+  repo?: string;
+  baseBranch?: string;
+  branch?: string;
+  state: string;
+  error?: string;
+  steps: NodeRun[];
+  rework?: Record<string, number>;
+  events?: RunEvent[];
+  parentRunId?: string;
+  parentNodeId?: string;
+  parentRound?: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt?: string;
+}
+
+export interface WorkflowRunDetail {
+  run: WorkflowRun;
+  gates: WorkflowGateView[];
+  canSteer: boolean;
+}
+
+export interface WorkflowTemplate {
+  id: string;
+  name: string;
+  description: string;
+  workflow: Workflow;
+}
+
+export interface WorkflowVersion {
+  version: number;
+  workflow: Workflow;
+  changedBy?: string;
+  at: string;
 }
 
 export interface WorkspaceFile {
