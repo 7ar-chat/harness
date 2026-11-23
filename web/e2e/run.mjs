@@ -422,14 +422,14 @@ async function main() {
 
   await step("g4. the inbox lists a session that waits for an approval and clears when it is approved", async () => {
     await page.goto(`${base}/#/inbox`);
-    await visible(page.getByText("Nothing waits for you"), "the empty inbox");
+    await visible(page.getByRole("main").getByText("Nothing waits for you"), "the empty inbox");
     const id = await newSession("E2E inbox");
     await send("please run the script");
     await visible(page.getByRole("alertdialog", { name: "Approval needed" }), "the approval card");
     await page.goto(`${base}/#/inbox`);
-    await visible(page.getByText("E2E inbox"), "the waiting session in the inbox");
-    eq(await page.getByText("Nothing waits for you").count(), 0, "the inbox is not empty");
-    await page.getByText("E2E inbox").first().click();
+    await visible(page.getByRole("main").getByText("E2E inbox"), "the waiting session in the inbox");
+    eq(await page.getByRole("main").getByText("Nothing waits for you").count(), 0, "the inbox is not empty");
+    await page.getByRole("main").getByText("E2E inbox").first().click();
     await page.waitForURL(new RegExp(`#/t/${id}$`));
     const card = page.getByRole("alertdialog", { name: "Approval needed" });
     await visible(card, "the approval card after opening the session");
@@ -437,7 +437,7 @@ async function main() {
     await visible(page.getByText("The script finished."), "the answer after approval");
     await idle(id);
     await page.goto(`${base}/#/inbox`);
-    await visible(page.getByText("Nothing waits for you"), "the inbox is empty again");
+    await visible(page.getByRole("main").getByText("Nothing waits for you"), "the inbox is empty again");
   });
 
   await step("g5. Admin registers a git host; Profile, Git access takes an SSH key for it; the host's trust is enforced", async () => {
@@ -535,9 +535,9 @@ async function main() {
     await visible(runCanvas.locator('[data-kind="gate"][data-state="waiting"]'), "the gate waits for a decision", 30_000);
     // the gate is in the inbox
     await page.goto(`${base}/#/inbox`);
-    await visible(page.getByText("Workflow gates (1)"), "the gate in the inbox");
-    await page.getByRole("button", { name: "Approve", exact: true }).click();
-    await visible(page.getByText("Nothing waits for you"), "the inbox is empty after approving");
+    await visible(page.getByRole("main").getByText("Workflow gates (1)"), "the gate in the inbox");
+    await page.getByRole("main").getByRole("button", { name: "Approve", exact: true }).click();
+    await visible(page.getByRole("main").getByText("Nothing waits for you"), "the inbox is empty after approving");
     const runs = await api(`/projects/${hp}/workflow-runs`);
     await poll(async () => (await api(`/projects/${hp}/workflow-runs`))[0].state === "done", "the run is done", 30_000);
     eq(runs.length, 1, "one run");

@@ -38,7 +38,8 @@ export default defineConfig({
   base: "/ui/",
   plugins: [noInlineStyles(), react(), tailwindcss(), stripCssBanners()],
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "src") } },
-  build: { outDir: "../hosts/httpapi/ui", emptyOutDir: false, chunkSizeWarningLimit: 2500 },
+  // Fonts are never inlined as data: URIs: the CSP has no font-src for them, files under /ui/assets/ are served as 'self'.
+  build: { outDir: "../hosts/httpapi/ui", emptyOutDir: false, chunkSizeWarningLimit: 2500, assetsInlineLimit: (file) => (/\.(woff2?|ttf)$/.test(file) ? false : undefined) },
   server: {
     proxy: {
       "/api": { target: process.env.HARNESS_URL ?? "http://127.0.0.1:8080", changeOrigin: true },
