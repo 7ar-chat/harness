@@ -134,7 +134,7 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
           ["activity", "Activity", true],
         ].map(([v, label, show]) =>
           show ? (
-            <TabsTrigger key={v as string} value={v as string} className="h-auto flex-none rounded-none px-3 py-2 text-xs after:bottom-0 after:bg-primary">
+            <TabsTrigger key={v as string} value={v as string} className="h-auto flex-none rounded-none px-3 py-2 text-xs group-data-[orientation=horizontal]/tabs:after:bottom-0 after:bg-primary">
               {label}
             </TabsTrigger>
           ) : null,

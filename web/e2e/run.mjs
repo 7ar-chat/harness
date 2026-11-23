@@ -760,6 +760,9 @@ async function main() {
           if (!selected) failures.push(`${label} ${what}: no tab is selected`);
         }
         if (((await pg.locator("body").innerText()) ?? "").trim().length < 20) failures.push(`${label} ${what}: the page is blank`);
+        // no sideways page scroll on a phone (the tab strip and wide tables scroll inside their own box)
+        const overflow = await pg.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+        if (overflow > 0) failures.push(`${label} ${what}: the page scrolls sideways by ${overflow}px`);
       };
       for (const r of top) await check(`${base}/#${r}`, r, false);
       for (const t of tabs) await check(`${base}/#/p/${hp}?tab=${t}`, `project tab ${t}`, true);
@@ -792,6 +795,9 @@ async function main() {
     await shot(page, `/p/${proj.wf}?tab=workflows&run=${runs[0]?.id ?? ""}`, "workflow-run");
     await shot(page, `/p/${proj.id}?tab=settings`, "settings");
     await shot(page, `/p/${proj.id}?tab=tasks`, "tasks");
+    for (const t of ["requirements", "roles", "members", "memory", "capabilities", "usage", "schedules", "audit"]) await shot(page, `/p/${proj.id}?tab=${t}`, `tab-${t}`);
+    for (const r of ["/inbox", "/profile", "/jobs", "/admin", "/connectors"]) await shot(page, r, `page${r.replace("/", "-")}`);
+    await shot(page, `/p/${proj.wf}?tab=workflows`, "workflows");
     await page.evaluate(() => localStorage.setItem("theme", "light"));
     await page.reload();
     await shot(page, `/p/${proj.id}?tab=board`, "board-light");
