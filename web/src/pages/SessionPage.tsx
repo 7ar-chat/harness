@@ -21,6 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useRunSettings } from "@/lib/hooks";
 import { MemoryManager } from "./Memory";
+import { DiffPanel, sessionEdits } from "./DiffPanel";
 import { ActivityPanel, FilesPanel, PlanPanel, PreviewPanel } from "./panels";
 import { SessionCard } from "./Dashboard";
 
@@ -84,7 +85,7 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
   const qc = useQueryClient();
   const isMobile = useIsMobile();
   const [sheet, setSheet] = useState(false);
-  const [tab, setTab] = useState("files");
+  const [pickedTab, setTab] = useState<string>();
   const [confirm, setConfirm] = useState(false);
   const [status, setStatus] = useState<{ running: boolean; cancel: () => void; plan?: PlanItem[] }>({ running: false, cancel: () => {} });
   const project = useMe().data?.projects.find((p) => p.id === t?.projectId);
@@ -110,6 +111,8 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
   if (q.error || !t) return <ErrorState error={q.error} retry={() => void q.refetch()} />;
   const canDelete = t.createdBy === me?.login || role === "owner" || !t.projectId;
   const plan = status.plan ?? t.plan ?? [];
+  const edits = sessionEdits(t.messages ?? []);
+  const tab = pickedTab ?? (edits.length ? "diff" : "files");
   const infoModels = models?.info;
 
   const side = supervisor ? (
@@ -120,14 +123,26 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
       <SessionsList />
     </div>
   ) : (
-    <Tabs value={tab} onValueChange={setTab} className="flex h-full min-h-0 flex-col gap-0">
-      <TabsList className="m-2 shrink-0">
-        <TabsTrigger value="files">Files</TabsTrigger>
-        {t.projectId ? <TabsTrigger value="preview">Preview</TabsTrigger> : null}
-        <TabsTrigger value="plan">Plan{plan.length ? ` (${plan.length})` : ""}</TabsTrigger>
-        <TabsTrigger value="memory">Memory</TabsTrigger>
-        <TabsTrigger value="activity">Activity</TabsTrigger>
+    <Tabs value={tab} onValueChange={setTab} className="flex h-full min-h-0 flex-col gap-0 bg-panel">
+      <TabsList variant="line" className="h-auto w-full shrink-0 justify-start gap-0 overflow-x-auto rounded-none border-b p-0">
+        {[
+          ["diff", "Diff" + (edits.length ? ` (${edits.length})` : ""), true],
+          ["files", "Files", true],
+          ["plan", "Plan" + (plan.length ? ` (${plan.length})` : ""), true],
+          ["preview", "Preview", !!t.projectId],
+          ["memory", "Memory", true],
+          ["activity", "Activity", true],
+        ].map(([v, label, show]) =>
+          show ? (
+            <TabsTrigger key={v as string} value={v as string} className="h-auto flex-none rounded-none px-3 py-2 text-xs after:bottom-0 after:bg-primary">
+              {label}
+            </TabsTrigger>
+          ) : null,
+        )}
       </TabsList>
+      <TabsContent value="diff" className="min-h-0 flex-1 overflow-y-auto">
+        <DiffPanel messages={t.messages ?? []} />
+      </TabsContent>
       <TabsContent value="files" className="min-h-0 flex-1 overflow-hidden">
         <div className="flex h-full min-h-0 flex-col">
           <PublishedList threadId={threadId} refreshKey={t.updatedAt + String(status.running)} />

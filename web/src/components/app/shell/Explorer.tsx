@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { getDevUser, setDevUser } from "@/api/client";
 import { useNeedsReview } from "@/api/factory";
-import { useAdminUsers, useDeleteThread, useMe, useOverview, useSeen } from "@/api/queries";
+import { useAdminUsers, useDeleteThread, useMe, useMemoryStats, useOverview, useSeen } from "@/api/queries";
 import type { ThreadSummary } from "@/api/types";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
@@ -184,12 +184,13 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
   const overview = useOverview().data;
   const review = useNeedsReview().data;
   const { newSession, newProject } = useDialogs();
-  const { projectId, openSwitcher } = useShell();
+  const { projectId, openSwitcher, narrow } = useShell();
   const { conn } = useFeed();
   const project = overview?.projects.find((p) => p.id === projectId);
   const threads = (project?.threads ?? []).filter((t) => t.kind !== "supervisor").sort(byRecent);
   const personal = (overview?.personal ?? []).filter((t) => t.kind !== "supervisor").sort(byRecent);
   const total = review?.count ?? 0;
+  const memPending = useMemoryStats({ project: projectId ?? "" }, !!projectId).data?.pending ?? 0;
   const mine = (pid: string) => !projectId || pid === projectId;
   const needs = [
     ...(review?.gates ?? []).filter((g) => mine(g.projectId)).map((g) => ({ key: `g:${g.runId}:${g.nodeId}`, tone: "text-warning", label: `${g.workflowName}: ${g.title}`, href: projectHref(g.projectId, "workflows", { run: g.runId }), k: `p:${g.projectId}:run:${g.runId}`, kind: "gate" })),
@@ -206,7 +207,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
             7
           </span>
           <span className="min-w-0 flex-1 truncate font-semibold text-foreground">{project?.name ?? (overview ? "Personal" : "7ar")}</span>
-          <span className="shrink-0 text-[11px] text-muted-foreground">switch ⌘P</span>
+          {narrow ? null : <span className="shrink-0 text-[11px] text-muted-foreground">switch ⌘P</span>}
         </button>
         {conn === "offline" ? <WifiOff className="size-4 shrink-0 text-destructive" aria-label="Offline, reconnecting" /> : null}
       </div>
@@ -281,7 +282,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
             <Section title="Setup">
               <SetupLink pid={project.id} section="roles" label="Roles & executors" onNavigate={onNavigate} />
               <SetupLink pid={project.id} section="schedules" label="Schedules" onNavigate={onNavigate} />
-              <SetupLink pid={project.id} section="memory" label="Memory & docs" onNavigate={onNavigate} />
+              <SetupLink pid={project.id} section="memory" label="Memory & docs" onNavigate={onNavigate} meta={memPending ? <span className="rounded-full bg-warning px-1.5 text-[10px] font-medium text-warning-foreground" aria-label={`${memPending} memories to review`}>{memPending}</span> : null} />
               <SetupLink pid={project.id} section="members" label="Members & access" onNavigate={onNavigate} />
               <SetupLink pid={project.id} section="capabilities" label="Capabilities" onNavigate={onNavigate} />
               <SetupLink pid={project.id} section="audit" label="Audit log" onNavigate={onNavigate} />
@@ -348,9 +349,6 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
             Usage & caps
           </Row>
         )}
-        <Row href="/profile" k="page:/profile" onNavigate={onNavigate}>
-          Profile
-        </Row>
         <UserMenu />
       </div>
     </div>

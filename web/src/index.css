@@ -29,7 +29,7 @@
     --border: #d5dbe5;
     --input: #c3cbd8;
     --ring: #2b5bd7;
-    --success: #1b7a3a;
+    --success: #16672e;
     --warning: #8a5a00;
     --warning-foreground: #ffffff;
     --shell: #e9edf3;                    /* behind everything */
@@ -47,6 +47,7 @@
 }
 
 .dark {
+    color-scheme: dark;
     --background: #1b1f26;
     --foreground: #d7dce5;
     --card: #20252d;

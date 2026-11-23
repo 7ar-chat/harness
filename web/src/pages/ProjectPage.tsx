@@ -280,7 +280,7 @@ export function ProjectPage() {
       <div className="space-y-4 p-4 md:p-6">
         <div className="flex flex-wrap items-start gap-3">
           <div className="min-w-0 flex-1">
-            <h1 className="flex items-center gap-2 text-xl font-semibold">
+            <h1 className="flex items-center gap-2 text-lg font-semibold">
               {p.name} <RoleBadge role={p.role} />
             </h1>
             {p.description ? <p className="mt-1 text-sm text-muted-foreground">{p.description}</p> : null}
@@ -306,6 +306,7 @@ export function ProjectPage() {
             {canWrite(p.role) ? (
               <Button
                 variant="outline"
+                size="sm"
                 disabled={importAgents.isPending || !ghReady}
                 title={ghReady ? "Import AGENTS.md from the repository as a pinned memory" : "Connect GitHub (Profile) to import AGENTS.md"}
                 onClick={() =>
@@ -318,11 +319,11 @@ export function ProjectPage() {
                 <FileText /> Import AGENTS.md
               </Button>
             ) : null}
-            <Button variant="outline" onClick={() => downloadText(`/projects/${projectId}/memory/export`, "MEMORY.md").catch(toastError)}>
+            <Button variant="outline" size="sm" onClick={() => downloadText(`/projects/${projectId}/memory/export`, "MEMORY.md").catch(toastError)}>
               <Download /> Export MEMORY.md
             </Button>
             {canWrite(p.role) ? (
-              <Button onClick={() => newSession(projectId)}>
+              <Button size="sm" onClick={() => newSession(projectId)}>
                 <Plus /> New session
               </Button>
             ) : null}

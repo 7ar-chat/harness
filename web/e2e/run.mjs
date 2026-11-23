@@ -775,6 +775,38 @@ async function main() {
     if (failures.length) throw new Error(failures.join("\n"));
   });
 
+  // Opt-in: E2E_SHOTS=<dir> saves screenshots of the main surfaces (not a scenario, nothing is asserted).
+  if (process.env.E2E_SHOTS) {
+    const dir = process.env.E2E_SHOTS;
+    fs.mkdirSync(dir, { recursive: true });
+    const shot = async (pg, url, name) => {
+      await pg.goto(`${base}/#${url}`);
+      await pg.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+      await pg.waitForTimeout(1500);
+      await pg.screenshot({ path: path.join(dir, `${name}.png`) });
+    };
+    const runs = await api(`/projects/${proj.wf}/workflow-runs`);
+    await shot(page, "/", "dashboard");
+    await shot(page, `/t/${sessionState.w}`, "session");
+    await shot(page, `/p/${proj.id}?tab=board`, "board");
+    await shot(page, `/p/${proj.wf}?tab=workflows&run=${runs[0]?.id ?? ""}`, "workflow-run");
+    await shot(page, `/p/${proj.id}?tab=settings`, "settings");
+    await shot(page, `/p/${proj.id}?tab=tasks`, "tasks");
+    await page.evaluate(() => localStorage.setItem("theme", "light"));
+    await page.reload();
+    await shot(page, `/p/${proj.id}?tab=board`, "board-light");
+    await shot(page, `/t/${sessionState.w}`, "session-light");
+    await page.evaluate(() => localStorage.setItem("theme", "dark"));
+    const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const pp = await phone.newPage();
+    await shot(pp, `/t/${sessionState.w}`, "phone-session");
+    await shot(pp, `/p/${proj.id}?tab=board`, "phone-board");
+    await pp.getByRole("button", { name: "Open navigation" }).click();
+    await pp.waitForTimeout(600);
+    await pp.screenshot({ path: path.join(dir, "phone-explorer.png") });
+    await phone.close();
+  }
+
   await ctx.close();
 }
 
