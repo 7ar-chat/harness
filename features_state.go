@@ -97,6 +97,7 @@ func Artifacts() Feature {
 			BlobGCGrace: time.Duration(cfg.BlobGCGraceHours) * time.Hour})
 		b.Artifacts = svc
 		b.ToolHook(svc)
+		b.AddTools(artifacts.PublishTools{Svc: svc, State: b.Options.ThreadState})
 		if err := b.SetAnswers(svc); err != nil {
 			return err
 		}

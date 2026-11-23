@@ -95,7 +95,11 @@ type Config struct {
 	// (see SandboxProfile): an OpenSandbox container image, an E2B template or a Daytona snapshot, whichever backend is
 	// selected. A profile without an entry uses the backend's own default (OPENSANDBOX_IMAGE, E2B_TEMPLATE, DAYTONA_SNAPSHOT).
 	SandboxImagesRaw string `env:"SANDBOX_IMAGES"`
-	SandboxImages    map[string]string
+	// EnvironmentSelector is ENVIRONMENT_SELECTOR: offer the runtime-environment choice (GET /api/environments,
+	// "selectable") even when the deployment has a single environment. With several (SANDBOX_IMAGES names more than
+	// one profile) it is offered anyway.
+	EnvironmentSelector bool `env:"ENVIRONMENT_SELECTOR"`
+	SandboxImages       map[string]string
 	// E2BAPIKey is E2B_API_KEY (or the "e2b" entry of auth.json: `harness auth login e2b`), used by SANDBOX_BACKEND=e2b.
 	// E2BTemplate is the template sandboxes start from (default "base"); E2BDomain a self-hosted E2B domain.
 	E2BAPIKey   string `env:"E2B_API_KEY"`

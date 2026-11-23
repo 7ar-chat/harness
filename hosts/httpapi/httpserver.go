@@ -12,12 +12,14 @@
 //	GET    /healthz                                  → {"status":"ok"}            (no auth)
 //	GET    /api/models                               → {"models":[…],"default"}
 //	GET    /api/sessions?limit=                      → [Session]  (durable file store only, else 501)
-//	POST   /api/threads            {"title"}         → 201 Thread
+//	POST   /api/threads            {"title","environment"} → 201 Thread
 //	GET    /api/threads?limit=                       → [Thread]
 //	GET    /api/threads/{id}                         → Thread + messages (+ pendingApproval, pendingQuestion, activeRun)
 //	PATCH  /api/threads/{id}       {"title"}         → Thread
 //	DELETE /api/threads/{id}                         → 204
 //	POST   /api/threads/{id}/runs  {"message","model","reasoningEffort","skills","interactive","sandbox":"auto|off|on","mode":"build|plan","attachments":[{"name","mime","data":base64}]} → 202 Run
+//	GET    /api/environments                         → {"environments":[…],"default","selectable"}
+//	GET|PUT /api/threads/{id}/environment            → {"environment","frozen"}  (see extras_chat.go: queue, environment, published)
 //	POST   /api/threads/{id}/resume {"interruptId","reason","decision":"approve|deny","always","text","model","interactive","mode"} → 202 Run
 //	GET    /api/threads/{id}/files?path=             → [File]   (read-only, confined to /workspace)
 //	GET    /api/threads/{id}/files/download?path=    → file bytes, Content-Disposition: attachment
@@ -42,6 +44,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -176,6 +179,7 @@ func NewServer(h *harness.Harness, o Options) (http.Handler, error) {
 	s.Route("POST /runs/{id}/cancel", s.cancel)
 	s.Route("POST /runs/{id}/steer", s.steer)
 	s.routeHistory()
+	s.routeChat()
 	s.routeCommands()
 	if o.Extension != nil {
 		if err := o.Extension.Install(s); err != nil {
@@ -256,14 +260,30 @@ func (s *Server) createThread(w http.ResponseWriter, r *http.Request, c Caller) 
 	}
 	var body struct {
 		Title string `json:"title"`
+		// Environment is the runtime environment of the conversation (GET /environments), "" for the default.
+		Environment string `json:"environment"`
 	}
 	if !decode(w, r, &body) {
 		return
+	}
+	if body.Environment != "" { // refuse an unknown one before the thread exists
+		if !slices.ContainsFunc(s.H.Environments(), func(e harness.Environment) bool {
+			return e.Name == strings.ToLower(strings.TrimSpace(body.Environment))
+		}) {
+			fail(w, client.Errorf(client.ErrInvalidRequest, "Unknown environment %q.", body.Environment))
+			return
+		}
 	}
 	th, err := s.API(c).CreateThread(r.Context(), body.Title)
 	if err != nil {
 		fail(w, err)
 		return
+	}
+	if body.Environment != "" {
+		if err := s.H.SetThreadEnvironment(r.Context(), c.Login, th.ID, body.Environment); err != nil {
+			failHarness(w, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusCreated, th)
 }

@@ -112,6 +112,20 @@ export interface DispatchBudget {
   maxTokens?: number;
 }
 
+export interface Environment {
+  name: string;
+  kind: string;
+  description: string;
+  egress: string;
+  default?: boolean;
+}
+
+export interface EnvironmentList {
+  environments: Environment[];
+  default: string;
+  selectable: boolean;
+}
+
 export interface FactoryReport {
   ProjectID: string;
   Since: string;
@@ -492,6 +506,19 @@ export interface ProjectWithRole extends Project {
   role: Role;
 }
 
+export interface PublishedArtifact {
+  artifactId: string;
+  path: string;
+  name: string;
+  title?: string;
+  version: number;
+  mimeType: string;
+  sizeBytes: number;
+  runId?: string;
+  toolCallId?: string;
+  publishedAt: string;
+}
+
 export interface PullRequest {
   number?: number;
   url?: string;
@@ -501,6 +528,23 @@ export interface PullRequest {
 export interface QuestionOption {
   label: string;
   description?: string;
+}
+
+export interface QueueAck {
+  item: QueueItem;
+  run?: Run;
+}
+
+export interface QueueItem {
+  id: string;
+  text: string;
+  model?: string;
+  createdAt: string;
+}
+
+export interface QueueSendResult {
+  steered: boolean;
+  run?: Run;
 }
 
 export interface Requirement {
@@ -737,6 +781,11 @@ export interface ThreadBase {
   pendingApproval: PendingApproval | null;
   pendingQuestion: PendingQuestion | null;
   messages?: Message[];
+}
+
+export interface ThreadEnvironment {
+  environment: string;
+  frozen: boolean;
 }
 
 export type ThreadKind = "chat" | "supervisor";

@@ -29,6 +29,8 @@ type rig struct {
 	srv *httptest.Server
 	h   *harness.Harness
 	ctx context.Context
+	// backend is the in-memory sandbox backend (nil with local or no sandbox).
+	backend *sandboxtest.Backend
 }
 
 type rigOpts struct {
@@ -78,8 +80,10 @@ func newRig(t *testing.T, o rigOpts) *rig {
 		o.model = llmtest.New(llmtest.Turn{Chunks: llmtest.Text("Hi there")}, llmtest.Turn{Chunks: llmtest.Text("Title")})
 	}
 	ho := harness.Options{Config: cfg, Models: llmtest.Factory{M: o.model}, Store: o.store}
+	var backend *sandboxtest.Backend
 	if !o.local && !o.noSandbox {
-		ho.Backend = sandboxtest.NewBackend()
+		backend = sandboxtest.NewBackend()
+		ho.Backend = backend
 	}
 	h, err := harness.New(ho)
 	if err != nil {
@@ -95,7 +99,7 @@ func newRig(t *testing.T, o rigOpts) *rig {
 	w.Models = cfg.LLMModels
 	srv := httptest.NewServer(httpapi.New(h, w))
 	t.Cleanup(func() { srv.Close(); cancel() })
-	return &rig{t: t, srv: srv, h: h, ctx: ctx}
+	return &rig{t: t, srv: srv, h: h, ctx: ctx, backend: backend}
 }
 
 // do sends a request as user (X-User) and returns the response.
