@@ -178,13 +178,17 @@ function RoleEditor({ pid, role, create, readOnly, onClose, onDuplicate }: { pid
             <Select value={d.executor || "internal"} onValueChange={(v) => set({ executor: v === "internal" ? "" : v })} disabled={readOnly}>
               <SelectTrigger aria-label="Executor"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="internal">7ar harness (built-in loop)</SelectItem>
+                <SelectItem value="internal">7ar harness (built-in loop) · Recommended</SelectItem>
                 {executorOptions.map((e) => (
                   <SelectItem key={e.name} value={e.name}>{e.title || e.name}{e.kind === "custom" ? " (project)" : ""}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">An external coding agent that does this role&apos;s work in the sandbox, under the task&apos;s policy. Each person sets their own API key in Settings.</p>
+            <p className="text-xs text-muted-foreground">
+              {d.executor
+                ? "An external CLI runs on its own loop in the sandbox, under the task's policy. It does not use the project's memory, and its spend is counted only if the CLI reports it. Each person sets their own API key in Settings."
+                : "Recommended. The 7ar harness codes in the sandbox with the project's memory and instructions, loop guards, budgets that count every token, approvals in the UI, and queue, steer and resume. It needs no setup."}
+            </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">

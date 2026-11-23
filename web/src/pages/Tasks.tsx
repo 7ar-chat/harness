@@ -306,7 +306,9 @@ function CreateTaskDialog({ projectId, owner, open, onOpenChange, existing }: { 
                 <p className="text-xs text-muted-foreground">
                   Runs on the external executor {projectRoles.find((r) => r.name === f.role)?.executor}, under the policy below. It uses your API key from Settings.
                 </p>
-              ) : null}
+              ) : (
+                <p className="text-xs text-muted-foreground">Runs on the 7ar harness (recommended), under the policy below.</p>
+              )}
             </div>
             <div className="space-y-1">
               <Label htmlFor="task-model">Model</Label>

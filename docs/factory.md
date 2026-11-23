@@ -370,6 +370,8 @@ process dies with the sandbox call), reads its final summary and `git diff --sta
 (Claude Code's `total_cost_usd`, token counts for Codex; a CLI that reports nothing books an unpriced run) against
 the task budget, and refuses to start once the budget is spent.
 
+* The 7ar harness (the internal loop) stays the recommended and default runner: a role with no executor uses it, and it is
+  the only one that uses the project's memory and counts every token against the budget. Executors are optional extras.
 * Policy: the policy engine classifies `run_executor` as an exec, so a *supervised* task asks a human first and the
   others do not. The CLI's level follows the task: read-only for a read-only role or plan run, edit under
   supervised and sandboxed, full (no prompts inside the sandbox) under autonomous. A `policy` event (the level) and an

@@ -114,7 +114,7 @@ export function ExecutorsCard() {
         <CardTitle className="flex items-center gap-2">
           <Terminal className="size-4" /> Executors
         </CardTitle>
-        <CardDescription>External coding agents your tasks and roles can run in the sandbox. Your API keys stay sealed on the server.</CardDescription>
+        <CardDescription>Optional external coding agents your tasks and roles can run in the sandbox. The 7ar harness is recommended and needs no key here. Your API keys stay sealed on the server.</CardDescription>
       </CardHeader>
       <CardContent>
         {list.isLoading ? <ListSkeleton rows={3} /> : null}
@@ -235,7 +235,7 @@ export function ProjectExecutors({ projectId, canEdit }: { projectId: string; ca
         <div>
           <h2 className="text-base font-semibold">Executors</h2>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            External coding agents that run in the sandbox. Give a role an executor and the delegate tool and tasks of that role use it, under the task&apos;s policy.
+            The 7ar harness is the recommended way to run a role and needs no setup. These are optional external coding agents that run in the sandbox: give a role an executor and the delegate tool and tasks of that role use it, under the task&apos;s policy.
           </p>
         </div>
         {canEdit ? (
