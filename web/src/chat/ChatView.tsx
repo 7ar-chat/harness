@@ -4,7 +4,7 @@ import {
   type AppendMessage,
 } from "@assistant-ui/react";
 import { Bot, Paperclip, Send, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { api } from "@/api/client";
 import { useCommands, useMarkSeen } from "@/api/queries";
@@ -13,6 +13,7 @@ import { UserAvatar } from "@/components/app/common";
 import { Button } from "@/components/ui/button";
 import { toThreadMessage, type MessageCustom } from "./convert";
 import { MarkdownText, MemoryLinkContext, MemoryNote, PlainText, Reasoning, ToolCard, ToolGroup } from "./parts";
+import { MentionChips, MentionPicker, useMention, useMentionItems, type MentionItem } from "./MentionPicker";
 import { InterruptCard } from "./Prompts";
 import { useChat, type RunSettings } from "./useChat";
 import { formatUsage } from "./usage";
@@ -114,10 +115,15 @@ function SlashMenu({ commands }: { commands: Command[] }) {
   );
 }
 
-function Composer({ running, readOnly, commands }: { running: boolean; readOnly: boolean; commands: Command[] }) {
+function Composer({ running, readOnly, commands, items, chips, onChips }: { running: boolean; readOnly: boolean; commands: Command[]; items: MentionItem[]; chips: MentionItem[]; onChips: (c: MentionItem[]) => void }) {
+  const aui = useAui();
+  const text = useAuiState((s) => s.composer.text);
+  const mention = useMention(text, items, chips, onChips, (t) => aui.composer().setText(t));
   return (
-    <ComposerPrimitive.Root className="rounded-xl border bg-card p-2 shadow-sm focus-within:ring-2 focus-within:ring-ring/40">
+    <ComposerPrimitive.Root className="rounded-xl border bg-card p-2 shadow-sm focus-within:ring-2 focus-within:ring-ring/40" onKeyDownCapture={mention.onKeyDownCapture}>
       <SlashMenu commands={commands} />
+      <MentionPicker items={mention.list} active={mention.active} onPick={mention.pick} onHover={mention.setIndex} />
+      <MentionChips chips={chips} onRemove={(c) => onChips(chips.filter((x) => !(x.kind === c.kind && x.id === c.id)))} />
       <ComposerPrimitive.Attachments>
         {({ attachment }) => (
           <span className="mb-2 mr-2 inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-1 text-xs">
@@ -172,6 +178,11 @@ export function ChatView({ threadId, settings, readOnly, users, self, suggestion
   const chat = useChat(threadId, settings, users, self);
   const commands = useCommands().data ?? [];
   const markSeen = useMarkSeen();
+  const mentionItems = useMentionItems(projectId);
+  // The roles and skills picked with @ for the next message; the handler reads them through a ref so onNew stays stable.
+  const [chips, setChips] = useState<MentionItem[]>([]);
+  const chipsRef = useRef(chips);
+  chipsRef.current = chips;
   const { messages, running, send, resume, cancel, interrupt, live, busy, thread } = chat;
 
   const onNew = useCallback(
@@ -189,9 +200,16 @@ export function ChatView({ threadId, settings, readOnly, users, self, suggestion
           toast.error(`Could not expand /${cmd[1]}; sending it as typed.`);
         }
       }
-      await send(text, atts).catch(() => undefined);
+      const picked = chipsRef.current;
+      const role = picked.find((c) => c.kind === "role")?.id;
+      const skills = picked.filter((c) => c.kind === "skill").map((c) => c.id);
+      let sent = true;
+      await send(text, atts, running ? {} : { role, skills }).catch(() => {
+        sent = false;
+      });
+      if (sent && !running) setChips([]);
     },
-    [commands, send],
+    [commands, send, running],
   );
 
   const runtime = useExternalStoreRuntime<ChatMessage>({
@@ -243,7 +261,7 @@ export function ChatView({ threadId, settings, readOnly, users, self, suggestion
             <span>{running ? `Running · ${live.steps} steps` : live.phase === "failed" ? "Last run failed" : live.phase === "cancelled" ? "Cancelled" : readOnly ? "Read-only" : "Idle"}</span>
             <span className="truncate">{usage}</span>
           </div>
-          <Composer running={running} readOnly={readOnly} commands={commands} />
+          <Composer running={running} readOnly={readOnly} commands={commands} items={mentionItems} chips={chips} onChips={setChips} />
         </div>
       </ThreadPrimitive.Root>
     </AssistantRuntimeProvider>

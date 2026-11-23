@@ -115,7 +115,7 @@ export function useChat(threadId: string, settings: RunSettings, users: (login: 
   const running = live.phase === "running" || !!activeId;
 
   const send = useCallback(
-    async (text: string, attachments: Attachment[] = []) => {
+    async (text: string, attachments: Attachment[] = [], pick: { role?: string; skills?: string[] } = {}) => {
       const runId = followingRef.current ?? activeId;
       setBusy(true);
       try {
@@ -133,6 +133,8 @@ export function useChat(threadId: string, settings: RunSettings, users: (login: 
           mode: settings.mode,
           sandbox: settings.sandbox,
           attachments: attachments.length ? attachments : undefined,
+          role: pick.role || undefined,
+          skills: pick.skills?.length ? pick.skills : undefined,
         };
         const run = await api.post<Run>(`/threads/${threadId}/runs`, body);
         follow(run.id);

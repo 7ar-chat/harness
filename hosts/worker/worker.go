@@ -19,6 +19,7 @@ import (
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/ai/llm"
 	"github.com/7ar-chat/harness/config"
+	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/core/sandbox"
 	"github.com/7ar-chat/harness/engine/runtime"
 )
@@ -61,6 +62,9 @@ type Options struct {
 	// the worker's store is known; nil adds none. The returned func releases what it opened and runs when the worker
 	// stops, or when building the harness fails.
 	MCPServers func(ctx context.Context, cfg *config.Config, st harness.Store) (harness.MCPServersFunc, func(), error)
+	// Roles supplies the resolver of the roles of projects and users (harness.Options.Roles), so the runs a worker
+	// executes apply the role they were started in; nil: none. The returned func releases what it opened.
+	Roles func(ctx context.Context, cfg *config.Config, st harness.Store) (roles.Resolver, func(), error)
 
 	// OnListening is called with the admin address once the server accepts connections.
 	OnListening func(addr string)

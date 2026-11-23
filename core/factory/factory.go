@@ -533,6 +533,12 @@ type SpawnRequest struct {
 	Instructions string
 	// ReadOnly runs the thread in plan mode: no tool that changes anything.
 	ReadOnly bool
+	// ReasoningEffort and Skills are the role's settings for the run ("" and nil: the defaults).
+	ReasoningEffort string
+	Skills          []string
+	// RoleRef names a role of the role registry (core/roles Ref.String) that the run takes on: its prompt,
+	// tool limits and MCP servers apply to the run. Empty for a builtin role, whose Instructions are enough.
+	RoleRef string
 	// Policy is the factory policy name the thread runs under ("" none).
 	Policy string
 	// TaskID links the thread to a factory task ("" none).

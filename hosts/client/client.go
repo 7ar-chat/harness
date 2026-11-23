@@ -266,6 +266,9 @@ type SendOptions struct {
 	// Sandbox is auto (default: sandbox tools when the server has a backend, created on first use), off (no
 	// sandbox tools for this run) or on (fail when the server has no sandbox).
 	Sandbox string `json:"sandbox,omitempty"`
+	// Role makes the run take on a role of the project (or one of the user's, or a builtin one) by name: its prompt,
+	// model, tool limits and skills apply to this run only.
+	Role string `json:"role,omitempty"`
 }
 
 // RunRequest is the body of the run-creation request (POST /threads/{id}/runs).

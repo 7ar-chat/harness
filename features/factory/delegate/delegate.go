@@ -13,6 +13,7 @@ import (
 
 	"github.com/7ar-chat/harness/ai"
 	"github.com/7ar-chat/harness/core/factory"
+	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/engine/tools"
 )
 
@@ -42,6 +43,10 @@ type Options struct {
 	Store factory.Store
 	// Roles is the catalogue (nil: DefaultRoles).
 	Roles map[string]Role
+	// Registry holds the roles of the thread's project and user. It is asked first: a role it has wins over the
+	// catalogue's of the same name, and its roles are offered to the model beside the catalogue's. Nil: the
+	// catalogue alone.
+	Registry roles.Resolver
 	// MaxDepth is how deep delegation nests: a thread already that many
 	// delegations below an ordinary thread gets no delegate tool (0: 2).
 	MaxDepth int
@@ -65,6 +70,7 @@ type Provider struct {
 	spawner  factory.Spawner
 	store    factory.Store
 	roles    map[string]Role
+	registry roles.Resolver
 	maxDepth int
 	parallel int
 	models   []string
@@ -77,7 +83,7 @@ type Provider struct {
 
 // New returns a Provider; zero Options fields take their defaults.
 func New(o Options) *Provider {
-	p := &Provider{spawner: o.Spawner, store: o.Store, roles: o.Roles, maxDepth: o.MaxDepth, parallel: o.MaxParallel,
+	p := &Provider{spawner: o.Spawner, store: o.Store, roles: o.Roles, registry: o.Registry, maxDepth: o.MaxDepth, parallel: o.MaxParallel,
 		models: o.Models, timeout: o.Timeout, task: o.Task, onSpend: o.OnSpend}
 	if p.roles == nil {
 		p.roles = DefaultRoles()
@@ -133,13 +139,14 @@ func (p *Provider) Tools(ctx context.Context, rc tools.RunContext) ([]ai.BaseToo
 		return nil, nil, nil
 	}
 	c := &call{p: p, rc: rc, info: info, sem: make(chan struct{}, p.parallel)}
-	one, err := ai.InferTool("delegate", p.describeOne(), func(ctx context.Context, in input) (string, error) {
+	cat := p.catalogue(ctx, rc, info)
+	one, err := ai.InferTool("delegate", p.describeOne(cat), func(ctx context.Context, in input) (string, error) {
 		return c.one(ctx, in)
 	})
 	if err != nil {
 		return nil, nil, err
 	}
-	many, err := ai.InferTool("delegate_many", p.describeMany(), func(ctx context.Context, in manyInput) (string, error) {
+	many, err := ai.InferTool("delegate_many", p.describeMany(cat), func(ctx context.Context, in manyInput) (string, error) {
 		return c.many(ctx, in)
 	})
 	if err != nil {
@@ -176,9 +183,40 @@ func (p *Provider) depth(ctx context.Context, threadID string) (int, *factory.Th
 	return n, first, nil
 }
 
-func (p *Provider) rosterLines() string {
+// query says on behalf of whom the registry is asked about a thread.
+func query(rc tools.RunContext, info *factory.ThreadInfo) roles.Query {
+	q := roles.Query{Login: rc.Login, ThreadID: rc.ThreadID}
+	if info != nil && info.Login != "" {
+		q.Login = info.Login
+	}
+	return q
+}
+
+// catalogue is the roles this run may delegate to: the registry's, over the builtin catalogue.
+func (p *Provider) catalogue(ctx context.Context, rc tools.RunContext, info *factory.ThreadInfo) map[string]Role {
+	if p.registry == nil {
+		return p.roles
+	}
+	list, err := p.registry.Available(ctx, query(rc, info))
+	if err != nil {
+		slog.Warn("delegate: the role registry is unavailable, offering the builtin roles", "error", err)
+		return p.roles
+	}
+	out := make(map[string]Role, len(p.roles)+len(list))
+	for k, r := range p.roles {
+		out[k] = r
+	}
+	for _, r := range list {
+		if dr, ok := fromRegistry(r); ok {
+			out[r.Name] = dr
+		}
+	}
+	return out
+}
+
+func rosterLines(catalogue map[string]Role) string {
 	var b strings.Builder
-	for _, r := range sortedRoles(p.roles) {
+	for _, r := range sortedRoles(catalogue) {
 		fmt.Fprintf(&b, "- %s", r.Name)
 		if r.ReadOnly {
 			b.WriteString(" (read-only)")
@@ -198,20 +236,20 @@ func (p *Provider) modelNote() string {
 	return "\nThe model argument may be one of: " + strings.Join(p.models, ", ") + "."
 }
 
-func (p *Provider) describeOne() string {
+func (p *Provider) describeOne(cat map[string]Role) string {
 	return "Hand a task to a sub-agent with its own thread and sandbox and wait for its report. Use it to split off work that is large, independent or needs a different role; do small things yourself.\n" +
 		"The sub-agent does not see this conversation: write a self-contained task. It works on the same repository and branch (read-only roles never change anything); with isolated=true a writer gets a branch of its own that you must merge or cherry-pick yourself.\n" +
-		"Roles:\n" + p.rosterLines() + p.modelNote() + "\n" +
+		"Roles:\n" + rosterLines(cat) + p.modelNote() + "\n" +
 		"This tool is not read-only, so the calls of one step run one after the other: to run several sub-agents at once use delegate_many. The report ends with the sub-agent's status; a failed or cancelled sub-agent returns an error text, not a report."
 }
 
-func (p *Provider) describeMany() string {
+func (p *Provider) describeMany(cat map[string]Role) string {
 	return fmt.Sprintf("Run up to %d sub-agents at once (at most %d items per call) and return all their reports in order. Each item is as for delegate; items are independent and must not depend on one another's results or edit the same files. Roles:\n%s%s",
-		p.parallel, maxItems, p.rosterLines(), p.modelNote())
+		p.parallel, maxItems, rosterLines(cat), p.modelNote())
 }
 
 func (c *call) one(ctx context.Context, in input) (string, error) {
-	r, err := c.p.resolve(in)
+	r, err := c.p.resolve(ctx, c, in)
 	if err != nil {
 		return "", err
 	}
@@ -230,7 +268,7 @@ func (c *call) many(ctx context.Context, in manyInput) (string, error) {
 	}
 	roles := make([]Role, len(in.Items))
 	for i, it := range in.Items {
-		r, err := c.p.resolve(it)
+		r, err := c.p.resolve(ctx, c, it)
 		if err != nil {
 			return "", tools.Errorf("item %d: %v", i+1, err)
 		}
@@ -272,11 +310,25 @@ func (c *call) reserve(n int) error {
 }
 
 // resolve validates one delegation.
-func (p *Provider) resolve(in input) (Role, error) {
-	r, ok := lookup(p.roles, in.Role)
+func (p *Provider) resolve(ctx context.Context, c *call, in input) (Role, error) {
+	var r Role
+	var ok bool
+	if p.registry != nil {
+		rr, err := p.registry.Resolve(ctx, query(c.rc, c.info), strings.ToLower(strings.TrimSpace(in.Role)))
+		switch {
+		case err == nil:
+			r, ok = fromRegistry(*rr)
+		case !errors.Is(err, roles.ErrNotFound):
+			slog.Warn("delegate: the role registry failed, using the builtin roles", "role", in.Role, "error", err)
+		}
+	}
 	if !ok {
-		names := make([]string, 0, len(p.roles))
-		for _, x := range sortedRoles(p.roles) {
+		r, ok = lookup(p.roles, in.Role)
+	}
+	if !ok {
+		cat := p.catalogue(ctx, c.rc, c.info)
+		names := make([]string, 0, len(cat))
+		for _, x := range sortedRoles(cat) {
 			names = append(names, x.Name)
 		}
 		return Role{}, tools.Errorf("unknown role %q; available roles: %s", in.Role, strings.Join(names, ", "))
@@ -330,13 +382,16 @@ func (c *call) run(ctx context.Context, r Role, in input) string {
 // request builds the SpawnRequest of one delegation from the calling thread.
 func (c *call) request(ctx context.Context, r Role, in input) factory.SpawnRequest {
 	req := factory.SpawnRequest{
-		Login:          c.rc.Login,
-		Title:          title(r.Name, in.Task),
-		Model:          r.Model,
-		Role:           r.Name,
-		Instructions:   r.Instructions,
-		ReadOnly:       r.ReadOnly,
-		ParentThreadID: c.rc.ThreadID,
+		Login:           c.rc.Login,
+		Title:           title(r.Name, in.Task),
+		Model:           r.Model,
+		Role:            r.Name,
+		Instructions:    r.Instructions,
+		ReadOnly:        r.ReadOnly,
+		ReasoningEffort: r.Effort,
+		Skills:          r.Skills,
+		RoleRef:         r.Ref,
+		ParentThreadID:  c.rc.ThreadID,
 	}
 	if in.Model != "" {
 		req.Model = in.Model

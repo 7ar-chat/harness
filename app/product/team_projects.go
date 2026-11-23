@@ -11,6 +11,7 @@ import (
 
 	"github.com/7ar-chat/harness/core/blobs"
 	"github.com/7ar-chat/harness/core/capabilities"
+	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/core/store"
 )
 
@@ -302,6 +303,11 @@ func (s *server) deleteProject(w http.ResponseWriter, r *http.Request, c Caller)
 	if s.opt.Capabilities != nil {
 		if err := s.opt.Capabilities.DeleteInstalls(r.Context(), capabilities.ScopeProject, p.ID); err != nil {
 			slog.Warn("project deleted but its marketplace installs were not", "project", p.ID, "error", err)
+		}
+	}
+	if s.opt.Roles != nil {
+		if err := s.opt.Roles.DeleteScope(r.Context(), roles.ScopeProject, p.ID); err != nil {
+			slog.Warn("project deleted but its roles were not", "project", p.ID, "error", err)
 		}
 	}
 	for _, m := range members {
