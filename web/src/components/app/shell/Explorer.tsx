@@ -244,7 +244,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
   const personalCount = personal.length;
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-2 px-2 pb-1 pt-2">
+      <div className={cn("flex shrink-0 items-center gap-2 px-2 pb-1 pt-2", narrow && "pr-12")}>
         <button type="button" onClick={openSwitcher} aria-label="Switch project" title="Switch project (Ctrl/Cmd+P)" className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring">
           <span aria-hidden className="flex size-[22px] shrink-0 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
             7

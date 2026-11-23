@@ -153,8 +153,9 @@ async function main() {
   const page = await ctx.newPage();
 
   // ---- assertion helpers (observable outcomes only; waits are locator/poll waits, never fixed sleeps) ----------
-  const visible = (loc, what, timeout = T) => loc.first().waitFor({ state: "visible", timeout }).catch(() => Promise.reject(new Error(`expected visible: ${what}`)));
-  const gone = (loc, what, timeout = T) => loc.first().waitFor({ state: "hidden", timeout }).catch(() => Promise.reject(new Error(`expected gone: ${what}`)));
+  // Tabs the person left stay mounted (hidden): only what is actually on screen counts.
+  const visible = (loc, what, timeout = T) => loc.filter({ visible: true }).first().waitFor({ state: "visible", timeout }).catch(() => Promise.reject(new Error(`expected visible: ${what}`)));
+  const gone = (loc, what, timeout = T) => loc.filter({ visible: true }).first().waitFor({ state: "hidden", timeout }).catch(() => Promise.reject(new Error(`expected gone: ${what}`)));
   const eq = (got, want, what) => {
     if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`${what}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
   };
@@ -790,11 +791,21 @@ async function main() {
     };
     const runs = await api(`/projects/${proj.wf}/workflow-runs`);
     await shot(page, "/", "dashboard");
+    // a session with an edit, so the Diff tab shows
+    await page.goto(`${base}/#/t/${sessionState.w}`);
+    await page.getByRole("textbox", { name: "Message" }).fill("please edit the report");
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await visible(page.getByText("Edited the report.", { exact: true }), "the edit answer");
+    await idle(sessionState.w);
     await shot(page, `/t/${sessionState.w}`, "session");
+    const reqs = await api(`/projects/${proj.id}/requirements`);
+    await shot(page, `/p/${proj.id}?tab=requirements&req=${reqs[0]?.id ?? ""}`, "requirement");
+    const tasks = await api(`/projects/${proj.id}/tasks?limit=50`);
+    await shot(page, `/p/${proj.id}?tab=tasks&task=${tasks[0]?.id ?? ""}`, "task");
     await shot(page, `/p/${proj.id}?tab=board`, "board");
     await shot(page, `/p/${proj.wf}?tab=workflows&run=${runs[0]?.id ?? ""}`, "workflow-run");
     await shot(page, `/p/${proj.id}?tab=settings`, "settings");
-    await shot(page, `/p/${proj.id}?tab=tasks`, "tasks");
+    
     for (const t of ["requirements", "roles", "members", "memory", "capabilities", "usage", "schedules", "audit"]) await shot(page, `/p/${proj.id}?tab=${t}`, `tab-${t}`);
     for (const r of ["/inbox", "/profile", "/jobs", "/admin", "/connectors"]) await shot(page, r, `page${r.replace("/", "-")}`);
     await shot(page, `/p/${proj.wf}?tab=workflows`, "workflows");

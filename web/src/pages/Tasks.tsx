@@ -129,7 +129,7 @@ function TaskBody({ projectId, detail, canWrite }: { projectId: string; detail: 
   const ci = latest(events, "ci", "state");
   const review = latest(events, "review", "verdict");
   return (
-    <div className="space-y-5 overflow-y-auto px-4 pb-6">
+    <div className="space-y-5 pb-6 pt-2">
       <div className="flex items-center gap-2">
         <TaskStateBadge state={t.state} />
         {t.role ? <Badge variant="outline">{t.role}</Badge> : null}
@@ -216,7 +216,7 @@ function TaskInline({ projectId, taskId, canWrite, onBack }: { projectId: string
       <Button variant="ghost" size="sm" onClick={onBack}>
         <ArrowLeft /> Tasks
       </Button>
-      <section aria-label="Task detail" className="mx-auto max-w-3xl space-y-1">
+      <section aria-label="Task detail" className="max-w-3xl space-y-1">
         <h2 className="text-base font-semibold">{q.data?.task.title ?? "Task"}</h2>
         <p className="text-xs text-muted-foreground">{q.data ? `Created ${ago(q.data.task.createdAt)} by ${q.data.task.owner}` : "Task details"}</p>
         {q.isLoading ? <ListSkeleton rows={3} /> : q.error || !q.data ? <ErrorState error={q.error} retry={() => void q.refetch()} /> : <TaskBody projectId={projectId} detail={q.data} canWrite={canWrite} />}
@@ -704,6 +704,9 @@ function ReportBody({ r }: { r: NonNullable<ReturnType<typeof useFactoryReport>[
 
 /** The project's "Tasks" tab: tasks, triggers and the spend report. */
 export function TasksTab({ projectId, role }: { projectId: string; role: Role }) {
+  // A task opened in its own tab is the detail alone: no List/Triggers/Report switcher above it.
+  const open = !!useProjectSearch().task;
+  if (open) return <TaskList projectId={projectId} role={role} />;
   return (
     <Tabs defaultValue="tasks">
       <TabsList>

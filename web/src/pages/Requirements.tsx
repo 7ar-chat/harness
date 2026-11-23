@@ -324,7 +324,7 @@ export function Requirements({ projectId, role }: { projectId: string; role: Rol
   const canWork = role !== "viewer";
   if (selected)
     return (
-      <div className="space-y-3">
+      <div className="max-w-3xl space-y-3">
         <Button variant="ghost" size="sm" onClick={() => setSelected("")}>
           <ArrowLeft /> Requirements
         </Button>

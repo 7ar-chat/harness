@@ -42,10 +42,6 @@ function TabButton({ tab, active, multi, tabs, dragging, setDragging }: { tab: E
   const label = useTabLabel(tab, multi);
   const overview = useOverview().data;
   const status = tab.kind === "session" ? [...(overview?.personal ?? []), ...(overview?.projects ?? []).flatMap((p) => p.threads)].find((x) => x.id === tab.id)?.status : undefined;
-  const ref = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (active) ref.current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-  }, [active]);
   return (
     <div
       role="presentation"
@@ -65,7 +61,6 @@ function TabButton({ tab, active, multi, tabs, dragging, setDragging }: { tab: E
       className={cn("group relative flex shrink-0 items-center border-r bg-panel text-[12.5px]", active ? "bg-background text-foreground shadow-[inset_0_2px_0_var(--primary)]" : "text-muted-foreground hover:text-foreground", dragging === tab.key && "opacity-50")}
     >
       <button
-        ref={ref}
         role="tab"
         id={`tab-${tab.key}`}
         aria-selected={active}
@@ -99,6 +94,26 @@ function TabButton({ tab, active, multi, tabs, dragging, setDragging }: { tab: E
 
 export function EditorTabs({ tabs }: { tabs: Tabs }) {
   const [dragging, setDragging] = useState<string>();
+  const strip = useRef<HTMLDivElement>(null);
+  // Keep the shown tab inside the strip: after layout, and again once fonts and widths have settled.
+  const activeKey = tabs.active?.key;
+  useEffect(() => {
+    const reveal = () => {
+      const bar = strip.current;
+      const el = bar?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+      if (!bar || !el) return;
+      const r = el.getBoundingClientRect();
+      const s = bar.getBoundingClientRect();
+      if (r.right > s.right) bar.scrollLeft += r.right - s.right + 8;
+      else if (r.left < s.left) bar.scrollLeft -= s.left - r.left + 8;
+    };
+    const id = requestAnimationFrame(reveal);
+    const t = window.setTimeout(reveal, 200);
+    return () => {
+      cancelAnimationFrame(id);
+      window.clearTimeout(t);
+    };
+  }, [activeKey, tabs.tabs.length]);
   const multi = new Set(tabs.tabs.map((t) => t.projectId).filter(Boolean)).size > 1;
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
@@ -106,7 +121,7 @@ export function EditorTabs({ tabs }: { tabs: Tabs }) {
     tabs.next(e.key === "ArrowRight" ? 1 : -1);
   };
   return (
-    <div role="tablist" aria-label="Open editors" onKeyDown={onKey} className="flex overflow-x-auto overflow-y-hidden bg-panel [scrollbar-width:thin]">
+    <div ref={strip} role="tablist" aria-label="Open editors" onKeyDown={onKey} className="flex overflow-x-auto overflow-y-hidden bg-panel [scrollbar-width:thin]">
       {tabs.tabs.map((t) => (
         <TabButton key={t.key} tab={t} active={tabs.active?.key === t.key} multi={multi} tabs={tabs} dragging={dragging} setDragging={setDragging} />
       ))}

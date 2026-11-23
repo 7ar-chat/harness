@@ -8,6 +8,7 @@
 //   * no tools offered (title generation, summaries, ...)     -> "A title"
 //   * last message is a tool result                           -> a closing text for that tool (see closing())
 //   * user text contains "write a file"                       -> tool call write_file{report.md}
+//   * user text contains "edit the report"                    -> tool call edit_file{report.md}
 //   * user text contains "run the risky script"               -> tool call execute_command `node -e "require('fs').writeFileSync('denied.txt','ran')"`
 //   * user text contains "run the script"                     -> tool call execute_command `node -e "require('fs').writeFileSync('ran.txt','ran')"`
 //   * user text contains "publish the page"                   -> write_file{page.html}, then publish_artifact{page.html}, then a closing text
@@ -33,6 +34,7 @@ export function script(body) {
   const user = textOf([...msgs].reverse().find((m) => m.role === "user")?.content);
   if (user.includes("write a file"))
     return { call: { name: "write_file", args: { path: "report.md", content: "# Report v1\n" } } };
+  if (user.includes("edit the report")) return { call: { name: "edit_file", args: { path: "report.md", oldText: "# Report v1", newText: "# Report v2\n\nMore detail." } } };
   if (user.includes("run the risky script")) return { call: { name: "execute_command", args: { command: `node -e "require('fs').writeFileSync('denied.txt','ran')"` } } };
   if (user.includes("run the script")) return { call: { name: "execute_command", args: { command: `node -e "require('fs').writeFileSync('ran.txt','ran')"` } } };
   if (user.includes("publish the page")) return { call: { name: "write_file", args: { path: "page.html", content: "<h1>E2E page</h1><p>published by the agent</p>\n" } } };
@@ -54,6 +56,7 @@ function closing(msgs, result) {
     if (args.path === "page.html") return { call: { name: "publish_artifact", args: { path: "page.html", title: "E2E page" } } };
     return { text: ["I wrote ", "report.md", " and nothing else", "."], hold: true };
   }
+  if (name === "edit_file") return { text: ["Edited ", "the report."] };
   if (name === "publish_artifact") return { text: ["Published ", "the page."] };
   if (name === "execute_command") {
     const denied = /den(y|ied)|reject|not approved|refus/i.test(result) && !/ran-ok/.test(result);
