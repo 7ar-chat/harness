@@ -88,6 +88,8 @@ async function main() {
     return walk(stateDir);
   };
 
+  const pricesFile = path.join(tmp, "prices.json");
+  fs.writeFileSync(pricesFile, JSON.stringify({ "gpt-test": { mode: "chat", litellm_provider: "openai", max_input_tokens: 128000, max_output_tokens: 8000, input_cost_per_token: 1e-3, output_cost_per_token: 1e-3 } }));
   const env = {
     PATH: process.env.PATH,
     HOME: path.join(tmp, dirs.home),
@@ -99,7 +101,9 @@ async function main() {
     LLM_MODELS: "gpt-test",
     LLM_DEFAULT_MODEL: "gpt-test",
     LLM_STEP_RETRIES: "0",
-    HARNESS_MODEL_PRICES: "off", // no download of the public price table
+    // No download of the public price table: a one-model table prices the fake model (1e-3 USD per token), so the
+    // usage totals and the spend cap (h2) are deterministic: one scripted call costs $0.015.
+    HARNESS_MODEL_PRICES: pricesFile,
     HARNESS_WEB_ADDR: "127.0.0.1:0",
     // The UI needs the team API (/api/me, /api/overview: without -team they answer 404 and the dashboard shows
     // "Not found", see the report), so the server runs in team mode without OIDC: everyone is the user "local".
@@ -114,6 +118,10 @@ async function main() {
     // The admin page and the git hosts need a secret key (to seal tokens and SSH keys) and an administrator.
     HARNESS_SECRET_KEY: "e2e-secret-key-0123456789abcdef0123456789",
     HARNESS_ADMINS: "local",
+    // The document library and the job search are optional features whose routes answer 404 without a directory; they are on
+    // so that the References and Jobs pages render their real state (h5) instead of a "not available" one.
+    HARNESS_DOCUMENTS_DIR: path.join(tmp, "documents"),
+    HARNESS_JOBS_DIR: path.join(tmp, "jobs"),
   };
   server = spawn(bin, ["-local", "-team"], { cwd: tmp, env, stdio: ["ignore", "pipe", "pipe"] });
   let serverLog = "";
@@ -180,7 +188,10 @@ async function main() {
   const roles = (t) => t.messages.map((m) => m.role);
   const sessionState = { w: null, d: null };
 
+  // E2E_ONLY=h1,h4 runs just those scenarios (matched on the name's prefix before the dot) while developing one.
+  const only = process.env.E2E_ONLY?.split(",");
   async function step(name, fn) {
+    if (only && !only.includes(name.split(".")[0])) return;
     const t0 = Date.now();
     const before = problems.length;
     try {
@@ -466,6 +477,302 @@ async function main() {
     await page.getByRole("listitem", { name: "git.e2e.example.com" }).getByRole("button", { name: /Remove/ }).click();
     await gone(page.getByRole("listitem", { name: "git.e2e.example.com" }), "the host removed");
     eq((await api("/git-hosts")).hosts, [], "no host left");
+  });
+
+  // ---- h: workflows, schedules and usage, executors, the chat workbench, a route sweep -----------------------------
+  const post = (p, body, method = "POST") => api(p, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
+  // The browser logs "Failed to load resource: ... status of N" for a request that failed ON PURPOSE (a refused run, an invalid
+  // expression). Only those statuses, only from `since` on, are tolerated; anything else stays a problem.
+  const expectStatus = (since, ...codes) => {
+    const extra = problems.splice(since).filter((p) => !codes.some((c) => p.includes(`Failed to load resource: the server responded with a status of ${c}`)));
+    problems.push(...extra);
+  };
+  const toastText = (re) => page.locator("[data-sonner-toast]").filter({ hasText: re });
+
+  await step("h1. Workflows: template -> designer -> cycle is refused -> publish -> run -> the gate in the inbox is approved", async () => {
+    const hp = (await post("/projects", { name: "E2E workflows" })).id;
+    proj.wf = hp;
+    await page.goto(`${base}/#/p/${hp}?tab=workflows`);
+    await page.reload();
+    await page.getByRole("button", { name: "Use the Product proposal template" }).click();
+    // the copy opens in the designer: three steps on the canvas
+    const canvas = page.getByRole("group", { name: "Workflow canvas" });
+    await visible(canvas.getByRole("button", { name: "Step Research" }), "the Research step on the canvas");
+    await visible(canvas.getByRole("button", { name: "Step Draft the proposal" }), "the Draft step");
+    await visible(canvas.getByRole("button", { name: "Step Decision" }), "the Decision gate");
+    eq(await canvas.getByRole("button", { name: /^Connection from/ }).count(), 2, "two edges on the canvas");
+    // edit a step's prompt in the inspector
+    await canvas.getByRole("button", { name: "Step Research" }).click();
+    const inspector = page.getByRole("complementary", { name: "Inspector" });
+    const prompt = inspector.getByLabel("Prompt", { exact: true });
+    await prompt.fill("Research briefly: {{inputs.topic}}");
+    await visible(page.getByRole("button", { name: "Save", exact: true }).and(page.locator(":enabled")), "Save enabled once the prompt changed");
+    // a cycle: Decision cannot be waited for by Research
+    await inspector.getByRole("button", { name: /^Remove step/ }).waitFor();
+    await canvas.getByRole("button", { name: "Connect from approve" }).click();
+    await canvas.getByRole("button", { name: "Step Research" }).click();
+    await visible(toastText(/wait for each other/), "the cycle is refused with a message");
+    // an invalid graph (an empty prompt) shows in Problems and blocks nothing until fixed; fix it
+    await prompt.fill("");
+    await visible(page.getByRole("region", { name: "Problems" }).getByText("The agent needs a prompt."), "the validation message");
+    await prompt.fill("Research briefly: {{inputs.topic}}");
+    await visible(page.getByText("No problems found in the graph."), "problems cleared");
+    // publish (saves first)
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await visible(page.getByText(/^published v\d+$/), "the published badge");
+    const wfs = await api(`/projects/${hp}/workflows`);
+    eq([wfs.length, wfs[0].status, wfs[0].nodes.find((n) => n.id === "research").prompt], [1, "published", "Research briefly: {{inputs.topic}}"], "stored published workflow");
+    // run it
+    await page.getByRole("button", { name: /Workflows$/ }).click();
+    await page.getByRole("button", { name: "Run", exact: true }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByLabel("What to propose").fill("Add a dark mode");
+    await dlg.getByRole("button", { name: /Start the run/ }).click();
+    const runCanvas = page.getByRole("group", { name: "Workflow canvas" });
+    await visible(runCanvas, "the run view");
+    // the steps change status: the first two finish (answered by the fake LLM), the gate waits for a decision
+    await poll(async () => (await runCanvas.locator('[data-kind="agent"][data-state="done"]').count()) === 2, "both agent steps done", 90_000);
+    await visible(runCanvas.locator('[data-kind="gate"][data-state="waiting"]'), "the gate waits for a decision", 30_000);
+    // the gate is in the inbox
+    await page.goto(`${base}/#/inbox`);
+    await visible(page.getByText("Workflow gates (1)"), "the gate in the inbox");
+    await page.getByRole("button", { name: "Approve", exact: true }).click();
+    await visible(page.getByText("Nothing waits for you"), "the inbox is empty after approving");
+    const runs = await api(`/projects/${hp}/workflow-runs`);
+    await poll(async () => (await api(`/projects/${hp}/workflow-runs`))[0].state === "done", "the run is done", 30_000);
+    eq(runs.length, 1, "one run");
+    await page.goto(`${base}/#/p/${hp}?tab=workflows&run=${runs[0].id}`);
+    await page.reload();
+    await visible(page.getByRole("group", { name: "Workflow canvas" }).locator('[data-kind="gate"][data-state="done"]'), "the gate step is done in the run view");
+  });
+
+  await step("h2. Schedules and Usage: create, preview, toggle, run now, usage totals, the cap and a run refused over it", async () => {
+    const since = problems.length;
+    const hp = (await post("/projects", { name: "E2E schedules" })).id;
+    await page.goto(`${base}/#/p/${hp}?tab=schedules`);
+    await page.reload();
+    await page.getByRole("button", { name: /New schedule/ }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByLabel("Name").fill("Quarter-hour hello");
+    await dlg.getByLabel("Prompt").fill("Say hello to the team.");
+    await dlg.getByRole("combobox", { name: "Repeat" }).click();
+    await page.getByRole("option", { name: "Every 15 minutes" }).click();
+    eq(await dlg.getByLabel("Cron or interval").inputValue(), "*/15 * * * *", "the preset fills the cron field");
+    await dlg.getByLabel("Time zone").fill("Asia/Tokyo");
+    const next = dlg.getByRole("list", { name: "Next runs" });
+    await visible(next.getByRole("listitem"), "the next fire times");
+    await visible(dlg.getByText(/Next \d+ runs \(Asia\/Tokyo\)/), "the preview names the zone");
+    if ((await next.getByRole("listitem").count()) < 3) throw new Error("fewer than 3 next fire times");
+    // an invalid expression shows the server's message instead of times
+    await dlg.getByLabel("Cron or interval").fill("not a cron");
+    await visible(dlg.getByRole("alert"), "the preview error for a bad expression");
+    await dlg.getByLabel("Cron or interval").fill("*/15 * * * *");
+    await visible(next.getByRole("listitem"), "times again");
+    await dlg.getByRole("button", { name: "Create" }).click();
+    await gone(page.getByRole("dialog"), "the schedule form closed");
+    const list = page.getByRole("list", { name: "Schedules" });
+    await visible(list.getByText("Quarter-hour hello"), "the schedule in the list");
+    const sch = (await api(`/projects/${hp}/schedules`))[0];
+    eq([sch.cron, sch.timezone, sch.enabled], ["*/15 * * * *", "Asia/Tokyo", true], "stored schedule");
+    // toggle enabled
+    const sw = list.getByRole("switch", { name: "Enable Quarter-hour hello" });
+    await sw.click();
+    await visible(list.getByText("paused"), "the schedule shows paused");
+    eq((await api(`/projects/${hp}/schedules`))[0].enabled, false, "stored disabled");
+    await sw.click();
+    await poll(async () => (await api(`/projects/${hp}/schedules`))[0].enabled === true, "enabled again");
+    // run now, and the run in the history links to a session
+    await list.getByRole("button", { name: "Run Quarter-hour hello now" }).click();
+    await list.getByRole("button", { name: "Show runs of Quarter-hour hello" }).click();
+    const hist = list.getByRole("table", { name: "Runs of Quarter-hour hello" });
+    await visible(hist.getByText("succeeded"), "the manual run succeeded", 60_000);
+    await visible(hist.getByText("manual"), "the run is marked manual");
+    const link = hist.getByRole("link", { name: "Open session" });
+    await link.click();
+    await page.waitForURL(/#\/t\/[^/]+$/);
+    await visible(page.getByText("Hello from the fake model."), "the scheduled run's answer in its session");
+    // Usage: the personal page and the project tab show totals now that a run exists
+    await page.goto(`${base}/#/usage`);
+    await page.reload();
+    await visible(page.getByRole("heading", { name: "Usage" }), "the usage page");
+    await visible(page.getByText("Scheduled tasks").locator("xpath=..").getByText(/1 runs/), "one scheduled run counted");
+    await visible(page.getByLabel("By kind of work").getByText(/^\$0\.0/).first(), "a scheduled-task cost");
+    await page.goto(`${base}/#/p/${hp}?tab=usage`);
+    await page.reload();
+    const costTile = page.getByText("Cost", { exact: true }).locator("xpath=..");
+    await visible(costTile.getByText(/^\$0\.0\d+$/), "the project cost total");
+    await visible(page.getByRole("table", { name: /Usage by day/ }), "the by-day table");
+    await visible(page.getByText(/no cap/), "no cap yet");
+    // the owner sets a cap: the bar and the reached warning show
+    await page.getByLabel(/^Cap \(USD per month/).fill("0.0001");
+    await page.getByRole("button", { name: "Save cap" }).click();
+    await visible(page.getByRole("progressbar", { name: "Share of the monthly cap spent" }), "the cap bar");
+    await visible(page.getByRole("alert").getByText(/The cap is used up/), "the cap-reached notice");
+    // a new run in the project is refused, with the reason on screen
+    const th = await post("/threads", { title: "E2E over the cap", projectId: hp });
+    await page.goto(`${base}/#/t/${th.id}`);
+    await visible(composer, "composer");
+    await send("hello over the cap");
+    await visible(page.getByText(/cap/i).filter({ hasText: /spend|monthly|reached|used up/i }), "the refusal is visible");
+    eq(((await thread(th.id)).messages ?? []).some((m) => m.role === "assistant"), false, "no answer was produced");
+    expectStatus(since, 400, 402);
+    // raising the cap lets the run start again
+    await post(`/projects/${hp}/usage/cap`, { monthlyUsd: 0 }, "PUT");
+    await send("hello after the cap is lifted");
+    await visible(page.getByText("Hello from the fake model."), "the answer once the cap is lifted");
+  });
+
+  await step("h3. Executors: a project executor shows in the role editor's picker; a credential is saved and never shown", async () => {
+    const hp = (await post("/projects", { name: "E2E executors" })).id;
+    await page.goto(`${base}/#/p/${hp}?tab=roles`);
+    await page.reload();
+    const section = page.getByRole("region", { name: "Executors" });
+    await visible(section, "the Executors section");
+    await section.getByRole("button", { name: /New executor/ }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByLabel("Name", { exact: true }).fill("my-agent");
+    await dlg.getByLabel("Title").fill("My agent");
+    await dlg.getByLabel("Command", { exact: true }).fill("my-agent run {task}");
+    await dlg.getByLabel("Program").fill("my-agent");
+    await dlg.getByLabel("Credential variables").fill("MY_AGENT_API_KEY");
+    await dlg.getByRole("button", { name: "Create" }).click();
+    await gone(page.getByRole("dialog"), "the executor form closed");
+    const mine = section.getByRole("list", { name: "Project executors" }).getByRole("listitem").filter({ hasText: "my-agent" });
+    await visible(mine.getByText("Project", { exact: true }), "the executor is listed as a project one");
+    eq((await api(`/projects/${hp}/executors`)).some((e) => e.name === "my-agent" && e.kind === "custom"), true, "stored executor");
+    // an invalid draft is explained instead of created
+    await section.getByRole("button", { name: /New executor/ }).click();
+    await page.getByRole("dialog").getByLabel("Name", { exact: true }).fill("bad");
+    await page.getByRole("dialog").getByLabel("Command", { exact: true }).fill("no placeholder");
+    await visible(page.getByRole("dialog").getByRole("alert").getByText(/must contain \{task\}/), "the validation message");
+    await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+    // the role editor offers it
+    await page.getByRole("button", { name: /New role/ }).click();
+    const rd = page.getByRole("dialog");
+    await rd.getByLabel("Name").fill("delegator");
+    await rd.getByLabel("Instructions").fill("Delegate coding to the external agent.");
+    await rd.getByRole("combobox", { name: "Executor" }).click();
+    await visible(page.getByRole("option", { name: "My agent (project)" }), "the project executor in the picker");
+    await page.getByRole("option", { name: "My agent (project)" }).click();
+    await rd.getByRole("button", { name: "Create" }).click();
+    await gone(page.getByRole("dialog"), "the role editor closed");
+    await visible(page.getByRole("list", { name: "Roles" }).getByText("runs on my-agent"), "the role runs on the executor");
+    eq((await api(`/projects/${hp}/roles`)).find((r) => r.name === "delegator")?.executor, "my-agent", "stored role executor");
+
+    // Settings: a builtin executor's credential is write-only
+    const builtin = (await api("/executors")).find((e) => e.credentialEnv?.length);
+    if (!builtin) throw new Error("no builtin executor takes credentials");
+    await page.goto(`${base}/#/profile`);
+    await page.reload();
+    const card = page.getByRole("list", { name: "Executors" });
+    const line = card.getByRole("listitem").filter({ has: page.locator(`code:text-is("${builtin.name}")`) });
+    await line.getByRole("button", { name: `Credentials for ${builtin.name}` }).click();
+    const secret = "sk-e2e-very-secret-value";
+    const field = line.getByLabel(builtin.credentialEnv.find((n) => !n.endsWith("_URL")) ?? builtin.credentialEnv[0], { exact: true });
+    await field.fill(secret);
+    await line.getByRole("button", { name: "Save", exact: true }).click();
+    await visible(line.getByText("credentials set"), "the executor shows as configured");
+    eq((await api("/executors")).find((e) => e.name === builtin.name).configured, true, "stored as configured");
+    // the value is nowhere: not in the API answer, not in the page, and the form shows a placeholder only
+    if (JSON.stringify(await api("/executors")).includes(secret)) throw new Error("the credential is in the API answer");
+    if ((await page.content()).includes(secret)) throw new Error("the credential is in the page");
+    await line.getByRole("button", { name: `Credentials for ${builtin.name}` }).click();
+    eq(await line.getByLabel(builtin.credentialEnv.find((n) => !n.endsWith("_URL")) ?? builtin.credentialEnv[0], { exact: true }).inputValue(), "", "the field is empty again");
+    await visible(line.getByPlaceholder("set: leave empty to keep it"), "the field says it is set");
+  });
+
+  await step("h4. Chat workbench: the queue while a reply runs, an inline artifact card, the Files tab, one environment", async () => {
+    const id = await newSession("E2E workbench");
+    await send("slow reply please");
+    await fake.held();
+    await visible(page.getByText(/Slow reply finally/), "the partial reply while the run is held");
+    // two messages sent meanwhile go into the queue card
+    for (const text of ["queued beta message", "queued alpha message"]) {
+      await composer.fill(text);
+      await page.getByRole("button", { name: "Queue", exact: true }).click(); // the Send button reads "Queue" while a reply runs
+    }
+    const queue = page.getByRole("region", { name: "Queued messages" });
+    await visible(queue.getByText("2 messages queued"), "two queued messages");
+    await visible(queue.getByText("queued beta message"), "the first queued message");
+    // Remove drops one of them (server side too)
+    await queue.getByRole("button", { name: "Remove: queued beta message" }).click();
+    await visible(queue.getByText("1 message queued"), "one message left");
+    eq((await api(`/threads/${id}/queue`)).map((q) => q.text), ["queued alpha message"], "the server queue");
+    // the reply completes and the remaining message is sent by itself
+    fake.release();
+    await visible(page.getByText("Slow reply finally done."), "the held reply completes");
+    await visible(page.getByText("Alpha answer."), "the queued message was sent and answered");
+    await gone(queue, "the queue card is gone");
+    eq((await api(`/threads/${id}/queue`)).length, 0, "the queue is empty");
+    eq(await page.getByText("Beta answer.").count(), 0, "the removed message was never sent");
+    await idle(id);
+    eq((await thread(id)).messages.filter((m) => m.role === "user").map((m) => m.content), ["slow reply please", "queued alpha message"], "the stored user messages");
+    // one environment: no selector
+    eq(await page.getByLabel("Runtime environment").count(), 0, "the environment control is hidden with one environment");
+
+    // a published artifact is a card in the transcript, with preview and download
+    await send("please publish the page");
+    const card = page.getByRole("figure", { name: "Artifact E2E page" });
+    await visible(card, "the artifact card");
+    await visible(card.getByRole("tab", { name: "preview" }), "the preview tab");
+    const frame = card.frameLocator("iframe");
+    await visible(frame.getByRole("heading", { name: "E2E page" }), "the page rendered in the card's preview");
+    await card.getByRole("tab", { name: "source" }).click();
+    await visible(card.getByText("published by the agent"), "the source view");
+    const [dl] = await Promise.all([page.waitForEvent("download"), card.getByRole("button", { name: /Download/ }).click()]);
+    eq(dl.suggestedFilename(), "page.html", "the download's file name");
+    eq(fs.readFileSync(await dl.path(), "utf8").includes("published by the agent"), true, "the downloaded content");
+    await visible(page.getByText("Published the page."), "the closing text");
+    // and it is listed in the Files tab
+    const list = page.getByRole("region", { name: "Artifacts" });
+    await visible(list.getByText("E2E page"), "the artifact in the Files tab");
+    eq((await api(`/threads/${id}/published`)).map((a) => a.name), ["page.html"], "the published list");
+    await list.getByRole("button", { name: /E2E page/ }).click();
+    await visible(page.getByRole("dialog").getByRole("heading", { name: "E2E page" }), "the artifact opens from the list");
+    await page.keyboard.press("Escape");
+    await idle(id);
+  });
+
+  await step("h5. Route sweep: every top-level route and project tab renders without errors, on desktop and on a phone", async () => {
+    const hp = (await post("/projects", { name: "E2E sweep" })).id;
+    const top = ["/", "/supervisor", "/inbox", "/jobs", "/references", "/connectors", "/capabilities", "/schedules", "/usage", "/memory", "/profile", "/admin"];
+    const tabs = ["board", "overview", "members", "memory", "capabilities", "roles", "schedules", "usage", "audit", "tasks", "requirements", "workflows", "settings"];
+    const failures = [];
+    const bad = [/Something went wrong/, /^Not found$/, /You do not have access to this/, /Try again/];
+    const sweep = async (pg, label) => {
+      let where = "";
+      pg.on("response", (r) => r.status() >= 400 && failures.push(`${label} ${where}: ${r.status()} ${r.request().method()} ${r.url().replace(base, "")}`));
+      const check = async (url, what, tab) => {
+        where = what;
+        await pg.goto(url);
+        // (networkidle never comes: the live feed keeps a stream open.) Settled = two animation frames after the route rendered,
+        // with no loading skeleton or spinner left.
+        await pg.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+        await pg.waitForFunction(() => !document.querySelector('[data-slot="skeleton"], [aria-busy="true"], [aria-label="Loading"]'), null, { timeout: T });
+        // a tab is not rendered until its trigger is selected
+        if (tab) await pg.getByRole("tab", { selected: true }).first().waitFor({ state: "visible", timeout: T });
+        await pg.locator("main, body").first().waitFor({ state: "visible", timeout: T });
+        for (const re of bad) if ((await pg.getByText(re).count()) > 0) failures.push(`${label} ${what}: shows ${re}`);
+        const toasts = await pg.locator('[data-sonner-toast][data-type="error"]').allInnerTexts();
+        if (toasts.length) failures.push(`${label} ${what}: error toast ${JSON.stringify(toasts)}`);
+        if (tab) {
+          const selected = (await pg.getByRole("tab", { selected: true }).first().textContent())?.trim().toLowerCase();
+          if (!selected) failures.push(`${label} ${what}: no tab is selected`);
+        }
+        if (((await pg.locator("body").innerText()) ?? "").trim().length < 20) failures.push(`${label} ${what}: the page is blank`);
+      };
+      for (const r of top) await check(`${base}/#${r}`, r, false);
+      for (const t of tabs) await check(`${base}/#/p/${hp}?tab=${t}`, `project tab ${t}`, true);
+    };
+    await sweep(page, "desktop");
+    const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    phone.on("page", watch);
+    try {
+      await sweep(await phone.newPage(), "phone 390x844");
+    } finally {
+      await phone.close();
+    }
+    if (failures.length) throw new Error(failures.join("\n"));
   });
 
   await ctx.close();

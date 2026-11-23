@@ -10,6 +10,9 @@
 //   * user text contains "write a file"                       -> tool call write_file{report.md}
 //   * user text contains "run the risky script"               -> tool call execute_command `node -e "require('fs').writeFileSync('denied.txt','ran')"`
 //   * user text contains "run the script"                     -> tool call execute_command `node -e "require('fs').writeFileSync('ran.txt','ran')"`
+//   * user text contains "publish the page"                   -> write_file{page.html}, then publish_artifact{page.html}, then a closing text
+//   * user text contains "slow reply"                         -> a streamed text HELD before its last piece (see below)
+//   * user text contains "queued alpha" / "queued beta"       -> "Alpha answer." / "Beta answer."
 //   * anything else                                           -> a plain streamed text
 //
 // The closing text after a write_file is streamed in pieces and HELD before its last piece until the test calls
@@ -32,6 +35,10 @@ export function script(body) {
     return { call: { name: "write_file", args: { path: "report.md", content: "# Report v1\n" } } };
   if (user.includes("run the risky script")) return { call: { name: "execute_command", args: { command: `node -e "require('fs').writeFileSync('denied.txt','ran')"` } } };
   if (user.includes("run the script")) return { call: { name: "execute_command", args: { command: `node -e "require('fs').writeFileSync('ran.txt','ran')"` } } };
+  if (user.includes("publish the page")) return { call: { name: "write_file", args: { path: "page.html", content: "<h1>E2E page</h1><p>published by the agent</p>\n" } } };
+  if (user.includes("slow reply")) return { text: ["Slow ", "reply ", "finally ", "done."], hold: true };
+  if (user.includes("queued alpha")) return { text: ["Alpha ", "answer."] };
+  if (user.includes("queued beta")) return { text: ["Beta ", "answer."] };
   return { text: ["Hello ", "from ", "the ", "fake ", "model."] };
 }
 
@@ -39,7 +46,15 @@ export function script(body) {
 function closing(msgs, result) {
   const call = [...msgs].reverse().find((m) => m.role === "assistant" && m.tool_calls?.length)?.tool_calls[0];
   const name = call?.function?.name;
-  if (name === "write_file") return { text: ["I wrote ", "report.md", " and nothing else", "."], hold: true };
+  if (name === "write_file") {
+    let args = {};
+    try {
+      args = JSON.parse(call.function.arguments);
+    } catch {}
+    if (args.path === "page.html") return { call: { name: "publish_artifact", args: { path: "page.html", title: "E2E page" } } };
+    return { text: ["I wrote ", "report.md", " and nothing else", "."], hold: true };
+  }
+  if (name === "publish_artifact") return { text: ["Published ", "the page."] };
   if (name === "execute_command") {
     const denied = /den(y|ied)|reject|not approved|refus/i.test(result) && !/ran-ok/.test(result);
     return { text: denied ? ["Understood, ", "I did not run it."] : ["The script ", "finished."] };
