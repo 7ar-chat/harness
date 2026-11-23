@@ -2,73 +2,96 @@
 
 @import "tw-animate-css";
 @import "sonner/dist/styles.css";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
 
 @custom-variant dark (&:is(.dark *));
 
+/* "Console" look: dense, IDE-like. Dark is the default; every pair below keeps 4.5:1 text contrast on the surface it sits on. */
 :root {
-    --radius: 0.625rem;
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.46 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --success: oklch(0.62 0.17 150);
-    --warning: oklch(0.72 0.16 70);
-    --sidebar: hsl(0 0% 98%);
-    --sidebar-foreground: hsl(240 5.3% 26.1%);
-    --sidebar-primary: hsl(240 5.9% 10%);
-    --sidebar-primary-foreground: hsl(0 0% 98%);
-    --sidebar-accent: hsl(240 4.8% 95.9%);
-    --sidebar-accent-foreground: hsl(240 5.9% 10%);
-    --sidebar-border: hsl(220 13% 91%);
-    --sidebar-ring: hsl(217.2 91.2% 59.8%);
+    --radius: 0.5rem;
+    --background: #ffffff;               /* the editor surface */
+    --foreground: #1c2230;
+    --card: #ffffff;
+    --card-foreground: #1c2230;
+    --popover: #ffffff;
+    --popover-foreground: #1c2230;
+    --primary: #2b5bd7;
+    --primary-foreground: #ffffff;
+    --secondary: #eef1f6;
+    --secondary-foreground: #1c2230;
+    --muted: #eef1f6;
+    --muted-foreground: #596478;
+    --accent: #e7ecf4;
+    --accent-foreground: #1c2230;
+    --destructive: #c0262d;
+    --destructive-foreground: #ffffff;
+    --border: #d5dbe5;
+    --input: #c3cbd8;
+    --ring: #2b5bd7;
+    --success: #1b7a3a;
+    --warning: #8a5a00;
+    --warning-foreground: #ffffff;
+    --shell: #e9edf3;                    /* behind everything */
+    --panel: #f4f6fa;                    /* explorer, tab strip, bottom panel */
+    --statusbar: #2b5bd7;
+    --statusbar-foreground: #ffffff;
+    --sidebar: #f4f6fa;
+    --sidebar-foreground: #2a3345;
+    --sidebar-primary: #2b5bd7;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #e1e7f1;
+    --sidebar-accent-foreground: #111827;
+    --sidebar-border: #d5dbe5;
+    --sidebar-ring: #2b5bd7;
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 12%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --success: oklch(0.72 0.17 150);
-    --warning: oklch(0.8 0.15 80);
-    --sidebar: hsl(240 5.9% 10%);
-    --sidebar-foreground: hsl(240 4.8% 95.9%);
-    --sidebar-primary: hsl(224.3 76.3% 48%);
-    --sidebar-primary-foreground: hsl(0 0% 100%);
-    --sidebar-accent: hsl(240 3.7% 15.9%);
-    --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-    --sidebar-border: hsl(240 3.7% 15.9%);
-    --sidebar-ring: hsl(217.2 91.2% 59.8%);
+    --background: #1b1f26;
+    --foreground: #d7dce5;
+    --card: #20252d;
+    --card-foreground: #d7dce5;
+    --popover: #232933;
+    --popover-foreground: #d7dce5;
+    --primary: #7aa2f7;
+    --primary-foreground: #14171c;
+    --secondary: #252b35;
+    --secondary-foreground: #d7dce5;
+    --muted: #252b35;
+    --muted-foreground: #98a2b3;
+    --accent: #2a313c;
+    --accent-foreground: #ffffff;
+    --destructive: #f2777a;
+    --destructive-foreground: #14171c;
+    --border: #2b313b;
+    --input: #3a4250;
+    --ring: #7aa2f7;
+    --success: #8bd49c;
+    --warning: #e5c07b;
+    --warning-foreground: #14171c;
+    --shell: #14171c;
+    --panel: #171b21;
+    --statusbar: #7aa2f7;
+    --statusbar-foreground: #0f1520;
+    --sidebar: #171b21;
+    --sidebar-foreground: #b4bdcc;
+    --sidebar-primary: #7aa2f7;
+    --sidebar-primary-foreground: #14171c;
+    --sidebar-accent: #252b35;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #2b313b;
+    --sidebar-ring: #7aa2f7;
 }
 
 @theme inline {
+    --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --text-xs: 0.75rem;
+    --text-xs--line-height: 1.1rem;
+    --text-sm: 0.8125rem;
+    --text-sm--line-height: 1.25rem;
+    --text-base: 0.875rem;
+    --text-base--line-height: 1.35rem;
     --radius-sm: calc(var(--radius) - 4px);
     --radius-md: calc(var(--radius) - 2px);
     --radius-lg: var(--radius);
@@ -88,11 +111,17 @@
     --color-accent: var(--accent);
     --color-accent-foreground: var(--accent-foreground);
     --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
     --color-border: var(--border);
     --color-input: var(--input);
     --color-ring: var(--ring);
     --color-success: var(--success);
     --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-shell: var(--shell);
+    --color-panel: var(--panel);
+    --color-statusbar: var(--statusbar);
+    --color-statusbar-foreground: var(--statusbar-foreground);
     --color-sidebar: var(--sidebar);
     --color-sidebar-foreground: var(--sidebar-foreground);
     --color-sidebar-primary: var(--sidebar-primary);
@@ -106,7 +135,9 @@
 @layer base {
   * { @apply border-border outline-ring/50; }
   html, body, #root { height: 100%; }
-  body { @apply bg-background text-foreground antialiased; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { @apply bg-shell text-foreground font-sans text-sm antialiased; font-feature-settings: "cv11", "ss01"; }
+  button, [role="button"], [role="tab"] { cursor: pointer; }
+  code, kbd, pre, samp { font-family: var(--font-mono); }
 }
 
 /* Markdown rendered in chat bubbles and memory entries */

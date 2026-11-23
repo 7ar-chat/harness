@@ -35,8 +35,8 @@ const STATE_TONE: Record<FactoryState, string> = {
   ready: "bg-muted text-foreground",
   running: "bg-primary/15 text-primary",
   review: "bg-primary/15 text-primary",
-  blocked: "bg-warning text-black",
-  done: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  blocked: "bg-warning text-warning-foreground",
+  done: "bg-success/15 text-success",
   failed: "bg-destructive/15 text-destructive",
   cancelled: "bg-muted text-muted-foreground",
 };

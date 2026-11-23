@@ -11,10 +11,10 @@ const ago = (iso: string) => formatDistanceToNowStrict(new Date(iso), { addSuffi
 
 const ACCENT: Record<BoardColumn["id"], string> = {
   ready: "bg-muted-foreground/40",
-  running: "bg-orange-500",
-  needs_you: "bg-red-500",
-  review: "bg-blue-500",
-  done: "bg-green-500",
+  running: "bg-warning",
+  needs_you: "bg-destructive",
+  review: "bg-primary",
+  done: "bg-success",
 };
 
 function Card({ card }: { card: BoardCard }) {

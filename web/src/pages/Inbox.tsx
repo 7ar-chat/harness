@@ -114,7 +114,7 @@ export function InboxPage() {
       <div className="mx-auto max-w-6xl space-y-8 p-4 md:p-8">
         <h1 className="flex items-center gap-2 text-xl font-semibold">
           <InboxIcon className="size-5" /> Needs review
-          {count ? <span className="rounded-full bg-warning px-2 text-xs text-black">{count}</span> : null}
+          {count ? <span className="rounded-full bg-warning px-2 text-xs text-warning-foreground">{count}</span> : null}
         </h1>
         {!count ? <Empty title="Nothing waits for you">Blocked tasks, pull requests to review and sessions that ask for you show up here.</Empty> : null}
         {gates.length ? (

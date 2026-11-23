@@ -181,7 +181,7 @@ function RunsList({ projectId, onOpen }: { projectId: string; onOpen: (id: strin
             <button className="flex w-full items-center gap-3 p-3 text-left hover:bg-accent" onClick={() => onOpen(r.id)}>
               <span className="min-w-0 flex-1 truncate text-sm">{r.workflowName}</span>
               <RunBadge state={r.state} />
-              {waiting ? <Badge className="bg-warning text-black">needs a decision</Badge> : null}
+              {waiting ? <Badge className="bg-warning text-warning-foreground">needs a decision</Badge> : null}
               <span className="text-xs text-muted-foreground">
                 {done}/{r.steps.length} steps
               </span>

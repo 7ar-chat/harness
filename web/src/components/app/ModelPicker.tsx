@@ -156,7 +156,7 @@ export function ModelPicker({ models, value, onChange, info, disabled, placehold
                           }}
                           onPointerDown={(e) => e.stopPropagation()}
                         >
-                          <Star className={cn("size-4", on ? "fill-yellow-400 text-yellow-500" : "text-muted-foreground")} />
+                          <Star className={cn("size-4", on ? "fill-warning text-warning" : "text-muted-foreground")} />
                         </button>
                       </span>
                     </CommandItem>

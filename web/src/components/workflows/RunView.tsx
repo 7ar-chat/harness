@@ -19,8 +19,8 @@ const ago = (iso: string) => `${formatDistanceToNowStrict(new Date(iso))} ago`;
 export const RUN_STATE_LABEL: Record<string, string> = { running: "Running", paused: "Paused", done: "Done", failed: "Failed", cancelled: "Cancelled" };
 export const RUN_STATE_TONE: Record<string, string> = {
   running: "bg-primary/15 text-primary",
-  paused: "bg-warning text-black",
-  done: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  paused: "bg-warning text-warning-foreground",
+  done: "bg-success/15 text-success",
   failed: "bg-destructive/15 text-destructive",
   cancelled: "bg-muted text-muted-foreground",
 };

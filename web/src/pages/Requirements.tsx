@@ -29,11 +29,11 @@ import { cn } from "@/lib/utils";
 
 export const STATUSES = [
   { id: "backlog", label: "Backlog", dot: "bg-muted-foreground/40" },
-  { id: "ready", label: "Ready", dot: "bg-yellow-500" },
-  { id: "in_progress", label: "In progress", dot: "bg-orange-500" },
-  { id: "in_review", label: "In review", dot: "bg-blue-500" },
-  { id: "done", label: "Done", dot: "bg-green-500" },
-  { id: "rejected", label: "Rejected", dot: "bg-red-500" },
+  { id: "ready", label: "Ready", dot: "bg-warning" },
+  { id: "in_progress", label: "In progress", dot: "bg-warning" },
+  { id: "in_review", label: "In review", dot: "bg-primary" },
+  { id: "done", label: "Done", dot: "bg-success" },
+  { id: "rejected", label: "Rejected", dot: "bg-destructive" },
 ] as const;
 const statusOf = (id: string) => STATUSES.find((s) => s.id === id) ?? STATUSES[0];
 const labelsOf = (s: string) => [...new Set(s.split(",").map((x) => x.trim()).filter(Boolean))];
@@ -143,8 +143,8 @@ function Detail({ projectId, id, role, onEdit, onGone }: { projectId: string; id
         <StatusBadge status={r.status} />
       </div>
       {r.flag ? (
-        <p role="alert" className="flex items-start gap-2 rounded-md border border-orange-500/40 bg-orange-500/10 p-2 text-sm">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-orange-600" aria-hidden />
+        <p role="alert" className="flex items-start gap-2 rounded-md border border-orange-500/40 bg-warning/10 p-2 text-sm">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
           {r.flag}
         </p>
       ) : null}
@@ -392,7 +392,7 @@ export function Requirements({ projectId, role }: { projectId: string; role: Rol
                   </span>
                   <span className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                     {r.flag ? (
-                      <span className="inline-flex items-center gap-1 text-orange-600">
+                      <span className="inline-flex items-center gap-1 text-warning">
                         <AlertTriangle className="size-3" aria-hidden /> needs attention
                       </span>
                     ) : null}

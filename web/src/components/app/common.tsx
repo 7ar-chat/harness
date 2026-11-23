@@ -56,11 +56,11 @@ export const STATUS_LABEL: Record<ThreadStatus, string> = {
 // grey: nothing new · green: a message you have not read · red: the agent waits for you · orange: working
 const STATUS_COLOR: Record<ThreadStatus, string> = {
   idle: "bg-muted-foreground/40",
-  queued: "bg-orange-500",
-  running: "bg-orange-500 animate-pulse",
-  waiting_approval: "bg-red-500",
-  waiting_input: "bg-red-500",
-  failed: "bg-red-500",
+  queued: "bg-warning",
+  running: "bg-warning animate-pulse",
+  waiting_approval: "bg-destructive",
+  waiting_input: "bg-destructive",
+  failed: "bg-destructive",
 };
 
 export const needsYou = (s: ThreadStatus) => s === "waiting_approval" || s === "waiting_input" || s === "failed";
@@ -69,7 +69,7 @@ export const isActive = (s: ThreadStatus) => s !== "idle";
 export function StatusDot({ status, unread, className }: { status: ThreadStatus; unread?: boolean; className?: string }) {
   const fresh = unread && status === "idle";
   const label = fresh ? "New message" : STATUS_LABEL[status];
-  return <span role="img" aria-label={label} title={label} className={cn("inline-block size-2 shrink-0 rounded-full", fresh ? "bg-green-500" : STATUS_COLOR[status], className)} />;
+  return <span role="img" aria-label={label} title={label} className={cn("inline-block size-2 shrink-0 rounded-full", fresh ? "bg-success" : STATUS_COLOR[status], className)} />;
 }
 
 export function StatusBadge({ status }: { status: ThreadStatus }) {

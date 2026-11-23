@@ -67,7 +67,7 @@ const STATUS_STYLE: Record<string, string> = {
   succeeded: "bg-success/15 text-success",
   failed: "bg-destructive/15 text-destructive",
   timeout: "bg-destructive/15 text-destructive",
-  running: "bg-orange-500/15 text-orange-600 dark:text-orange-400",
+  running: "bg-warning/15 text-warning",
 };
 
 export function RunStatus({ status }: { status: string }) {

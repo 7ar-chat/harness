@@ -11,7 +11,7 @@ const STATE_STROKE: Record<string, string> = {
   pending: "stroke-border",
   running: "stroke-primary",
   waiting: "stroke-warning",
-  done: "stroke-emerald-500",
+  done: "stroke-success",
   failed: "stroke-destructive",
   skipped: "stroke-border",
   cancelled: "stroke-border",

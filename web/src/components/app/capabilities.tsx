@@ -62,7 +62,7 @@ function headersOf(rows: HeaderRow[], taken: string[] = []): { headers: Record<s
 // ---- status ----
 function statusOf(c: CapabilityView): { label: string; className?: string; variant: "default" | "secondary" | "outline" } {
   if (c.orphan) return { label: "No longer in catalog", variant: "outline" };
-  if (c.missing?.length) return { label: "Needs setup", variant: "default", className: "bg-warning text-black" };
+  if (c.missing?.length) return { label: "Needs setup", variant: "default", className: "bg-warning text-warning-foreground" };
   if (c.enabled) return c.defaultEnabled && !c.installed ? { label: "On by default", variant: "secondary" } : { label: "On", variant: "default" };
   return { label: "Off", variant: "outline" };
 }
@@ -615,7 +615,7 @@ function Section({ id, title, count, action, children }: { id: string; title: st
 // ---- skills that need an account ----
 function skillStatus(c: SkillConnView): { label: string; className?: string; variant: "default" | "secondary" | "outline" } {
   if (c.enabled) return { label: "Connected", variant: "default" };
-  if (c.installed && c.missing?.length) return { label: "Needs setup", variant: "default", className: "bg-warning text-black" };
+  if (c.installed && c.missing?.length) return { label: "Needs setup", variant: "default", className: "bg-warning text-warning-foreground" };
   return { label: "Not connected", variant: "outline" };
 }
 

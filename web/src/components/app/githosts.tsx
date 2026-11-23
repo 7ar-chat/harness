@@ -253,7 +253,7 @@ function AdminHostRow({ h }: { h: GitHost }) {
         The sandbox needs to reach: <span className="font-mono">{h.egress.join(", ")}</span>
       </p>
       {h.egressBlocked.length ? (
-        <p role="alert" className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
+        <p role="alert" className="flex items-center gap-1 text-xs text-warning">
           <AlertTriangle className="size-3.5" aria-hidden /> SANDBOX_EGRESS_ALLOWLIST does not include {h.egressBlocked.join(", ")}; clones and pushes will fail until it does.
         </p>
       ) : null}
