@@ -114,7 +114,7 @@ export function InboxPage() {
     <ScrollArea className="h-full">
       <div className="mx-auto max-w-6xl space-y-8 p-4 md:p-8">
         <h1 className="flex items-center gap-2 text-xl font-semibold">
-          <InboxIcon className="size-5" /> Needs review
+          <InboxIcon className="size-5" /> Needs you
           {count ? <span className="rounded-full bg-warning px-2 text-xs text-warning-foreground">{count}</span> : null}
         </h1>
         {!count ? <EmptyGuide title="Nothing waits for you" what="Blocked tasks, pull requests to review and sessions that ask for you show up here." slug="the-basics" /> : null}

@@ -284,7 +284,7 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this session?</AlertDialogTitle>
-            <AlertDialogDescription>The conversation and its workspace are removed for everyone.</AlertDialogDescription>
+            <AlertDialogDescription>The session and its workspace are removed for everyone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>

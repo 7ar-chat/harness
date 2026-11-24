@@ -36,7 +36,7 @@ describe("ProjectPage", () => {
     expect(await screen.findByText("The payments service")).toBeTruthy();
     expect(screen.getByRole("link", { name: /github.com\/acme\/payments/ }).getAttribute("href")).toBe("https://github.com/acme/payments");
     // the project's name, role and branch live in the explorer header and the status bar, not in the tab
-    expect(screen.getByRole("button", { name: "Switch project" }).textContent).toContain("payments");
+    expect(screen.getByRole("button", { name: /^Switch project/ }).textContent).toContain("payments");
     expect(within(screen.getByRole("contentinfo")).getByText(/acme\/payments · main/)).toBeTruthy();
     expect(screen.queryByRole("heading", { name: /payments/ })).toBeNull();
     expect((await page().findByRole("link", { name: /Flaky test/ })).getAttribute("href")).toBe("/#/t/t1");
@@ -75,21 +75,21 @@ describe("ProjectPage", () => {
   it("gives owners a Settings entry and writers a New session button; viewers get neither", async () => {
     mockFetch(routes("owner"));
     const owner = await renderApp("/p/p1");
-    await screen.findByRole("button", { name: "Switch project" });
+    await screen.findByRole("button", { name: /^Switch project/ });
     expect(screen.getByRole("link", { name: "Settings" })).toBeTruthy();
     expect(await openMenu()).toContain("New session");
     owner.unmount();
 
     mockFetch(routes("member"));
     const member = await renderApp("/p/p1");
-    await screen.findByRole("button", { name: "Switch project" });
+    await screen.findByRole("button", { name: /^Switch project/ });
     expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();
     expect(await openMenu()).toContain("New session");
     member.unmount();
 
     mockFetch(routes("viewer"));
     await renderApp("/p/p1");
-    await screen.findByRole("button", { name: "Switch project" });
+    await screen.findByRole("button", { name: /^Switch project/ });
     expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();
     const viewer = await openMenu();
     expect(viewer).not.toContain("New session");
@@ -100,7 +100,7 @@ describe("ProjectPage", () => {
   it("switching tab puts it in the URL", async () => {
     mockFetch(routes("owner"));
     const { router } = await renderApp("/p/p1");
-    await screen.findByRole("button", { name: "Switch project" });
+    await screen.findByRole("button", { name: /^Switch project/ });
     fireEvent.click(screen.getByRole("button", { name: /^Setup/ })); // the Setup group starts folded
     fireEvent.click(screen.getByRole("link", { name: "Members & access" }));
     await waitFor(() => expect(router.state.location.search).toEqual({ tab: "members" }));

@@ -42,10 +42,7 @@ function Shell({ login, palette, setPalette, switcher, setSwitcher }: { login: s
   // desktop: remembered; narrow: the explorer is a drawer and the panel a sheet, both closed until asked for
   const [explorerD, setExplorerD] = usePersisted("7ar.ui.explorer", true);
   // The panel is collapsed until something needs the person; an explicit open or close is remembered and wins from then on.
-  const needsCount = useNeedsReview().data?.count ?? 0;
   const [panelChoice, setPanelChoice] = usePersisted<boolean | null>("7ar.ui.panel.v2", null);
-  const panelD = panelChoice ?? needsCount > 0;
-  const setPanelD = useCallback((v: boolean | ((p: boolean) => boolean)) => setPanelChoice(typeof v === "function" ? v(panelD) : v), [panelD, setPanelChoice]);
   const [explorerW, setExplorerW] = usePersisted("7ar.ui.explorerW", 272);
   const [panelH, setPanelH] = usePersisted("7ar.ui.panelH", 178);
   const [drawer, setDrawer] = useState(false);
@@ -69,6 +66,13 @@ function Shell({ login, palette, setPalette, switcher, setSwitcher }: { login: s
     if (picked && overview?.projects.some((p) => p.id === picked)) return picked;
     return overview?.projects[0]?.id;
   }, [fromLocation, personalSession, picked, overview]);
+
+  // What waits for the person in the place they are looking at: the panel opens for it and its badge counts it, so neither shows a number the
+  // panel then does not list. (The Needs you page lists everything across projects.)
+  const review = useNeedsReview().data;
+  const needsCount = !review ? 0 : !projectId ? review.count : [...(review.threads ?? []), ...(review.gates ?? []), ...(review.tasks ?? [])].filter((x) => x.projectId === projectId).length;
+  const panelD = panelChoice ?? needsCount > 0;
+  const setPanelD = useCallback((v: boolean | ((p: boolean) => boolean)) => setPanelChoice(typeof v === "function" ? v(panelD) : v), [panelD, setPanelChoice]);
 
   const setExplorer = useCallback((v: boolean | ((p: boolean) => boolean)) => (narrow ? setDrawer(v) : setExplorerD(v)), [narrow, setExplorerD]);
   const setPanel = useCallback((v: boolean | ((p: boolean) => boolean)) => (narrow ? setSheet(v) : setPanelD(v)), [narrow, setPanelD]);
@@ -127,14 +131,14 @@ function Shell({ login, palette, setPalette, switcher, setSwitcher }: { login: s
         <div className="flex min-h-0 flex-1">
           {!narrow && explorerD ? (
             <>
-              <aside aria-label="Explorer panel" style={{ width: clamp(explorerW, 200, 480) }} className="flex shrink-0 flex-col border-r bg-sidebar">
+              <aside aria-label="Explorer panel" style={{ width: clamp(explorerW, 200, 480) }} className="relative flex shrink-0 flex-col border-r bg-sidebar">
                 <ExplorerBody />
+                <ResizeHandle orientation="vertical" label="Resize explorer" value={clamp(explorerW, 200, 480)} min={200} max={480} initial={272} onChange={setExplorerW} className="absolute inset-y-0 -right-[3px] mx-0" />
               </aside>
-              <ResizeHandle orientation="vertical" label="Resize explorer" value={clamp(explorerW, 200, 480)} min={200} max={480} initial={272} onChange={setExplorerW} />
             </>
           ) : null}
           <div className="flex min-w-0 flex-1 flex-col">
-            <div className="flex shrink-0 border-b bg-panel">
+            <nav aria-label="Editor tabs" className="flex shrink-0 border-b bg-panel">
               {narrow ? (
                 <button type="button" onClick={() => setDrawer(true)} aria-label="Open navigation" className="flex w-10 shrink-0 items-center justify-center border-r text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
                   <PanelLeft className="size-4" />
@@ -143,15 +147,17 @@ function Shell({ login, palette, setPalette, switcher, setSwitcher }: { login: s
               <div className="min-w-0 flex-1">
                 <EditorTabs tabs={tabs} />
               </div>
-            </div>
+            </nav>
             <TabHost tabs={tabs} />
           </div>
         </div>
         {!narrow && panelD ? (
           <>
-            <ResizeHandle orientation="horizontal" label="Resize panel" value={clamp(panelH, 100, 480)} min={100} max={480} initial={178} onChange={setPanelH} className="border-t" />
-            <div style={{ height: clamp(panelH, 100, 480) }} className="shrink-0">
-              <BottomPanel onClose={() => setPanelD(false)} />
+            <div style={{ height: clamp(panelH, 100, 480) }} className="relative shrink-0 border-t">
+              <BottomPanel
+                onClose={() => setPanelD(false)}
+                handle={<ResizeHandle orientation="horizontal" label="Resize panel" value={clamp(panelH, 100, 480)} min={100} max={480} initial={178} onChange={setPanelH} className="absolute inset-x-0 -top-[3px] my-0" />}
+              />
             </div>
           </>
         ) : null}

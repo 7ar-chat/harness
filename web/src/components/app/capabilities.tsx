@@ -544,7 +544,7 @@ function CapRow({ cap, canEdit, pid, onConfigure }: { cap: CapabilityView; canEd
     <div data-slot="row" className="flex items-start gap-3 border-b py-3">
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-medium">{cap.title}</h3>
+          <h2 className="text-sm font-medium">{cap.title}</h2>
           <Badge variant={st.variant} className={st.className}>
             {st.label}
           </Badge>
@@ -556,7 +556,7 @@ function CapRow({ cap, canEdit, pid, onConfigure }: { cap: CapabilityView; canEd
         </div>
         <p className="text-sm text-muted-foreground">{cap.description}</p>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-          {need.length && !cap.orphan ? <span className="text-warning-foreground">Needs: {need.join(", ")}</span> : null}
+          {need.length && !cap.orphan ? <span className="text-warning">Needs: {need.join(", ")}</span> : null}
           {cap.kind === "custom" ? <span className="break-all font-mono">{cap.url}</span> : null}
           <span>{cap.tools?.length ? `${cap.tools.length} allowed tool${cap.tools.length === 1 ? "" : "s"}` : "Read-only tools"}</span>
           {cap.transport ? <span className="uppercase">{cap.transport}</span> : null}
@@ -749,7 +749,7 @@ function SkillConnections({ pid, canEdit }: { pid?: string; canEdit: boolean }) 
             <li key={c.name} data-slot="row" className="flex items-start gap-3 border-b py-3">
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-sm font-medium">{c.name}</h3>
+                  <h2 className="text-sm font-medium">{c.name}</h2>
                   <Badge variant={st.variant} className={st.className}>{st.label}</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">{c.description}</p>

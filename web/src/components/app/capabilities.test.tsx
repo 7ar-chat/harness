@@ -59,7 +59,7 @@ describe("CapabilitiesPanel", () => {
     expect(g.getByRole("link", { name: "GitHub homepage" }).getAttribute("href")).toBe("https://github.com");
     expect((await card("Docs search")).getByText("On by default")).toBeTruthy();
     expect((await card("Linear")).getByText("On")).toBeTruthy();
-    expect(within(screen.getByRole("list", { name: "Custom servers" })).getByText("mine", { selector: "h3" })).toBeTruthy();
+    expect(within(screen.getByRole("list", { name: "Custom servers" })).getByText("mine", { selector: "h2" })).toBeTruthy();
     // the search and category filter narrow the marketplace
     fireEvent.change(screen.getByRole("searchbox", { name: "Search the marketplace" }), { target: { value: "documentation" } });
     expect(screen.queryByRole("heading", { name: "GitHub" })).toBeNull();

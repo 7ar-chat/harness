@@ -19,7 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { AddFromRecipe, ShareRecipeDialog } from "./Recipes";
+import { AddFromRecipe, ShareRecipeDialog } from "@/lib/lazyPages";
 
 /** The schedules people reach for most; anything else is typed as cron ("0 9 * * 1-5") or "@every 90m". */
 export const CRON_PRESETS: { label: string; cron: string }[] = [
@@ -367,7 +367,7 @@ export function ScheduleDialog({ projectId, schedule, open, onClose }: { project
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="sc-reuse">Keep one conversation</Label>
+              <Label htmlFor="sc-reuse">Keep one session</Label>
               <p className="text-xs text-muted-foreground">Every run continues the same session instead of starting a new one.</p>
             </div>
             <Switch id="sc-reuse" checked={d.reuseSession} onCheckedChange={(v) => set("reuseSession", v)} />
@@ -401,7 +401,7 @@ export function SchedulesPanel({ projectId, canEdit, owner }: { projectId?: stri
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Put an agent on a recurring job: it runs the prompt on its schedule, as an ordinary session you can open, with its cost on the Usage page. A run stops at its time limit.
+          Have an agent repeat a piece of work: it runs the prompt on its schedule, as an ordinary session you can open, with its cost on the Usage page. A run stops at its time limit.
         </p>
         {canEdit ? (
           <div className="flex flex-wrap gap-2">

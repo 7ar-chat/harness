@@ -41,7 +41,7 @@ describe("the Workflows tab", () => {
     expect(page().getByText("Published one")).toBeTruthy();
     expect(page().getByText("published v2")).toBeTruthy();
     expect(await page().findByText("reproduce → fix")).toBeTruthy();
-    fireEvent.click(page().getByRole("button", { name: "Use the Bug fix template" }));
+    fireEvent.click(page().getByRole("button", { name: "Use this template: Bug fix" }));
 
     await waitFor(() => expect(f.find("POST", "/api/projects/p1/workflows/from-template")).toHaveLength(1));
     expect(f.find("POST", "/api/projects/p1/workflows/from-template")[0]?.body).toEqual({ template: "bug-fix" });
@@ -73,7 +73,7 @@ describe("the Workflows tab", () => {
     await page().findByText("Delivery");
     expect(page().queryByRole("button", { name: /New workflow/ })).toBeNull();
     expect(page().queryByRole("button", { name: /^Run$/ })).toBeNull();
-    expect(page().queryByRole("button", { name: /Use the Bug fix template/ })).toBeNull();
+    expect(page().queryByRole("button", { name: /Use this template: Bug fix/ })).toBeNull();
     expect(page().getAllByRole("button", { name: "View" })).toHaveLength(2);
   });
 });

@@ -301,7 +301,7 @@ function ConnectorRow({ c, onImport }: { c: Connector; onImport: () => void }) {
         <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">{gh ? <GithubMark className="size-4" /> : <Send className="size-4" />}</span>
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-medium">{c.label || (gh ? "GitHub" : name)}</h3>
+            <h2 className="text-sm font-medium">{c.label || (gh ? "GitHub" : name)}</h2>
             {statusOf(c)}
           </div>
           <p className="text-sm text-muted-foreground">{gh ? "Import repositories as projects and let agents work on them." : slack ? "Message your assistant or mention it in a channel; it also pings you when a session needs you." : "Chat with your assistant from Telegram; it also pings you when a session needs you."}</p>

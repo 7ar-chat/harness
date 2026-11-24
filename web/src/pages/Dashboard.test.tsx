@@ -111,8 +111,8 @@ describe("app shell", () => {
     });
     await renderApp("/");
     const nav = within(await screen.findByRole("navigation", { name: "Explorer" }));
-    expect((await screen.findByRole("button", { name: "Switch project" })).textContent).toContain("payments");
-    const needs = within(nav.getByRole("region", { name: "Needs you" }));
+    expect((await screen.findByRole("button", { name: /^Switch project/ })).textContent).toContain("payments");
+    const needs = within(nav.getByRole("region", { name: /^Needs you in the explorer/ }));
     expect((await needs.findByRole("link", { name: /Flaky test/ })).getAttribute("href")).toBe("/#/t/t1");
     expect(nav.getByRole("region", { name: "Sessions" })).toBeTruthy();
     expect(nav.getByRole("link", { name: /Scratch notes/ }).getAttribute("href")).toBe("/#/t/p1");
@@ -127,8 +127,8 @@ describe("app shell", () => {
     expect(await screen.findByLabelText("New session in rw")).toBeTruthy();
     a.unmount();
     await renderApp("/p/pr");
-    await screen.findByRole("button", { name: "Switch project" });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Switch project" }).textContent).toContain("ro"));
+    await screen.findByRole("button", { name: /^Switch project/ });
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Switch project/ }).textContent).toContain("ro"));
     expect(screen.queryByLabelText("New session in ro")).toBeNull();
   });
 
@@ -146,7 +146,7 @@ describe("app shell", () => {
     expect(strip.getAllByRole("tab")).toHaveLength(2);
     fireEvent.click(strip.getByRole("tab", { name: "Dashboard" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/"));
-    fireEvent.click(strip.getByRole("button", { name: "Close Members & access" }));
+    fireEvent.click(strip.getByLabelText("Close Members & access"));
     await waitFor(() => expect(strip.getAllByRole("tab")).toHaveLength(1));
   });
 

@@ -121,7 +121,7 @@ export function Dashboard() {
             <span>
               {needsReview} {needsReview === 1 ? "item needs" : "items need"} your review
             </span>
-            <span className="ml-auto text-xs underline">Open the inbox</span>
+            <span className="ml-auto text-xs underline">Open Needs you</span>
           </Link>
         ) : null}
         {!data.projects.length && !data.personal.length ? (

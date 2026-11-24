@@ -146,7 +146,7 @@ function NeedsYou() {
     ];
   }, [q, projectId]);
   if (!q) return <p className="p-3 text-muted-foreground">Loading…</p>;
-  if (!rows.length) return <p className="p-3 text-muted-foreground">Nothing waits for you.</p>;
+  if (!rows.length) return <p className="p-3 text-muted-foreground">Nothing waits here.</p>;
   return (
     <ul aria-label="Waiting for you" className="flex flex-col gap-1.5 p-2.5">
       {rows.map((r) => (
@@ -274,7 +274,7 @@ function UsageNow() {
   );
 }
 
-export function BottomPanel({ onClose }: { onClose?: () => void }) {
+export function BottomPanel({ onClose, handle }: { onClose?: () => void; handle?: ReactNode }) {
   const { panelTab, setPanelTab, projectId } = useShell();
   const review = useNeedsReview().data;
   const n = review
@@ -288,6 +288,7 @@ export function BottomPanel({ onClose }: { onClose?: () => void }) {
   ];
   return (
     <section aria-label="Panel" className="flex h-full min-h-0 flex-col bg-panel text-[13px]">
+      {handle}
       <div className="flex shrink-0 items-center border-b">
         <div role="tablist" aria-label="Panel views" className="flex">
           {tabs.map(([id, label]) => (

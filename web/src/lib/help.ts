@@ -33,7 +33,7 @@ A session is a conversation with an agent. You ask, it reads and edits files, ru
 A task is work you hand off: write what you want, and an agent does it on its own and opens a pull request for you to review. A requirement is a bigger goal you write down; agents break it into tasks.
 
 ## Needs you
-When an agent wants to run something risky, asks a question, or finishes work to review, it shows up under **Needs you** (the inbox and the bottom panel). Everything else can run without you.
+When an agent wants to run something risky, asks a question, or finishes work to review, it shows up under **Needs you** (the bottom panel, or the Needs you page). Everything else can run without you.
 
 **First steps:** create a project, start a session, then hand off a task.`,
   },
@@ -137,7 +137,7 @@ A waiting gate appears under **Needs you**. Open it, read what the earlier steps
 | **Sandboxed** | The agent works freely in its own copy; only push and merge ask. | It edits and tests as it likes, and asks before pushing a branch. |
 | **Autonomous** | Nothing asks; only protected rules deny. | A nightly dependency update that opens a pull request by itself. |
 
-Start with **supervised** while you learn what the agent does. Move to **sandboxed** for everyday work. Use **autonomous** only for jobs you trust and cap with a budget.
+Start with **supervised** while you learn what the agent does. Move to **sandboxed** for everyday work. Use **autonomous** only for work you trust and cap with a budget.
 
 Leave the policy on **Server default** if you are not sure: your administrator chose it.`,
   },
@@ -232,7 +232,7 @@ Tip: small, clear tasks work best.`,
   },
   {
     slug: "schedule-a-job",
-    title: "Schedule a recurring job",
+    title: "Schedule recurring work",
     group: "How to",
     summary: "Have an agent do something every morning or every week.",
     keywords: "schedule cron recurring daily weekly",
@@ -264,6 +264,27 @@ Only project owners can add or remove people.`,
     body: `In the message box of a session, type **@**. A list of roles appears. Pick one, then write your message: the reply is given by that role.
 
 Create roles under **Roles & executors**. See [Roles](help:roles).`,
+  },
+  {
+    slug: "glossary",
+    title: "Glossary: the words 7ar uses",
+    group: "Reference",
+    summary: "One plain line for each word: policy, budget, executor, workflow, gate, trigger and more.",
+    keywords: "glossary terms words meaning definition dictionary what does mean jargon policy budget executor workflow gate trigger recipe",
+    body: `| Word | In plain words |
+| --- | --- |
+| **Project** | A repository your agents work in. See [the four ideas](help:the-basics). |
+| **Session** | A conversation with an agent. See [Sessions](help:sessions). |
+| **Task** | Work you hand off. An agent does it alone and opens a pull request. See [Tasks](help:tasks). |
+| **Policy** | How often an agent must ask before it acts: supervised, sandboxed or autonomous. See [Policies](help:policies). |
+| **Budget** | The most a task, a person or a project may spend. See [Budgets](help:budgets). |
+| **Executor** | The program that does the agent's work, for example the 7ar harness or Claude Code. See [Executors](help:executors). |
+| **Role** | A saved set of instructions for an agent, such as reviewer or planner. See [Roles](help:roles). |
+| **Workflow** | Several steps in a row that you design once and run many times. See [Workflows](help:workflows). |
+| **Gate** | A step in a workflow that waits until a person says yes or no. See [Gates](help:gates). |
+| **Trigger** | Something that starts a task by itself, such as a new issue or a schedule. See [Triggers](help:triggers). |
+| **Recipe** | A ready-made task, schedule or workflow you can add with a few answers. |
+| **Needs you** | The list of things an agent is waiting on: approve, answer or review. See [Approvals](help:approvals). |`,
   },
   {
     slug: "shortcuts",
@@ -308,6 +329,9 @@ Changes live in the session's copy until they are pushed. Deny a push and nothin
 Open the user menu (bottom of the explorer) and choose **Getting started**, or **Take the tour**.`,
   },
 ];
+
+// The articles that use a term from the glossary end with a link to it.
+for (const a of ARTICLES) if (["policies", "budgets", "executors", "workflows", "gates", "triggers"].includes(a.slug)) a.body += "\n\nA word you do not know? See the [glossary](help:glossary).";
 
 export const articleBySlug = (slug: string | undefined) => ARTICLES.find((a) => a.slug === slug);
 

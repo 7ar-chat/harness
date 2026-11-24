@@ -62,7 +62,7 @@ describe("contextual help", () => {
     await renderApp("/p/p1?tab=schedules");
     fireEvent.click(await page().findByRole("button", { name: /\(help\)$/ }));
     const sheet = await screen.findByRole("dialog");
-    expect(within(sheet).getByRole("heading", { name: "Schedule a recurring job" })).toBeTruthy();
+    expect(within(sheet).getByRole("heading", { name: "Schedule recurring work" })).toBeTruthy();
     expect(within(sheet).getByRole("button", { name: "Open in the help center" })).toBeTruthy();
     fireEvent.keyDown(sheet, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());

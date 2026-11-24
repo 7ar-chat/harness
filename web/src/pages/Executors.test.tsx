@@ -34,7 +34,7 @@ describe("the Executors card in Settings", () => {
     mockFetch(routes());
     await renderApp("/profile");
     const list = await screen.findByRole("list", { name: "Executors" });
-    const rows = within(list).getAllByRole("listitem");
+    const rows = await within(list).findAllByRole("listitem");
     expect(rows).toHaveLength(2);
     expect(within(rows[0]!).getByText("credentials set")).toBeTruthy();
     expect(within(rows[1]!).queryByText("credentials set")).toBeNull();
@@ -55,7 +55,7 @@ describe("the Executors card in Settings", () => {
     const f = mockFetch(routes({ "PUT /api/me/executors/codex/credentials": ex("codex", { configured: true }) }));
     await renderApp("/profile");
     const list = await screen.findByRole("list", { name: "Executors" });
-    fireEvent.click(within(list).getByRole("button", { name: "Credentials for codex" }));
+    fireEvent.click(within(list).getByRole("button", { name: /credentials for codex/ }));
 
     const key = (await screen.findByLabelText("ANTHROPIC_API_KEY")) as HTMLInputElement;
     expect(key.type).toBe("password");
@@ -72,7 +72,7 @@ describe("the Executors card in Settings", () => {
     const f = mockFetch(routes({ "DELETE /api/me/executors/claude-code/credentials": new Response(null, { status: 204 }) }));
     await renderApp("/profile");
     const list = await screen.findByRole("list", { name: "Executors" });
-    fireEvent.click(within(list).getByRole("button", { name: "Credentials for claude-code" }));
+    fireEvent.click(within(list).getByRole("button", { name: /credentials for claude-code/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Remove my credentials" }));
     await waitFor(() => expect(f.find("DELETE", "/api/me/executors/claude-code/credentials")).toHaveLength(1));
   });
@@ -122,12 +122,13 @@ describe("the project's executors in the Roles tab", () => {
     const f = mockFetch(routes("owner", { "PUT /api/me/executors/mycli/credentials?project=p1": mine, "DELETE /api/projects/p1/executors/mycli": new Response(null, { status: 204 }) }));
     await renderApp("/p/p1?tab=roles");
     const list = await screen.findByRole("list", { name: "Project executors" });
-    fireEvent.click(within(list).getByRole("button", { name: "Credentials for mycli" }));
+    fireEvent.click(within(list).getByRole("button", { name: /credentials for mycli/ }));
     fireEvent.change(await screen.findByLabelText("MYCLI_KEY"), { target: { value: "abc-123-secret" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(f.find("PUT", "/api/me/executors/mycli/credentials?project=p1")).toHaveLength(1));
 
     fireEvent.click(within(list).getByRole("button", { name: "Delete mycli" }));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(f.find("DELETE", "/api/projects/p1/executors/mycli")).toHaveLength(1));
   });
 

@@ -157,7 +157,7 @@ function Templates({ projectId, onCreated }: { projectId: string; onCreated: (w:
             <CardContent className="space-y-3 text-xs text-muted-foreground">
               <p>{t.description}</p>
               <p>{t.workflow.nodes.map((n) => n.title || n.id).join(" → ")}</p>
-              <Button size="sm" variant="outline" disabled={copy.isPending} onClick={() => copy.mutate({ template: t.id }, { onSuccess: onCreated })} aria-label={`Use the ${t.name} template`}>
+              <Button size="sm" variant="outline" disabled={copy.isPending} onClick={() => copy.mutate({ template: t.id }, { onSuccess: onCreated })} aria-label={`Use this template: ${t.name}`}>
                 <FilePlus2 /> Use this template
               </Button>
             </CardContent>

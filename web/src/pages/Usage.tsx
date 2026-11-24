@@ -148,7 +148,7 @@ export function CapCard({ cap, canSet, projectId }: { cap: UsageCap; canSet: boo
           The cap is used up: new runs are refused until the 1st of next month{canSet ? " or until you raise it" : projectId ? ", unless an owner raises it" : ""}.
         </p>
       ) : cap.warn ? (
-        <p role="status" className="flex items-start gap-2 text-sm text-warning-foreground dark:text-warning">
+        <p role="status" className="flex items-start gap-2 text-sm text-warning">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
           {pct}% of the monthly cap is spent. Runs are refused once it is used up.
         </p>
@@ -211,7 +211,7 @@ function RowsTable({ view, group }: { view: UsageView; group: UsageGroup }) {
               <td className="px-3 py-2 text-right tabular-nums">
                 {money(r.costUsd)}
                 {r.unpriced ? (
-                  <span className="ml-1 text-xs text-warning-foreground dark:text-warning" title="Cost not reported (no known price for the model, or a CLI that does not say what it used): the cost leaves it out">
+                  <span className="ml-1 text-xs text-warning" title="Cost not reported (no known price for the model, or a CLI that does not say what it used): the cost leaves it out">
                     unpriced
                   </span>
                 ) : null}

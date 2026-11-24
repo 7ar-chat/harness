@@ -20,7 +20,7 @@ const text = (a?: string[]) => (a ?? []).join(", ");
 
 /** The groups of the list: what needs the person first. */
 const GROUPS: { key: string; label: string; statuses: string[]; empty: string }[] = [
-  { key: "queued", label: "Needs you", statuses: ["queued", "failed"], empty: "Nothing waits for you." },
+  { key: "queued", label: "Waiting on you", statuses: ["queued", "failed"], empty: "Nothing waits on you here." },
   { key: "new", label: "New", statuses: ["new"], empty: "No new jobs. The search looks again every hour." },
   { key: "approved", label: "Approved", statuses: ["approved", "applying"], empty: "Nothing approved yet." },
   { key: "applied", label: "Applied", statuses: ["applied", "interview", "rejected", "offer", "withdrawn"], empty: "No applications yet." },
@@ -273,7 +273,7 @@ export function JobsPage() {
       <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-8">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <h1 className="text-xl font-semibold">Jobs</h1>
+            <h1 className="text-xl font-semibold">Job search</h1>
             <p className="text-sm text-muted-foreground">
               Your job-search agent reads your CV, finds companies and roles by itself, applies, and asks you only what it cannot know. You decide how much freedom it has.
             </p>
