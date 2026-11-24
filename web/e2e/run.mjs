@@ -12,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startFakeLlm } from "./fakellm.mjs";
+import { runP } from "./p-scenarios.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appDir = path.resolve(here, "../../app");
@@ -565,7 +566,7 @@ async function main() {
     proj.wf = hp;
     await page.goto(`${base}/#/p/${hp}?tab=workflows`);
     await page.reload();
-    await page.getByRole("button", { name: "Use the Product proposal template" }).click();
+    await page.getByRole("button", { name: "Use this template: Product proposal" }).click();
     // the copy opens in the designer: three steps on the canvas
     const canvas = page.getByRole("group", { name: "Workflow canvas" });
     await visible(canvas.getByRole("button", { name: "Step Research" }), "the Research step on the canvas");
@@ -1571,7 +1572,7 @@ async function main() {
     await list.getByRole("button", { name: "Edit Morning hello" }).click();
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("Name").fill("Evening hello");
-    await dlg.getByLabel("Keep one conversation").click();
+    await dlg.getByLabel("Keep one session").click();
     await dlg.getByRole("button", { name: "Save", exact: true }).click();
     await gone(page.getByRole("dialog"), "the schedule form closed");
     await visible(list.getByText("Evening hello"), "the renamed schedule");
@@ -1885,6 +1886,7 @@ async function main() {
     await page.reload();
     await visible(page.getByRole("table", { name: "Delivery log" }).getByText(/Weekly digest: E2E digest/).first(), "the digest in the delivery log table");
   });
+  await runP({ step, browser, base, post, api, visible, gone, poll, eq, watch, onboarded, T, proj, tmp, fake });
 
   // Opt-in: E2E_SHOTS=<dir> saves screenshots of the main surfaces (not a scenario, nothing is asserted).
   if (process.env.E2E_SHOTS) {

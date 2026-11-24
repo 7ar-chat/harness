@@ -3,19 +3,11 @@
 // accessibility tree, inert and unclickable. Places the strip does not know (not found) fall through to the router's outlet.
 import { Outlet } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AdminPage } from "@/pages/Admin";
 import { Dashboard } from "@/pages/Dashboard";
-import { HelpPage } from "@/pages/Help";
 import { InboxPage } from "@/pages/Inbox";
-import { InsightsPage } from "@/pages/Insights";
-import { JobsPage } from "@/pages/Jobs";
-import { MemoryPage } from "@/pages/Memory";
-import { CapabilitiesPage, ConnectorsPage, ProfilePage, ReferencesPage } from "@/pages/Profile";
 import { ProjectPage } from "@/pages/ProjectPage";
-import { RolesPage } from "@/pages/Roles";
-import { SchedulesPage } from "@/pages/Schedules";
 import { SessionTab, SupervisorPage } from "@/pages/SessionPage";
-import { UsagePage } from "@/pages/Usage";
+import { AdminPage, CapabilitiesPage, ConnectorsPage, HelpPage, InsightsPage, JobsPage, MemoryPage, ProfilePage, ReferencesPage, RolesPage, SchedulesPage, UsagePage } from "@/lib/lazyPages";
 import { PlaceCtx, placeOf } from "@/lib/place";
 import { TabActiveProvider } from "@/lib/tabActive";
 import { ErrorBoundary } from "../ErrorBoundary";

@@ -129,7 +129,9 @@ export function ReferencesPanel() {
       ) : (
         <div className="border-t text-sm" role="table" aria-label="Your references">
           <div role="row" className="grid grid-cols-[1.5rem_1fr_auto] items-center gap-3 border-b py-2 text-xs text-muted-foreground md:grid-cols-[1.5rem_1fr_6rem_5rem_7rem_6rem]">
-            <input type="checkbox" aria-label="Select all" checked={allPicked} onChange={() => setPicked(allPicked ? new Set() : new Set(shown.map((d) => d.name)))} className="size-4 accent-primary" />
+            <div role="columnheader">
+              <input type="checkbox" aria-label="Select all" checked={allPicked} onChange={() => setPicked(allPicked ? new Set() : new Set(shown.map((d) => d.name)))} className="size-4 accent-primary" />
+            </div>
             <div role="columnheader">{head("name", "Name")}</div>
             <div role="columnheader" className="hidden md:block">{head("type", "Type")}</div>
             <div role="columnheader" className="hidden md:block">{head("size", "Size")}</div>
@@ -138,7 +140,9 @@ export function ReferencesPanel() {
           </div>
           {shown.map((d) => (
             <div key={d.name} role="row" className="grid grid-cols-[1.5rem_1fr_auto] items-center gap-3 border-b py-2 hover:bg-muted/40 md:grid-cols-[1.5rem_1fr_6rem_5rem_7rem_6rem]">
-              <input type="checkbox" aria-label={`Select ${d.name}`} checked={picked.has(d.name)} onChange={() => toggle(d.name)} className="size-4 accent-primary" />
+              <div role="cell">
+                <input type="checkbox" aria-label={`Select ${d.name}`} checked={picked.has(d.name)} onChange={() => toggle(d.name)} className="size-4 accent-primary" />
+              </div>
               <div className="flex min-w-0 items-center gap-2" role="cell">
                 <FileText className="size-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0">
@@ -162,17 +166,18 @@ export function ReferencesPanel() {
               </div>
             </div>
           ))}
-          {shown.length === 0 ? (
-            all.length ? (
-              <div className="py-10 text-center text-sm text-muted-foreground">No reference matches your search.</div>
-            ) : (
-              <EmptyGuide title="No references yet" what="Nothing here yet. Drop files anywhere on this page, or use Add references: PDF, Word, text, spreadsheet, slides or image, up to 20 MB each.">
-                <Button size="sm" onClick={() => input.current?.click()}>Upload your first reference</Button>
-              </EmptyGuide>
-            )
-          ) : null}
         </div>
       )}
+
+      {!docs.isLoading && shown.length === 0 ? (
+        all.length ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">No reference matches your search.</div>
+        ) : (
+          <EmptyGuide title="No references yet" what="Nothing here yet. Drop files anywhere on this page, or use Add references: PDF, Word, text, spreadsheet, slides or image, up to 20 MB each.">
+            <Button size="sm" onClick={() => input.current?.click()}>Upload your first reference</Button>
+          </EmptyGuide>
+        )
+      ) : null}
 
       <p className="text-xs text-muted-foreground">
         {all.length} of {MAX_FILES} files · {size(total)} of {size(MAX_TOTAL)}. Agents see the list in every session, can copy a file to <span className="font-mono">{WORKSPACE}</span> to read it, and can attach it to a web form. Only you can see them.

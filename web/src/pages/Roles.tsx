@@ -353,7 +353,7 @@ export function RolesPanel({ projectId, canEdit }: { projectId?: string; canEdit
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="max-w-2xl text-sm text-muted-foreground">
-          A role is a named agent configuration: instructions, model, tools and skills. Type <code>@</code> in a chat to run as one, or name one in the delegate tool and on a task. The five builtin roles can be replaced by a role of the same name.
+          A role is a named agent configuration: instructions, model, tools and skills. Type <code>@</code> in a session to run as one, or name one in the delegate tool and on a task. The five builtin roles can be replaced by a role of the same name.
         </p>
         {canEdit ? (
           <Button onClick={() => setEditing({ create: true })}>

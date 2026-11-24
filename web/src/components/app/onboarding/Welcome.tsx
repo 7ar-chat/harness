@@ -93,9 +93,14 @@ export function Welcome({ open, onClose, actions }: { open: boolean; onClose: ()
               </Button>
             ) : null}
             {step < last ? (
-              <Button onClick={() => setStep(step + 1)} autoFocus>
-                {step === last - 1 ? "Where to start" : "Next"}
-              </Button>
+              <>
+                <Button variant="outline" onClick={() => setStep(step + 1)}>
+                  {step === last - 1 ? "Where to start" : "Next"}
+                </Button>
+                <Button onClick={act(actions.trySample)} autoFocus>
+                  Try a sample
+                </Button>
+              </>
             ) : null}
           </div>
         </DialogFooter>

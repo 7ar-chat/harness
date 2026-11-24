@@ -23,7 +23,7 @@ describe("first-run welcome", () => {
     fireEvent.click(within(dlg).getByRole("button", { name: "Skip for now" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(stored().welcomed).toBe(true);
-    fireEvent.pointerDown(screen.getByRole("button", { name: "User menu" }), { button: 0, ctrlKey: false });
+    fireEvent.pointerDown(screen.getByRole("button", { name: /^User menu/ }), { button: 0, ctrlKey: false });
     fireEvent.click(await screen.findByRole("menuitem", { name: /Getting started/ }));
     expect(await screen.findByRole("dialog", { name: "Welcome to 7ar" })).toBeTruthy();
   });
@@ -143,7 +143,7 @@ describe("discoverability", () => {
   it("the tour runs from the user menu and closes with Escape", async () => {
     mockFetch(shellRoutes());
     await renderApp("/");
-    fireEvent.pointerDown(screen.getByRole("button", { name: "User menu" }), { button: 0, ctrlKey: false });
+    fireEvent.pointerDown(screen.getByRole("button", { name: /^User menu/ }), { button: 0, ctrlKey: false });
     fireEvent.click(await screen.findByRole("menuitem", { name: /Take the tour/ }));
     const tour = await screen.findByTestId("tour");
     expect(within(tour).getByRole("heading", { name: "The explorer" })).toBeTruthy();

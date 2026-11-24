@@ -19,19 +19,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { SectionIntro } from "@/components/app/SectionIntro";
-import { CapabilitiesPanel } from "@/components/app/capabilities";
 import { isUnread } from "@/lib/unread";
 import { Board } from "./Board";
 import { MemoryManager } from "./Memory";
 import { TasksTab } from "./Tasks";
-import { Requirements } from "./Requirements";
-import { RolesPanel } from "./Roles";
-import { RecipesPanel } from "./Recipes";
-import { ProjectNotifications } from "./Notifications";
-import { SchedulesPanel } from "./Schedules";
-import { InsightsPanel } from "./Insights";
-import { UsagePanel } from "./Usage";
-import { WorkflowsPanel } from "./Workflows";
+import { CapabilitiesPanel, InsightsPanel, ProjectNotifications, RecipesPanel, Requirements, RolesPanel, SchedulesPanel, UsagePanel, WorkflowsPanel } from "@/lib/lazyPages";
 
 const ago = (iso: string) => `${formatDistanceToNowStrict(new Date(iso))} ago`;
 
@@ -173,6 +165,7 @@ function Settings({ pid }: { pid: string }) {
           update.mutate({ ...rest, extraRepos: extraRepos.split(/\s+/).filter(Boolean) });
         }}
       >
+        <h2 className="text-base font-semibold">General</h2>
         <div className="space-y-2">
           <Label htmlFor="s-name">Name</Label>
           <Input id="s-name" value={f.name} onChange={set("name")} required />
@@ -181,6 +174,7 @@ function Settings({ pid }: { pid: string }) {
           <Label htmlFor="s-desc">Description</Label>
           <Textarea id="s-desc" value={f.description} onChange={set("description")} rows={3} />
         </div>
+        <h2 className="border-t pt-4 text-base font-semibold">Repositories</h2>
         <div className="space-y-2">
           <Label htmlFor="s-repo">Repository URL</Label>
           <Input id="s-repo" value={f.repoUrl} onChange={set("repoUrl")} type="url" />
@@ -197,6 +191,7 @@ function Settings({ pid }: { pid: string }) {
           <Label htmlFor="s-branch">Default branch</Label>
           <Input id="s-branch" value={f.defaultBranch} onChange={set("defaultBranch")} />
         </div>
+        <h2 className="border-t pt-4 text-base font-semibold">Slack</h2>
         <div className="space-y-2">
           <Label htmlFor="s-slack">Slack channel</Label>
           <Input id="s-slack" value={f.slackChannel} onChange={set("slackChannel")} placeholder="#proj-payments or a channel id" />
@@ -211,7 +206,7 @@ function Settings({ pid }: { pid: string }) {
       </form>
       <Github pid={pid} owner />
       <div className="max-w-xl rounded-lg border border-destructive/40 p-4">
-        <h3 className="text-sm font-medium text-destructive">Danger zone</h3>
+        <h2 className="text-sm font-medium text-destructive">Danger zone</h2>
         <p className="my-2 text-sm text-muted-foreground">Deleting the project removes its members, memory links and session access.</p>
         <Button variant="destructive" onClick={() => setConfirm(true)}>
           Delete project

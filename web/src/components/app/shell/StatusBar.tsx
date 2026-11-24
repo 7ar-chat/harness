@@ -46,7 +46,7 @@ export function StatusBar() {
         <CircleHelp className="size-3.5" />
         <span className="hidden sm:inline">Help</span>
       </Btn>
-      <Btn pressed={panel} onClick={() => setPanel((v) => !v)} aria-label="Toggle panel (Ctrl/Cmd+J)" title="Toggle panel (Ctrl/Cmd+J)" className="md:ml-0">
+      <Btn pressed={panel} onClick={() => setPanel((v) => !v)} aria-label={needsCount ? `Panel ${needsCount} waiting for you` : "Panel"} title="Toggle panel (Ctrl/Cmd+J)" className="md:ml-0">
         <PanelBottom className="size-3.5" />
         <span className="hidden sm:inline">Panel</span>
         {needsCount ? (

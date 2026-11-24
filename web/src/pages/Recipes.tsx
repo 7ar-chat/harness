@@ -74,7 +74,7 @@ function RecipeCard({ r, onUse, canUse, onDelete, onEdit, onDuplicate }: { r: Re
       </p>
       {r.cost ? <p className="text-xs text-muted-foreground">{r.cost}</p> : null}
       <div className="mt-auto flex items-center gap-1.5 pt-2">
-        <Button size="sm" onClick={() => onUse(r)} disabled={!canUse} title={canUse ? undefined : "Members can use recipes"}>
+        <Button size="sm" variant="outline" onClick={() => onUse(r)} disabled={!canUse} title={canUse ? undefined : "Members can use recipes"}>
           Use this recipe
         </Button>
         <Button size="icon" variant="ghost" aria-label={`Export ${r.name}`} title="Export as a file" onClick={() => void exportRecipe(r).catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Export failed"))}>
@@ -365,7 +365,7 @@ export function RecipeWizard({ projectId, recipe, canCreate, onClose }: { projec
               )}
               {isSchedule && cron ? <NextRuns cron={cron} timezone={zone} /> : null}
               {r.kind === "trigger" && b.title ? <p className="text-xs text-muted-foreground">Each task is titled “{fill(b.title)}”.</p> : null}
-              <pre className="max-h-40 overflow-auto rounded border bg-background p-2 text-xs whitespace-pre-wrap" aria-label="What the agent will be told">
+              <pre tabIndex={0} className="max-h-40 overflow-auto rounded border bg-background p-2 text-xs whitespace-pre-wrap" aria-label="What the agent will be told">
                 {fill(b.prompt)}
               </pre>
               {r.cost ? <p className="text-xs text-muted-foreground">{r.cost}.</p> : null}
@@ -707,7 +707,7 @@ export function RecipesPanel({ projectId, canEdit, owner }: { projectId: string;
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Ready-made recurring jobs and hand-offs. Pick one, fill in a few words, and it becomes a schedule, a task or a trigger of this project. To share your own, use <em>Share as recipe</em> on a schedule or a task.
+          Ready-made schedules, tasks and triggers. Pick one, fill in a few words, and it becomes a schedule, a task or a trigger of this project. To share your own, use <em>Share as recipe</em> on a schedule or a task.
         </p>
         <Button variant="outline" onClick={() => setImporting(true)} disabled={!canEdit}>
           <Upload /> Import a file

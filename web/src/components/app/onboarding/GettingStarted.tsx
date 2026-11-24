@@ -100,7 +100,7 @@ export function GettingStarted({ variant, projectId, onNavigate }: { variant: "d
     // Folded to a single progress line until the person opens it: the full checklist lives on the Dashboard.
     const open = state.folded === false;
     return (
-      <section aria-label={title} className="mx-0.5 mb-1 mt-2 rounded-md border bg-card/60 text-card-foreground">
+      <section aria-label={`${title} summary`} className="mx-0.5 mb-1 mt-2 rounded-md border bg-card/60 text-card-foreground">
         <div className="flex items-center pr-1">
           <button type="button" aria-expanded={open} onClick={() => patch({ folded: open })} className="flex flex-1 items-center gap-1.5 rounded px-2 py-1.5 text-left text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
             {open ? <ChevronDown className="size-3" aria-hidden /> : <ChevronRight className="size-3" aria-hidden />}

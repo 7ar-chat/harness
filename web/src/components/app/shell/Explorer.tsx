@@ -36,7 +36,7 @@ const readSection = (title: string): boolean | undefined => {
 };
 
 /** A foldable group. A person's choice is remembered; `forceOpen` (the shown page is inside it) opens it without remembering. */
-function Section({ title, count, action, badge, children, defaultOpen = true, forceOpen = false }: { title: string; count?: number; action?: ReactNode; badge?: ReactNode; children: ReactNode; defaultOpen?: boolean; forceOpen?: boolean }) {
+function Section({ title, label, count, action, badge, children, defaultOpen = true, forceOpen = false }: { title: string; label?: string; count?: number; action?: ReactNode; badge?: ReactNode; children: ReactNode; defaultOpen?: boolean; forceOpen?: boolean }) {
   const [open, setOpen] = useState(() => readSection(title) ?? defaultOpen);
   const shown = open || forceOpen;
   const toggle = () => {
@@ -50,7 +50,7 @@ function Section({ title, count, action, badge, children, defaultOpen = true, fo
     rememberUi({ section: [title, next] });
   };
   return (
-    <section aria-label={title} className="pb-1">
+    <section aria-label={label ?? title} className="pb-1">
       <div className="group flex items-center pr-1">
         <button type="button" aria-expanded={shown} onClick={toggle} className="flex flex-1 items-center gap-1 rounded px-2.5 pb-1 pt-3 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground focus-visible:outline-2">
           {shown ? <ChevronDown className="size-3" aria-hidden /> : <ChevronRight className="size-3" aria-hidden />}
@@ -105,7 +105,7 @@ function SessionRow({ t, owner, onNavigate }: { t: ThreadSummary; owner?: boolea
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete “{t.title || "(untitled)"}”?</AlertDialogTitle>
-            <AlertDialogDescription>The conversation and its workspace are removed for everyone.</AlertDialogDescription>
+            <AlertDialogDescription>The session and its workspace are removed for everyone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -135,12 +135,17 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" aria-label="User menu" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[state=open]:bg-sidebar-accent">
+        <button type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[state=open]:bg-sidebar-accent">
           <span className="relative shrink-0">
-            <UserAvatar login={me.login} name={me.name} url={me.avatarUrl} className="size-6" />
+            <span aria-hidden>
+              <UserAvatar login={me.login} name={me.name} url={me.avatarUrl} className="size-6" />
+            </span>
             {pendingUsers ? <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-warning ring-2 ring-sidebar" aria-label={`${pendingUsers} users awaiting approval`} /> : null}
           </span>
-          <span className="min-w-0 flex-1 truncate text-[13px] text-sidebar-foreground">{me.name || me.login}</span>
+          <span className="min-w-0 flex-1 truncate text-[13px] text-sidebar-foreground">
+            <span className="sr-only">User menu: </span>
+            {me.name || me.login}
+          </span>
           <ChevronsUpDown className="size-3.5 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
@@ -219,7 +224,7 @@ const HINTS: Record<string, string> = {
   tasks: "Work handed off to agents, and what starts it",
   workflows: "Repeatable flows of steps, and their runs",
   roles: "How agents behave, and what runs them",
-  schedules: "Jobs that repeat on a timetable",
+  schedules: "Work an agent repeats on a timetable",
   memory: "What agents remember about the project",
   members: "Who can see and change the project",
   capabilities: "Tools and skills your agents can use",
@@ -295,12 +300,19 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className={cn("flex shrink-0 items-center gap-2 px-2 pb-1 pt-2", narrow && "pr-12")}>
-        <button type="button" onClick={openSwitcher} aria-label="Switch project" title="Switch project (Ctrl/Cmd+P)" className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring">
+        <button type="button" onClick={openSwitcher} title="Switch project (Ctrl/Cmd+P)" className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring">
           <span aria-hidden className="flex size-[22px] shrink-0 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
             7
           </span>
-          <span className="min-w-0 flex-1 truncate font-semibold text-foreground">{project?.name ?? (overview ? "Personal" : "7ar")}</span>
-          {narrow ? null : <span className="shrink-0 text-[11px] text-muted-foreground">switch ⌘P</span>}
+          <span className="min-w-0 flex-1 truncate font-semibold text-foreground">
+            <span className="sr-only">Switch project: </span>
+            {project?.name ?? (overview ? "Personal" : "7ar")}
+          </span>
+          {narrow ? null : (
+            <span aria-hidden className="shrink-0 text-[11px] text-muted-foreground">
+              switch ⌘P
+            </span>
+          )}
         </button>
         <ProjectMenu />
         {conn === "offline" ? <WifiOff className="size-4 shrink-0 text-destructive" aria-label="Offline, reconnecting" /> : null}
@@ -318,13 +330,13 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
             onNavigate={onNavigate}
             meta={total ? <span className="rounded-full bg-warning px-1.5 text-[10px] font-medium text-warning-foreground" aria-label={`${total} waiting for you`}>{total}</span> : null}
           >
-            Inbox
+            Needs you
           </Row>
         </div>
 
         {project ? (
           <>
-            <Section title="Needs you" count={needs.length}>
+            <Section title="Needs you" label="Needs you in the explorer" count={needs.length}>
               {visible.length ? (
                 visible.map((n) => (
                   <Row key={n.key} href={n.href} k={n.k} onNavigate={onNavigate} icon={<span aria-hidden className={cn("text-[10px]", n.tone)}>●</span>}>
@@ -332,11 +344,11 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
                   </Row>
                 ))
               ) : (
-                <p className="px-2.5 py-1 text-xs text-muted-foreground">Nothing waits for you.</p>
+                <p className="px-2.5 py-1 text-xs text-muted-foreground">Nothing waits in this project.</p>
               )}
               {needs.length > visible.length ? (
                 <Row href="/inbox" k="page:/inbox" onNavigate={onNavigate}>
-                  <span className="text-muted-foreground">{needs.length - visible.length} more in the inbox</span>
+                  <span className="text-muted-foreground">{needs.length - visible.length} more in Needs you</span>
                 </Row>
               ) : null}
             </Section>
@@ -418,7 +430,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
             <SessionRow key={t.id} t={t} onNavigate={onNavigate} />
           ))}
           <Row href="/jobs" k="page:/jobs" onNavigate={onNavigate}>
-            Jobs
+            Job search
           </Row>
           <Row href="/references" k="page:/references" onNavigate={onNavigate}>
             References

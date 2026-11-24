@@ -25,7 +25,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { AddFromRecipe, ShareRecipeDialog, type ShareSource } from "./Recipes";
+import { AddFromRecipe, ShareRecipeDialog } from "@/lib/lazyPages";
+import type { ShareSource } from "./Recipes";
 
 const ago = (iso: string) => `${formatDistanceToNowStrict(new Date(iso))} ago`;
 const usd = (n: number) => `$${n.toFixed(n >= 100 ? 0 : 2)}`;
@@ -249,7 +250,7 @@ const POLICY_HINT: Record<string, string> = {
   default: "Uses the setting your administrator chose. A good choice when unsure.",
   supervised: "Every risky call asks you first. Safest while you are learning.",
   sandboxed: "The agent works freely in its own copy; only pushing and merging ask.",
-  autonomous: "Nothing asks you; only protected rules deny. For jobs you trust, with a budget.",
+  autonomous: "Nothing asks you; only protected rules deny. For work you trust, with a budget.",
 };
 
 function CreateTaskDialog({ projectId, owner, open, onOpenChange, existing }: { projectId: string; owner: boolean; open: boolean; onOpenChange: (o: boolean) => void; existing: FactoryTask[] }) {

@@ -10,6 +10,7 @@ import {
 } from "@/api/executors";
 import type { ExecutorView } from "@/api/types";
 import { ErrorState, ListSkeleton } from "@/components/app/common";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -109,7 +110,7 @@ function ExecutorLine({ ex, project, actions }: { ex: ExecutorView; project?: st
         <AvailabilityBadge value={ex.availability} />
         <div className="ml-auto flex items-center gap-1">
           {ex.credentialEnv?.length ? (
-            <Button size="sm" variant="outline" aria-expanded={open} aria-label={`Credentials for ${ex.name}`} onClick={() => setOpen((o) => !o)}>
+            <Button size="sm" variant="outline" aria-expanded={open} aria-label={`${ex.configured ? "Change" : "Set up"} credentials for ${ex.name}`} onClick={() => setOpen((o) => !o)}>
               <KeyRound /> {ex.configured ? "Change" : "Set up"}
             </Button>
           ) : null}
@@ -251,6 +252,7 @@ export function ProjectExecutors({ projectId, canEdit }: { projectId: string; ca
   const list = useExecutors(projectId);
   const del = useDeleteExecutor(projectId);
   const [editing, setEditing] = useState<{ ex?: ExecutorView } | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
   if (list.data === null || list.isLoading) return null;
   return (
     <section className="space-y-3" aria-label="Executors">
@@ -283,7 +285,7 @@ export function ProjectExecutors({ projectId, canEdit }: { projectId: string; ca
                   <Button size="icon" variant="ghost" aria-label={`Edit ${ex.name}`} onClick={() => setEditing({ ex })}>
                     <Pencil />
                   </Button>
-                  <Button size="icon" variant="ghost" aria-label={`Delete ${ex.name}`} onClick={() => del.mutate(ex.name)}>
+                  <Button size="icon" variant="ghost" aria-label={`Delete ${ex.name}`} onClick={() => setRemoving(ex.name)}>
                     <Trash2 />
                   </Button>
                 </>
@@ -293,6 +295,18 @@ export function ProjectExecutors({ projectId, canEdit }: { projectId: string; ca
         ))}
       </ul>
       {editing ? <ExecutorEditor pid={projectId} ex={editing.ex} onClose={() => setEditing(null)} /> : null}
+      <AlertDialog open={!!removing} onOpenChange={(o) => !o && setRemoving(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {removing}?</AlertDialogTitle>
+            <AlertDialogDescription>Roles that name it will no longer find it.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => removing && del.mutate(removing)}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

@@ -77,6 +77,13 @@ function TabButton({ tab, active, multi, tabs, dragging, setDragging }: { tab: E
           }
         }}
         onMouseDown={(e) => e.button === 1 && e.preventDefault()}
+        onKeyDown={(e) => {
+          // The close button is for the pointer (a button inside a tab is not allowed in a tab list); the keyboard closes the tab with Delete or Ctrl+W.
+          if (e.key === "Delete") {
+            e.preventDefault();
+            tabs.close(tab.key);
+          }
+        }}
         className="flex max-w-[220px] items-center gap-2 py-2 pl-3.5 pr-1.5 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
         {status ? <StatusDot status={status} /> : null}
@@ -89,6 +96,8 @@ function TabButton({ tab, active, multi, tabs, dragging, setDragging }: { tab: E
       </button>
       <button
         type="button"
+        aria-hidden="true"
+        tabIndex={-1}
         aria-label={`Close ${label}`}
         title="Close (Ctrl+W)"
         onClick={() => tabs.close(tab.key)}

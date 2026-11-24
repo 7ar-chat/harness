@@ -41,8 +41,8 @@ export const PROJECT_SECTIONS: Record<string, string> = {
 const PAGES: Record<string, string> = {
   "/": "Dashboard",
   "/supervisor": "My assistant",
-  "/inbox": "Inbox",
-  "/jobs": "Jobs",
+  "/inbox": "Needs you",
+  "/jobs": "Job search",
   "/references": "References",
   "/connectors": "Connectors",
   "/capabilities": "My tools & skills",

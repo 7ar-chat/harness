@@ -13,9 +13,9 @@ import { PROJECT_SECTIONS, projectHref, type EditorTab } from "./tabs";
 
 const PAGES: [string, string][] = [
   ["/", "Dashboard"],
-  ["/inbox", "Inbox"],
+  ["/inbox", "Needs you"],
   ["/supervisor", "My assistant"],
-  ["/jobs", "Jobs"],
+  ["/jobs", "Job search"],
   ["/references", "References"],
   ["/connectors", "Connectors"],
   ["/memory", "Library (my memory)"],

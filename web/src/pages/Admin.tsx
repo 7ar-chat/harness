@@ -67,7 +67,7 @@ export function AdminPage() {
   const tab = TABS.find((t) => t.value === status)!;
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4 md:p-6">
+      <div className="flex max-w-3xl flex-col gap-4 p-4 md:p-6">
         <Tabs value={section} onValueChange={(v) => setSection(v as "users" | "hosts")}>
           <TabsList aria-label="Admin sections">
             <TabsTrigger value="users">Users</TabsTrigger>
