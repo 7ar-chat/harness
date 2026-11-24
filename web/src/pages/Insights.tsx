@@ -6,6 +6,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { INSIGHT_RANGES, reportUrl, useInsights, type InsightsView } from "@/api/insights";
 import { Empty, ErrorState, ListSkeleton } from "@/components/app/common";
+import { DigestCard } from "./DigestCard";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -391,6 +392,7 @@ export function InsightsPanel({ projectId }: { projectId: string }) {
         <RangePicker value={range} onChange={setRange} />
         <ReportMenu projectId={projectId} range={range} />
       </div>
+      <DigestCard projectId={projectId} />
       {q.isLoading ? (
         <ListSkeleton rows={3} />
       ) : q.error || !q.data ? (

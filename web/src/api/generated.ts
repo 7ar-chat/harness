@@ -195,6 +195,36 @@ export interface Delivery {
   byExecutor: Count[];
 }
 
+export interface DigestItem {
+  id: string;
+  createdAt: string;
+  from: string;
+  to: string;
+  summary: string;
+  trigger: string;
+  url: string;
+}
+
+export interface DigestSendResult {
+  digest: DigestItem;
+}
+
+export interface DigestSetting {
+  enabled: boolean;
+  weekday: number;
+  hour: number;
+  timezone: string;
+  nextAt?: string;
+  lastSentAt?: string;
+}
+
+export interface DigestView {
+  setting: DigestSetting;
+  digests: DigestItem[];
+  canEdit: boolean;
+  notified: boolean;
+}
+
 export interface DispatchBudget {
   maxUsd?: number;
   maxTokens?: number;
@@ -323,7 +353,7 @@ export interface FeedEvent {
   at: string;
 }
 
-export type FeedType = "thread.created" | "thread.updated" | "thread.deleted" | "run.started" | "run.finished" | "message.sent" | "member.changed" | "project.changed" | "memory.changed" | "task.created" | "task.updated" | "task.blocked" | "requirement.changed" | "workflow.changed" | "workflow.run" | "workflow.gate" | "schedule.updated";
+export type FeedType = "thread.created" | "thread.updated" | "thread.deleted" | "run.started" | "run.finished" | "message.sent" | "member.changed" | "project.changed" | "memory.changed" | "task.created" | "task.updated" | "task.blocked" | "requirement.changed" | "digest.ready" | "workflow.changed" | "workflow.run" | "workflow.gate" | "schedule.updated";
 
 export type FileType = "file" | "directory";
 
@@ -737,6 +767,7 @@ export interface Origin {
   kind: string;
   repo?: string;
   number?: number;
+  id?: string;
   url?: string;
 }
 
@@ -1025,6 +1056,8 @@ export interface RequirementImport {
   imported: number;
   skipped: number;
   requirements: Requirement[];
+  source?: string;
+  truncated?: boolean;
 }
 
 export interface RequirementSettings {
@@ -1270,6 +1303,17 @@ export interface Suggest {
 export interface SupervisorSettings {
   watch: boolean;
   stuckMinutes: number;
+}
+
+export interface TapdStatus {
+  connected: boolean;
+  workspaceId?: string;
+  baseUrl?: string;
+  user?: string;
+  hasPassword?: boolean;
+  hasToken?: boolean;
+  openStatuses?: string;
+  available: boolean;
 }
 
 export interface TaskRef {

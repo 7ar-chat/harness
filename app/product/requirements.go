@@ -71,6 +71,10 @@ type RequirementImport struct {
 	Imported     int                        `json:"imported"`
 	Skipped      int                        `json:"skipped"`
 	Requirements []requirements.Requirement `json:"requirements"`
+	// Source and Truncated are set by the TAPD import: how "open" was decided (workflow or filter), and whether more
+	// stories were left than one call imports.
+	Source    string `json:"source,omitempty"`
+	Truncated bool   `json:"truncated,omitempty"`
 }
 
 func (s *server) routeRequirements() {

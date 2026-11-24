@@ -29,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { TapdImport } from "./TapdImport";
 
 export const STATUSES = [
   { id: "backlog", label: "Backlog", dot: "bg-muted-foreground/40" },
@@ -370,6 +371,7 @@ export function Requirements({ projectId, role }: { projectId: string; role: Rol
               </Button>
             </>
           ) : null}
+          <TapdImport projectId={projectId} role={role} />
           {canWork ? (
             <Button size="sm" onClick={() => setEditing({})}>
               <Plus className="size-4" aria-hidden /> New requirement

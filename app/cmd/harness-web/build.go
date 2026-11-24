@@ -18,6 +18,7 @@ import (
 	"github.com/7ar-chat/harness/adapters/store/notifystore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
+	"github.com/7ar-chat/harness/adapters/store/projdatastore"
 	"github.com/7ar-chat/harness/adapters/store/recipestore"
 	"github.com/7ar-chat/harness/adapters/store/reqstore"
 	"github.com/7ar-chat/harness/adapters/store/rolestore"
@@ -34,6 +35,7 @@ import (
 	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/githost"
 	"github.com/7ar-chat/harness/core/notify"
+	"github.com/7ar-chat/harness/core/projdata"
 	"github.com/7ar-chat/harness/core/recipes"
 	"github.com/7ar-chat/harness/core/requirements"
 	"github.com/7ar-chat/harness/core/roles"
@@ -86,6 +88,8 @@ type built struct {
 	githosts *product.GitHosts
 	// notifications holds the notification rules, channels and delivery log (team mode).
 	notifications notify.Store
+	// projdata holds the weekly digest and the sealed TAPD credentials (team mode).
+	projdata projdata.Store
 	// skills serves the connections of skills that need an account (nil without the marketplace).
 	skills *product.SkillAPI
 	// bus shares the live feed between replicas: set in team mode when REDIS_HOST is.
@@ -118,6 +122,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 	var rcs recipes.Store
 	var ghr githost.Registry
 	var nfs notify.Store
+	var pds projdata.Store
 	_, havePG := os.LookupEnv("POSTGRES_HOST")
 	switch {
 	case team && havePG:
@@ -141,6 +146,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		rcs = recipestore.NewPG(pool, nil)
 		ghr = githoststore.NewPG(pool, nil)
 		nfs = notifystore.NewPG(pool, nil)
+		pds = projdatastore.NewPG(pool)
 	case durable || team:
 		st, err := harness.OpenLocalStore(cfg.LocalStateDir)
 		if err != nil {
@@ -216,9 +222,15 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 				return nil, fmt.Errorf("open the notifications store: %w", err)
 			}
 			nfs = nf
+			pf, err := projdatastore.Open(filepath.Join(stateDir(cfg), "projectdata.json"))
+			if err != nil {
+				_ = closers.Close()
+				return nil, fmt.Errorf("open the project data store: %w", err)
+			}
+			pds = pf
 		}
 	}
-	b := &built{team: ts, closer: closers, notifications: nfs}
+	b := &built{team: ts, closer: closers, notifications: nfs, projdata: pds}
 	if _, ok := os.LookupEnv("REDIS_HOST"); ok && ts != nil {
 		rdb := redisinfra.NewClient(cfg)
 		closers = append(closers, rdb)
