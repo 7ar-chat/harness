@@ -289,7 +289,7 @@ export async function runP(h) {
       const explorer = pg.getByRole("navigation", { name: "Explorer" });
       await visible(explorer.getByRole("link", { name: "Work", exact: true }), "the Work area");
       const short = ["Dashboard", "Needs you", "Work", "Automation", "Insights", "Settings", "My assistant", "Me"];
-      const names = (await explorer.getByRole("link").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
+      const names = (await explorer.getByRole("link").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim().replace(/^Needs you \d+$/, "Needs you")); // the count badge is part of the link's text
       eq(names.filter((n) => short.includes(n)), short, "the explorer's places, in order");
       for (const old of [/^Jobs?\b/i, /^Job search/i, /^References/, /^Connectors/, /^Members/, /^Usage/, /^Audit/, /^Recipes/, /^Schedules/, /^Roles/, /^Insights \S/, /^My (memory|schedules|roles|tools)/]) {
         const left = names.filter((n) => old.test(n));
