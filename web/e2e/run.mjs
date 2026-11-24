@@ -1781,7 +1781,7 @@ async function main() {
     await visible(composer, "composer");
     const explorer = page.getByRole("navigation", { name: "Explorer" });
     await visible(explorer.getByText(/Personal\. Pick a project/), "the explorer is in the Personal context");
-    eq(await explorer.getByRole("region", { name: "Work" }).count(), 0, "no project work in the personal context");
+    eq(await explorer.getByRole("region", { name: "Project" }).count(), 0, "no project areas in the personal context");
     eq(await page.getByTestId("agent-role").count(), 0, "no role chip before a role is used");
     // My roles: same editor, caller's own roles
     await page.goto(`${base}/#/roles`);

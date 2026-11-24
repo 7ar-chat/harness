@@ -15,7 +15,7 @@ const INTRO: Record<string, { title: string; text: string; slug?: string }> = {
   memory: { title: "Memory & docs", text: "What agents remember about this project, and the documents they can read.", slug: "memory" },
   members: { title: "Members & access", text: "Who can see and change this project.", slug: "add-a-teammate" },
   capabilities: { title: "Tools & skills", text: "Tools and skills (MCP servers) your agents can use in this project.", slug: "tools-and-skills" },
-  audit: { title: "Audit log", text: "Who did what in this project, newest first." },
+  audit: { title: "Activity", text: "Who did what in this project, newest first." },
   settings: { title: "Project settings", text: "The name, repositories and channels of this project." },
   usage: { title: "Usage & caps", text: "What this project spent, and the monthly cap that limits it.", slug: "budgets" },
 };

@@ -70,3 +70,63 @@ Second-order effect caught by the axe e2e and fixed in the same change: the new 
 | 13 and 22: executor editor (now captured) | not captured | `ux-after/desktop-dark/dlg-executor-editor.png` |
 
 (All paths are under `/private/tmp/claude-501/-Users-ghazi-projects-harness/689d5953-4b78-4369-984a-e47c2f2a6d41/scratchpad/`.)
+
+## Navigation consolidation (before: 27 links; after: 9)
+
+The request: "there are too many tabs; job search is a use case, not a feature of the platform". The interface had about
+27 places to go to. They are regrouped, not removed: every view, every tab id (`?tab=members`, `?tab=usage`...), every
+route and every deep parameter (`task=`, `req=`, `wf=`, `run=`) still works, so notifications, onboarding, help and the
+e2e scenarios did not change their links.
+
+### Before
+
+* Top: Dashboard, Needs you (2)
+* Project, "Work": Board, Requirements, Tasks & triggers, Workflows & runs, Insights (5)
+* Project, "Setup" (folded): Roles & executors, Schedules, Recipes, Notifications, Memory & docs, Members & access, Tools &
+  skills, Audit log (8)
+* Personal: My assistant, Job search, References, Connectors, My memory, My schedules, My roles, My tools & skills (8)
+* Bottom: Usage & caps, Project settings (owners) or My insights and Usage & caps (no project) (2 to 3)
+* Total: 25 to 27 links (plus the sessions lists), 16 project tab ids, 17 routes
+
+### After
+
+* Top: Dashboard, Needs you (2)
+* Project: **Work**, **Automation**, **Insights**, **Settings** (4)
+* Personal: **My assistant**, **Me** (2)
+* Bottom: **Settings** (your account; the user menu still has Settings, Help, theme, Admin) (1)
+* Total: **9 links** (plus the sessions lists). Tab ids and routes are unchanged.
+
+### The areas and their views
+
+Each area is one explorer link and one editor tab. Its views are a row of pill tabs (a real tablist: arrow keys, Home and
+End move and show the view) at the top of the page. The view last shown in an area is remembered per project, and the
+explorer link opens it.
+
+| Area | Views (old tab id or route) |
+| --- | --- |
+| Work | Board (`board`), Requirements (`requirements`), Tasks (`tasks`, with its triggers and report), Sessions (`overview`, reached from "All N sessions", not drawn as a pill) |
+| Automation | Workflows (`workflows`, with its runs), Schedules (`schedules`), Recipes (`recipes`) |
+| Insights | Overview (`insights`), Usage & caps (`usage`), Activity (`audit`, was "Audit log") |
+| Settings | General (`settings`, owners only), Members & access (`members`), Roles & executors (`roles`), Tools & skills (`capabilities`), Memory & docs (`memory`), Notifications (`notifications`) |
+| Me | Library (`/references`), Connectors (`/connectors`), Memory (`/memory`), My roles (`/roles`), My schedules (`/schedules`), My tools & skills (`/capabilities`), My insights (`/insights`), My usage (`/usage`) |
+
+The registry is `web/src/components/app/shell/areas.ts` (area, then view, in order, with aliases the palette matches). The
+editor tab reads "Work · Board". A task, requirement, workflow or run opened on its own stays its own tab and has no
+sub-navigation. A tab strip saved before this change is folded into one tab per area on load.
+
+### Decisions
+
+* **Job search is a use case.** Removed from the explorer. It is offered, only when the server has it (the same 404 and 501
+  check the page itself uses), as a card in a **Use cases** section on the Dashboard (also on the empty Dashboard, next
+  to "Try it with a sample"), as the palette entry "Use case: Job search", in the help article "Use cases" and in
+  docs/jobs.md. The list is data (`web/src/lib/useCases.ts`): adding a use case is adding a row. The backend is untouched.
+* **Usage & caps** left the bottom of the explorer: it is a view of Insights (it is about what the project spent).
+* **Recipes** are Automation (they make schedules, tasks and triggers). **Audit log** is **Activity**, next to the
+  numbers. **Notifications**, **Members**, **Roles**, **Tools** and **Memory** are configuration: Settings.
+* **Project settings** is the General view of Settings, owners only; the other views of Settings stay open to everyone, as
+  before.
+* **Me** gathers the personal rows. My insights and My usage stay two views (they are two pages), so Me has 8 views.
+* **Admin** stays only in the user menu (and the palette). **Help** too.
+* Considered and left: Sessions is not an area (the explorer lists them, the Board shows them); "Needs you" stays a
+  top-level link because it is the one place a person must look at.
+* Not first-class any more but kept: the Profile page is reached by the bottom **Settings** link and the user menu.

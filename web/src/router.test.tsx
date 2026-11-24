@@ -35,7 +35,7 @@ describe("router", () => {
     await waitFor(() => expect(r.router.state.status).toBe("idle"));
     expect(r.router.state.location.search).toEqual({ tab: "requirements", req: "r1" });
     expect(tabFor("/p/p1", { tab: "requirements", req: "r1" })?.key).toBe("p:p1:req:r1");
-    expect(tabFor("/p/p1", { tab: "requirements" })?.key).toBe("p:p1:requirements");
+    expect(tabFor("/p/p1", { tab: "requirements" })?.key).toBe("p:p1:work");
     expect(tabFor("/p/p1", { tab: "tasks", task: "t1" })?.kind).toBe("task");
     expect(tabFor("/p/p1", { tab: "workflows", run: "x" })?.kind).toBe("run");
     expect(tabFor("/p/p1", { tab: "workflows", wf: "w" })?.kind).toBe("workflow");

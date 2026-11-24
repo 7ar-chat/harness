@@ -9,23 +9,16 @@ import { useDialogs } from "../dialogs";
 import { useShell } from "./context";
 import { useProjectActions } from "./projectActions";
 import { useTabLabel } from "./EditorTabs";
-import { PROJECT_SECTIONS, projectHref, type EditorTab } from "./tabs";
+import { useUseCases } from "@/lib/useCases";
+import { ME_AREA, PROJECT_AREAS, viewHref } from "./areas";
+import { projectHref, type EditorTab } from "./tabs";
 
 const PAGES: [string, string][] = [
   ["/", "Dashboard"],
   ["/inbox", "Needs you"],
   ["/supervisor", "My assistant"],
-  ["/jobs", "Job search"],
-  ["/references", "References"],
-  ["/connectors", "Connectors"],
-  ["/memory", "My memory"],
-  ["/schedules", "My schedules"],
-  ["/roles", "My roles (personal)"],
-  ["/usage", "My usage"],
-  ["/insights", "My insights"],
-  ["/capabilities", "My tools & skills"],
   ["/help", "Help"],
-  ["/profile", "Profile and settings"],
+  ["/profile", "Settings (profile and preferences)"],
 ];
 
 function OpenTab({ tab, onPick }: { tab: EditorTab; onPick: () => void }) {
@@ -40,6 +33,7 @@ function OpenTab({ tab, onPick }: { tab: EditorTab; onPick: () => void }) {
 
 export function Palette({ open, setOpen }: { open: boolean; setOpen: (o: boolean) => void }) {
   const overview = useOverview().data;
+  const useCases = useUseCases();
   const { tabs, projectId, setExplorer, setPanel } = useShell();
   const { newSession, newProject } = useDialogs();
   const { setTheme, resolvedTheme } = useTheme();
@@ -69,11 +63,29 @@ export function Palette({ open, setOpen }: { open: boolean; setOpen: (o: boolean
             </CommandItem>
           ))}
         </CommandGroup>
+        <CommandGroup heading="Me">
+          {ME_AREA.views.map((v) => (
+            <CommandItem key={v.id} value={`me ${v.label} ${(v.aliases ?? []).join(" ")}`} onSelect={go(() => tabs.open(v.id))}>
+              Me · {v.label}
+            </CommandItem>
+          ))}
+        </CommandGroup>
         {project ? (
           <CommandGroup heading={project.name}>
-            {Object.entries(PROJECT_SECTIONS).map(([s, label]) => (
-              <CommandItem key={s} value={`${project.name} ${label}`} onSelect={go(() => tabs.open(projectHref(project.id, s)))}>
-                {label}
+            {PROJECT_AREAS.flatMap((area) =>
+              area.views.map((v) => (
+                <CommandItem key={v.id} value={`${project.name} ${area.label} ${v.label} ${(v.aliases ?? []).join(" ")}`} onSelect={go(() => tabs.open(viewHref(area, v, project.id)))}>
+                  {area.label} · {v.label}
+                </CommandItem>
+              )),
+            )}
+          </CommandGroup>
+        ) : null}
+        {useCases.length ? (
+          <CommandGroup heading="Use cases">
+            {useCases.map((u) => (
+              <CommandItem key={u.id} value={`${u.command} ${u.title}`} onSelect={go(() => tabs.open(u.route))}>
+                {u.command}
               </CommandItem>
             ))}
           </CommandGroup>

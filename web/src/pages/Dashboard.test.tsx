@@ -116,7 +116,7 @@ describe("app shell", () => {
     expect((await needs.findByRole("link", { name: /Flaky test/ })).getAttribute("href")).toBe("/#/t/t1");
     expect(nav.getByRole("region", { name: "Sessions" })).toBeTruthy();
     expect(nav.getByRole("link", { name: /Scratch notes/ }).getAttribute("href")).toBe("/#/t/p1");
-    expect(nav.getByRole("link", { name: "Workflows & runs" }).getAttribute("href")).toBe("/#/p/pr?tab=workflows");
+    expect(nav.getByRole("link", { name: "Automation" }).getAttribute("href")).toBe("/#/p/pr?tab=workflows");
     expect(nav.getByLabelText("1 waiting for you")).toBeTruthy(); // the inbox count
   });
 
@@ -138,15 +138,18 @@ describe("app shell", () => {
     const { router } = await renderApp("/");
     const strip = within(await screen.findByRole("tablist", { name: "Open editors" }));
     expect(strip.getByRole("tab", { name: "Dashboard", selected: true })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /^Setup/ })); // the Setup group starts folded
-    fireEvent.click(screen.getByRole("link", { name: "Members & access" }));
-    await waitFor(() => expect(strip.getByRole("tab", { name: "Members & access", selected: true })).toBeTruthy());
+    fireEvent.click(screen.getByRole("link", { name: "Automation" }));
+    await waitFor(() => expect(strip.getByRole("tab", { name: "Automation · Workflows", selected: true })).toBeTruthy());
     expect(strip.getAllByRole("tab")).toHaveLength(2);
-    fireEvent.click(screen.getByRole("link", { name: "Members & access" })); // focusing it again adds nothing
+    fireEvent.click(screen.getByRole("link", { name: "Automation" })); // focusing it again adds nothing
+    expect(strip.getAllByRole("tab")).toHaveLength(2);
+    // another view of the same area is the same tab: its title follows
+    fireEvent.click(await screen.findByRole("tab", { name: "Schedules" }));
+    await waitFor(() => expect(strip.getByRole("tab", { name: "Automation · Schedules", selected: true })).toBeTruthy());
     expect(strip.getAllByRole("tab")).toHaveLength(2);
     fireEvent.click(strip.getByRole("tab", { name: "Dashboard" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/"));
-    fireEvent.click(strip.getByLabelText("Close Members & access"));
+    fireEvent.click(strip.getByLabelText("Close Automation · Schedules"));
     await waitFor(() => expect(strip.getAllByRole("tab")).toHaveLength(1));
   });
 
@@ -157,12 +160,13 @@ describe("app shell", () => {
     await router.navigate({ href: "/jobs" });
     await waitFor(() => expect(hidden()).toBe(1));
     expect(screen.getAllByRole("main")).toHaveLength(1); // only the shown tab is the landmark
-    const more = ["/references", "/connectors", "/capabilities", "/schedules", "/usage", "/memory", "/profile", "/inbox"];
+    // the personal views are one tab ("Me"), so eight more places that differ
+    const more = ["/references", "/profile", "/inbox", "/supervisor", "/help", "/p/pr?tab=board", "/p/pr?tab=insights", "/p/pr?tab=settings"];
     for (const [i, to] of more.entries()) {
       await router.navigate({ href: to });
       await waitFor(() => expect(hidden()).toBe(Math.min(i + 2, 7))); // eight are kept: seven hidden plus the shown one
     }
-    await waitFor(() => expect(router.state.location.pathname).toBe("/inbox"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/p/pr"));
     expect(screen.getAllByRole("main")).toHaveLength(1);
   });
 });

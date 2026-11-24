@@ -12,7 +12,8 @@ import { useDialogs } from "@/components/app/dialogs";
 import { EmptyGuide } from "@/components/app/EmptyGuide";
 import { GettingStarted } from "@/components/app/onboarding/GettingStarted";
 import { useTrySample } from "@/components/app/onboarding/sample";
-import { useShell } from "@/components/app/shell/context";
+import { NavLink, useShell } from "@/components/app/shell/context";
+import { useUseCases } from "@/lib/useCases";
 import { onboardingAuto } from "@/lib/onboarding";
 import { ImportEntry } from "@/components/app/github-import";
 import { Button } from "@/components/ui/button";
@@ -89,6 +90,29 @@ export function SessionCard({ t }: { t: Row }) {
   );
 }
 
+/** Ready-made setups built on top of the platform (job search today). Nothing is drawn while the server offers none. */
+export function UseCases() {
+  const cases = useUseCases();
+  if (!cases.length) return null;
+  return (
+    <section aria-labelledby="usecases-h" className="space-y-3">
+      <h2 id="usecases-h" className="text-sm font-medium text-muted-foreground">
+        Use cases
+      </h2>
+      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {cases.map((u) => (
+          <li key={u.id}>
+            <NavLink href={u.route} className="flex h-full flex-col gap-1 rounded-lg border bg-card p-3 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">
+              <span className="font-medium">{u.title}</span>
+              <span className="text-xs text-muted-foreground">{u.blurb}</span>
+            </NavLink>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function Dashboard() {
   const { data, isLoading, error, refetch } = useOverview();
   const { newProject, newSession, importGithub } = useDialogs();
@@ -135,6 +159,7 @@ export function Dashboard() {
             </Button>
           </EmptyGuide>
         ) : null}
+        <UseCases />
         <section aria-labelledby="active-h" className="space-y-3">
           <h2 id="active-h" className="text-sm font-medium text-muted-foreground">
             Running and waiting ({active.length})

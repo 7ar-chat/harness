@@ -7,7 +7,7 @@ import { useWorkflows } from "@/api/workflows";
 import { useQueuedCount } from "@/chat/queue";
 import { cn } from "@/lib/utils";
 import { StatusDot } from "../common";
-import { PROJECT_SECTIONS, pageTitle, type EditorTab, type Tabs } from "./tabs";
+import { pageTitle, projectTitle, type EditorTab, type Tabs } from "./tabs";
 
 /** The words on a tab. Project places say which project when more than one project has a tab open. */
 export function useTabLabel(tab: EditorTab, multi: boolean): string {
@@ -35,7 +35,7 @@ export function useTabLabel(tab: EditorTab, multi: boolean): string {
     case "run":
       return `Run · ${(tab.id ?? "").slice(0, 8)}`;
     default:
-      return `${PROJECT_SECTIONS[tab.section ?? "board"] ?? tab.section}${suffix}`;
+      return `${projectTitle(tab.section ?? "board")}${suffix}`;
   }
 }
 

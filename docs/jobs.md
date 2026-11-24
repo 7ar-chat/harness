@@ -1,5 +1,10 @@
 # Job search
 
+Job search is a **use case** built on the platform, not a part of the platform itself: a ready-made setup (a profile, a
+prompt variant, a few tools and an hourly round) that is offered only when the server has it turned on. It has no place
+in the explorer; the Dashboard lists it under **Use cases** and the command palette has a "Use case: Job search" entry
+(the list of use cases is one file, `web/src/lib/useCases.ts`).
+
 The agent can look for work for a person and apply for them, around the clock, inside limits the person sets. It is
 generic: nothing is specific to one person. The person's search is **data** (a profile), the finding is **plain HTTP**
 (no model), and the judging and form filling are **the agent's**.

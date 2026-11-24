@@ -355,7 +355,10 @@ export interface JobsOverview {
 }
 const jobsKey = ["jobs"] as const;
 export const useJobs = () => useQuery({ queryKey: jobsKey, queryFn: () => api.get<JobsOverview>("/me/jobs"), retry: false, refetchInterval: useLivePoll(30000) });
-export const useSaveJobProfile = () => useAction((p: JobProfile) => api.put<JobProfile>("/me/jobs/profile", p), () => [jobsKey], "Saved");
+/** Whether this server has the job-search use case at all (the answer the page itself gives: no 404 or 501). Asked once, not polled. */
+export const useJobsAvailable = () =>
+  useQuery({ queryKey: ["jobs", "available"], queryFn: async () => { await api.get<JobsOverview>("/me/jobs"); return true; }, retry: false, staleTime: 5 * 60_000 }).data === true;
+export const useSaveJobProfile =() => useAction((p: JobProfile) => api.put<JobProfile>("/me/jobs/profile", p), () => [jobsKey], "Saved");
 export const useAddJobBoard = () => useAction((url: string) => api.post<{ openJobs: number }>("/me/jobs/boards", { url }), () => [jobsKey], "Board added");
 export const useScanJobs = () => useAction(() => api.post<{ added: number; boards: number; errors?: string[] }>("/me/jobs/scan"), () => [jobsKey]);
 export const useOpenJobThread = () => useAction(() => api.post<{ threadId: string; started: boolean }>("/me/jobs/thread"), () => [jobsKey]);

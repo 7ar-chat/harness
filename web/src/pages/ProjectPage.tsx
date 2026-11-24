@@ -2,7 +2,9 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useProjectPlace } from "@/lib/place";
 import { formatDistanceToNowStrict } from "date-fns";
 import { ExternalLink, Plus, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { AreaNav } from "@/components/app/shell/AreaNav";
+import { locateTab } from "@/components/app/shell/areas";
 import { isOwner, canWrite } from "@/api/client";
 import {
   useAudit, useSeen, useDeleteProject, useGithub, useInvite, useInvites, useMe, useMembers, useOverview, useProject, useRecheckGithub, useRemoveMember, useRevokeInvite, useSetMember, useUpdateProject,
@@ -282,10 +284,15 @@ export function ProjectPage() {
   const p = project.data;
   const owner = isOwner(p.role);
   const threads = (overview?.projects.find((x) => x.id === projectId)?.threads ?? []).filter((t) => t.kind !== "supervisor").sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  // The area's views are a sub-navigation above the page (a task, requirement, workflow or run opened on its own has none).
+  const located = locateTab(tab);
+  const detail = !!(search.task || search.req || search.wf || search.run);
+  const frame = (body: ReactNode) => (located && !detail ? <AreaNav area={located.area} current={located.view.id} projectId={projectId} owner={owner}>{body}</AreaNav> : body);
   return (
     <ScrollArea className="h-full">
       <div className="space-y-4 p-4 md:p-6">
-        {/* The tab strip is the shell's: the explorer and the editor tabs choose the section, the address holds it. */}
+        {/* The tab strip is the shell's: the explorer and the editor tabs choose the area, the sub-navigation the view, the address holds it. */}
+        {frame(<>
         <SectionIntro section={tab ?? "board"} />
         <Tabs value={tab ?? "board"}>
           <TabsContent value="board" className="mt-0">
@@ -362,6 +369,7 @@ export function ProjectPage() {
             </TabsContent>
           ) : null}
         </Tabs>
+        </>)}
       </div>
     </ScrollArea>
   );
