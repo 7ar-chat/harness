@@ -352,9 +352,6 @@ export function RolesPanel({ projectId, canEdit }: { projectId?: string; canEdit
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          A role is a named agent configuration: instructions, model, tools and skills. Type <code>@</code> in a session to run as one, or name one in the delegate tool and on a task. The five builtin roles can be replaced by a role of the same name.
-        </p>
         {canEdit ? (
           <Button onClick={() => setEditing({ create: true })}>
             <Plus /> New role
@@ -403,7 +400,7 @@ export function RolesPage() {
     <ScrollArea className="h-full">
       <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-8">
         <h1 className="text-xl font-semibold">My roles</h1>
-        <p className="text-sm text-muted-foreground">Agent configurations only you can call with @ in your sessions. A project role of the same name wins inside that project.</p>
+        <p className="text-sm text-muted-foreground">A role is a named agent configuration: instructions, model, tools and skills. These are yours alone: type @ in a session to run as one. A project role of the same name wins inside that project.</p>
         <RolesPanel canEdit />
       </div>
     </ScrollArea>

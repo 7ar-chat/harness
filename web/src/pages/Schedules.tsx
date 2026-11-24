@@ -433,7 +433,7 @@ export function SchedulesPage() {
   return (
     <ScrollArea className="h-full">
       <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-8">
-        <h1 className="text-xl font-semibold">Scheduled tasks</h1>
+        <h1 className="text-xl font-semibold">My schedules</h1>
         <SchedulesPanel canEdit />
       </div>
     </ScrollArea>

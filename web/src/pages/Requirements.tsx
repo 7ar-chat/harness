@@ -271,7 +271,11 @@ function AutoDispatch({ projectId }: { projectId: string }) {
   if (!s) return null; // the form starts from what is saved
   const valid = !on || budget > 0;
   return (
-    <section aria-label="Auto-dispatch" className="space-y-2 rounded-lg border p-3 text-sm">
+    <details className="rounded-lg border text-sm" open={on || comment}>
+      <summary className="cursor-pointer select-none px-3 py-2 font-medium">
+        Automation <span className="font-normal text-muted-foreground">{on ? "Auto-dispatch is on" : "Off: hand ready requirements to agents by itself"}</span>
+      </summary>
+    <section aria-label="Auto-dispatch" className="space-y-2 p-3 pt-1">
       <div className="flex items-center gap-2">
         <Switch id="req-auto" checked={on} onCheckedChange={setOn} aria-label="Auto-dispatch ready requirements" />
         <Label htmlFor="req-auto">Auto-dispatch ready requirements</Label>
@@ -303,6 +307,7 @@ function AutoDispatch({ projectId }: { projectId: string }) {
       </div>
       <p className="text-xs text-muted-foreground">When a requirement imported from a GitHub issue gets a pull request, say so on the issue, and write "Fixed by #142" when it merges. Off by default; the GitHub App needs the issues permission.</p>
     </section>
+    </details>
   );
 }
 

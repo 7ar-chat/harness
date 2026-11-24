@@ -478,7 +478,6 @@ export function InsightsPanel({ projectId }: { projectId: string }) {
         <RangePicker value={range} onChange={setRange} />
         <ReportMenu projectId={projectId} range={range} />
       </div>
-      <DigestCard projectId={projectId} />
       {q.isLoading ? (
         <ListSkeleton rows={3} />
       ) : q.error || !q.data ? (
@@ -494,6 +493,7 @@ export function InsightsPanel({ projectId }: { projectId: string }) {
       ) : (
         <Body d={q.data} projectId={projectId} />
       )}
+      <DigestCard projectId={projectId} />
     </div>
   );
 }

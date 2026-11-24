@@ -13,6 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startFakeLlm } from "./fakellm.mjs";
 import { runP } from "./p-scenarios.mjs";
+import { runShots } from "./shots.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appDir = path.resolve(here, "../../app");
@@ -1888,69 +1889,8 @@ async function main() {
   });
   await runP({ step, browser, base, post, api, visible, gone, poll, eq, watch, onboarded, T, proj, tmp, fake });
 
-  // Opt-in: E2E_SHOTS=<dir> saves screenshots of the main surfaces (not a scenario, nothing is asserted).
-  if (process.env.E2E_SHOTS) {
-    const dir = process.env.E2E_SHOTS;
-    fs.mkdirSync(dir, { recursive: true });
-    const shot = async (pg, url, name) => {
-      await pg.goto(`${base}/#${url}`);
-      await pg.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-      await pg.waitForTimeout(1500);
-      await pg.screenshot({ path: path.join(dir, `${name}.png`) });
-    };
-    const runs = await api(`/projects/${proj.wf}/workflow-runs`);
-    await shot(page, "/", "dashboard");
-    // a session with an edit, so the Diff tab shows
-    await page.goto(`${base}/#/t/${sessionState.w}`);
-    await page.getByRole("textbox", { name: "Message" }).fill("please edit the report");
-    await page.getByRole("button", { name: "Send", exact: true }).click();
-    await visible(page.getByText("Edited the report.", { exact: true }), "the edit answer");
-    await idle(sessionState.w);
-    await shot(page, `/t/${sessionState.w}`, "session");
-    const reqs = await api(`/projects/${proj.id}/requirements`);
-    await shot(page, `/p/${proj.id}?tab=requirements&req=${reqs[0]?.id ?? ""}`, "requirement");
-    const tasks = await api(`/projects/${proj.id}/tasks?limit=50`);
-    await shot(page, `/p/${proj.id}?tab=tasks&task=${tasks[0]?.id ?? ""}`, "task");
-    await shot(page, `/p/${proj.id}?tab=board`, "board");
-    await shot(page, `/p/${proj.wf}?tab=workflows&run=${runs[0]?.id ?? ""}`, "workflow-run");
-    await shot(page, `/p/${proj.id}?tab=settings`, "settings");
-    
-    for (const t of ["requirements", "roles", "members", "memory", "capabilities", "usage", "insights", "schedules", "audit", "recipes"]) await shot(page, `/p/${proj.id}?tab=${t}`, `tab-${t}`);
-    for (const r of ["/insights", "/inbox", "/profile", "/jobs", "/admin", "/connectors"]) await shot(page, r, `page${r.replace("/", "-")}`);
-    await shot(page, `/p/${proj.wf}?tab=workflows`, "workflows");
-    await shot(page, `/p/${lp.id}?tab=notifications`, "notifications-project");
-    await shot(page, "/profile", "notifications-me");
-    await page.getByRole("table", { name: "My notifications" }).scrollIntoViewIfNeeded();
-    await page.getByLabel("Quiet hours", { exact: true }).scrollIntoViewIfNeeded();
-    await page.screenshot({ path: path.join(dir, "notifications-me.png") });
-    await page.evaluate(() => localStorage.setItem("theme", "light"));
-    await page.reload();
-    await shot(page, `/p/${proj.id}?tab=board`, "board-light");
-    await shot(page, `/t/${sessionState.w}`, "session-light");
-    await shot(page, `/p/${proj.id}?tab=insights`, "insights-light");
-    await page.evaluate(() => localStorage.setItem("theme", "dark"));
-    const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
-    await phone.addInitScript(onboarded);
-    const pp = await phone.newPage();
-    await shot(pp, `/t/${sessionState.w}`, "phone-session");
-    await shot(pp, `/p/${proj.id}?tab=board`, "phone-board");
-    await shot(pp, `/p/${proj.id}?tab=insights`, "phone-insights");
-    await pp.getByRole("button", { name: "Open navigation" }).click();
-    await pp.waitForTimeout(600);
-    await pp.screenshot({ path: path.join(dir, "phone-explorer.png") });
-    await phone.close();
-    // onboarding on a phone: the dashboard with the checklist (a person who has been welcomed)
-    const phone2 = await browser.newContext({ viewport: { width: 390, height: 844 } });
-    await phone2.addInitScript(() => {
-      try {
-        localStorage.setItem("7ar.onboarding.v1.local", JSON.stringify({ welcomed: true }));
-      } catch {
-        /* no storage */
-      }
-    });
-    await shot(await phone2.newPage(), "/", "onboarding-phone-dashboard");
-    await phone2.close();
-  }
+  // Opt-in: E2E_SHOTS=<dir> saves a screenshot of every screen (shots.mjs); nothing is asserted.
+  await runShots({ problems, step, browser, base, api, post, visible, watch, onboarded, T, proj, lp, sessionState, page, newSession, send, idle });
 
   await ctx.close();
 }

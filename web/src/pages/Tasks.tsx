@@ -710,7 +710,7 @@ function Learning({ projectId }: { projectId: string }) {
   const exp = useLearning<LearningExperiment>(projectId, "experiment");
   // 404 answers null: the server runs without the learning feature.
   if (clusters.isLoading || exp.isLoading) return null;
-  if (clusters.data === null || exp.data === null) return <p className="text-sm text-muted-foreground">Learning views are off on this server.</p>;
+  if (clusters.data === null || exp.data === null) return null; // the server runs without the learning feature: nothing to show
   return (
     <div className="space-y-4">
       <section>

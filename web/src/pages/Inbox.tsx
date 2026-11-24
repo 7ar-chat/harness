@@ -36,7 +36,7 @@ function TaskItem({ it }: { it: InboxTask }) {
           <span className="ml-auto">{ago(t.updatedAt)}</span>
         </div>
         {blocked && it.reason ? <div className="rounded-md bg-warning/10 p-2 text-foreground">{it.reason}</div> : null}
-        {it.lastEvent?.text ? <p className="line-clamp-2">{it.lastEvent.text}</p> : null}
+        {it.lastEvent?.text && !(blocked && it.reason && it.lastEvent.text.startsWith(it.reason.slice(0, 40))) ? <p className="line-clamp-2">{it.lastEvent.text}</p> : null}
         <div className="flex flex-wrap items-center gap-2">
           {!blocked && t.pr?.number ? (
             <Button size="sm" asChild>

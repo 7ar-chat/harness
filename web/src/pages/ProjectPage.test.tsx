@@ -76,21 +76,21 @@ describe("ProjectPage", () => {
     mockFetch(routes("owner"));
     const owner = await renderApp("/p/p1");
     await screen.findByRole("button", { name: /^Switch project/ });
-    expect(screen.getByRole("link", { name: "Settings" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Project settings" })).toBeTruthy();
     expect(await openMenu()).toContain("New session");
     owner.unmount();
 
     mockFetch(routes("member"));
     const member = await renderApp("/p/p1");
     await screen.findByRole("button", { name: /^Switch project/ });
-    expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Project settings" })).toBeNull();
     expect(await openMenu()).toContain("New session");
     member.unmount();
 
     mockFetch(routes("viewer"));
     await renderApp("/p/p1");
     await screen.findByRole("button", { name: /^Switch project/ });
-    expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Project settings" })).toBeNull();
     const viewer = await openMenu();
     expect(viewer).not.toContain("New session");
     expect(viewer).not.toContain("Import AGENTS.md");

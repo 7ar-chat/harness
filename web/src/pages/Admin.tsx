@@ -68,6 +68,7 @@ export function AdminPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="flex max-w-3xl flex-col gap-4 p-4 md:p-6">
+        <h1 className="text-xl font-semibold">Admin</h1>
         <Tabs value={section} onValueChange={(v) => setSection(v as "users" | "hosts")}>
           <TabsList aria-label="Admin sections">
             <TabsTrigger value="users">Users</TabsTrigger>
