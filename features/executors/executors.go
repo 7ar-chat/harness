@@ -354,7 +354,7 @@ func Diagnose(ex executors.Executor, output string) string {
 	keys := strings.Join(ex.CredentialEnv, ", ")
 	switch {
 	case authRe.MatchString(output):
-		msg := fmt.Sprintf("%s could not authenticate: add your key in Settings > Executors", ex.Name)
+		msg := fmt.Sprintf("%s could not authenticate: add your key in Account > Executors", ex.Name)
 		if keys != "" {
 			msg += " (it reads " + keys + ")"
 		}

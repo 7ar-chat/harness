@@ -426,7 +426,7 @@ export function ProfilePage() {
   return (
     <ScrollArea className="h-full">
       <div className="space-y-4 p-4 md:p-8">
-        <h1 className="text-xl font-semibold">My settings</h1>
+        <h1 className="text-xl font-semibold">Account</h1>
         <div className="min-w-0 max-w-3xl space-y-4">
           <p className="text-sm text-muted-foreground">Your name, avatar, sounds and notifications</p>
           <ProfileCard />

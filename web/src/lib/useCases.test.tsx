@@ -87,7 +87,8 @@ describe("explorer", () => {
     const names = nav.getAllByRole("link").map((a) => a.textContent?.replace(/\s+/g, " ").trim());
     // places first, sessions are listed too
     expect(names.filter((n) => n && !/^Session /.test(n))).toEqual(["Dashboard", "Needs you", "Work", "Automation", "Insights", "Settings", "My assistant", "Me"]);
-    // the one link under the list is the account's Settings
-    expect(screen.getAllByRole("link", { name: "Settings" })).toHaveLength(2);
+    // one Settings (the project's); the account link under the list has its own name
+    expect(screen.getAllByRole("link", { name: "Settings" })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: "Account" })).toHaveLength(1);
   });
 });

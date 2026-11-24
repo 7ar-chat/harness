@@ -187,7 +187,7 @@ function RoleEditor({ pid, role, create, readOnly, onClose, onDuplicate }: { pid
             </Select>
             <p className="text-xs text-muted-foreground">
               {d.executor
-                ? "An external CLI runs on its own loop in the sandbox, under the task's policy. It does not use the project's memory, and its spend is counted only if the CLI reports it. Each person sets their own API key in Settings."
+                ? "An external CLI runs on its own loop in the sandbox, under the task's policy. It does not use the project's memory, and its spend is counted only if the CLI reports it. Each person sets their own API key in Account."
                 : "Recommended. The 7ar harness codes in the sandbox with the project's memory and instructions, loop guards, budgets that count every token, approvals in the UI, and queue, steer and resume. It needs no setup."}
             </p>
           </div>

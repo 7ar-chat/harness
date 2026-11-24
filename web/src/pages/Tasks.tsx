@@ -326,7 +326,7 @@ function CreateTaskDialog({ projectId, owner, open, onOpenChange, existing }: { 
               </Select>
               {projectRoles.find((r) => r.name === f.role)?.executor ? (
                 <p className="text-xs text-muted-foreground">
-                  Runs on the external executor {projectRoles.find((r) => r.name === f.role)?.executor}, under the policy below. It uses your API key from Settings.
+                  Runs on the external executor {projectRoles.find((r) => r.name === f.role)?.executor}, under the policy below. It uses your API key from Account.
                 </p>
               ) : (
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">Runs on the 7ar harness (recommended), under the policy below. <HelpButton slug="executors" /></p>

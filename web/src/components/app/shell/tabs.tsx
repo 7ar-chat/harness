@@ -33,7 +33,7 @@ const PAGES: Record<string, string> = {
   "/usage": "Me",
   "/insights": "Me",
   "/memory": "Me",
-  "/profile": "Settings",
+  "/profile": "Account",
   "/admin": "Admin",
   "/help": "Help",
 };

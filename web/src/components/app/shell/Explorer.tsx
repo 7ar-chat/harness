@@ -161,7 +161,7 @@ export function UserMenu() {
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => tabs.open("/profile")}>
-          <UserCog /> My settings
+          <UserCog /> Account
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => tabs.open("/memory")}>
           <Brain /> My memory
@@ -421,7 +421,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
       <div className="shrink-0 border-t border-sidebar-border px-2 py-1">
         <Row href="/profile" k="page:/profile" onNavigate={onNavigate} title="Your account and preferences">
-          Settings
+          Account
         </Row>
         <UserMenu />
       </div>

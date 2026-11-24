@@ -30,7 +30,7 @@ func TestFailedRunExplainsAMissingKeyAndBooksItUnpriced(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(res.Problem, "add your key in Settings > Executors") || !strings.Contains(res.Problem, "OPENAI_API_KEY") {
+	if !strings.Contains(res.Problem, "add your key in Account > Executors") || !strings.Contains(res.Problem, "OPENAI_API_KEY") {
 		t.Fatalf("problem = %q", res.Problem)
 	}
 	if !strings.Contains(executors.Render(res), "problem: ") {

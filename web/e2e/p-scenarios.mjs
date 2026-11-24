@@ -295,7 +295,8 @@ export async function runP(h) {
         const left = names.filter((n) => old.test(n));
         eq(left, [], `no explorer link like ${old}`);
       }
-      eq(await pg.getByRole("link", { name: "Settings", exact: true }).count(), 2, "the project's Settings and the account's Settings");
+      eq(await pg.getByRole("link", { name: "Settings", exact: true }).count(), 1, "one Settings (the project's); the account link is called Account");
+      eq(await pg.getByRole("link", { name: "Account", exact: true }).count(), 1, "the account link");
       // Work, then its views: the tab id follows
       await explorer.getByRole("link", { name: "Work", exact: true }).click();
       const main = pg.getByRole("main");

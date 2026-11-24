@@ -120,7 +120,7 @@ function ExecutorLine({ ex, project, actions }: { ex: ExecutorView; project?: st
       {ex.description ? <p className="text-sm text-muted-foreground">{ex.description}</p> : null}
       {ex.credentialEnv?.length ? (
         <p className="text-xs text-muted-foreground">
-          Reads <code>{ex.credentialEnv.join(", ")}</code> from your Settings{ex.installCommand ? <>; installed on first use with <code>{ex.installCommand}</code></> : null}.
+          Reads <code>{ex.credentialEnv.join(", ")}</code> from your Account{ex.installCommand ? <>; installed on first use with <code>{ex.installCommand}</code></> : null}.
         </p>
       ) : null}
       {open ? <CredentialsForm ex={ex} project={project} onDone={() => setOpen(false)} /> : null}
@@ -218,7 +218,7 @@ function ExecutorEditor({ pid, ex, onClose }: { pid: string; ex?: ExecutorView; 
           <div className="space-y-1">
             <Label htmlFor="ex-env">Credential variables</Label>
             <Input id="ex-env" value={env} placeholder="MYCLI_API_KEY, MYCLI_BASE_URL" onChange={(e) => setEnv(e.target.value)} />
-            <p className="text-xs text-muted-foreground">Each member sets their own values in Settings; they are sealed per person.</p>
+            <p className="text-xs text-muted-foreground">Each member sets their own values in Account; they are sealed per person.</p>
           </div>
           <div className="space-y-1">
             <Label htmlFor="ex-parser">Output</Label>

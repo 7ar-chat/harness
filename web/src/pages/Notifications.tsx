@@ -60,7 +60,7 @@ export function WhyNot({ log }: { log: NotifyLogEntry[] }) {
         <li>Quiet hours or the hourly digest hold messages for later{held ? ` (${held} held in the list below)` : ""}.</li>
         <li>The same event within the repeat window is sent once{collapsed ? ` (${collapsed} collapsed below)` : ""}.</li>
         <li>The channel may have failed{failed ? ` (${failed} failed below, with the reason)` : ""}: press Test on it.</li>
-        <li>Telegram, Slack and email only work once you linked them in My settings and Connectors.</li>
+        <li>Telegram, Slack and email only work once you linked them in Account and Connectors.</li>
       </ul>
     </details>
   );

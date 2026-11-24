@@ -53,7 +53,7 @@ When an agent wants to run something risky, asks a question, or finishes work to
 | **Settings** | General, Members & access, Roles & executors, Tools & skills, Memory & docs, Notifications |
 | **Me** | Library, Connectors, Memory, My roles, My schedules, My tools & skills, My insights, My usage |
 
-**Me** is yours across every project. **My assistant** is your personal agent. The **Settings** link at the bottom of the explorer is for your account.
+**Me** is yours across every project. **My assistant** is your personal agent. The **Account** link at the bottom of the explorer is for your account.
 
 Looking for something by name? Press **Ctrl/Cmd + K** and type it: every view is in the palette. Ready-made setups such as job search are not areas, see [Use cases](help:use-cases).`,
   },
@@ -129,7 +129,7 @@ A role also says which **executor** runs it.`,
     body: `An **executor** is the program that does the work for a role or task.
 
 - **7ar harness** (recommended): runs inside 7ar. Approvals, budgets, memory and policies all work, and you see every step.
-- **External executors** (for example a coding CLI): run the tool of another vendor with your own API key from Settings. Use them when you want that tool's behaviour.
+- **External executors** (for example a coding CLI): run the tool of another vendor with your own API key from Account. Use them when you want that tool's behaviour.
 
 If you are unsure, leave it on the 7ar harness.`,
   },
