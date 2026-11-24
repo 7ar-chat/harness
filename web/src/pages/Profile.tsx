@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bell, CheckCircle2, ExternalLink, Send, Upload, User as UserIcon, Volume2 } from "lucide-react";
+import { Bell, CheckCircle2, ExternalLink, Hash, Send, Upload, User as UserIcon, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import QRCode from "qrcode";
 import {
@@ -298,7 +298,7 @@ function ConnectorRow({ c, onImport }: { c: Connector; onImport: () => void }) {
   return (
     <div className="flex flex-col gap-3 border-b py-4 md:flex-row md:items-start">
       <div className="flex min-w-0 flex-1 gap-3">
-        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">{gh ? <GithubMark className="size-4" /> : <Send className="size-4" />}</span>
+        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">{gh ? <GithubMark className="size-4" /> : c.kind === "slack" ? <Hash className="size-4" /> : <Send className="size-4" />}</span>
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-sm font-medium">{c.label || (gh ? "GitHub" : name)}</h2>
@@ -426,7 +426,7 @@ export function ProfilePage() {
   return (
     <ScrollArea className="h-full">
       <div className="space-y-4 p-4 md:p-8">
-        <h1 className="text-xl font-semibold">Settings</h1>
+        <h1 className="text-xl font-semibold">My settings</h1>
         <div className="min-w-0 max-w-3xl space-y-4">
           <p className="text-sm text-muted-foreground">Your name, avatar, sounds and notifications</p>
           <ProfileCard />

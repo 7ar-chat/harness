@@ -711,11 +711,11 @@ function Learning({ projectId }: { projectId: string }) {
   const exp = useLearning<LearningExperiment>(projectId, "experiment");
   // 404 answers null: the server runs without the learning feature.
   if (clusters.isLoading || exp.isLoading) return null;
-  if (clusters.data === null || exp.data === null) return <p className="text-sm text-muted-foreground">Learning views are off on this server.</p>;
+  if (clusters.data === null || exp.data === null) return null; // the server runs without the learning feature: nothing to show
   return (
     <div className="space-y-4">
       <section>
-        <h3 className="mb-2 text-sm font-medium">Recurring failures</h3>
+        <h2 className="mb-2 text-sm font-medium">Recurring failures</h2>
         {clusters.data?.length ? (
           <ul className="divide-y rounded-lg border">
             {clusters.data.map((c) => (
@@ -734,7 +734,7 @@ function Learning({ projectId }: { projectId: string }) {
         )}
       </section>
       <section>
-        <h3 className="mb-2 text-sm font-medium">Prompt experiment</h3>
+        <h2 className="mb-2 text-sm font-medium">Prompt experiment</h2>
         {exp.data?.standings?.length ? (
           <table className="w-full text-sm">
             <thead className="text-left text-xs text-muted-foreground">
@@ -772,7 +772,7 @@ function Report({ projectId }: { projectId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">Spend</h3>
+        <h2 className="text-sm font-medium">Spend</h2>
         <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
           <SelectTrigger size="sm" className="w-36" aria-label="Period">
             <SelectValue />
@@ -800,7 +800,7 @@ function Breakdowns({ days, models }: { days: Breakdown[]; models: Breakdown[] }
     <div className="grid gap-4 lg:grid-cols-2">
       {days.length ? (
         <section className="rounded-lg border p-3">
-          <h3 className="mb-2 text-sm font-medium">Spend per day</h3>
+          <h2 className="mb-2 text-sm font-medium">Spend per day</h2>
           <ul className="space-y-1">
             {days.map((d) => (
               <li key={d.Key} className="flex items-center gap-2 text-xs">
@@ -814,7 +814,7 @@ function Breakdowns({ days, models }: { days: Breakdown[]; models: Breakdown[] }
       ) : null}
       {models.length ? (
         <section className="rounded-lg border p-3">
-          <h3 className="mb-2 text-sm font-medium">Spend per model</h3>
+          <h2 className="mb-2 text-sm font-medium">Spend per model</h2>
           <table className="w-full text-xs">
             <thead className="text-muted-foreground">
               <tr>
@@ -864,7 +864,7 @@ function ReportBody({ r }: { r: NonNullable<ReturnType<typeof useFactoryReport>[
       <Breakdowns days={r.ByDay ?? []} models={r.ByModel ?? []} />
       {r.Top?.length ? (
         <section>
-          <h3 className="mb-2 text-sm font-medium">Most expensive tasks</h3>
+          <h2 className="mb-2 text-sm font-medium">Most expensive tasks</h2>
           <ul className="divide-y rounded-lg border">
             {r.Top.map((t) => (
               <li key={t.ID} className="flex items-center gap-3 p-3 text-sm">

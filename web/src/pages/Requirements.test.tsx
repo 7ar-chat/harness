@@ -57,7 +57,7 @@ describe("Requirements tab", () => {
     const panel = await page().findByRole("region", { name: "Requirement detail" });
     expect(await within(panel).findByText("Dark mode task")).toBeTruthy();
     expect(within(panel).getByRole("link", { name: /Dark mode chat/ }).getAttribute("href")).toBe("/#/t/t9");
-    fireEvent.click(within(panel).getByRole("button", { name: "Dispatch" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Hand to an agent" }));
     await waitFor(() => expect(m.find("POST", "/api/projects/p1/requirements/a/dispatch")).toHaveLength(1));
   });
 
@@ -70,7 +70,7 @@ describe("Requirements tab", () => {
     expect((await within(panel).findByRole("alert")).textContent).toContain("task failed: tests");
     expect(within(panel).getByRole("link", { name: /Pull request #12/ }).getAttribute("href")).toBe("https://github.com/acme/payments/pull/12");
     // a flagged requirement may be dispatched again
-    expect((within(panel).getByRole("button", { name: "Dispatch" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((within(panel).getByRole("button", { name: "Hand to an agent" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("creates a requirement from the dialog", async () => {

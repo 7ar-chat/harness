@@ -36,7 +36,7 @@ function TaskItem({ it }: { it: InboxTask }) {
           <span className="ml-auto">{ago(t.updatedAt)}</span>
         </div>
         {blocked && it.reason ? <div className="rounded-md bg-warning/10 p-2 text-foreground">{it.reason}</div> : null}
-        {it.lastEvent?.text ? <p className="line-clamp-2">{it.lastEvent.text}</p> : null}
+        {it.lastEvent?.text && !(blocked && it.reason && it.lastEvent.text.startsWith(it.reason.slice(0, 40))) ? <p className="line-clamp-2">{it.lastEvent.text}</p> : null}
         <div className="flex flex-wrap items-center gap-2">
           {!blocked && t.pr?.number ? (
             <Button size="sm" asChild>
@@ -113,10 +113,13 @@ export function InboxPage() {
   return (
     <ScrollArea className="h-full">
       <div className="mx-auto max-w-6xl space-y-8 p-4 md:p-8">
-        <h1 className="flex items-center gap-2 text-xl font-semibold">
-          <InboxIcon className="size-5" /> Needs you
-          {count ? <span className="rounded-full bg-warning px-2 text-xs text-warning-foreground">{count}</span> : null}
-        </h1>
+        <header className="space-y-1">
+          <h1 className="flex items-center gap-2 text-xl font-semibold">
+            <InboxIcon className="size-5" /> Needs you
+            {count ? <span className="rounded-full bg-warning px-2 text-xs text-warning-foreground">{count}</span> : null}
+          </h1>
+          <p className="text-sm text-muted-foreground">Everything an agent is waiting on a person for: approve, answer or review.</p>
+        </header>
         {!count ? <EmptyGuide title="Nothing waits for you" what="Blocked tasks, pull requests to review and sessions that ask for you show up here." slug="the-basics" /> : null}
         {gates.length ? (
           <section aria-labelledby="inbox-gates" className="space-y-3">

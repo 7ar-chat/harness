@@ -35,7 +35,7 @@ export const PROJECT_SECTIONS: Record<string, string> = {
   audit: "Audit log",
   usage: "Usage & caps",
   notifications: "Notifications",
-  settings: "Settings",
+  settings: "Project settings",
 };
 
 const PAGES: Record<string, string> = {
@@ -50,8 +50,8 @@ const PAGES: Record<string, string> = {
   "/roles": "My roles",
   "/usage": "Usage",
   "/insights": "Insights",
-  "/memory": "Library",
-  "/profile": "Settings",
+  "/memory": "My memory",
+  "/profile": "My settings",
   "/admin": "Admin",
   "/help": "Help",
 };

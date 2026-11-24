@@ -68,6 +68,10 @@ export function AdminPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="flex max-w-3xl flex-col gap-4 p-4 md:p-6">
+        <div>
+          <h1 className="text-xl font-semibold">Admin</h1>
+          <p className="text-sm text-muted-foreground">Who may sign in to this server, and which git servers agents may use.</p>
+        </div>
         <Tabs value={section} onValueChange={(v) => setSection(v as "users" | "hosts")}>
           <TabsList aria-label="Admin sections">
             <TabsTrigger value="users">Users</TabsTrigger>
@@ -79,7 +83,7 @@ export function AdminPage() {
         ) : (
           <>
         <div>
-          <h1 className="text-lg font-semibold">Users</h1>
+          <h2 className="text-lg font-semibold">Users</h2>
           <p className="text-sm text-muted-foreground">Approve or reject the people who signed up.</p>
         </div>
         <Tabs value={status} onValueChange={(v) => setStatus(v as UserStatus)}>
