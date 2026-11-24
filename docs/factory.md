@@ -139,6 +139,7 @@ Team mode, a GitHub App and Postgres are the production shape (`docs/team.md`). 
 | `FACTORY_POLICY` | default policy (`supervised`, `sandboxed`, `autonomous`) |
 | `FACTORY_DAILY_BUDGET_USD`, `_TOKENS`, `FACTORY_DAILY_PER_PROJECT=1` | daily cap (a task's own budget is set by its creator) |
 | `FACTORY_MAX_CONCURRENT`, `FACTORY_MAX_ATTEMPTS` | tasks running at once (4), attempts per task (3) |
+| `FACTORY_RETRY_BACKOFF_SECONDS` | a fixed delay before a failed attempt is retried (default: 30 s doubling, capped at 15 min); for tests |
 | `FACTORY_RUN=0` | do not run the dispatcher, scheduler and PR loop in this process (in `harness-worker` it is the other way round: they run only with `FACTORY_RUN=1`) |
 | `FACTORY_LESSONS=1` | distil lessons from finished tasks into project memory (needs the memory feature) |
 | `FACTORY_LEARNING=1` | record each run's context and each task's outcome, score memory entries by it ([Learning and self-improvement](#learning-and-self-improvement)) |
@@ -385,6 +386,17 @@ the task budget, and refuses to start once the budget is spent.
   prints, and never written to disk. The credential broker of the sandbox adds headers to HTTPS requests of the
   sandbox; it is not used here because the CLIs read their key from the environment.
 * Installing a missing CLI needs `install=true` on the call and `HARNESS_EXECUTORS_INSTALL=1` on the server.
+* **Availability.** `GET /api/executors` carries `availability` for each executor: `ready` (the binary is in the default
+  sandbox image), `install` (it is not, and a run installs it on first use), `missing` (it is not and nothing installs
+  it) or `unknown` (no sandbox backend, or the probe has not answered). It comes from one `command -v` per binary in a
+  short-lived sandbox, cached for 10 minutes; a request never waits more than 3 seconds for it. The Settings card
+  shows it as a badge, with the environment variables the executor reads.
+* **Failures with a fix.** A run that fails because the CLI is missing, or because it could not authenticate (command not
+  found, 401, invalid API key...), reports `problem:` with what to do ("add your key in Settings > Executors", and which
+  variables it reads) in the tool result and in the task's `executor` event.
+* **Cost.** A CLI that reports no tokens or dollars (omp, opencode, custom commands) is booked as one *unpriced* run:
+  the task event says "cost not reported by this CLI" and the Task detail and Usage rows say so. No number is made up
+  from the wall time.
 * `omp` (Oh My Pi, github.com/can1357/oh-my-pi, `bun install -g @oh-my-pi/pi-coding-agent`) is run as `omp -p ... </dev/null`
   (stdin is closed because omp reads a non-terminal stdin to EOF before it starts). A headless omp cannot answer an
   approval prompt, so the edit and full levels both use `--approval-mode yolo` and the sandbox is the boundary; the

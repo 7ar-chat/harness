@@ -42,7 +42,8 @@ export function useTabLabel(tab: EditorTab, multi: boolean): string {
 function TabButton({ tab, active, multi, tabs, dragging, setDragging }: { tab: EditorTab; active: boolean; multi: boolean; tabs: Tabs; dragging?: string; setDragging: (k?: string) => void }) {
   const label = useTabLabel(tab, multi);
   const overview = useOverview().data;
-  const queued = useQueuedCount(tab.id ?? "", tab.kind === "session");
+  const known = tab.kind === "session" && [...(overview?.personal ?? []), ...(overview?.projects ?? []).flatMap((p) => p.threads)].some((x) => x.id === tab.id);
+  const queued = useQueuedCount(tab.id ?? "", known); // only for a session the server lists: an unknown id would be a 404 on every tab
   const status = tab.kind === "session" ? [...(overview?.personal ?? []), ...(overview?.projects ?? []).flatMap((p) => p.threads)].find((x) => x.id === tab.id)?.status : undefined;
   return (
     <div
