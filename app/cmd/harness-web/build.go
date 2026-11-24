@@ -338,7 +338,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 			_ = closers.Close()
 			return nil, err
 		} else if enabled {
-			b.factory = &product.FactoryOptions{Escalator: fo.Escalator, Hooks: fo.Hooks}
+			b.factory = &product.FactoryOptions{Escalator: fo.Escalator, Hooks: fo.Hooks, Review: product.ReviewMode(fo.Options.ReviewModel, fo.Options.NoReview, fo.Options.Forge != nil)}
 			o.Features = append(o.Features, harness.FactoryFeature(fo.Options))
 		}
 	}
