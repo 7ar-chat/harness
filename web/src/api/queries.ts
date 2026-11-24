@@ -459,6 +459,9 @@ export const useAdminUsers = (status?: UserStatus, o: { enabled?: boolean; refet
     queryFn: () => api.get<AdminUser[]>(`/admin/users${status ? `?status=${status}` : ""}`),
     enabled: o.enabled ?? true,
     refetchInterval: o.refetchInterval,
+    // Sign-ups produce no feed event: the sidebar badge fetched this list when the admin loaded the app, and the Admin
+    // page must not show that copy as fresh when it opens (found by the stack e2e: bob signed up, the list said "nobody").
+    staleTime: 0,
     retry: false,
   });
 
