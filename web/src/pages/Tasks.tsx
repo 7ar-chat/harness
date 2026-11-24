@@ -948,7 +948,7 @@ export function TasksTab({ projectId, role }: { projectId: string; role: Role })
   if (open) return <TaskList projectId={projectId} role={role} />;
   return (
     <Tabs defaultValue="tasks">
-      <TabsList>
+      <TabsList variant="line">
         <TabsTrigger value="tasks">List</TabsTrigger>
         <TabsTrigger value="triggers">Triggers</TabsTrigger>
         <TabsTrigger value="report">Report</TabsTrigger>

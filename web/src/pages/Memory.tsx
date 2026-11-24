@@ -473,7 +473,7 @@ export function MemoryManager({ project, compact, readOnly = false }: { project?
     <div className={compact ? "space-y-4 p-3" : "w-full max-w-5xl space-y-4 p-4 md:p-6"}>
       {project ? (
         <Tabs value={layer} onValueChange={(v) => setLayer(v === "mine" ? "mine" : "shared")}>
-          <TabsList>
+          <TabsList variant="line">
             <TabsTrigger value="shared">Project</TabsTrigger>
             <TabsTrigger value="mine">Me in this project</TabsTrigger>
           </TabsList>

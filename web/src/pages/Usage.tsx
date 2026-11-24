@@ -245,7 +245,7 @@ export function UsagePanel({ projectId }: { projectId?: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <Tabs value={range} onValueChange={setRange}>
-          <TabsList>
+          <TabsList variant="line">
             {RANGES.map((r) => (
               <TabsTrigger key={r.key} value={r.key}>
                 {r.label}
@@ -292,7 +292,7 @@ export function UsagePanel({ projectId }: { projectId?: string }) {
           </section>
           {days.data ? <DayChart rows={days.data.rows} /> : null}
           <Tabs value={group} onValueChange={(g) => setGroup(g as UsageGroup)}>
-            <TabsList>
+            <TabsList variant="line">
               {GROUPS.map((g) => (
                 <TabsTrigger key={g.key} value={g.key}>
                   {g.label}
