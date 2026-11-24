@@ -243,6 +243,13 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		}
 		b.bus = redisx.NewFeedBus(rdb)
 		b.locker = redisx.NewCoordinator(rdb)
+		// HARNESS_RUN_QUEUE=redis: the run queue, the event log and the coordination of the runtime live in Redis (as in
+		// harness-worker), so a run queued by any replica is executed by any process that consumes the queue, in
+		// particular by harness-worker processes (with HARNESS_WEB_RUNS=0 the replicas only queue). Default: in process.
+		if os.Getenv("HARNESS_RUN_QUEUE") == "redis" {
+			infra := redisinfra.Infra(rdb, o.Store)
+			o.Infra = &infra
+		}
 	}
 	if ts != nil && cfg.LocalSandbox() {
 		be, err := teamLocalBackend(cfg)

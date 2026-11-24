@@ -4,7 +4,7 @@ GOFLAGS_BUILD = -trimpath -ldflags='-s -w'
 # The standalone Go modules next to the root one (see go.work); each is also built and tested alone, with GOWORK=off.
 MODULES = ai core modelinfo hosts/client hosts/tui adapters/sandbox app
 
-.PHONY: build test test-modules coverage e2e check-embed bench-offline vet web ci gen
+.PHONY: build test test-modules coverage e2e e2e-stack check-embed bench-offline vet web ci gen
 build:
 	cd app && go build $(GOFLAGS_BUILD) -o ../bin/harness ./cmd/harness
 	cd app && go build $(GOFLAGS_BUILD) -o ../bin/harness-web ./cmd/harness-web
@@ -36,6 +36,12 @@ coverage:
 e2e:
 	cd app && go test -race -count=1 -timeout 5m ./integration/...
 	cd web && npm run e2e
+
+# The production-shaped browser suite (opt-in, about 6 minutes): real OIDC sign-in (Dex), several people, two harness-web
+# replicas, a separate harness-worker, Postgres + Redis + S3 in Docker. Skips with a message when Docker is missing.
+# See docs/e2e-stack.md.
+e2e-stack:
+	cd web && npm run e2e:stack
 
 # Embeds the harness from an empty directory with a clean module cache and no replace directives, against the PUBLISHED
 # root module (default: the latest v* tag; make check-embed VERSION=main for the branch head), and runs a conversation.

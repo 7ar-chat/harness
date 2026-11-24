@@ -22,6 +22,10 @@ text: `harness_worker_up`, `_ready`, `_draining`, `_uptime_seconds`, `_concurren
 `_runs_started_total`, `_runs_finished_total{status}`). The startup log names the store, queue and sandbox
 backend and the model list.
 
+The web side of this topology is `harness-web` with `HARNESS_RUN_QUEUE=redis` (queue, event log and coordination in Redis) and,
+to leave all execution to the workers, `HARNESS_WEB_RUNS=0`. The worker uses the same S3 content store as the web replicas
+(`ARTIFACTS_S3_*`). A suite that runs this shape end to end: `docs/e2e-stack.md`.
+
 A docker-compose deployment is one `redis` and one `postgres` service, a web service built on the library
 (environment: the same `REDIS_HOST`/`POSTGRES_HOST`), and a `worker` service running `harness-worker` with
 those variables plus `LLM_API_KEY` and `OPENSANDBOX_URL`, `HARNESS_WORKER_ADDR=0.0.0.0:9090`, a health check

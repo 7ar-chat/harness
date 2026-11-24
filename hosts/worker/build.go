@@ -7,11 +7,13 @@ import (
 	"os"
 
 	"github.com/7ar-chat/harness"
+	"github.com/7ar-chat/harness/adapters/blobs/s3blobs"
 	"github.com/7ar-chat/harness/adapters/store/memstore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
 	"github.com/7ar-chat/harness/config"
 	"github.com/7ar-chat/harness/engine/queue"
+	"github.com/7ar-chat/harness/features/artifacts"
 	"github.com/7ar-chat/harness/redisinfra"
 )
 
@@ -86,6 +88,22 @@ func buildHarness(ctx context.Context, cfg *config.Config, o Options, m *metrics
 			infra := redisinfra.Infra(rdb, st)
 			ho.Infra = &infra
 		}
+	}
+	if cfg.ArtifactsS3Bucket != "" && ho.Store != nil {
+		// The same content store as harness-web: a worker that kept to the database would write the artifacts and
+		// files of its runs there while the web replicas look in S3 first, and could not read the attachments they
+		// stored in S3 (what was stored in the database stays readable through the fallback).
+		s3, err := s3blobs.New(s3blobs.Options{Bucket: cfg.ArtifactsS3Bucket, Endpoint: cfg.ArtifactsS3Endpoint, Region: cfg.ArtifactsS3Region,
+			AccessKey: cfg.AWSAccessKeyID, SecretKey: cfg.AWSSecretAccessKey, PathStyle: cfg.ArtifactsS3PathStyle, Prefix: cfg.ArtifactsS3Prefix})
+		if err != nil {
+			return fail(fmt.Errorf("configure the S3 blob store: %w", err))
+		}
+		if cfg.ArtifactsS3CreateBucket {
+			if err := s3.EnsureBucket(ctx); err != nil {
+				return fail(err)
+			}
+		}
+		ho.Blobs = artifacts.FallbackBlobs{Primary: s3, Legacy: artifacts.PGBlobs{S: ho.Store}}
 	}
 	if o.Features != nil {
 		fs, release, err := o.Features(ctx, cfg, ho.Store)

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockFetch, reply } from "@/test/fetch";
 import { ApiError } from "./client";
-import { errMessage, qk, supervisorQuery, toastError, useCommands, useCreateProject, useGithub, useMemory, useMarkSeen, useMemoryStats, useSaveMemory, useSeen, useUserDirectory } from "./queries";
+import { errMessage, qk, supervisorQuery, toastError, useCommands, useCreateProject, useGithub, useMemory, useMarkSeen, useMemoryStats, useSaveMemory, useSeen, useUserDirectory, useAdminUsers } from "./queries";
 
 function wrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -113,6 +113,20 @@ describe("useUserDirectory", () => {
     await waitFor(() => expect(result.current.size).toBe(2));
     expect(result.current.get("alice")?.name).toBe("Alice (me)");
     expect(result.current.get("bob")).toEqual({ login: "bob", name: "Bob", avatarUrl: "/b.png", email: "b@x" });
+  });
+});
+
+describe("useAdminUsers", () => {
+  it("refetches when the Admin page opens, even if the sidebar badge fetched a fresh empty list (sign-ups send no feed event)", async () => {
+    let list: unknown[] = [];
+    mockFetch({ "GET /api/admin/users": () => list });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 10_000 } } });
+    const W = ({ children }: { children: ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+    const badge = renderHook(() => useAdminUsers("pending"), { wrapper: W });
+    await waitFor(() => expect(badge.result.current.data).toEqual([]));
+    list = [{ login: "bob", status: "pending" }];
+    const page = renderHook(() => useAdminUsers("pending"), { wrapper: W });
+    await waitFor(() => expect(page.result.current.data).toHaveLength(1));
   });
 });
 

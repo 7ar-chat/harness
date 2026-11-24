@@ -305,6 +305,12 @@ replica, or the local file store), exactly as before.
 
 * Delivery is best effort, like the feed itself (pub/sub, no replay): a client that was disconnected refetches
   `/api/overview` on reconnect.
+* **Runs through a shared queue and workers.** By default each replica queues and executes its own runs in process. With
+  `HARNESS_RUN_QUEUE=redis` (needs `REDIS_HOST` and Postgres) the run queue, the event log and the runtime coordination live in
+  Redis, so any replica can stream, cancel or steer a run another process executes, and `harness-worker` processes
+  (`hosts/worker`) consume the queue. `HARNESS_WEB_RUNS=0` makes a replica only queue (it never executes runs): the
+  deployment shape "web replicas + workers". The workers need the same `POSTGRES_*`, `REDIS_*`, `HARNESS_SECRET_KEY` and
+  `ARTIFACTS_S3_*` settings. A production-shaped suite of this topology: [e2e-stack.md](e2e-stack.md).
 * The **watcher** runs in every replica and reacts to the events its own replica produced, so an attention note
   is queued once. Stuck-run reports are claimed in Redis (`work:feed:claim:stuck:<run>`, 24 h) so only one
   replica reports a run that went quiet.
