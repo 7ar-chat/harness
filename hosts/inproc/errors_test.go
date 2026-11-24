@@ -41,6 +41,15 @@ func TestMapErrTranslatesEngineErrorsToTheAPIErrorsFrontEndsTest(t *testing.T) {
 	}
 }
 
+func TestMapErrAnswersAnUnreachableSandboxWith503NotAnInternalError(t *testing.T) {
+	got := mapErr(fmt.Errorf("listing files: %w", sandbox.ErrUnavailable))
+
+	e := client.AsError(got)
+	if e == nil || e.Status != 503 || e.Code != "sandbox_unavailable" || !errors.Is(got, sandbox.ErrUnavailable) {
+		t.Fatalf("mapErr = %#v", e)
+	}
+}
+
 func TestMapErrAnswersASpendCapWith402AndItsOwnMessage(t *testing.T) {
 	cause := fmt.Errorf("starting: %w", &usage.CapError{Scope: usage.ScopeProject, ID: "p1", CapUSD: 10, SpentUSD: 10.5})
 

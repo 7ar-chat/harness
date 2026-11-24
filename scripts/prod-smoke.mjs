@@ -94,7 +94,8 @@ if (!tid) {
 if (tid) {
   const T = `/api/threads/${tid}`;
   await check("thread", T);
-  for (const sub of ["queue", "published", "environment", "usage", "files"]) await check("thread", `${T}/${sub}`, [200, 404]);
+  for (const sub of ["queue", "published", "environment", "usage"]) await check("thread", `${T}/${sub}`, [200, 404]);
+  await check("thread", `${T}/files`, [200, 404, 503]); // 503: the session's sandbox is asleep or not reachable from this server
 } else rows.push({ area: "thread", path: "(no session found: area skipped)", want: "-", got: "-", ms: 0, ok: true });
 
 // ---- the UI shell and its security headers (no cookie) ----------------------------------------------------------------

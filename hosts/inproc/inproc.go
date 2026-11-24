@@ -89,6 +89,9 @@ func mapErr(err error) error {
 		return client.ErrTooManySteers
 	case errors.Is(err, sandbox.ErrNotFound):
 		return client.ErrNotFound
+	case errors.Is(err, sandbox.ErrUnavailable):
+		// transient (found by the stack e2e: a replica that does not reach a sandbox answered 500 "internal" for it)
+		return client.Wrap(&client.Error{Status: http.StatusServiceUnavailable, Code: "sandbox_unavailable"}, "The sandbox is temporarily unavailable. Try again in a moment.", err)
 	}
 	if !errors.Is(err, context.Canceled) {
 		slog.Error("client: request failed", "error", err)
