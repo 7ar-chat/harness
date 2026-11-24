@@ -313,6 +313,22 @@ func (m *Mem) SetThread(_ context.Context, runID, threadID, agentRunID string) e
 	return schedule.ErrNotFound
 }
 
+// ClearThread implements schedule.Store.
+func (m *Mem) ClearThread(_ context.Context, threadID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	changed := false
+	for _, s := range m.schedules {
+		if s.ThreadID == threadID {
+			s.ThreadID, changed = "", true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return m.save()
+}
+
 // Runs implements schedule.Store.
 func (m *Mem) Runs(_ context.Context, scheduleID string, limit int) ([]schedule.Run, error) {
 	if limit <= 0 {

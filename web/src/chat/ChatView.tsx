@@ -265,7 +265,7 @@ export function ChatView({ threadId, settings, readOnly, users, self, suggestion
             <span>{running ? `Running · ${live.steps} steps` : live.phase === "failed" ? "Last run failed" : live.phase === "cancelled" ? "Cancelled" : readOnly ? "Read-only" : "Idle"}</span>
             <span className="truncate">{usage}</span>
           </div>
-          <QueueCard items={queue.items} running={running} readOnly={readOnly} remove={queue.remove} sendNow={queue.sendNow} pending={queue.pending} />
+          <QueueCard items={queue.items} running={running} readOnly={readOnly} remove={queue.remove} sendNow={queue.sendNow} discardAll={queue.discardAll} pending={queue.pending} />
           <Composer running={running} readOnly={readOnly} commands={commands} items={mentionItems} chips={chips} onChips={setChips} />
         </div>
       </ThreadPrimitive.Root>

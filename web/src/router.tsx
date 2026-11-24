@@ -16,6 +16,7 @@ import { JobsPage } from "@/pages/Jobs";
 import { MemoryPage } from "@/pages/Memory";
 import { CapabilitiesPage, ConnectorsPage, ProfilePage, ReferencesPage } from "@/pages/Profile";
 import { ProjectPage } from "@/pages/ProjectPage";
+import { RolesPage } from "@/pages/Roles";
 import { SchedulesPage } from "@/pages/Schedules";
 import { SessionPage, SupervisorPage } from "@/pages/SessionPage";
 import { UsagePage } from "@/pages/Usage";
@@ -108,6 +109,7 @@ const routeTree = root.addChildren([
   createRoute({ getParentRoute: () => root, path: "/jobs", component: JobsPage }),
   createRoute({ getParentRoute: () => root, path: "/inbox", component: InboxPage }),
   createRoute({ getParentRoute: () => root, path: "/schedules", component: SchedulesPage }),
+  createRoute({ getParentRoute: () => root, path: "/roles", component: RolesPage }),
   createRoute({ getParentRoute: () => root, path: "/usage", component: UsagePage }),
   createRoute({ getParentRoute: () => root, path: "/insights", component: InsightsPage }),
   createRoute({ getParentRoute: () => root, path: "/connectors", component: ConnectorsPage }),

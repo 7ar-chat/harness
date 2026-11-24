@@ -44,6 +44,37 @@ func (k Kind) Valid() bool {
 // Command reports whether the node runs a shell command.
 func (k Kind) Command() bool { return k == KindScript || k == KindBuild || k == KindPreview }
 
+// BranchFor is the branch a run uses in repo: one branch (and so one pull request) per repository per run. The
+// run's own repository uses r.Branch; any other repository gets "workflow/<run>-<repo slug>".
+func BranchFor(r Run, repo string) string {
+	if repo == "" || repo == r.Repo {
+		return r.Branch
+	}
+	id := r.ID
+	if len(id) > 8 {
+		id = id[:8]
+	}
+	slug := strings.Map(func(c rune) rune {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '-', c == '_':
+			return c
+		}
+		return '-'
+	}, repo)
+	return "workflow/" + id + "-" + slug
+}
+
+// RepoOf is the repository a step of node n works in ("" none).
+func RepoOf(r Run, n Node) string {
+	if !n.UseRepo {
+		return ""
+	}
+	if n.Repo != "" {
+		return n.Repo
+	}
+	return r.Repo
+}
+
 // Failure actions (OnFailure.Action).
 const (
 	// FailStop fails the run (the default).
@@ -125,6 +156,9 @@ type Node struct {
 	// request is merged; by default it is done once the pull request is open.
 	UseRepo   bool `json:"useRepo,omitempty"`
 	WaitMerge bool `json:"waitMerge,omitempty"`
+	// Repo is the repository of a step that uses one when it is not the run's (an "owner/name" or "host/path" id).
+	// Each repository of a run has its own branch and pull request (see BranchFor).
+	Repo string `json:"repo,omitempty"`
 
 	// Script, build, preview: Command succeeds when it exits 0.
 	Command string `json:"command,omitempty"`
@@ -261,8 +295,18 @@ type NodeRun struct {
 	// Context are the notes people added to a gate.
 	Context []string `json:"context,omitempty"`
 	// Manual: a person took the step over and gave its result.
-	Manual     bool      `json:"manual,omitempty"`
-	Note       string    `json:"note,omitempty"`
+	Manual bool   `json:"manual,omitempty"`
+	Note   string `json:"note,omitempty"`
+	// Log is the end of the output of a command step that ran directly in the run's sandbox (see ExecDirect).
+	Log string `json:"log,omitempty"`
+	// URL is where a preview step shows the running app.
+	URL string `json:"url,omitempty"`
+	// Direct: the command ran in the run's sandbox without a model (no task, no spend).
+	Direct bool `json:"direct,omitempty"`
+	// Approved: a person allowed the command to run (a supervised policy asks first).
+	Approved bool `json:"approved,omitempty"`
+	// ExitCode of a command step that ran directly.
+	ExitCode   *int      `json:"exitCode,omitempty"`
 	StartedAt  time.Time `json:"startedAt,omitzero"`
 	FinishedAt time.Time `json:"finishedAt,omitzero"`
 }

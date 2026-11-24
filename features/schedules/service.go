@@ -53,6 +53,8 @@ type Options struct {
 	// Locker, when set, lets one process per Every window claim; ID names this process in the lock.
 	Locker Locker
 	ID     string
+	// OnRunFinished is called after a run's outcome is recorded (nil: nothing); the host tells its live views.
+	OnRunFinished func(s schedule.Schedule, r schedule.Run)
 	// Timeout overrides the time limit of a run (nil: the schedule's TimeoutMinutes). For tests.
 	Timeout func(schedule.Schedule) time.Duration
 }
@@ -269,5 +271,8 @@ func (s *Service) execute(base, lifetime context.Context, c schedule.Claim) {
 	f := schedule.Finish{Status: out.Status, Error: out.Error, ThreadID: out.ThreadID, AgentRun: out.AgentRunID, Usage: out.Usage}
 	if err := s.o.Store.FinishRun(fctx, c.Run.ID, f, s.now()); err != nil {
 		slog.Error("schedules: recording a run failed", "run", c.Run.ID, "schedule", c.Schedule.ID, "error", err)
+	}
+	if s.o.OnRunFinished != nil {
+		s.o.OnRunFinished(c.Schedule, c.Run)
 	}
 }

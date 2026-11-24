@@ -211,7 +211,7 @@ function RowsTable({ view, group }: { view: UsageView; group: UsageGroup }) {
               <td className="px-3 py-2 text-right tabular-nums">
                 {money(r.costUsd)}
                 {r.unpriced ? (
-                  <span className="ml-1 text-xs text-warning-foreground dark:text-warning" title="No price is known for this model: the cost leaves it out">
+                  <span className="ml-1 text-xs text-warning-foreground dark:text-warning" title="Cost not reported (no known price for the model, or a CLI that does not say what it used): the cost leaves it out">
                     unpriced
                   </span>
                 ) : null}

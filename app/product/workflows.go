@@ -562,6 +562,9 @@ func runDetail(run workflows.Run, login, role string) WorkflowRunDetail {
 }
 
 func gateTitle(n workflows.Node) string {
+	if n.Kind.Command() { // a command waiting for approval to run (a supervised policy)
+		return "Run " + firstNonEmpty(n.Title, n.ID) + "?"
+	}
 	if n.Title != "" {
 		return n.Title
 	}
@@ -644,7 +647,7 @@ func (s *server) gateAction(action string) handler {
 		}
 		nid := r.PathValue("nid")
 		n, found := run.Node(nid)
-		if !found || n.Kind != workflows.KindGate {
+		if !found || n.Kind != workflows.KindGate && !n.Kind.Command() { // a command step may wait for approval to run
 			writeError(w, http.StatusNotFound, "not_found", "No such gate.")
 			return
 		}

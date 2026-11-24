@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/7ar-chat/harness/core/factory"
+	"github.com/7ar-chat/harness/core/sandbox"
 	core "github.com/7ar-chat/harness/core/workflows"
 )
 
@@ -35,6 +36,23 @@ type Options struct {
 	Answer func(ctx context.Context, threadID string) (string, error)
 	// Requirement returns the title and text of a requirement a run is linked to (nil: not shown to the agents).
 	Requirement func(ctx context.Context, projectID, id string) (title, body string, ok bool)
+	// Sandbox returns the sandbox of a run for a repository ("" none) checked out on branch: command steps run in it
+	// directly, without a model. Nil: they run as tasks whose agent runs the command.
+	Sandbox func(ctx context.Context, r core.Run, repo, branch string) (sandbox.Sandbox, error)
+	// SandboxEnabled says whether a sandbox backend exists (nil: yes when Sandbox is set).
+	SandboxEnabled func() bool
+	// Judge applies the factory policy to a command before it runs directly (nil: allowed).
+	Judge func(ctx context.Context, r core.Run, n core.Node, command string) Verdict
+	// Preview starts the app of a preview step (the host's preview mechanism) and returns its URL and the log.
+	// It returns ErrNoPreview when it cannot (the step then runs its command like a script).
+	Preview func(ctx context.Context, r core.Run, n core.Node, sb sandbox.Sandbox) (url, log string, err error)
+	// OnFinished is called once a run reached a final state (the host destroys the run's sandboxes).
+	OnFinished func(r core.Run)
+	// ExecTimeout bounds a command step (0: DefaultExecTimeout); RepoDir is the checkout directory (default
+	// /workspace/repo); FlushEvery is how often a running step's output is saved (0: 2s).
+	ExecTimeout time.Duration
+	RepoDir     string
+	FlushEvery  time.Duration
 	// PollEvery is how often Run looks at the active runs (0: 15s).
 	PollEvery time.Duration
 	Now       func() time.Time
@@ -48,6 +66,7 @@ type Engine struct {
 	locks     map[string]*sync.Mutex
 	observers []func(core.Change)
 	wg        sync.WaitGroup
+	execs     execs
 }
 
 var _ core.Engine = (*Engine)(nil)
@@ -210,6 +229,11 @@ func (e *Engine) mutate(ctx context.Context, runID string, fn func(*pass) error)
 			p.changes = []core.Change{{Run: *saved, Kind: "step"}}
 		}
 		if saved.State.Terminal() && !wasTerminal {
+			if e.o.OnFinished != nil {
+				run := *saved
+				e.wg.Add(1)
+				go func() { defer e.wg.Done(); e.o.OnFinished(run) }()
+			}
 			p.changes = append(p.changes, core.Change{Run: *saved, Kind: "finished"})
 			if saved.ParentRunID != "" {
 				e.advanceAsync(saved.ParentRunID)
@@ -306,6 +330,8 @@ func (e *Engine) syncSteps(p *pass) bool {
 		}
 		n, _ := r.Node(s.NodeID)
 		switch {
+		case s.Direct && s.TaskID == "":
+			e.resumeDirect(p, s)
 		case s.ChildRunID != "":
 			child, err := e.o.Store.GetRun(p.ctx, s.ChildRunID)
 			if err != nil {
@@ -497,6 +523,9 @@ func (e *Engine) failRun(p *pass, msg string) {
 
 // cancelStep stops the task or child run of a step (best effort: a failure is logged, the step is still left).
 func (e *Engine) cancelStep(p *pass, s *core.NodeRun) {
+	if s.Direct && s.State == core.NodeRunning {
+		e.execs.cancel(execKey{p.r.ID, s.NodeID, s.Round})
+	}
 	if s.TaskID != "" && (s.State == core.NodeRunning || s.State == core.NodeWaiting) {
 		if err := e.o.Tasks.Cancel(p.ctx, s.TaskID); err != nil && !errors.Is(err, factory.ErrConflict) && !errors.Is(err, factory.ErrNotFound) {
 			slog.Warn("workflows: cancelling a task failed", "task", s.TaskID, "error", err)
@@ -560,6 +589,7 @@ func (e *Engine) start(p *pass, n core.Node, s *core.NodeRun) {
 	s.Round++
 	s.StartedAt, s.FinishedAt = e.o.Now().UTC(), time.Time{}
 	s.Error, s.Result, s.Note, s.TaskState = "", "", "", ""
+	s.Direct, s.Log, s.URL, s.ExitCode = false, "", "", nil
 	switch {
 	case n.Kind == core.KindGate:
 		s.State = core.NodeWaiting
@@ -574,6 +604,8 @@ func (e *Engine) start(p *pass, n core.Node, s *core.NodeRun) {
 		s.State, s.ChildRunID = core.NodeRunning, child.ID
 		p.log("step", n.ID, "", "started workflow "+child.WorkflowName)
 		p.note("step", n.ID)
+	case n.Kind.Command() && e.startDirect(p, n, s):
+		// the command runs in the run's sandbox (or waits for approval, or was refused)
 	default:
 		t, err := e.createTask(p, n, s)
 		if err != nil {
@@ -599,8 +631,12 @@ func (e *Engine) createTask(p *pass, n core.Node, s *core.NodeRun) (*factory.Tas
 		Labels: []string{factory.LabelWorkflow + r.ID, factory.LabelWorkflowNode + n.ID},
 		Source: factory.Source{Kind: factory.SourceWorkflow, Key: fmt.Sprintf("workflow:%s:%s:%d", r.ID, n.ID, s.Round)},
 	}
-	if n.UseRepo && r.Repo != "" {
-		t.Repo, t.BaseBranch, t.Branch = r.Repo, r.BaseBranch, r.Branch
+	if repo := core.RepoOf(*r, n); repo != "" {
+		// One branch (and pull request) per repository per run.
+		t.Repo, t.Branch = repo, core.BranchFor(*r, repo)
+		if repo == r.Repo {
+			t.BaseBranch = r.BaseBranch
+		}
 	}
 	created, _, err := e.o.Tasks.Create(p.ctx, t)
 	return created, err

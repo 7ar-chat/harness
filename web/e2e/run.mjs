@@ -40,6 +40,7 @@ try {
 // ---- cleanup --------------------------------------------------------------------------------------------------
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "harness-e2e-"));
 let server = null;
+const extraServers = []; // more harness-web processes a scenario started (m5)
 let fake = null;
 let hookSrv = null; // the webhook receiver of the notification scenarios (l*)
 let cleanupDone = null;
@@ -51,6 +52,7 @@ async function doCleanup() {
     const gone = await Promise.race([new Promise((r) => server.once("exit", () => r(true))), new Promise((r) => setTimeout(() => r(false), 6000))]);
     if (!gone) server.kill("SIGKILL");
   }
+  for (const x of extraServers) if (x.exitCode === null) x.kill("SIGKILL");
   await fake?.close().catch(() => {});
   hookSrv?.close();
   hookSrv?.closeAllConnections?.();
@@ -132,6 +134,8 @@ async function main() {
     // on the Tasks tab and the inbox's task list (scenarios g and h).
     FACTORY: "1",
     FACTORY_NO_REVIEW: "1",
+    // A failed attempt is retried after 30s by default; one second keeps the scenarios that refuse a task (m6) quick.
+    FACTORY_RETRY_BACKOFF_SECONDS: "1",
     // The admin page and the git hosts need a secret key (to seal tokens and SSH keys) and an administrator.
     HARNESS_SECRET_KEY: "e2e-secret-key-0123456789abcdef0123456789",
     HARNESS_ADMINS: "local",
@@ -765,7 +769,7 @@ async function main() {
 
   await step("h5. Route sweep: every top-level route and project tab renders without errors, on desktop and on a phone", async () => {
     const hp = (await post("/projects", { name: "E2E sweep" })).id;
-    const top = ["/", "/supervisor", "/inbox", "/jobs", "/references", "/connectors", "/capabilities", "/schedules", "/usage", "/insights", "/memory", "/profile", "/admin"];
+    const top = ["/", "/supervisor", "/inbox", "/jobs", "/references", "/connectors", "/capabilities", "/schedules", "/roles", "/usage", "/insights", "/memory", "/profile", "/admin"];
     const tabs = ["board", "overview", "members", "memory", "capabilities", "roles", "schedules", "recipes", "usage", "insights", "notifications", "audit", "tasks", "requirements", "workflows", "settings"];
     const failures = [];
     const bad = [/Something went wrong/, /^Not found$/, /You do not have access to this/, /Try again/];
@@ -1303,6 +1307,364 @@ async function main() {
   });
 
   await fresh.close();
+
+  // ---- m: the weak spots closed (stream M) ------------------------------------------------------------------------
+  // A published workflow made through the API (the designer is covered by h1); nodes get a position.
+  const mkWorkflow = async (pid, name, nodes, inputs = []) => {
+    const w = await post(`/projects/${pid}/workflows`, { name, inputs, nodes: nodes.map((n, i) => ({ pos: { x: i * 220, y: 0 }, ...n })) });
+    return post(`/projects/${pid}/workflows/${w.id}/publish`, {});
+  };
+  const startRun = async (pid, workflowId, inputs = {}) => {
+    const r = await post(`/projects/${pid}/workflow-runs`, { workflowId, inputs });
+    return (r.run ?? r).id;
+  };
+  const runOf = async (pid, id) => (await api(`/projects/${pid}/workflow-runs/${id}`)).run;
+  const stepOf = (r, id) => r.steps.find((s) => s.nodeId === id);
+  const openRun = async (pid, id) => {
+    await page.goto(`${base}/#/p/${pid}?tab=workflows&run=${id}`);
+    await page.reload();
+    await visible(page.getByRole("group", { name: "Workflow canvas" }), "the run view");
+  };
+
+  await step("m1. Workflow run controls: pause, resume, add context, send back, approve, rerun from a step, take over, cancel, rerun a cancelled run", async () => {
+    const hp = (await post("/projects", { name: "E2E run controls" })).id;
+    const wf = await mkWorkflow(hp, "Controls", [
+      { id: "plan", kind: "agent", title: "Plan it", prompt: "Plan it." },
+      { id: "review", kind: "gate", title: "Review gate", approvers: ["role:member"], dependsOn: ["plan"] },
+      { id: "build", kind: "agent", title: "Build it", prompt: "Build it.", dependsOn: ["review"] },
+      { id: "signoff", kind: "gate", title: "Sign-off", approvers: ["role:member"], dependsOn: ["build"] },
+    ]);
+    const runId = await startRun(hp, wf.id);
+    await openRun(hp, runId);
+    const canvas = page.getByRole("group", { name: "Workflow canvas" });
+    await visible(canvas.locator('[data-kind="gate"][data-state="waiting"]'), "the review gate waits", 60_000);
+    // pause and resume
+    await page.getByRole("button", { name: "Pause", exact: true }).click();
+    await visible(page.getByText(/Paused: steps that are running finish/), "the paused notice");
+    eq((await runOf(hp, runId)).state, "paused", "stored paused");
+    await page.getByRole("button", { name: "Resume", exact: true }).click();
+    await gone(page.getByText(/Paused: steps that are running finish/), "the paused notice is gone");
+    eq((await runOf(hp, runId)).state, "running", "stored running");
+    // add context to the gate: the gate keeps waiting
+    const gate = page.getByRole("region", { name: "Step Review gate" });
+    await gate.getByRole("button", { name: "Add context" }).click();
+    await gate.getByLabel("A note the next steps are given").fill("Use the staging database.");
+    await gate.getByRole("button", { name: "Add the note" }).click();
+    await poll(async () => stepOf(await runOf(hp, runId), "review").context?.length === 1, "the note is stored on the gate");
+    eq(stepOf(await runOf(hp, runId), "review").state, "waiting", "the gate keeps waiting");
+    // send back: the step before runs again with the feedback, then the gate waits again (round 2)
+    await gate.getByRole("button", { name: "Send back", exact: true }).click();
+    await gate.getByLabel(/What must change/).fill("Tighten the scope.");
+    await gate.getByRole("button", { name: "Send it back" }).click();
+    await poll(async () => {
+      const r = await runOf(hp, runId);
+      return stepOf(r, "plan").round === 2 && /Tighten the scope/.test(stepOf(r, "plan").feedback ?? "") && stepOf(r, "review").round === 2 && stepOf(r, "review").state === "waiting";
+    }, "the plan ran again with the feedback and the gate waits in its second round", 60_000);
+    // approve: the agent step runs (the fake model answers) and the sign-off gate waits
+    await gate.getByRole("button", { name: "Approve", exact: true }).click();
+    await poll(async () => {
+      const r = await runOf(hp, runId);
+      return stepOf(r, "build").state === "done" && stepOf(r, "signoff").state === "waiting";
+    }, "build done, sign-off waiting", 60_000);
+    // rerun from the agent step: it runs again (round 2) and the sign-off waits again
+    await canvas.getByRole("button", { name: "Step Build it" }).click();
+    const build = page.getByRole("region", { name: "Step Build it" });
+    await build.getByRole("button", { name: "Rerun from here" }).click();
+    await page.getByRole("alertdialog").getByLabel(/What should this attempt do differently/).fill("Shorter, please.");
+    await page.getByRole("alertdialog").getByRole("button", { name: "Rerun", exact: true }).click();
+    await poll(async () => {
+      const r = await runOf(hp, runId);
+      return stepOf(r, "build").round === 2 && stepOf(r, "build").state === "done" && stepOf(r, "signoff").state === "waiting";
+    }, "build ran again and the sign-off waits again", 60_000);
+    // take over the sign-off: a person gives its result and the run is done
+    await canvas.getByRole("button", { name: "Step Sign-off" }).click();
+    const sign = page.getByRole("region", { name: "Step Sign-off" });
+    await sign.getByRole("button", { name: "Take over" }).click();
+    await page.getByRole("alertdialog").getByLabel("The result").fill("Signed off by hand.");
+    await page.getByRole("alertdialog").getByRole("button", { name: "Mark as done" }).click();
+    await poll(async () => (await runOf(hp, runId)).state === "done", "the run is done after the take-over");
+    const s = stepOf(await runOf(hp, runId), "signoff");
+    eq([s.manual, s.result], [true, "Signed off by hand."], "the taken-over step");
+    await visible(page.getByText("done by hand"), "the step says it was done by hand");
+
+    // a second run: cancel it, then rerun from the first step (it works on a cancelled run)
+    const second = await startRun(hp, wf.id);
+    await openRun(hp, second);
+    await visible(page.getByRole("group", { name: "Workflow canvas" }).locator('[data-kind="gate"][data-state="waiting"]'), "the gate of the second run", 60_000);
+    await page.getByRole("button", { name: "Cancel run", exact: true }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Cancel the run" }).click();
+    await poll(async () => (await runOf(hp, second)).state === "cancelled", "the run is cancelled");
+    await page.getByRole("group", { name: "Workflow canvas" }).getByRole("button", { name: "Step Review gate" }).click();
+    await page.getByRole("region", { name: "Step Review gate" }).getByRole("button", { name: "Rerun from here" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Rerun", exact: true }).click();
+    await poll(async () => {
+      const r = await runOf(hp, second);
+      return r.state === "running" && stepOf(r, "review").state === "waiting";
+    }, "the cancelled run runs again from the gate");
+  });
+
+  await step("m2. A subworkflow step runs a child run and finishes with it", async () => {
+    const hp = (await post("/projects", { name: "E2E subworkflow" })).id;
+    const child = await mkWorkflow(hp, "Child", [{ id: "c1", kind: "agent", title: "Child step", prompt: "Say hello." }]);
+    const parent = await mkWorkflow(hp, "Parent", [{ id: "sub", kind: "subworkflow", title: "Run the child", workflowId: child.id }]);
+    const runId = await startRun(hp, parent.id);
+    await poll(async () => (await runOf(hp, runId)).state === "done", "the parent run is done", 60_000);
+    const runs = await api(`/projects/${hp}/workflow-runs`);
+    eq(runs.length, 2, "a parent and a child run");
+    const childRun = runs.find((r) => r.parentRunId === runId);
+    if (!childRun || childRun.workflowName !== "Child" || childRun.state !== "done") throw new Error(`the child run: ${JSON.stringify(childRun)}`);
+    await openRun(hp, runId);
+    await page.getByRole("group", { name: "Workflow canvas" }).getByRole("button", { name: "Step Run the child" }).click();
+    await visible(page.getByRole("region", { name: "Step Run the child" }).getByText(/Runs the workflow as run/), "the step names its child run");
+    // the child is a run of its own, listed with the others
+    await page.goto(`${base}/#/p/${hp}?tab=workflows`);
+    await page.reload();
+    await visible(page.getByText("Child", { exact: true }).first(), "the child workflow is listed");
+  });
+
+  await step("m3. Schedules: edit, 'keep one conversation' reuses the session, delete", async () => {
+    const hp = (await post("/projects", { name: "E2E schedule edit" })).id;
+    const created = await post(`/projects/${hp}/schedules`, { name: "Morning hello", prompt: "Say hello to the team.", cron: "@daily", timezone: "UTC", enabled: true });
+    await page.goto(`${base}/#/p/${hp}?tab=schedules`);
+    await page.reload();
+    const list = page.getByRole("list", { name: "Schedules" });
+    await list.getByRole("button", { name: "Edit Morning hello" }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByLabel("Name").fill("Evening hello");
+    await dlg.getByLabel("Keep one conversation").click();
+    await dlg.getByRole("button", { name: "Save", exact: true }).click();
+    await gone(page.getByRole("dialog"), "the schedule form closed");
+    await visible(list.getByText("Evening hello"), "the renamed schedule");
+    const stored = (await api(`/projects/${hp}/schedules`))[0];
+    eq([stored.id, stored.name, stored.reuseSession], [created.id, "Evening hello", true], "stored edit");
+    // two manual runs land in one conversation
+    const runsOf = () => api(`/projects/${hp}/schedules/${created.id}/runs?limit=10`);
+    await list.getByRole("button", { name: "Run Evening hello now" }).click();
+    await poll(async () => (await runsOf()).filter((r) => r.status === "succeeded").length === 1, "the first run succeeded", 60_000);
+    await list.getByRole("button", { name: "Run Evening hello now" }).click();
+    await poll(async () => (await runsOf()).filter((r) => r.status === "succeeded").length === 2, "the second run succeeded", 60_000);
+    const threads = new Set((await runsOf()).map((r) => r.threadId));
+    eq(threads.size, 1, "both runs used one conversation");
+    const th = await thread([...threads][0]);
+    eq(th.messages.filter((m) => m.role === "user").length, 2, "the conversation holds both prompts");
+    // delete it
+    await list.getByRole("button", { name: "Delete Evening hello" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Delete", exact: true }).click();
+    await gone(list.getByText("Evening hello"), "the schedule is gone from the list");
+    eq((await api(`/projects/${hp}/schedules`)).length, 0, "stored: no schedule left");
+  });
+
+  await step("m4. Steer now: a queued message goes into the reply that is running", async () => {
+    const id = await newSession("E2E steer now");
+    await send("slow reply please");
+    await fake.held();
+    await visible(page.getByText(/Slow reply finally/), "the partial reply while the run is held");
+    await composer.fill("queued alpha message");
+    await page.getByRole("button", { name: "Queue", exact: true }).click();
+    const queue = page.getByRole("region", { name: "Queued messages" });
+    await visible(queue.getByText("1 message queued"), "one queued message");
+    await queue.getByRole("button", { name: "Steer now: queued alpha message" }).click();
+    await poll(async () => (await api(`/threads/${id}/queue`)).length === 0, "the queue is empty after steering");
+    await gone(queue, "the queue card is gone");
+    fake.release();
+    await visible(page.getByText("Slow reply finally done."), "the held reply completes");
+    // the steered message was taken into the conversation (as a steer, or sent as the next message when the reply had ended)
+    await poll(async () => (await thread(id)).messages.some((m) => m.role === "user" && m.content.includes("queued alpha message")), "the message is in the conversation", 30_000);
+    await idle(id);
+    eq(await page.getByText("Beta answer.").count(), 0, "nothing else was sent");
+  });
+
+  await step("m5. A second environment: the choice is offered, frozen once the session has a workspace, and a new session opens in the other one", async () => {
+    // A second server with two sandbox profiles: the shared one has a single environment (h4 asserts the selector is hidden).
+    const d = path.join(tmp, "second");
+    for (const x of ["home", "workspace", "state"]) fs.mkdirSync(path.join(d, x), { recursive: true });
+    const env2 = { ...env, SANDBOX_IMAGES: "work=img-work,coding=img-coding", HOME: path.join(d, "home"), LOCAL_WORKSPACE: path.join(d, "workspace"), LOCAL_STATE_DIR: path.join(d, "state"), HARNESS_DOCUMENTS_DIR: path.join(d, "documents"), HARNESS_JOBS_DIR: path.join(d, "jobs") };
+    const child2 = spawn(bin, ["-local", "-team"], { cwd: d, env: env2, stdio: ["ignore", "pipe", "pipe"] });
+    extraServers.push(child2);
+    const base2 = await new Promise((resolve, reject) => {
+      let out = "";
+      const timer = setTimeout(() => reject(new Error(`the second harness-web did not start:\n${out}`)), 30_000);
+      child2.stdout.on("data", (x) => {
+        out += x;
+        const m = /harness-web: (http:\/\/[^/\s]+)\//.exec(out);
+        if (m) (clearTimeout(timer), resolve(m[1]));
+      });
+      child2.once("exit", (code) => (clearTimeout(timer), reject(new Error(`the second harness-web exited (${code}):\n${out}`))));
+    });
+    const api2 = async (p, init) => {
+      const r = await fetch(`${base2}/api${p}`, init);
+      if (!r.ok) throw new Error(`${init?.method ?? "GET"} ${base2}/api${p} -> ${r.status}`);
+      return r.json();
+    };
+    const post2 = (p, body, method = "POST") => api2(p, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
+    const envs = await api2("/environments");
+    eq(envs.environments.map((e) => e.name).sort(), ["coding", "work"], "two environments are offered");
+    const th = await post2("/threads", { title: "E2E environments" });
+    await page.goto(`${base2}/#/t/${th.id}`);
+    await visible(composer, "composer");
+    const select = page.getByRole("combobox", { name: "Runtime environment" });
+    await visible(select, "the environment selector");
+    eq(envs.default, "coding", "the local backend's default environment");
+    await select.selectOption("work"); // not the default: the choice is recorded
+    await poll(async () => (await api2(`/threads/${th.id}/environment`)).environment === "work", "the choice is stored");
+    // the first run creates the workspace: the choice is frozen
+    await send("please write a file");
+    await fake.held();
+    fake.release();
+    await poll(async () => (await api2(`/threads/${th.id}/environment`)).frozen === true, "the environment is frozen after the first run", 30_000);
+    await page.reload();
+    await visible(page.getByText(/Fixed once the session has a workspace/), "the selector says it is fixed");
+    await page.getByRole("combobox", { name: "Runtime environment" }).selectOption("coding");
+    await visible(page.getByText(/This session already has a workspace/), "another choice offers a new session");
+    await page.getByRole("button", { name: "Open a new session in coding" }).click();
+    await poll(() => /#\/t\/[^/]+$/.test(page.url()) && !page.url().endsWith(th.id), "a new session opens");
+    const next = page.url().split("/t/")[1];
+    await poll(async () => (await api2(`/threads/${next}/environment`)).environment === "coding", "the new session is in the other environment");
+    await page.goto(`${base}/#/`); // back to the main server for the next scenarios
+  });
+
+  await step("m6. Over the cap: a factory task and a workflow run are refused with the reason", async () => {
+    const hp = (await post("/projects", { name: "E2E over the cap" })).id;
+    // some spend first (one scripted call), then a cap that is already used up
+    const th = await post("/threads", { title: "spend", projectId: hp });
+    await post(`/threads/${th.id}/runs`, { message: "hello", model: "gpt-test" });
+    await idle(th.id);
+    await post(`/projects/${hp}/usage/cap`, { monthlyUsd: 0.0001 }, "PUT");
+    // a factory task
+    await post(`/projects/${hp}/tasks`, { title: "Over the cap", spec: "Say hello." });
+    const task = await poll(async () => {
+      const t = (await api(`/projects/${hp}/tasks?limit=20`)).find((x) => x.title === "Over the cap");
+      return t && ["blocked", "failed"].includes(t.state) ? t : null;
+    }, "the task is refused", 60_000);
+    if (!/cap/i.test(`${task.blockedReason ?? ""} ${task.error ?? ""}`)) throw new Error(`the task does not say why: ${JSON.stringify([task.state, task.blockedReason, task.error])}`);
+    await page.goto(`${base}/#/p/${hp}?tab=tasks&task=${task.id}`);
+    await page.reload();
+    await visible(page.getByRole("region", { name: "Task detail" }).getByText(/cap/i).first(), "the reason is on screen in the task detail");
+    // a workflow run with an agent step
+    const wf = await mkWorkflow(hp, "Capped", [{ id: "a", kind: "agent", title: "Say hello", prompt: "Say hello." }]);
+    const runId = await startRun(hp, wf.id);
+    // the step's task is refused three times and then blocked: the step says why, and the run waits for a person
+    const run = await poll(async () => {
+      const r = await runOf(hp, runId);
+      const st = stepOf(r, "a");
+      return st.state === "failed" || /cap/i.test(st.note ?? "") ? r : null;
+    }, "the step reports the refusal", 60_000);
+    const st = stepOf(run, "a");
+    if (!/cap/i.test(`${st.note ?? ""} ${st.error ?? ""}`)) throw new Error(`the step does not say why: ${JSON.stringify(st)}`);
+    eq(st.taskState === "blocked" || st.state === "failed", true, "the step's task is blocked (or the step failed)");
+    await openRun(hp, runId);
+    await visible(page.getByRole("region", { name: "Step Say hello" }).getByText(/cap/i).first(), "the reason is on screen in the step");
+    await post(`/workflow-runs/${runId}/cancel`, {});
+    await post(`/projects/${hp}/usage/cap`, { monthlyUsd: 0 }, "PUT");
+  });
+
+  await step("m7. Workflow script steps run in the run's sandbox without a model; a supervised one asks first", async () => {
+    const hp = (await post("/projects", { name: "E2E script steps" })).id;
+    const wf = await mkWorkflow(hp, "Scripts", [
+      { id: "hello", kind: "script", title: "Echo", command: "echo script-says-hi && echo to-stderr 1>&2" },
+      { id: "risky", kind: "script", title: "Supervised echo", command: "echo approved-and-ran > ran-by-workflow.txt && cat ran-by-workflow.txt", policy: "supervised", dependsOn: ["hello"] },
+      { id: "bad", kind: "script", title: "Failing", command: "echo about-to-fail; exit 3", dependsOn: ["risky"], onFailure: { action: "continue" } },
+    ]);
+    const requestsBefore = fake.requests.length;
+    const runId = await startRun(hp, wf.id);
+    await poll(async () => stepOf(await runOf(hp, runId), "risky").state === "waiting", "the supervised script waits for approval", 60_000);
+    const first = stepOf(await runOf(hp, runId), "hello");
+    if (first.state !== "done" || first.taskId || !first.direct || !first.log.includes("script-says-hi")) throw new Error(`the first script: ${JSON.stringify(first)}`);
+    eq(fake.requests.length, requestsBefore, "no model call was made for the script steps");
+    await openRun(hp, runId);
+    const canvas = page.getByRole("group", { name: "Workflow canvas" });
+    await canvas.getByRole("button", { name: "Step Echo" }).click();
+    await visible(page.getByRole("region", { name: "Step Echo" }).getByLabel("Step output").getByText(/script-says-hi/), "the output of the script in the step");
+    await visible(page.getByRole("region", { name: "Step Echo" }).getByText(/Ran in the run's sandbox, no model involved \(exit code 0\)/), "the step says no model was involved");
+    await canvas.getByRole("button", { name: "Step Supervised echo" }).click();
+    const risky = page.getByRole("region", { name: "Step Supervised echo" });
+    await visible(risky.getByText(/waits for your approval before it runs/), "the approval is asked for");
+    await risky.getByRole("button", { name: "Approve", exact: true }).click();
+    await poll(async () => {
+      const r = await runOf(hp, runId);
+      return stepOf(r, "risky").state === "done" && stepOf(r, "bad").state === "failed" && r.state === "done";
+    }, "the approved script ran, the failing one failed and the run went on", 60_000);
+    const bad = stepOf(await runOf(hp, runId), "bad");
+    eq(bad.exitCode, 3, "the exit code of the failing script");
+    if (!bad.log.includes("about-to-fail") || !/status 3/.test(bad.error)) throw new Error(`the failing step: ${JSON.stringify(bad)}`);
+    eq(fake.requests.length, requestsBefore, "still no model call");
+  });
+
+  await step("m8. Queued messages carry an image; Discard all empties the queue", async () => {
+    const id = await newSession("E2E queue image");
+    await send("slow reply please");
+    await fake.held();
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+    // the attach button opens a file chooser; the file is picked there
+    const attach = async (name) => {
+      const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("button", { name: "Attach an image" }).click()]);
+      await chooser.setFiles({ name, mimeType: "image/png", buffer: png });
+      await visible(page.getByText(name, { exact: true }).first(), `the attached ${name} in the composer`);
+    };
+    await attach("shot.png");
+    await composer.fill("queued alpha with an image");
+    await page.getByRole("button", { name: "Queue", exact: true }).click();
+    const queue = page.getByRole("region", { name: "Queued messages" });
+    await visible(queue.getByText("shot.png"), "the image on the queued item");
+    eq((await api(`/threads/${id}/queue`))[0].attachments.map((a) => a.name), ["shot.png"], "the server queue keeps the attachment");
+    await composer.fill("queued beta message");
+    await page.getByRole("button", { name: "Queue", exact: true }).click();
+    await visible(queue.getByText("2 messages queued"), "two queued messages");
+    await queue.getByRole("button", { name: /Discard all/ }).click();
+    await poll(async () => (await api(`/threads/${id}/queue`)).length === 0, "the queue is empty after Discard all");
+    await gone(queue, "the queue card is gone");
+    // an image queued again travels with the message when it is sent
+    await attach("again.png");
+    await composer.fill("queued alpha again");
+    await page.getByRole("button", { name: "Queue", exact: true }).click();
+    await visible(queue.getByText("again.png"), "the second queued image");
+    fake.release();
+    await visible(page.getByText("Slow reply finally done."), "the held reply completes");
+    await visible(page.getByText("Alpha answer."), "the queued message was sent and answered");
+    await idle(id);
+    const sent = (await thread(id)).messages.find((m) => m.role === "user" && m.content === "queued alpha again");
+    eq(sent?.metadata?.attachments?.map((a) => a.name), ["again.png"], "the sent message has the image");
+    eq(await page.getByText("Beta answer.").count(), 0, "the discarded message was never sent");
+  });
+
+  await step("m9. Personal context, My roles, the role chip and the executors' availability", async () => {
+    // a personal session: the explorer says Personal and shows no project's work
+    const th = await post("/threads", { title: "E2E personal" });
+    await page.goto(`${base}/#/t/${th.id}`);
+    await page.reload();
+    await visible(composer, "composer");
+    const explorer = page.getByRole("navigation", { name: "Explorer" });
+    await visible(explorer.getByText(/Personal\. Pick a project/), "the explorer is in the Personal context");
+    eq(await explorer.getByRole("region", { name: "Work" }).count(), 0, "no project work in the personal context");
+    eq(await page.getByTestId("agent-role").count(), 0, "no role chip before a role is used");
+    // My roles: same editor, caller's own roles
+    await page.goto(`${base}/#/roles`);
+    await page.reload();
+    await visible(page.getByRole("heading", { name: "My roles" }), "the My roles page");
+    await page.getByRole("button", { name: /New role/ }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByLabel("Name").fill("my-reviewer");
+    await dlg.getByLabel("Instructions").fill("Review kindly.");
+    await dlg.getByRole("button", { name: "Create" }).click();
+    await gone(page.getByRole("dialog"), "the role editor closed");
+    await visible(page.getByRole("list", { name: "Roles" }).getByText("my-reviewer"), "the personal role in the list");
+    eq((await api("/me/roles")).some((r) => r.name === "my-reviewer" && r.scope === "user"), true, "stored personal role");
+    // a run in the role: the session header shows it
+    await post(`/threads/${th.id}/runs`, { message: "hello", model: "gpt-test", role: "my-reviewer" });
+    await idle(th.id);
+    await page.goto(`${base}/#/t/${th.id}`);
+    await page.reload();
+    await visible(page.getByTestId("agent-role").filter({ hasText: "my-reviewer" }), "the role chip shows the role of the last run");
+    // executors: the availability badge and the keys each one reads
+    await page.goto(`${base}/#/profile`);
+    await page.reload();
+    const card = page.getByRole("list", { name: "Executors" });
+    const first = card.getByRole("listitem").first();
+    await visible(first.getByTestId("executor-availability"), "the availability badge", 15_000);
+    const label = (await first.getByTestId("executor-availability").innerText()).trim();
+    if (!["ready", "will be installed on first use", "not in the sandbox image", "unknown"].includes(label)) throw new Error(`availability badge: ${label}`);
+    await visible(first.getByText(/Reads .*_API_KEY/), "the keys the executor reads");
+  });
 
   // Opt-in: E2E_SHOTS=<dir> saves screenshots of the main surfaces (not a scenario, nothing is asserted).
   if (process.env.E2E_SHOTS) {

@@ -12,10 +12,12 @@ import { JobsPage } from "@/pages/Jobs";
 import { MemoryPage } from "@/pages/Memory";
 import { CapabilitiesPage, ConnectorsPage, ProfilePage, ReferencesPage } from "@/pages/Profile";
 import { ProjectPage } from "@/pages/ProjectPage";
+import { RolesPage } from "@/pages/Roles";
 import { SchedulesPage } from "@/pages/Schedules";
 import { SessionTab, SupervisorPage } from "@/pages/SessionPage";
 import { UsagePage } from "@/pages/Usage";
 import { PlaceCtx, placeOf } from "@/lib/place";
+import { TabActiveProvider } from "@/lib/tabActive";
 import { ErrorBoundary } from "../ErrorBoundary";
 import type { EditorTab, Tabs } from "./tabs";
 
@@ -29,6 +31,7 @@ const PAGES: Record<string, () => ReactNode> = {
   "/connectors": () => <ConnectorsPage />,
   "/capabilities": () => <CapabilitiesPage />,
   "/schedules": () => <SchedulesPage />,
+  "/roles": () => <RolesPage />,
   "/usage": () => <UsagePage />,
   "/insights": () => <InsightsPage />,
   "/memory": () => <MemoryPage />,
@@ -88,9 +91,11 @@ export function TabHost({ tabs }: { tabs: Tabs }) {
           : ({ "aria-hidden": true, inert: "", style: { visibility: "hidden", pointerEvents: "none" } } as Record<string, unknown>);
         return (
           <div key={t.key} role={on ? "main" : undefined} aria-label={on ? "Editor" : undefined} className="absolute inset-0 overflow-hidden" {...hidden}>
-            <ErrorBoundary reset={t.href}>
-              <TabPage tab={on ? active : t} />
-            </ErrorBoundary>
+            <TabActiveProvider active={on}>
+              <ErrorBoundary reset={t.href}>
+                <TabPage tab={on ? active : t} />
+              </ErrorBoundary>
+            </TabActiveProvider>
           </div>
         );
       })}

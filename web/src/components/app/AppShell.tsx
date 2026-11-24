@@ -54,17 +54,21 @@ function Shell({ login, palette, setPalette, switcher, setSwitcher }: { login: s
 
   // the project the explorer shows: the one in the address, else the last one picked, else the first
   const [picked, setPicked] = usePersisted<string | null>(`7ar.project.${login}`, null);
-  const threadProject = params.threadId ? overview?.projects.find((p) => p.threads.some((t) => t.id === params.threadId))?.id : undefined;
+  // A personal session (no project) is its own context: the explorer says "Personal" instead of showing some project.
+  const sessionId = params.threadId ?? (tabs.active?.kind === "session" ? tabs.active.id : undefined);
+  const personalSession = !!sessionId && !!overview?.personal.some((t) => t.id === sessionId) && !overview.projects.some((p) => p.threads.some((t) => t.id === sessionId));
+  const threadProject = sessionId ? overview?.projects.find((p) => p.threads.some((t) => t.id === sessionId))?.id : undefined;
   const fromLocation = params.projectId ?? threadProject;
   useEffect(() => {
     if (fromLocation && fromLocation !== picked) setPicked(fromLocation);
   }, [fromLocation, picked, setPicked]);
   const projectId = useMemo(() => {
     if (fromLocation) return fromLocation;
+    if (personalSession) return undefined;
     if (picked === "") return undefined;
     if (picked && overview?.projects.some((p) => p.id === picked)) return picked;
     return overview?.projects[0]?.id;
-  }, [fromLocation, picked, overview]);
+  }, [fromLocation, personalSession, picked, overview]);
 
   const setExplorer = useCallback((v: boolean | ((p: boolean) => boolean)) => (narrow ? setDrawer(v) : setExplorerD(v)), [narrow, setExplorerD]);
   const setPanel = useCallback((v: boolean | ((p: boolean) => boolean)) => (narrow ? setSheet(v) : setPanelD(v)), [narrow, setPanelD]);

@@ -143,16 +143,19 @@ describe("useChat", () => {
     await waitFor(() => expect(f.result.current.live.runId).toBe("r8"));
   });
 
-  it("refuses to queue an image behind a running reply", async () => {
+  it("queues an image behind a running reply: the file travels with the queued message", async () => {
     const f = setup({
       "GET /api/threads/t1": thread({ activeRun: { id: "r7", status: "running" }, status: "running" }),
       "GET /api/runs/r7/events": () => new Response(new ReadableStream<Uint8Array>({ start() {} }), { status: 200 }),
+      "POST /api/threads/t1/queue": { item: { id: "q1", text: "look", createdAt: T } },
     });
     await waitFor(() => expect(f.result.current.running).toBe(true));
     await act(async () => {
-      await expect(f.result.current.send("look", [{ name: "a.png", mime: "image/png", data: "AAAA" }])).rejects.toThrow(/once the reply has ended/);
+      await f.result.current.send("look", [{ name: "a.png", mime: "image/png", data: "AAAA" }]);
     });
-    expect(f.f.find("POST", "/api/threads/t1/queue")).toHaveLength(0);
+    const posts = f.f.find("POST", "/api/threads/t1/queue");
+    expect(posts).toHaveLength(1);
+    expect((posts[0]!.body as { attachments: unknown[] }).attachments).toEqual([{ name: "a.png", mime: "image/png", data: "AAAA" }]);
   });
 
   it("cancel posts to the active run, and does nothing when none is active", async () => {

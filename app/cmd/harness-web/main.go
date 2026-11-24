@@ -29,6 +29,7 @@ import (
 	"github.com/7ar-chat/harness/app/product"
 	"github.com/7ar-chat/harness/config"
 	"github.com/7ar-chat/harness/core/store"
+	wfcore "github.com/7ar-chat/harness/core/workflows"
 	wfengine "github.com/7ar-chat/harness/features/workflows"
 	"github.com/7ar-chat/harness/hosts/client"
 	"github.com/7ar-chat/harness/hosts/httpapi"
@@ -164,7 +165,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 			// Workflow runs are factory tasks: the engine creates them through the task service and moves a run on
 			// when the factory's OnTaskState hook (and a slow poll, for what a restart missed) says a task moved.
 			eng := wfengine.New(wfengine.Options{Store: bt.wfs, Tasks: f.Tasks, Answer: f.Answer,
-				Requirement: product.RequirementText(bt.reqs)})
+				Requirement: product.RequirementText(bt.reqs), Sandbox: workflowSandbox(h), SandboxEnabled: h.SandboxEnabled,
+				Judge: workflowJudge(h), Preview: workflowPreview(bt.preview),
+				OnFinished: func(r wfcore.Run) { h.ReleaseWorkflowSandboxes(context.Background(), r.ID) }})
 			prod.WorkflowEngine = eng
 			go func() { _ = eng.Run(hctx) }()
 		}

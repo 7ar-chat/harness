@@ -11,6 +11,16 @@ type QueueItem struct {
 	Text      string    `json:"text"`
 	Model     string    `json:"model,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
+	// Attachments are the files that travel with the message (already stored in the conversation's workspace).
+	Attachments []QueuedAttachment `json:"attachments,omitempty"`
+}
+
+// QueuedAttachment is a file of a queued message.
+type QueuedAttachment struct {
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	MimeType  string `json:"mimeType"`
+	SizeBytes int64  `json:"sizeBytes"`
 }
 
 // QueueAck answers POST /threads/{id}/queue (201): the queued message, or, when the reply had already ended, the

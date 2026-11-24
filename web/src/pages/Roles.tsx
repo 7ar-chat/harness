@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -393,5 +394,18 @@ export function RolesPanel({ projectId, canEdit }: { projectId?: string; canEdit
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+/** The caller's own roles, at /roles: the same editor as a project's Roles tab, for roles only they can use. */
+export function RolesPage() {
+  return (
+    <ScrollArea className="h-full">
+      <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-8">
+        <h1 className="text-xl font-semibold">My roles</h1>
+        <p className="text-sm text-muted-foreground">Agent configurations only you can call with @ in your sessions. A project role of the same name wins inside that project.</p>
+        <RolesPanel canEdit />
+      </div>
+    </ScrollArea>
   );
 }

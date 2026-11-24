@@ -1,4 +1,5 @@
 // Queries of the scheduled tasks and the usage page (kept apart from queries.ts: they belong to those two pages only).
+import { useLivePoll } from "@/lib/tabActive";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "./client";
@@ -23,7 +24,7 @@ export const schedulesPath = (projectId?: string) => (projectId ? `/projects/${p
 export const schedulesKey = (projectId?: string) => ["schedules", projectId ?? "me"] as const;
 
 export const useSchedules = (projectId?: string) =>
-  useQuery({ queryKey: schedulesKey(projectId), queryFn: () => api.get<ScheduleView[]>(schedulesPath(projectId)), retry: false, refetchInterval: 15_000 });
+  useQuery({ queryKey: schedulesKey(projectId), queryFn: () => api.get<ScheduleView[]>(schedulesPath(projectId)), retry: false, refetchInterval: useLivePoll(15_000) });
 
 export const useScheduleRuns = (projectId: string | undefined, id: string, enabled: boolean) =>
   useQuery({
@@ -31,7 +32,7 @@ export const useScheduleRuns = (projectId: string | undefined, id: string, enabl
     queryFn: () => api.get<ScheduleRun[]>(`${schedulesPath(projectId)}/${id}/runs?limit=20`),
     enabled,
     retry: false,
-    refetchInterval: 10_000,
+    refetchInterval: useLivePoll(10_000),
   });
 
 /** The next fire times of an expression in a zone, for the editor. An invalid expression is an error (the server says why). */
@@ -85,7 +86,7 @@ export const useUsage = (p: UsageParams) =>
     queryKey: usageKey(p),
     queryFn: () => api.get<UsageView>(`/usage?scope=${p.projectId ? `project&project=${encodeURIComponent(p.projectId)}` : "me"}&range=${encodeURIComponent(p.range)}&group=${p.group}`),
     retry: false,
-    refetchInterval: 60_000,
+    refetchInterval: useLivePoll(60_000),
   });
 
 /** Sets (0 removes) the monthly cap of the project (an owner) or of the caller. */

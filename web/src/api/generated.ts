@@ -235,6 +235,7 @@ export interface Executor {
 export interface ExecutorView extends Executor {
   configured: boolean;
   editable: boolean;
+  availability: string;
 }
 
 export interface FactoryReport {
@@ -322,7 +323,7 @@ export interface FeedEvent {
   at: string;
 }
 
-export type FeedType = "thread.created" | "thread.updated" | "thread.deleted" | "run.started" | "run.finished" | "message.sent" | "member.changed" | "project.changed" | "memory.changed" | "task.created" | "task.updated" | "task.blocked" | "requirement.changed" | "workflow.changed" | "workflow.run" | "workflow.gate";
+export type FeedType = "thread.created" | "thread.updated" | "thread.deleted" | "run.started" | "run.finished" | "message.sent" | "member.changed" | "project.changed" | "memory.changed" | "task.created" | "task.updated" | "task.blocked" | "requirement.changed" | "workflow.changed" | "workflow.run" | "workflow.gate" | "schedule.updated";
 
 export type FileType = "file" | "directory";
 
@@ -649,6 +650,11 @@ export interface NodeRun {
   context?: string[];
   manual?: boolean;
   note?: string;
+  log?: string;
+  url?: string;
+  direct?: boolean;
+  approved?: boolean;
+  exitCode?: number;
   startedAt?: string;
   finishedAt?: string;
 }
@@ -885,11 +891,19 @@ export interface QueueItem {
   text: string;
   model?: string;
   createdAt: string;
+  attachments?: QueuedAttachment[];
 }
 
 export interface QueueSendResult {
   steered: boolean;
   run?: Run;
+}
+
+export interface QueuedAttachment {
+  name: string;
+  path: string;
+  mimeType: string;
+  sizeBytes: number;
 }
 
 export interface Recipe extends RecipeDoc {
@@ -1312,6 +1326,7 @@ export interface Thread extends ThreadBase {
   createdBy?: string;
   kind?: ThreadKind;
   role?: Role;
+  agentRole?: string;
   status: ThreadStatus;
 }
 
@@ -1470,6 +1485,7 @@ export interface WorkflowNode {
   outputs?: string[];
   useRepo?: boolean;
   waitMerge?: boolean;
+  repo?: string;
   command?: string;
   approvers?: string[];
   workflowId?: string;

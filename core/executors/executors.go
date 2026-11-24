@@ -355,6 +355,9 @@ type Result struct {
 	// Tokens and USD are what the CLI reported it used (0 when it does not say).
 	Tokens int64   `json:"tokens,omitempty"`
 	USD    float64 `json:"usd,omitempty"`
+	// Problem is a user-facing diagnosis of a failed run (the CLI is missing, or it could not authenticate) with the
+	// fix; empty when the failure is something else.
+	Problem string `json:"problem,omitempty"`
 }
 
 // Failed reports whether the run did not succeed.

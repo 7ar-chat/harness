@@ -43,6 +43,7 @@ type Wiring struct {
 //	FACTORY_PROTECTED               comma-separated path globs no agent change may touch
 //	FACTORY_MAX_CONCURRENT          tasks running at once (default 4)
 //	FACTORY_MAX_ATTEMPTS            attempts per task (default 3)
+//	FACTORY_RETRY_BACKOFF_SECONDS   fixed delay before a failed attempt is retried (default: 30s doubling, capped at 15m); for tests
 //	FACTORY_POLICY                  default autonomy: supervised | sandboxed | autonomous (default sandboxed)
 //	(a task's budget is set by whoever creates the task or the trigger; there is no global one)
 //	FACTORY_DAILY_BUDGET_USD / _TOKENS   cap on all factory spend per 24h (FACTORY_DAILY_PER_PROJECT=1: per project)
@@ -128,6 +129,14 @@ func FromEnvWithHosts(getenv func(string) string, cfg *config.Config, st factory
 			return w, false, err
 		}
 		*dst = int(f)
+	}
+	if v := strings.TrimSpace(getenv("FACTORY_RETRY_BACKOFF_SECONDS")); v != "" {
+		secs, err := strconv.ParseFloat(v, 64)
+		if err != nil || secs < 0 {
+			return w, false, fmt.Errorf("FACTORY_RETRY_BACKOFF_SECONDS: %q is not a number of seconds", v)
+		}
+		d := time.Duration(secs * float64(time.Second))
+		o.Backoff = func(int) time.Duration { return d }
 	}
 	if mo, ok := config.ModelPriceOptions(); ok {
 		// The table loads in the background; until it arrives every model is unpriced (tokens are still counted).

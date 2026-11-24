@@ -180,6 +180,28 @@ describe("the Roles tab", () => {
     expect(page().getAllByRole("button", { name: /View/ }).length).toBeGreaterThan(0);
   });
 
+  it("lists and creates the caller's own roles at /roles, with the same editor", async () => {
+    const mine = role("mine", { scope: "user", scopeId: "alice", builtin: undefined, editable: true, prompt: "my way" });
+    const f = mockFetch({
+      ...shellRoutes(overview({ projects: [] }), me({ projects: [] })),
+      "GET /api/me/roles": [role("coder"), mine],
+      "GET /api/commands": [],
+      "GET /api/executors": [],
+      "POST /api/me/roles": { ...mine, name: "fresh" },
+    });
+    await renderApp("/roles");
+
+    const list = await page().findByRole("list", { name: "Roles" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+    expect(page().getByRole("heading", { name: "My roles" })).toBeTruthy();
+    fireEvent.click(page().getByRole("button", { name: /New role/ }));
+    fireEvent.change(dialog().getByLabelText("Name"), { target: { value: "fresh" } });
+    fireEvent.change(dialog().getByLabelText("Instructions"), { target: { value: "be fresh" } });
+    fireEvent.click(dialog().getByRole("button", { name: /Create|Save/ }));
+    await waitFor(() => expect(f.find("POST", "/api/me/roles")).toHaveLength(1));
+    expect((f.find("POST", "/api/me/roles")[0]!.body as { name: string }).name).toBe("fresh");
+  });
+
   it("says so when the server has no roles", async () => {
     mockFetch(routes("owner", undefined, { "GET /api/projects/p1/roles": reply(404, { error: { code: "not_found", message: "x" } }) }));
     await renderApp("/p/p1?tab=roles");

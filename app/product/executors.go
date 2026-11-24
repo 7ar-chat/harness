@@ -8,11 +8,13 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/core/capabilities"
 	"github.com/7ar-chat/harness/core/executors"
 	"github.com/7ar-chat/harness/core/roles"
+	"github.com/7ar-chat/harness/core/sandbox"
 	"github.com/7ar-chat/harness/core/store"
 )
 
@@ -42,6 +44,9 @@ type ExecutorView struct {
 	Configured bool `json:"configured"`
 	// Editable: the caller may change or delete the definition (the owner of the project, for a custom one).
 	Editable bool `json:"editable"`
+	// Availability says whether the CLI is in the default sandbox image: "ready", "install" (a run installs it on
+	// first use), "missing" or "unknown" (no sandbox backend, or the probe has not answered).
+	Availability string `json:"availability"`
 }
 
 // ExecutorAPI serves the executors: the routes, the resolver and the credential source of the harness feature.
@@ -52,6 +57,10 @@ type ExecutorAPI struct {
 	box  *secretBox
 	// AllowInstall lets runs install a missing CLI with its install command (harness feature option).
 	AllowInstall bool
+
+	cli   cliProbe
+	mgrMu sync.Mutex
+	mgr   sandbox.Manager
 }
 
 var (
@@ -75,7 +84,11 @@ func NewExecutorAPI(team store.TeamStore, caps capabilities.Store, defs executor
 // Feature installs the harness's Executors feature over this service. taskStore (nil: none) is the factory's store:
 // it gives the runs their task, policy and budget and receives the audit events. Install it before the factory.
 func (a *ExecutorAPI) Feature(taskStore harness.ExecutorTaskStore) harness.Feature {
-	return harness.Executors(harness.ExecutorsOptions{Resolver: a, Credentials: a, Store: taskStore, AllowInstall: a.AllowInstall})
+	inner := harness.Executors(harness.ExecutorsOptions{Resolver: a, Credentials: a, Store: taskStore, AllowInstall: a.AllowInstall})
+	return harness.FeatureFunc(inner.Name(), func(b *harness.Builder) error {
+		a.SetSandboxes(b.Sandboxes)
+		return inner.Install(b)
+	})
 }
 
 func (a *ExecutorAPI) projectOf(ctx context.Context, q executors.Query) string {
@@ -231,14 +244,17 @@ func (s *server) listExecutors(w http.ResponseWriter, r *http.Request, c Caller,
 		list = append(list, custom...)
 	}
 	out := make([]ExecutorView, 0, len(list))
+	avail := a.availability(r.Context(), list)
 	for _, e := range list {
-		out = append(out, a.view(r.Context(), c.Actor, e, owner))
+		v := a.view(r.Context(), c.Actor, e, owner)
+		v.Availability = avail[e.Name]
+		out = append(out, v)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
 
 func (a *ExecutorAPI) view(ctx context.Context, login string, e executors.Executor, owner bool) ExecutorView {
-	v := ExecutorView{Executor: e, Editable: owner && e.Kind == executors.KindCustom}
+	v := ExecutorView{Executor: e, Editable: owner && e.Kind == executors.KindCustom, Availability: AvailUnknown}
 	if in, err := a.install(ctx, login, e.Name); err == nil && in != nil && len(in.SecretKeys) > 0 {
 		v.Configured = true
 	}

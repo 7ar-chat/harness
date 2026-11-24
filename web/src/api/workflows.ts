@@ -1,5 +1,6 @@
 // Workflows: the procedures (SOPs) of a project and their runs. Kept apart from queries.ts like roles.ts; the live feed
 // invalidates ["workflows"] when a workflow, a run or a gate changes.
+import { useLivePoll } from "@/lib/tabActive";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ApiError, api, isUnsupported } from "./client";
@@ -97,11 +98,11 @@ export const useWorkflowRuns = (pid: string, enabled = true) =>
     },
     enabled,
     retry: false,
-    refetchInterval: 30_000,
+    refetchInterval: useLivePoll(30_000),
   });
 
 export const useWorkflowRun = (pid: string, id: string | undefined) =>
-  useQuery({ queryKey: wk.run(pid, id ?? ""), queryFn: () => api.get<WorkflowRunDetail>(`/projects/${pid}/workflow-runs/${id}`), enabled: !!id, refetchInterval: 10_000 });
+  useQuery({ queryKey: wk.run(pid, id ?? ""), queryFn: () => api.get<WorkflowRunDetail>(`/projects/${pid}/workflow-runs/${id}`), enabled: !!id, refetchInterval: useLivePoll(10_000) });
 
 export interface RunInput {
   workflowId: string;

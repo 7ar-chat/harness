@@ -29,6 +29,7 @@ package policy
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -530,4 +531,22 @@ func (c *ttlCache[V]) put(k string, v V) {
 		}
 	}
 	c.m[k] = cacheEntry[V]{v: v, exp: now.Add(cacheTTL)}
+}
+
+// DecideCommand decides a shell command that is not a tool call of an agent (a workflow step that runs it directly
+// in the run's sandbox) the way the policy decides an execute_command call: the project's deny and ask rules first,
+// then the table. A human can always be asked.
+func (e *Engine) DecideCommand(policy, command, base, branch string) Decision {
+	if policy == "" {
+		policy = e.o.DefaultPolicy
+	}
+	args, _ := json.Marshal(map[string]string{"command": command})
+	a := Classify("execute_command", string(args))
+	if pat := e.configMatch(e.deny, "execute_command", a); pat != "" {
+		return Decision{Rule: "config.deny:" + pat, Deny: describe("execute_command", a) + " matches the deny rule " + pat + " of the project's policy"}
+	}
+	if pat := e.configMatch(e.ask, "execute_command", a); pat != "" {
+		return Decision{Ask: true, Rule: "config.ask:" + pat}
+	}
+	return Decide(a, policy, Context{Base: base, Branch: branch, ProtectedPaths: e.protected, CanAsk: true})
 }

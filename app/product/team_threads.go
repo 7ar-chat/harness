@@ -1,9 +1,11 @@
 package product
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
+	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/hosts/client"
 )
@@ -37,7 +39,7 @@ func (s *server) createThreadTeam(w http.ResponseWriter, r *http.Request, c Call
 	}
 	meta := store.ThreadMeta{ThreadID: th.ID, ProjectID: body.ProjectID, Owner: c.Actor, CreatedBy: c.Actor, Kind: store.ThreadChat}
 	if err := s.team.SetThreadMeta(r.Context(), meta); err != nil {
-		_, _ = s.H.Store.DeleteThread(r.Context(), c.Actor, th.ID)
+		_, _ = s.H.DeleteThread(r.Context(), c.Actor, th.ID)
 		fail(w, err)
 		return
 	}
@@ -90,7 +92,7 @@ func (s *server) getThreadTeam(w http.ResponseWriter, r *http.Request, c Caller)
 		return
 	}
 	s.withAuthors(r.Context(), th)
-	v := threadView{Thread: *th, ProjectID: c.ProjectID, CreatedBy: c.CreatedBy, Role: c.Role, Kind: store.ThreadChat}
+	v := threadView{Thread: *th, ProjectID: c.ProjectID, CreatedBy: c.CreatedBy, Role: c.Role, Kind: store.ThreadChat, AgentRole: s.lastRunRole(r.Context(), th)}
 	if meta, err := s.team.GetThreadMeta(r.Context(), th.ID); err == nil {
 		v.Kind = meta.Kind
 	}
@@ -105,6 +107,26 @@ func (s *server) getThreadTeam(w http.ResponseWriter, r *http.Request, c Caller)
 		v.Status = "idle"
 	}
 	writeJSON(w, http.StatusOK, v)
+}
+
+// lastRunRole is the name of the role the thread's newest run took on ("" when none did): the role it recorded among
+// its requested skills.
+func (s *server) lastRunRole(ctx context.Context, th *client.Thread) string {
+	for i := len(th.Messages) - 1; i >= 0; i-- {
+		id := th.Messages[i].RunID
+		if id == "" {
+			continue
+		}
+		names, err := s.H.Store.RunSkills(ctx, id)
+		if err != nil {
+			return ""
+		}
+		if ref, ok := roles.RefOfRun(names); ok {
+			return ref.Name
+		}
+		return ""
+	}
+	return ""
 }
 
 // canDeleteThread: the thread's creator, or an owner of its project.

@@ -1,4 +1,5 @@
 // The agent factory over HTTP (tasks, triggers, the spend report, the learning views) and the "Needs review" inbox.
+import { useLivePoll } from "@/lib/tabActive";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api, ApiError, isUnsupported } from "./client";
@@ -74,10 +75,10 @@ export interface LearningExperiment {
 const noRetryOnClientError = (n: number, e: unknown) => !(e instanceof ApiError && e.status < 500) && n < 2;
 
 export const useTasks = (pid: string) =>
-  useQuery({ queryKey: fk.tasks(pid), queryFn: () => api.get<FactoryTask[]>(`/projects/${pid}/tasks?limit=500`), retry: noRetryOnClientError, refetchInterval: 30_000 });
+  useQuery({ queryKey: fk.tasks(pid), queryFn: () => api.get<FactoryTask[]>(`/projects/${pid}/tasks?limit=500`), retry: noRetryOnClientError, refetchInterval: useLivePoll(30_000) });
 
 export const useTask = (pid: string, tid: string | undefined) =>
-  useQuery({ queryKey: fk.task(pid, tid ?? ""), queryFn: () => api.get<TaskDetail>(`/projects/${pid}/tasks/${tid}`), enabled: !!tid, refetchInterval: 15_000 });
+  useQuery({ queryKey: fk.task(pid, tid ?? ""), queryFn: () => api.get<TaskDetail>(`/projects/${pid}/tasks/${tid}`), enabled: !!tid, refetchInterval: useLivePoll(15_000) });
 
 function useFactoryAction<V, R>(fn: (v: V) => Promise<R>, success?: string) {
   const qc = useQueryClient();

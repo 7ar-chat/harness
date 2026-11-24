@@ -20,8 +20,8 @@ A workflow has a name, **inputs** (asked when a run starts) and **nodes** with i
 
 | Kind | What it does |
 |---|---|
-| `agent` | a role (a builtin one or one of the project's Roles) works on a prompt; `model`, `policy` and `budget` override the task's; `outputs` names the artifacts the agent reports as `### name` sections; `useRepo` works on the run's branch of the project's repository, `waitMerge` waits for the merge (by default the step is done once the pull request is open) |
-| `script`, `build`, `preview` | a shell command that succeeds when it exits 0 |
+| `agent` | a role (a builtin one or one of the project's Roles) works on a prompt; `model`, `policy` and `budget` override the task's; `outputs` names the artifacts the agent reports as `### name` sections; `useRepo` works on the run's branch of the project's repository (`repo` names another repository for that step), `waitMerge` waits for the merge (by default the step is done once the pull request is open) |
+| `script`, `build`, `preview` | a shell command that succeeds when it exits 0; it runs directly in the run's sandbox (see "Command steps") |
 | `gate` | blocks until a member of `approvers` (logins, `role:member`, `role:owner`; project owners may always decide) approves, sends back with feedback, or adds context |
 | `subworkflow` | runs another published workflow of the project as a child run, with templated inputs (nesting is bounded and recursion refused) |
 
@@ -50,7 +50,10 @@ human gate), bug fix (reproduce, fix, test, pull request).
 A run is `running`, `paused`, `done`, `failed` or `cancelled`; a step is `pending`, `running`, `waiting` (a gate),
 `done`, `failed`, `skipped` or `cancelled`. A step's task carries the labels `workflow:<run id>` and `wfnode:<node id>`
 and the source `workflow`; the factory dispatcher, budgets, policies and the PR loop work on it as on any task. The
-steps that use the repository share the branch `workflow/<run id>`.
+steps that use the repository share the branch `workflow/<run id>`, and a step that names another repository with `repo`
+works on its own branch there: `workflow/<run id>-<repository slug>`. A run opens **one branch and one pull request per
+repository**, never one `workflow/<run>` pull request for steps on different repositories; the base branch of the run is
+only used for the run's own repository.
 
 The engine adds no scheduler. The factory's `OnTaskState` hook calls `TaskMoved`, which advances the run, and a
 15 second sweep catches what a restart or another process missed (`Engine.Run`). Changes to a run are saved from the
@@ -60,6 +63,23 @@ Controls: **pause** (no new step starts), **resume**, **cancel** (running tasks 
 **rerun from a node** (it and everything downstream is invalidated, running tasks cancelled; works on a finished run
 too), **retry** a failed step, **take over** (a person gives the result; the task is cancelled), and at a gate
 **approve**, **send back** (with feedback; the target step runs again) and **add context**.
+
+## Command steps
+
+A `script`, `build` or `preview` step runs its command **directly in the run's sandbox**: no model call and no spend.
+The sandbox is one per run and repository (a step with `useRepo` finds the repository checked out on the step's branch in
+`/workspace/repo`, a step without it runs in `/workspace`), shared by the command steps of the run and destroyed when the
+run reaches a final state. The command runs with a timeout (15 minutes), its output is saved into the step's log while it
+runs (the last 64 KB, shown in the step panel), and the exit code is the result: 0 succeeds, anything else (or the timeout)
+fails the step with the end of the output. A `preview` step starts the project's dev server through the preview mechanism
+(`.har/project.yaml`) and records the address in the step (`url`); a project that cannot show a preview just runs the
+step's command.
+
+Policy still applies. The step's `policy` (or the factory default) is applied to the command as to an agent's
+`execute_command`: *supervised* asks a person first (the step waits, shows in the inbox like a gate with the command, and is
+approved or sent back by a project owner or an approver), secret reads, destructive commands and protected paths are
+refused, and the project's deny and ask rules apply. Without a sandbox backend the step falls back to a factory task
+whose agent runs the command and reports an `EXIT_CODE:` line.
 
 ## HTTP
 
@@ -84,6 +104,6 @@ send back and add context. The live feed carries `workflow.changed`, `workflow.r
 
 ## Limits
 
-Script, build and preview steps run as a factory task whose agent runs the command in its sandbox and reports an
-`EXIT_CODE:` line (a missing line fails the step); there is no direct sandbox exec yet. Steps that share the run's
-branch each open (or update) the same pull request, so CI and the reviewer judge it once per step that uses the repository.
+The sandboxes of command steps are filed in the server's memory: after a restart a step that was running starts again in a
+new sandbox (the repository is checked out again). Steps that share a repository's branch each open (or update) the same
+pull request, so CI and the reviewer judge it once per step that uses that repository.

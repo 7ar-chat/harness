@@ -360,6 +360,8 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
               <SetupLink pid={project.id} section="audit" label="Audit log" onNavigate={onNavigate} />
             </Section>
           </>
+        ) : overview && overview.projects.length ? (
+          <p className="px-2.5 py-3 text-xs text-muted-foreground">Personal. Pick a project with the switcher above to see its work.</p>
         ) : overview ? (
           <p className="px-2.5 py-3 text-xs text-muted-foreground">
             No project yet.{" "}
@@ -398,6 +400,9 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
           </Row>
           <Row href="/schedules" k="page:/schedules" onNavigate={onNavigate}>
             My schedules
+          </Row>
+          <Row href="/roles" k="page:/roles" onNavigate={onNavigate} title="Your own agent roles, in every project">
+            My roles
           </Row>
           <Row href="/capabilities" k="page:/capabilities" onNavigate={onNavigate} title="Tools and skills your assistant can use">
             My tools & skills

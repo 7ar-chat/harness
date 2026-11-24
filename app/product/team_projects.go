@@ -291,12 +291,16 @@ func (s *server) deleteProject(w http.ResponseWriter, r *http.Request, c Caller)
 	if !ok {
 		return
 	}
-	// The threads are deleted with the project: they are only reachable through it.
+	// The threads are deleted with the project: they are only reachable through it. Their queue and thread-state
+	// documents go with them (H.DeleteThread), and a thread no store could delete still loses its documents.
 	if metas, err := s.team.ListProjectThreads(r.Context(), p.ID); err == nil {
 		for _, m := range metas {
-			_, _ = s.H.Store.DeleteThread(r.Context(), m.Owner, m.ThreadID)
+			if _, err := s.H.DeleteThread(r.Context(), m.Owner, m.ThreadID); err != nil {
+				s.H.ThreadDeleted(r.Context(), m.ThreadID)
+			}
 		}
 	}
+	s.cancelProjectRuns(r.Context(), p.ID)
 	members, _ := s.team.ListMembers(r.Context(), p.ID)
 	if bs := s.blobStore(); bs != nil && p.RepoURL == "" {
 		DeleteProjectFiles(r.Context(), bs, p.ID)
@@ -308,6 +312,7 @@ func (s *server) deleteProject(w http.ResponseWriter, r *http.Request, c Caller)
 	s.dropProjectSchedules(r.Context(), p.ID)
 	s.dropProjectRecipes(r.Context(), p.ID)
 	s.dropProjectNotifications(r.Context(), p.ID)
+	s.dropProjectRecords(r.Context(), p.ID)
 	// The project's marketplace installs (and their sealed keys) go with it; the project is already gone, so a
 	// failure here is logged and leaves rows nobody can reach.
 	if s.opt.Capabilities != nil {

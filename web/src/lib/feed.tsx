@@ -85,6 +85,7 @@ export function FeedProvider({ children }: { children: ReactNode }) {
       if (ev.type === "task.created" || ev.type === "task.updated" || ev.type === "task.blocked") void qc.invalidateQueries({ queryKey: fk.all });
       if (ev.type === "workflow.changed" || ev.type === "workflow.run" || ev.type === "workflow.gate") void qc.invalidateQueries({ queryKey: ["workflows"] });
       if (ev.type === "memory.changed" || ev.type === "run.finished") void qc.invalidateQueries({ queryKey: ["memory"] });
+      if (ev.type === "schedule.updated") void qc.invalidateQueries({ queryKey: ["schedules"] });
       const sound = soundFor(ev, { me: meRef.current, watching: document.hasFocus() && !document.hidden ? openThread.current : undefined });
       if (sound) cue(sound);
       if (ev.type === "run.finished" && ev.status && NEEDS_YOU[ev.status] && ev.threadId) {

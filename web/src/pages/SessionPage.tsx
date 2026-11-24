@@ -232,7 +232,11 @@ export function SessionView({ threadId, supervisor }: { threadId: string; superv
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          {role ? <span className="rounded-md bg-secondary px-2 py-0.5 font-mono" title="Your role in this project">role {role}</span> : null}
+          {t.agentRole ? (
+            <span className="rounded-md bg-secondary px-2 py-0.5 font-mono" title="The role the last reply took on" data-testid="agent-role">
+              role {t.agentRole}
+            </span>
+          ) : null}
           <ModelPicker
             models={models?.models ?? []}
             value={settings.model ?? ""}

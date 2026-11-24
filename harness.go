@@ -166,6 +166,10 @@ type Harness struct {
 	runGate      func(ctx context.Context, user, threadID string) error
 	redo         redoStacks
 	factory      *Factory
+	threadHooks  threadHooks
+	// wfSandboxes and wfStore hold the sandboxes of workflow runs (harness_workflows.go).
+	wfSandboxes sandbox.Manager
+	wfStore     *memSandboxStore
 }
 
 // New wires the harness: the core (store, models, sandboxes, infrastructure,
@@ -235,6 +239,14 @@ func New(o Options) (*Harness, error) {
 		OnCreate:          b.onCreate,
 	})
 	mgr = envManager{Manager: mgr, ts: ts} // a thread creates its sandbox in the environment it chose
+	// The command steps of workflow runs have sandboxes of their own, filed in memory (they belong to no conversation).
+	wfStore := newMemSandboxStore()
+	wfSandboxes := sandbox.NewManager(backend, wfStore, coord, sandbox.ManagerOptions{
+		Profile:    cfg.SandboxProfile(),
+		MaxPerUser: cfg.MaxSandboxesPerUser, Timeout: cfg.SandboxTimeout(),
+		UnhealthyRecreate: time.Duration(cfg.SandboxUnhealthyRecreate) * time.Second,
+		OnCreate:          b.onCreate,
+	})
 	b.Sandboxes = mgr
 	if err := b.install(features); err != nil {
 		return nil, err
@@ -253,7 +265,7 @@ func New(o Options) (*Harness, error) {
 
 	h := &Harness{cfg: cfg, Store: st, Log: infra.Log, Queue: infra.Broker, Bus: infra.Broker,
 		Sandboxes: mgr, Artifacts: b.Artifacts, Skills: b.Skills, Workspace: b.Workspace, Memory: b.Memory, Documents: b.Documents, Jobs: b.Jobs, Browser: b.BrowserSandboxes, ThreadState: ts, Queued: &chatqueue.Queue{St: ts},
-		sandboxTools: b.sandboxTools != nil, roles: o.Roles, runGate: o.RunGate}
+		sandboxTools: b.sandboxTools != nil, roles: o.Roles, runGate: o.RunGate, wfSandboxes: wfSandboxes, wfStore: wfStore}
 	h.Agent = &agent.Agent{
 		Models: models, Tools: registry, Store: st, Steers: h.Bus,
 		MaxSteps: cfg.AgentMaxSteps, MaxToolOutputChars: cfg.AgentMaxToolOutputChars,
@@ -316,6 +328,8 @@ type RunOptions struct {
 	// Attachments are images sent with the message (at most MaxAttachments of
 	// MaxAttachmentBytes each); they are stored in the thread's workspace.
 	Attachments []Attachment
+	// stored are attachments already in the thread's workspace (a queued message's): Send references them.
+	stored []store.Attachment
 	// Author is the user who typed the message when it is not the thread's
 	// owner (a project member), with AuthorKind and OnBehalfOf for a
 	// supervisor; they are recorded on the message and shown to the model in
@@ -402,6 +416,9 @@ func (h *Harness) Send(ctx context.Context, user, threadID, text string, o RunOp
 	meta, err := h.storeAttachments(ctx, user, threadID, o.Attachments)
 	if err != nil {
 		return nil, err
+	}
+	if len(o.stored) > 0 && meta == nil {
+		meta = map[string]any{"attachments": o.stored}
 	}
 	mode := ""
 	if o.Interactive {

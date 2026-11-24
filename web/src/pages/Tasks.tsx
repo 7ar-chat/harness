@@ -148,7 +148,7 @@ function TaskBody({ projectId, detail, canWrite }: { projectId: string; detail: 
           {t.maxAttempts ? ` of ${t.maxAttempts}` : ""}
         </Fact>
         <Fact label="Spend">{spendLine(t)}</Fact>
-        {t.spent.unpriced ? <Fact label="Unpriced runs">{t.spent.unpriced} (a model without a known price: its cost shows as $0)</Fact> : null}
+        {t.spent.unpriced ? <Fact label="Unpriced runs">{t.spent.unpriced} (cost not reported by this CLI, or no known price for the model: shown as $0, not free)</Fact> : null}
         <Fact label="Pull request">
           {t.pr?.number ? (
             <a href={t.pr.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline">
