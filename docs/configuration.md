@@ -402,3 +402,43 @@ Memory entries live in the store; their logical paths (`memories/semantic/facts.
 the `.har/memory/` prefix, which is stripped. The workspace checkpoints leave `.har/tmp/` and
 `.har/runtime/` out of the history.
 
+
+## Other environment variables
+
+Variables read by `harness-web` and the product that the table above does not cover, and the ones that only tests,
+benchmarks and the end-to-end suite read. Each is listed once, with what it does.
+
+### Server (`harness-web`, `harness-worker`)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `HARNESS_TEAM` | unset | `1` switches team mode on (users, projects, roles) without an OIDC or GitHub login configured; OIDC, GitHub login and the trusted-gateway headers switch it on by themselves |
+| `HARNESS_WEB_ORIGINS` | unset | comma separated browser origins allowed to call the API from another site (CORS); unset: same origin only |
+| `HARNESS_WORKER_ADDR` | the worker default | the address `harness-worker` listens on when none is given as an option |
+| `OIDC_SCOPES` | `profile`, `email` | comma separated scopes asked from the OIDC provider besides `openid` |
+| `GITHUB_APP_PRIVATE_KEY_FILE` | unset | path of the PEM private key of the GitHub App, instead of putting the key itself in `GITHUB_APP_PRIVATE_KEY`; it wins over an inline key |
+| `HARNESS_NOTIFY_ALLOW_PRIVATE` | unset | `1` lets a notification channel (webhook and the like) point at a loopback, private or link-local address; for a network where the receiver is inside; a user cannot override it |
+| `HARNESS_TAPD_ALLOW_PRIVATE` | unset | `1` lets the base URL of a project's TAPD connection be a private address or plain `http` (a TAPD deployment inside the company network); a user cannot override it |
+| `HARNESS_SCHEDULES_RUN` | `1` | `0` keeps the scheduler from starting runs: schedules can be edited and listed but nothing fires (a replica that must not run work, tests) |
+| `HARNESS_EXECUTORS_INSTALL` | unset | `1` lets a call install a missing coding CLI (`install=true`); without it a missing CLI is only reported |
+| `FACTORY_RETRY_BACKOFF_SECONDS` | `30` doubling, capped at 15 minutes | fixed delay before a failed factory attempt is retried; a number of seconds, fractions allowed; mostly for tests |
+| `FACTORY_IMPROVE_PROJECT` | unset | the project the factory's self-improvement tasks are created in |
+| `FACTORY_IMPROVE_BASE_BRANCH` | the repository default | the branch the self-improvement pull requests are based on |
+| `FACTORY_IMPROVE_MODEL` | the default model | the model the self-improvement tasks use |
+
+### Tests, benchmarks and the end-to-end suite
+
+| Variable | Meaning |
+|---|---|
+| `E2E_POSTGRES` | `host:port:user:password:database`: `npm run e2e` (web) runs the whole app on that Postgres instead of its file stores |
+| `HARNESS_TEST_S3_ENDPOINT`, `HARNESS_TEST_S3_ACCESS_KEY`, `HARNESS_TEST_S3_SECRET_KEY` | an S3-compatible store for the S3 tests; they are skipped without them |
+| `HARNESS_TEST_PYTHON` | the `python3` (with openpyxl, python-docx and lxml) the document-skill tests use |
+| `HARNESS_EVAL_EMBEDDING_KEY`, `HARNESS_EVAL_EMBEDDING_MODEL` | an embeddings API for the memory retrieval evaluation against a real model |
+| `HARNESS_PROMPT_DUMP` | a directory: the prompt-variant test writes the rendered prompts there, to measure them |
+| `PROMPTSIZE_PROFILE` | the profile whose prompt size the prompt-size test measures (default `coding`) |
+| `LLMTEST_CHAT_ONLY` | set: the test model rig answers without tool calls |
+| `HARNESS_FAKE_MCP`, `FAKE_MCP_FLAG` | make the MCP test binary act as a fake MCP server, and the flag it echoes back |
+| `CHECK_LOG` | the file the verification test checkers append their calls to |
+| `BENCH_TASKS`, `BENCH_TIER`, `BENCH_OUT`, `BENCH_MIN_PASS`, `BENCH_NO_CACHE_KEY` | the live benchmark: the tasks (comma separated) or tier to run, the JSON report to write, the number of passes required (default 0), and `1` to not send a prompt-cache key |
+| `TERM_PROGRAM` | read by the terminal UI to tell which terminal it runs in (set by the terminal itself) |
+| `WEBSITE_ADDR`, `WEBSITE_DATA_DIR` | the example website: its listen address (default `:8080`) and the directory it keeps its data in |

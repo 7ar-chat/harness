@@ -63,6 +63,52 @@ type Config struct {
 	// OpenStatuses overrides the computed open set: the English status names (planning, developing...) that count
 	// as open, comma separated.
 	OpenStatuses string `json:"openStatuses,omitempty"`
+	// StoryURL is the template of a story's page ("https://www.tapd.cn/{workspace}/prong/stories/view/{id}"); empty
+	// means DefaultStoryURL (or the host of a private deployment's API). The API does not return a story link.
+	StoryURL string `json:"storyUrl,omitempty"`
+	// StatusAliases maps status names to "open" or "closed" ("done=closed, 待办=open"), for workflows whose names
+	// differ from the ones the end-status endpoint reports. It wins over everything else.
+	StatusAliases string `json:"statusAliases,omitempty"`
+}
+
+// DefaultStoryURL is the pattern of a story's page on the public service.
+const DefaultStoryURL = "https://www.tapd.cn/{workspace}/prong/stories/view/{id}"
+
+// ValidStoryURL checks a story URL template: https only, a host, no credentials, and {id} in it.
+func ValidStoryURL(t string) error {
+	t = strings.TrimSpace(t)
+	if t == "" {
+		return nil
+	}
+	if len(t) > 300 {
+		return errors.New("The story link pattern is too long.")
+	}
+	if !strings.Contains(t, "{id}") {
+		return errors.New("The story link pattern must contain {id}, and may contain {workspace}.")
+	}
+	probe := strings.NewReplacer("{id}", "1", "{workspace}", "1").Replace(t)
+	if strings.ContainsAny(probe, "{}") {
+		return errors.New("The story link pattern may only use {id} and {workspace}.")
+	}
+	u, err := url.Parse(probe)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || strings.ContainsAny(t, " \r\n\t") {
+		return errors.New("The story link pattern must be an https address, like " + DefaultStoryURL)
+	}
+	return nil
+}
+
+// ParseAliases reads "done=closed, planning=open" (separators , ; | or a new line) into status (lower case) -> open.
+func ParseAliases(s string) (map[string]bool, error) {
+	out := map[string]bool{}
+	for _, f := range ParseStatuses(s) {
+		name, state, ok := strings.Cut(f, "=")
+		name, state = strings.ToLower(strings.TrimSpace(name)), strings.ToLower(strings.TrimSpace(state))
+		if !ok || name == "" || (state != "open" && state != "closed") {
+			return nil, fmt.Errorf("Each status alias looks like name=open or name=closed (got %q).", f)
+		}
+		out[name] = state == "open"
+	}
+	return out, nil
 }
 
 // Story is one TAPD story as the import needs it.
@@ -125,6 +171,14 @@ func (c *Client) base() string {
 		b = DefaultBaseURL
 	}
 	return strings.TrimRight(b, "/")
+}
+
+// storyLink is a story's page: the configured template, else StoryURL.
+func (c *Client) storyLink(id string) string {
+	if t := strings.TrimSpace(c.Cfg.StoryURL); t != "" && ValidStoryURL(t) == nil {
+		return strings.NewReplacer("{workspace}", url.PathEscape(c.Cfg.WorkspaceID), "{id}", url.PathEscape(id)).Replace(t)
+	}
+	return StoryURL(c.Cfg.BaseURL, c.Cfg.WorkspaceID, id)
 }
 
 // StoryURL is the address of a story's page in the web app.
@@ -263,6 +317,15 @@ func (c *Client) OpenStories(ctx context.Context, max int) (Result, error) {
 		}
 		isOpen = func(s string) bool { return !set[strings.ToLower(s)] }
 	}
+	if aliases, err := ParseAliases(c.Cfg.StatusAliases); err == nil && len(aliases) > 0 {
+		base := isOpen
+		isOpen = func(s string) bool {
+			if open, ok := aliases[strings.ToLower(strings.TrimSpace(s))]; ok {
+				return open
+			}
+			return base(s)
+		}
+	}
 	for page := 1; res.Scanned < MaxScan && len(res.Stories) < max; page++ {
 		q := url.Values{"workspace_id": {c.Cfg.WorkspaceID}, "limit": {strconv.Itoa(PageSize)}, "page": {strconv.Itoa(page)}, "order": {"created desc"}}
 		data, err := c.get(ctx, "/stories", q)
@@ -294,7 +357,7 @@ func (c *Client) OpenStories(ctx context.Context, max int) (Result, error) {
 				pr = s.Priority
 			}
 			res.Stories = append(res.Stories, Story{ID: s.ID.String(), Name: s.Name, Description: HTMLToText(s.Description), Status: s.Status,
-				Priority: pr, Owner: s.Owner, Creator: s.Creator, URL: StoryURL(c.Cfg.BaseURL, c.Cfg.WorkspaceID, s.ID.String())})
+				Priority: pr, Owner: s.Owner, Creator: s.Creator, URL: c.storyLink(s.ID.String())})
 		}
 		if len(items) < PageSize {
 			return res, nil

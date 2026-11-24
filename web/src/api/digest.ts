@@ -85,6 +85,8 @@ export interface TapdInput {
   password?: string;
   token?: string;
   openStatuses?: string;
+  storyUrl?: string;
+  statusAliases?: string;
 }
 
 export const usePutTapd = (pid: string) => {

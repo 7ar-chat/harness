@@ -1851,6 +1851,7 @@ async function main() {
   });
 
   await step("n2. Weekly digest: enable it, send one now, see it in the history, open the report and find it in the webhook's delivery log", async () => {
+    const since = problems.length;
     nz.dg = (await post("/projects", { name: "E2E digest" })).id;
     // the webhook channel that receives digest.ready, chosen on the Notifications tab
     await post(`/projects/${nz.dg}/notification-channels`, { kind: "webhook", name: "Digest hook", url: hook.url });
@@ -1872,6 +1873,8 @@ async function main() {
     eq([saved.setting.enabled, saved.setting.weekday, saved.setting.hour, saved.setting.timezone], [true, 5, 17, "Europe/Berlin"], "the saved setting");
     const before = hook.calls.length;
     await card.getByRole("button", { name: /Send one now/ }).click();
+    // a project that was just created has had a quiet week: the page asks first (q1 covers the question itself)
+    await page.getByRole("alertdialog").getByRole("button", { name: "Send anyway" }).click();
     const list = card.getByRole("list", { name: "Sent digests" });
     await visible(list.getByText("sent on request"), "the digest in the history");
     const h = (await api(`/projects/${nz.dg}/digest`)).digests;
@@ -1882,9 +1885,32 @@ async function main() {
     await poll(() => hook.calls.slice(before).some((c) => JSON.parse(c.body).event === "digest.ready"), "digest.ready at the webhook");
     eq(hook.calls.slice(before).filter((c) => JSON.parse(c.body).event === "digest.ready").length, 1, "the webhook got it exactly once");
     await poll(async () => (await api(`/projects/${nz.dg}/notifications/log`)).some((e) => e.event === "digest.ready" && e.status === "delivered"), "the delivery log entry");
+    expectStatus(since, 409);
     await page.goto(`${base}/#/p/${nz.dg}?tab=notifications`);
     await page.reload();
     await visible(page.getByRole("table", { name: "Delivery log" }).getByText(/Weekly digest: E2E digest/).first(), "the digest in the delivery log table");
+  });
+  await step("q1. Quiet week: 'Send one now' asks before sending an empty week, Cancel sends nothing, 'Send anyway' sends it", async () => {
+    const since = problems.length;
+    const pid = (await post("/projects", { name: "E2E quiet week" })).id;
+    await page.goto(`${base}/#/p/${pid}?tab=insights`);
+    await page.reload();
+    const card = page.getByTestId("digest-card");
+    await visible(card, "the weekly digest card");
+    await card.getByRole("button", { name: /Send one now/ }).click();
+    const dlg = page.getByRole("alertdialog");
+    await visible(dlg.getByText("Nothing happened in the last 7 days. Send a short 'quiet week' digest anyway?"), "the quiet week question");
+    await dlg.getByRole("button", { name: "Cancel" }).click();
+    await gone(page.getByRole("alertdialog"), "the question after Cancel");
+    eq((await api(`/projects/${pid}/digest`)).digests.length, 0, "nothing was sent by Cancel");
+    // the same answer from the API, and force passes it
+    const r = await fetch(`${base}/api/projects/${pid}/digest/send`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    eq([r.status, (await r.json()).error.code], [409, "quiet_week"], "the API answers quiet_week");
+    await card.getByRole("button", { name: /Send one now/ }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Send anyway" }).click();
+    await visible(card.getByRole("list", { name: "Sent digests" }).getByText("sent on request"), "the quiet week digest in the history");
+    eq((await api(`/projects/${pid}/digest`)).digests.length, 1, "one digest after Send anyway");
+    expectStatus(since, 409);
   });
   await runP({ step, browser, base, post, api, visible, gone, poll, eq, watch, onboarded, T, proj, tmp, fake });
 

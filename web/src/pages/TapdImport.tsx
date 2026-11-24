@@ -21,6 +21,8 @@ function ConnectDialog({ projectId, open, onOpenChange }: { projectId: string; o
   const [token, setToken] = useState("");
   const [baseUrl, setBaseUrl] = useState(cur?.baseUrl ?? "");
   const [statuses, setStatuses] = useState(cur?.openStatuses ?? "");
+  const [storyUrl, setStoryUrl] = useState(cur?.storyUrl ?? "");
+  const [aliases, setAliases] = useState(cur?.statusAliases ?? "");
   const connected = !!cur?.connected;
   const keep = connected ? "Leave empty to keep the saved one" : "";
   const ready = /^\d+$/.test(workspaceId.trim()) && (mode === "token" ? token.trim() !== "" || (connected && cur?.hasToken) : user.trim() !== "" && (password !== "" || (connected && !!cur?.hasPassword)));
@@ -38,7 +40,7 @@ function ConnectDialog({ projectId, open, onOpenChange }: { projectId: string; o
           onSubmit={(e) => {
             e.preventDefault();
             put.mutate(
-              { workspaceId: workspaceId.trim(), baseUrl: baseUrl.trim(), openStatuses: statuses.trim(), ...(mode === "token" ? { token: token.trim() } : { user: user.trim(), password }) },
+              { workspaceId: workspaceId.trim(), baseUrl: baseUrl.trim(), openStatuses: statuses.trim(), storyUrl: storyUrl.trim(), statusAliases: aliases.trim(), ...(mode === "token" ? { token: token.trim() } : { user: user.trim(), password }) },
               { onSuccess: () => { setPassword(""); setToken(""); onOpenChange(false); } },
             );
           }}
@@ -79,6 +81,20 @@ function ConnectDialog({ projectId, open, onOpenChange }: { projectId: string; o
               Normally a story is open unless its status is a final one of its workflow, which TAPD tells us. If TAPD does not answer that for this account, or you want your own rule, list the English status names that count as open here: the list wins.
             </p>
           </div>
+          <div className="space-y-1">
+            <Label htmlFor="tapd-aliases">Status aliases (optional)</Label>
+            <Input id="tapd-aliases" value={aliases} onChange={(e) => setAliases(e.target.value)} placeholder="done=closed, backlog=open" autoComplete="off" />
+            <p className="text-xs text-muted-foreground">
+              If your workflow names its statuses differently, say which ones mean open or closed, as name=open or name=closed, separated by commas. These win over what TAPD reports.
+            </p>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="tapd-story-url">Story link pattern (optional)</Label>
+            <Input id="tapd-story-url" value={storyUrl} onChange={(e) => setStoryUrl(e.target.value)} placeholder="https://www.tapd.cn/{workspace}/prong/stories/view/{id}" autoComplete="off" />
+            <p className="text-xs text-muted-foreground">
+              TAPD does not give the address of a story, so we build it. Change this if the links we make do not open the story. Use {"{id}"} for the story and {"{workspace}"} for the project; https only.
+            </p>
+          </div>
           <DialogFooter className="gap-2 sm:justify-between">
             {connected ? (
               <Button type="button" variant="ghost" disabled={off.isPending} onClick={() => off.mutate(undefined, { onSuccess: () => onOpenChange(false) })}>Disconnect</Button>
@@ -117,7 +133,7 @@ export function TapdImport({ projectId, role }: { projectId: string; role: Role 
       ) : (
         <Button variant="outline" size="sm" onClick={() => setDialog(true)}>Connect TAPD</Button>
       )}
-      {dialog ? <ConnectDialog key={`${t.workspaceId}${t.user}${t.baseUrl}${t.openStatuses}`} projectId={projectId} open onOpenChange={setDialog} /> : null}
+      {dialog ? <ConnectDialog key={`${t.workspaceId}${t.user}${t.baseUrl}${t.openStatuses}${t.storyUrl}${t.statusAliases}`} projectId={projectId} open onOpenChange={setDialog} /> : null}
       {r ? (
         <p role="status" className="w-full text-right text-sm text-muted-foreground" data-testid="tapd-result">
           Imported {r.imported} TAPD story(ies), skipped {r.skipped} already known. Open stories were decided {r.source === "filter" ? "by your list of open statuses" : "from the final statuses of the TAPD workflows"}

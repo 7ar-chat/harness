@@ -23,7 +23,7 @@ import (
 // with the server key, kept in core/projdata and never returned or logged.
 //
 //	GET    /api/projects/{pid}/requirements/tapd         → TapdStatus                          (project viewer+)
-//	PUT    /api/projects/{pid}/requirements/tapd {workspaceId,baseUrl?,user?,password?,token?,openStatuses?} → TapdStatus   (owner)
+//	PUT    /api/projects/{pid}/requirements/tapd {workspaceId,baseUrl?,user?,password?,token?,openStatuses?,storyUrl?,statusAliases?} → TapdStatus   (owner)
 //	DELETE /api/projects/{pid}/requirements/tapd         → 204                                 (owner)
 //	POST   /api/projects/{pid}/requirements/import/tapd  → RequirementImport                   (member)
 //
@@ -43,6 +43,9 @@ type TapdStatus struct {
 	HasPassword  bool   `json:"hasPassword,omitempty"`
 	HasToken     bool   `json:"hasToken,omitempty"`
 	OpenStatuses string `json:"openStatuses,omitempty"`
+	// StoryURL and StatusAliases are the owner's answers to what the TAPD API does not say (see core/tapd).
+	StoryURL      string `json:"storyUrl,omitempty"`
+	StatusAliases string `json:"statusAliases,omitempty"`
 	// Available is false when this server cannot keep the credentials (no secret key), so there is nothing to connect.
 	Available bool `json:"available"`
 }
@@ -97,7 +100,7 @@ func tapdStatus(cfg tapd.Config, connected, available bool) TapdStatus {
 		return TapdStatus{Available: available}
 	}
 	return TapdStatus{Connected: true, Available: available, WorkspaceID: cfg.WorkspaceID, BaseURL: cfg.BaseURL, User: cfg.User,
-		HasPassword: cfg.Password != "", HasToken: cfg.Token != "", OpenStatuses: cfg.OpenStatuses}
+		HasPassword: cfg.Password != "", HasToken: cfg.Token != "", OpenStatuses: cfg.OpenStatuses, StoryURL: cfg.StoryURL, StatusAliases: cfg.StatusAliases}
 }
 
 func (s *server) getTapd(w http.ResponseWriter, r *http.Request, c Caller) {
@@ -158,18 +161,29 @@ func (s *server) putTapd(w http.ResponseWriter, r *http.Request, c Caller) {
 		return
 	}
 	var b struct {
-		WorkspaceID  string `json:"workspaceId"`
-		BaseURL      string `json:"baseUrl"`
-		User         string `json:"user"`
-		Password     string `json:"password"`
-		Token        string `json:"token"`
-		OpenStatuses string `json:"openStatuses"`
+		WorkspaceID   string `json:"workspaceId"`
+		BaseURL       string `json:"baseUrl"`
+		User          string `json:"user"`
+		Password      string `json:"password"`
+		Token         string `json:"token"`
+		OpenStatuses  string `json:"openStatuses"`
+		StoryURL      string `json:"storyUrl"`
+		StatusAliases string `json:"statusAliases"`
 	}
 	if !decode(w, r, &b) {
 		return
 	}
 	cfg := tapd.Config{WorkspaceID: strings.TrimSpace(b.WorkspaceID), User: strings.TrimSpace(b.User), Password: b.Password, Token: strings.TrimSpace(b.Token),
-		OpenStatuses: strings.Join(tapd.ParseStatuses(b.OpenStatuses), ", ")}
+		OpenStatuses: strings.Join(tapd.ParseStatuses(b.OpenStatuses), ", "), StoryURL: strings.TrimSpace(b.StoryURL),
+		StatusAliases: strings.Join(tapd.ParseStatuses(b.StatusAliases), ", ")}
+	if err := tapd.ValidStoryURL(cfg.StoryURL); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	if _, err := tapd.ParseAliases(cfg.StatusAliases); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
 	bad := func(msg string) { writeError(w, http.StatusBadRequest, "invalid_request", msg) }
 	base, err := checkTapdBase(b.BaseURL, s.tapdAllowPrivate())
 	if err != nil {
@@ -191,8 +205,8 @@ func (s *server) putTapd(w http.ResponseWriter, r *http.Request, c Caller) {
 		bad("The workspace id is the number of the TAPD project (digits only).")
 	case cfg.Token == "" && (cfg.User == "" || cfg.Password == ""):
 		bad("Give the API account and its password, or an access token.")
-	case len(cfg.User) > 200 || len(cfg.Password) > 1000 || len(cfg.Token) > 4000 || len(cfg.OpenStatuses) > 500,
-		strings.ContainsAny(cfg.User+cfg.Password+cfg.Token+cfg.OpenStatuses, "\r\n\x00"):
+	case len(cfg.User) > 200 || len(cfg.Password) > 1000 || len(cfg.Token) > 4000 || len(cfg.OpenStatuses) > 500 || len(cfg.StatusAliases) > 1000,
+		strings.ContainsAny(cfg.User+cfg.Password+cfg.Token+cfg.OpenStatuses+cfg.StatusAliases, "\r\n\x00"):
 		bad("A value is too long or has line breaks.")
 	default:
 		if cfg.Token != "" {

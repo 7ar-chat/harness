@@ -52,8 +52,8 @@ TAPD (Tencent's project tool) is a requirements source next to the git hosts. Th
 workspace; members import its open stories.
 
 ```
-GET    /api/projects/{pid}/requirements/tapd         viewer+  {connected, workspaceId, baseUrl, user, hasPassword, hasToken, openStatuses, available}
-PUT    /api/projects/{pid}/requirements/tapd         owner    {workspaceId, baseUrl?, user?, password?, token?, openStatuses?}: checks the credentials against TAPD, then saves them sealed
+GET    /api/projects/{pid}/requirements/tapd         viewer+  {connected, workspaceId, baseUrl, user, hasPassword, hasToken, openStatuses, storyUrl, statusAliases, available}
+PUT    /api/projects/{pid}/requirements/tapd         owner    {workspaceId, baseUrl?, user?, password?, token?, openStatuses?, storyUrl?, statusAliases?}: checks the credentials against TAPD, then saves them sealed
 DELETE /api/projects/{pid}/requirements/tapd         owner
 POST   /api/projects/{pid}/requirements/import/tapd  member   → {imported, skipped, requirements, source: workflow|filter, truncated}
 ```
@@ -79,32 +79,48 @@ called. If the endpoint is unavailable for the account and no list is set, the i
 `tapd_no_statuses` and the page tells the owner to enter a list; nothing is guessed. The page says, after each
 import, which of the two decided.
 
-### What was confirmed and what is assumed
+### What was confirmed and what is configurable
 
-Confirmed from the official documentation (checked November 2026):
+Checked against the official documentation in November 2026. The pages (all under
+`https://open.tapd.cn/document/api-doc/API%E6%96%87%E6%A1%A3/api_reference/`):
 
-- `GET https://api.tapd.cn/stories` with `workspace_id` (required), `limit` (default 30, max 200), `page` (from 1),
-  `order`, `fields`; the answer is `{"status":1,"data":[{"Story":{...}}],"info":"success"}`; Story has `id`, `name`,
-  `status`, `description`, `owner`, `creator`, `priority`, `priority_label`, `workitem_type_id`...
-  (open.tapd.cn/document/api-doc/API文档/api_reference/story/get_stories.html)
-- Authentication: HTTP Basic `api_user:api_password`, or an OAuth `Authorization: Bearer <access_token>`
-  (same page, and the workflow pages below).
-- `GET /workflows/last_steps?system=story&workspace_id=` returns `{"status":1,"data":{"<english status>":"<name>"}}`,
-  the end statuses of all story workflows of the project when `workitem_type_id` is omitted; `GET /workflows/status_map`
-  returns English to Chinese status names (o.tapd.tencent.com/document/api-doc/API文档/api_reference/workflow/get_workflow_last_steps.html).
-  The older docs host these on `apiv2.tapd.tencent.com`; the open.tapd.cn pages use `api.tapd.cn`, which is the default.
+- Get stories, `story/get_stories.html`: `GET https://api.tapd.cn/stories` with `workspace_id` (required), `limit`
+  (default 30, max 200), `page` (from 1), `order`, `fields`; the answer is
+  `{"status":1,"data":[{"Story":{...}}],"info":"success"}`. Story has `id`, `name`, `status`, `description`, `owner`,
+  `creator`, `priority`, `priority_label`... The `status` in the example is the English name (`"status": "planning"`);
+  `with_v_status=1` returns the Chinese label instead and `v_status` filters by a Chinese name. The response has no
+  story link field.
+- Workflow end statuses, `workflow/get_workflow_last_steps.html`: `GET https://api.tapd.cn/workflows/last_steps?system=story&workspace_id=`
+  (`system` is `bug` or `story`; `workitem_type_id` optional: without it the end statuses of every workflow of the
+  project) answers `{"status":1,"data":{"closed":"已关闭"}}`: the keys are the English status names, the values the
+  Chinese labels.
+- Status names, `workflow/get_workflow_status_map.html`: `GET https://api.tapd.cn/workflows/status_map` returns the
+  same key/value shape for all statuses (story example: `planning` to `规划中`, `developing`, `resolved`, `rejected`);
+  for stories it wants `workitem_type_id`.
+- Authentication: HTTP Basic `api_user:api_password` (the `curl -u` examples), or an OAuth access token.
 
-Assumed (the documentation does not say):
+Settled from that:
 
-- The separator of an enumerated `status` filter. The import therefore never filters on the server: it reads pages and
-  decides openness itself from each story's `status`.
-- The story page address `https://www.tapd.cn/{workspace}/prong/stories/view/{id}` (known from TAPD's web app, not
-  stated in the API documentation). For a private deployment the host of the base URL is used instead of `www.tapd.cn`.
-- That the status values of a story are the English names that `last_steps` lists (`resolved`, `status_3`...), compared
-  case-insensitively.
-- That an error is the envelope with `status` other than 1, or HTTP 401 and 403, or `status` 401 and 403 in the
-  envelope, for bad credentials.
-- That `last_steps` may answer `[]` for an empty set (handled).
+- Default host: `https://api.tapd.cn`. Every open.tapd.cn page above uses it. `https://apiv2.tapd.tencent.com` is the
+  host the Tencent-hosted copy of the documentation (o.tapd.tencent.com, "使用必读") names; an account on that
+  deployment sets it as the base URL of the connection.
+- Status format: stories carry the English status name, and the keys of `last_steps` are English names too, so
+  comparing them (case-insensitively) is correct. The Chinese labels are never needed, unless a person types one.
+
+Not stated by the documentation, so configurable on the connection instead of assumed (both optional, kept sealed with
+the connection and shown in the Connect TAPD form):
+
+- Story link pattern (`storyUrl`): the API returns no link, so one is built from a template. Default
+  `https://www.tapd.cn/{workspace}/prong/stories/view/{id}` (known from the web app, not documented; on a private base
+  URL the host of that URL replaces `www.tapd.cn`). `{id}` is required, `{workspace}` optional; https only, no
+  credentials, validated on save.
+- Status aliases (`statusAliases`): `name=open` or `name=closed`, comma separated, for workflows whose status names
+  differ from the ones the end-status endpoint reports. They win over the workflow's end statuses and over the list of
+  open statuses. Names are compared case-insensitively.
+
+Still assumed: the separator of an enumerated `status` filter (the import never filters on the server: it reads pages
+and decides openness itself); that an error is the envelope with `status` other than 1, HTTP 401/403, or `status`
+401/403 in the envelope; that `last_steps` may answer `[]` for an empty set (handled).
 
 ## Weekly digest
 
@@ -119,7 +135,7 @@ an empty week (rate limited to one every 3 seconds).
 ```
 GET  /api/projects/{pid}/digest                     viewer+  {setting:{enabled,weekday,hour,timezone,nextAt,lastSentAt}, digests:[{id,createdAt,from,to,summary,trigger,url}], canEdit, notified}
 PUT  /api/projects/{pid}/digest                     owner    {enabled, weekday 0-6 (Sunday 0), hour 0-23, timezone (IANA)}
-POST /api/projects/{pid}/digest/send                owner    → {digest}
+POST /api/projects/{pid}/digest/send {force?}      owner    → {digest}; a week with no activity answers 409 quiet_week unless force:true (the page asks "Send anyway?")
 GET  /api/projects/{pid}/digest/{id}/report[?download=1]   viewer+: the stored page (no script, CSP default-src 'none')
 ```
 

@@ -37,11 +37,13 @@ describe("TAPD import", () => {
     fireEvent.change(dialog.getByLabelText("API user"), { target: { value: "api_user" } });
     fireEvent.change(dialog.getByLabelText("API password"), { target: { value: "s3cret" } });
     fireEvent.change(dialog.getByLabelText(/Open statuses/), { target: { value: "planning, developing" } });
+    fireEvent.change(dialog.getByLabelText(/Status aliases/), { target: { value: "done=closed" } });
+    fireEvent.change(dialog.getByLabelText(/Story link pattern/), { target: { value: "https://t.example.com/{workspace}/s/{id}" } });
     expect(submit.disabled).toBe(false);
     fireEvent.click(submit);
     await waitFor(() => expect(m.find("PUT", "/api/projects/p1/requirements/tapd")).toHaveLength(1));
     expect(m.find("PUT", "/api/projects/p1/requirements/tapd")[0]?.body).toEqual({
-      workspaceId: "10104801", baseUrl: "", openStatuses: "planning, developing", user: "api_user", password: "s3cret",
+      workspaceId: "10104801", baseUrl: "", openStatuses: "planning, developing", storyUrl: "https://t.example.com/{workspace}/s/{id}", statusAliases: "done=closed", user: "api_user", password: "s3cret",
     });
     expect(await page().findByRole("button", { name: "Import from TAPD" })).toBeTruthy();
     expect(document.body.textContent).not.toContain("s3cret");
@@ -57,7 +59,7 @@ describe("TAPD import", () => {
     fireEvent.change(dialog.getByLabelText("Access token"), { target: { value: "tok" } });
     fireEvent.click(dialog.getByRole("button", { name: "Connect" }));
     await waitFor(() => expect(m.find("PUT", "/api/projects/p1/requirements/tapd")).toHaveLength(1));
-    expect(m.find("PUT", "/api/projects/p1/requirements/tapd")[0]?.body).toEqual({ workspaceId: "1", baseUrl: "", openStatuses: "", token: "tok" });
+    expect(m.find("PUT", "/api/projects/p1/requirements/tapd")[0]?.body).toEqual({ workspaceId: "1", baseUrl: "", openStatuses: "", storyUrl: "", statusAliases: "", token: "tok" });
   });
 
   it("imports for a member and says how open stories were decided", async () => {

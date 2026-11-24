@@ -1349,6 +1349,8 @@ export interface TapdStatus {
   hasPassword?: boolean;
   hasToken?: boolean;
   openStatuses?: string;
+  storyUrl?: string;
+  statusAliases?: string;
   available: boolean;
 }
 
