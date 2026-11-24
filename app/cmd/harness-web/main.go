@@ -126,7 +126,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	}
 	hctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	go func() { _ = h.Run(hctx) }()
+	// HARNESS_WEB_RUNS=0: this process only queues runs (Send); harness-worker processes execute them (hosts/worker).
+	if getenv("HARNESS_WEB_RUNS") != "0" {
+		go func() { _ = h.Run(hctx) }()
+	}
 
 	opts := httpapi.Options{
 		Token: token, LocalUser: *user, Models: cfg.LLMModels, DefaultModel: *model,
