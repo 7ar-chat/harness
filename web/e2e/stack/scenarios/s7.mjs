@@ -1,6 +1,9 @@
 // s7: security checks through the real stack: cookie flags, origin check, CSP, unauthenticated access,
 // secrets never in a response (or a log), rate limit.
+import { execFile } from "node:child_process";
+import path from "node:path";
 import { eq, ok } from "../lib.mjs";
+import { repo } from "../stack.mjs";
 
 export const title = "security checks";
 const ctx = {};
@@ -143,6 +146,24 @@ export const steps = [
       const again = await alice.api("POST", `/projects/${ctx.pid}/notification-channels/${id}/test`, {}, { replica: 0 });
       eq(again.status, 429, "a test straight after another is 429");
       ok(Number(again.headers["retry-after"] ?? "1") >= 0, "Retry-After is sane");
+    },
+  ],
+  [
+    "the production smoke kit (scripts/prod-smoke.mjs) passes against the stack with a person's cookie, and fails without one",
+    async (env) => {
+      const alice = await env.person("alice");
+      const cookie = (await alice.ctx.cookies(env.S.base)).map((c) => `${c.name}=${c.value}`).join("; ");
+      const script = path.join(repo, "scripts/prod-smoke.mjs");
+      // async: the proxy of the stack runs in this process and must keep answering
+      const run = (cookieValue) =>
+        new Promise((resolve) =>
+          execFile("node", [script], { env: { PATH: process.env.PATH, BASE_URL: env.S.base, SESSION_COOKIE: cookieValue }, timeout: 60_000 }, (err, stdout, stderr) => resolve({ status: err ? (err.code ?? null) : 0, stdout, stderr })),
+        );
+      const good = await run(cookie);
+      ok(good.status === 0, `prod-smoke exit ${good.status}: ${good.stdout.split("\n").filter((l) => /FAIL|checks passed/.test(l)).join(" // ")} ${good.stderr.slice(0, 300)}`);
+      ok(good.stdout.includes("checks passed") && !good.stdout.includes(cookie.split("=")[1]), "a table is printed and the cookie is not");
+      const bad = await run("x=forged");
+      eq(bad.status, 1, "a forged cookie is reported as a failure");
     },
   ],
 ];

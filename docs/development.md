@@ -12,6 +12,9 @@ Postgres service, the web checks (`typecheck`, `test`, `build`) and a Docker bui
 validation. `make ci` runs the Go and web steps locally. After changing a DTO of `hosts/client` or a view of `product`, run
 `make gen`: `go test ./cmd/gen-ts` (run in `app/`) fails while `web/src/api/generated.ts` is stale.
 
+The browser suites: `make e2e` (one server, no login) and `make e2e-stack` (the production shape: OIDC, several people,
+two replicas, a worker, Postgres, Redis, S3; opt-in, needs Docker): see [e2e-stack.md](e2e-stack.md).
+
 ## Status / known gaps
 
 * Requires Go 1.26 (`go test ./...`). `adapters/store/pgstore` tests need a Postgres (`HARNESS_TEST_DATABASE_URL`) and skip otherwise.
