@@ -86,15 +86,15 @@ describe("getting-started checklist", () => {
     expect(stored().dismissed).toBe(true);
   });
 
-  it("is also a folded card in the explorer", async () => {
+  it("is a folded progress line in the explorer, opened on demand", async () => {
     mockFetch(shellRoutes());
     await renderApp("/");
     const side = within(await screen.findByRole("navigation", { name: "Explorer" }));
     const toggle = await side.findByRole("button", { name: /Getting started/ });
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(stored().folded).toBe(true);
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(stored().folded).toBe(false);
   });
 });
 

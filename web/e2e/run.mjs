@@ -933,6 +933,7 @@ async function main() {
     await shotTo(page, "recipes-schedules-tab");
     if (process.env.E2E_SHOTS) {
       const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
+      await phone.addInitScript(onboarded);
       phone.on("page", watch);
       try {
         const pp = await phone.newPage();

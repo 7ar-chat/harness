@@ -138,6 +138,7 @@ describe("app shell", () => {
     const { router } = await renderApp("/");
     const strip = within(await screen.findByRole("tablist", { name: "Open editors" }));
     expect(strip.getByRole("tab", { name: "Dashboard", selected: true })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Setup/ })); // the Setup group starts folded
     fireEvent.click(screen.getByRole("link", { name: "Members & access" }));
     await waitFor(() => expect(strip.getByRole("tab", { name: "Members & access", selected: true })).toBeTruthy());
     expect(strip.getAllByRole("tab")).toHaveLength(2);

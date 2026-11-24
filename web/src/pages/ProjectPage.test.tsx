@@ -101,6 +101,7 @@ describe("ProjectPage", () => {
     mockFetch(routes("owner"));
     const { router } = await renderApp("/p/p1");
     await screen.findByRole("button", { name: "Switch project" });
+    fireEvent.click(screen.getByRole("button", { name: /^Setup/ })); // the Setup group starts folded
     fireEvent.click(screen.getByRole("link", { name: "Members & access" }));
     await waitFor(() => expect(router.state.location.search).toEqual({ tab: "members" }));
     expect(screen.getByRole("tab", { name: "Members & access", selected: true })).toBeTruthy();

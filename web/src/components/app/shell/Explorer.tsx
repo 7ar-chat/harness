@@ -24,22 +24,46 @@ import { projectHref } from "./tabs";
 
 const byRecent = (a: ThreadSummary, b: ThreadSummary) => b.updatedAt.localeCompare(a.updatedAt);
 
-function Section({ title, count, action, children, defaultOpen = true }: { title: string; count?: number; action?: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
+const SECTION_KEY = "7ar.ui.section.";
+const readSection = (title: string): boolean | undefined => {
+  try {
+    const v = localStorage.getItem(SECTION_KEY + title);
+    return v === "1" ? true : v === "0" ? false : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/** A foldable group. A person's choice is remembered; `forceOpen` (the shown page is inside it) opens it without remembering. */
+function Section({ title, count, action, badge, children, defaultOpen = true, forceOpen = false }: { title: string; count?: number; action?: ReactNode; badge?: ReactNode; children: ReactNode; defaultOpen?: boolean; forceOpen?: boolean }) {
+  const [open, setOpen] = useState(() => readSection(title) ?? defaultOpen);
+  const shown = open || forceOpen;
+  const toggle = () => {
+    const next = !shown;
+    setOpen(next);
+    try {
+      localStorage.setItem(SECTION_KEY + title, next ? "1" : "0");
+    } catch {
+      /* the choice just is not remembered */
+    }
+  };
   return (
     <section aria-label={title} className="pb-1">
       <div className="group flex items-center pr-1">
-        <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex flex-1 items-center gap-1 rounded px-2.5 pb-1 pt-3 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground focus-visible:outline-2">
-          {open ? <ChevronDown className="size-3" aria-hidden /> : <ChevronRight className="size-3" aria-hidden />}
+        <button type="button" aria-expanded={shown} onClick={toggle} className="flex flex-1 items-center gap-1 rounded px-2.5 pb-1 pt-3 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground focus-visible:outline-2">
+          {shown ? <ChevronDown className="size-3" aria-hidden /> : <ChevronRight className="size-3" aria-hidden />}
           {title}
           {count !== undefined ? <span> · {count}</span> : null}
+          {!shown && badge ? <span className="ml-1.5 normal-case tracking-normal">{badge}</span> : null}
         </button>
         {action}
       </div>
-      {open ? <div className="flex flex-col gap-px">{children}</div> : null}
+      {shown ? <div className="flex flex-col gap-px">{children}</div> : null}
     </section>
   );
 }
+
+const SETUP_SECTIONS = ["roles", "schedules", "recipes", "notifications", "memory", "members", "capabilities", "audit"];
 
 const rowCls = "group/row relative flex min-h-7 items-center gap-2 rounded-md px-2.5 py-1 text-[13px] text-sidebar-foreground outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring aria-[current=page]:bg-sidebar-accent aria-[current=page]:font-medium aria-[current=page]:text-sidebar-accent-foreground";
 
@@ -251,7 +275,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
   const overview = useOverview().data;
   const review = useNeedsReview().data;
   const { newSession, newProject } = useDialogs();
-  const { projectId, openSwitcher, narrow } = useShell();
+  const { projectId, openSwitcher, narrow, tabs } = useShell();
   const { conn } = useFeed();
   const project = overview?.projects.find((p) => p.id === projectId);
   const threads = (project?.threads ?? []).filter((t) => t.kind !== "supervisor").sort(byRecent);
@@ -349,7 +373,12 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
               <SetupLink pid={project.id} section="insights" label="Insights" onNavigate={onNavigate} />
             </Section>
 
-            <Section title="Setup">
+            <Section
+              title="Setup"
+              defaultOpen={false}
+              forceOpen={SETUP_SECTIONS.some((x) => tabs.active?.key === `p:${project.id}:${x}`)}
+              badge={memPending ? <span className="rounded-full bg-warning px-1.5 text-[10px] font-medium text-warning-foreground" aria-label={`${memPending} memories to review`}>{memPending}</span> : null}
+            >
               <SetupLink pid={project.id} section="roles" label="Roles & executors" onNavigate={onNavigate} />
               <SetupLink pid={project.id} section="schedules" label="Schedules" onNavigate={onNavigate} />
               <SetupLink pid={project.id} section="recipes" label="Recipes" onNavigate={onNavigate} />

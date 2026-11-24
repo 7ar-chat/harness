@@ -97,7 +97,8 @@ export function GettingStarted({ variant, projectId, onNavigate }: { variant: "d
   const pct = Math.round((done / steps.length) * 100);
   const title = "Getting started";
   if (variant === "explorer") {
-    const open = !state.folded;
+    // Folded to a single progress line until the person opens it: the full checklist lives on the Dashboard.
+    const open = state.folded === false;
     return (
       <section aria-label={title} className="mx-0.5 mb-1 mt-2 rounded-md border bg-card/60 text-card-foreground">
         <div className="flex items-center pr-1">
