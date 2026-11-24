@@ -177,7 +177,7 @@ function Settings({ pid }: { pid: string }) {
         <h2 className="border-t pt-4 text-base font-semibold">Repositories</h2>
         <div className="space-y-2">
           <Label htmlFor="s-repo">Repository URL</Label>
-          <Input id="s-repo" value={f.repoUrl} onChange={set("repoUrl")} type="url" />
+          <Input id="s-repo" value={f.repoUrl} onChange={set("repoUrl")} type="url" placeholder="https://github.com/org/repo" />
         </div>
         <div className="space-y-2">
           <Label htmlFor="s-more-repos">More repositories</Label>

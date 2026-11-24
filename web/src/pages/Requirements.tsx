@@ -84,7 +84,7 @@ function EditDialog({ projectId, requirement, open, onOpenChange }: { projectId:
         <form onSubmit={submit} className="space-y-3">
           <DialogHeader>
             <DialogTitle>{requirement ? "Edit requirement" : "New requirement"}</DialogTitle>
-            <DialogDescription>What the project wants done. Dispatch it to an agent when it is ready.</DialogDescription>
+            <DialogDescription>What the project wants done. Hand it to an agent when it is ready.</DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
             <Label htmlFor="req-title">Title</Label>
@@ -213,7 +213,7 @@ function Detail({ projectId, id, role, onEdit, onGone }: { projectId: string; id
       {canWork ? (
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" disabled={closed || active || dispatch.isPending} onClick={() => dispatch.mutate(r.id)}>
-            Dispatch
+            Hand to an agent
           </Button>
           <label className="flex items-center gap-1.5 text-sm">
             <span className="text-muted-foreground">Status</span>

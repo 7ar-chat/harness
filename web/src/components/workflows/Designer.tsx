@@ -495,7 +495,7 @@ export function Designer({ projectId, workflow, canEdit, onBack }: { projectId: 
                     <Input value={inp.default ?? ""} placeholder="default" disabled={!editable} onChange={(e) => setInputs(inputs.map((x, j) => (j === i ? { ...x, default: e.target.value } : x)))} aria-label={`Input ${i + 1} default`} />
                     <label className="flex items-center gap-1 text-xs">
                       <Switch checked={!!inp.required} disabled={!editable} onCheckedChange={(v) => setInputs(inputs.map((x, j) => (j === i ? { ...x, required: v } : x)))} aria-label={`Input ${i + 1} required`} />
-                      needed
+                      required
                     </label>
                     {editable ? (
                       <Button size="icon" variant="ghost" aria-label={`Remove input ${inp.name}`} onClick={() => setInputs(inputs.filter((_, j) => j !== i))}>
