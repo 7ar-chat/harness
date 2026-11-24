@@ -296,7 +296,11 @@ func (p *Provider) Run(ctx context.Context, req executors.Request, onOutput func
 			onOutput(shown + "\n")
 		}
 	}
-	out, errOut := newLines(func(l string) { emit(parser.Line(l)) }), newLines(func(l string) { emit("! " + l) })
+	out, errOut := newLines(func(l string) { emit(parser.Line(l)) }), newLines(func(l string) {
+		if !stderrNoiseRe.MatchString(l) {
+			emit("! " + l)
+		}
+	})
 	er, execErr := sb.Exec(rctx, sandbox.ExecRequest{Command: command, Cwd: workdir, Timeout: timeout + 10*time.Second, Env: env,
 		OnStdout: out.write, OnStderr: errOut.write})
 	out.flush()
@@ -334,6 +338,10 @@ func (p *Provider) Run(ctx context.Context, req executors.Request, onOutput func
 	p.finish(context.WithoutCancel(ctx), req, res, ex)
 	return res, nil
 }
+
+// stderrNoiseRe matches stderr lines of the CLIs that say nothing to the user (seen in real runs): Codex announces
+// that it reads stdin (it is closed), and logs each failed WebSocket attempt before it falls back to HTTPS.
+var stderrNoiseRe = regexp.MustCompile(`^(Reading additional input from stdin|\S+ ERROR codex_api::endpoint::responses_websocket)`)
 
 var (
 	missingRe = regexp.MustCompile(`(?i)command not found|: not found|no such file or directory|executable file not found|is not recognized`)
@@ -500,7 +508,19 @@ func (p *Provider) gitChanges(ctx context.Context, sb sandbox.Sandbox, workdir, 
 			files = append(files, l)
 		}
 	}
-	return strings.TrimSpace(stat), files
+	// `git diff --stat` does not list files git does not track yet (what a CLI creates), so they are added to it.
+	untracked, _ := p.git(ctx, sb, workdir, "git ls-files --others --exclude-standard 2>/dev/null | head -50")
+	var extra []string
+	for _, l := range strings.Split(untracked, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			extra = append(extra, " "+l+" | new file (not tracked yet)")
+		}
+	}
+	stat = strings.TrimSpace(stat)
+	if len(extra) > 0 {
+		stat = strings.TrimSpace(stat + "\n" + strings.Join(extra, "\n"))
+	}
+	return stat, files
 }
 
 func (p *Provider) git(ctx context.Context, sb sandbox.Sandbox, workdir, cmd string) (string, int) {
@@ -565,9 +585,10 @@ func (t *tailBuf) String() string {
 
 // lines splits streamed chunks into lines.
 type lines struct {
-	mu  sync.Mutex
-	buf strings.Builder
-	fn  func(string)
+	mu       sync.Mutex
+	buf      strings.Builder
+	fn       func(string)
+	skipping bool
 }
 
 func newLines(fn func(string)) *lines { return &lines{fn: fn} }
@@ -575,6 +596,14 @@ func newLines(fn func(string)) *lines { return &lines{fn: fn} }
 func (l *lines) write(text string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if l.skipping { // inside the rest of an oversized line
+		i := strings.IndexByte(text, '\n')
+		if i < 0 {
+			return
+		}
+		l.skipping = false
+		text = text[i+1:]
+	}
 	l.buf.WriteString(text)
 	s := l.buf.String()
 	for {
@@ -589,6 +618,7 @@ func (l *lines) write(text string) {
 	if len(s) > 1<<20 { // a line that never ends: do not hold it all
 		l.fn(s)
 		s = ""
+		l.skipping = true
 	}
 	l.buf.WriteString(s)
 }
