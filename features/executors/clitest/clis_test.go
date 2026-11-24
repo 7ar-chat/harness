@@ -19,6 +19,7 @@ import (
 //	<dir>/claude/node_modules/.bin/claude
 //	<dir>/codex/node_modules/.bin/codex
 //	<dir>/omp/node_modules/.bin/omp
+//	<dir>/opencode/node_modules/.bin/opencode
 //
 // (npm installs of @anthropic-ai/claude-code and @openai/codex, a bun install of @oh-my-pi/pi-coding-agent). They
 // talk only to fake model servers on 127.0.0.1, so they cost nothing and need no key; each CLI runs with a clean

@@ -394,12 +394,12 @@ the task budget, and refuses to start once the budget is spent.
 * **Failures with a fix.** A run that fails because the CLI is missing, or because it could not authenticate (command not
   found, 401, invalid API key...), reports `problem:` with what to do ("add your key in Settings > Executors", and which
   variables it reads) in the tool result and in the task's `executor` event.
-* **Cost.** A CLI that reports no tokens or dollars (omp, opencode, custom commands) is booked as one *unpriced* run:
+* **Cost.** A CLI that reports no tokens or dollars (custom commands) is booked as one *unpriced* run:
   the task event says "cost not reported by this CLI" and the Task detail and Usage rows say so. No number is made up
   from the wall time. Claude Code (dollars and tokens) and omp (tokens, and dollars when its model has a price) report
-  usage; Codex reports tokens only.
+  usage; Codex reports tokens only; OpenCode reports tokens and a dollar cost (0 when its model has no price).
 * **What was verified against the real CLIs.** `features/executors/clitest` runs the real binaries (claude 2.1.331,
-  codex-cli 0.172.0, omp 19.1.1) through `Provider.Run`, with the builtin command lines and parsers, against scripted fake
+  codex-cli 0.172.0, omp 19.1.1, opencode-ai 1.19.6) through `Provider.Run`, with the builtin command lines and parsers, against scripted fake
   model servers on 127.0.0.1 (Anthropic Messages SSE, OpenAI Responses SSE, OpenAI chat-completions SSE), in a throwaway
   HOME and a temporary git repository, with a clean environment. It is opt-in (`HARNESS_REAL_CLIS=<dir>`, see the package
   doc) and needs no key. The fixtures in `core/executors/testdata/real` are the real stdout of those runs. Per CLI:
@@ -416,12 +416,39 @@ the task budget, and refuses to start once the budget is spent.
   * Codex does NOT read `OPENAI_API_KEY` or `OPENAI_BASE_URL` in `codex exec`: it then asks the real OpenAI API with no
     key (401, "Missing bearer or basic authentication"). The builtin therefore maps them: `CODEX_API_KEY` is
     `${CODEX_API_KEY:-$OPENAI_API_KEY}` and a base URL becomes `-c openai_base_url=...`. Verified with a custom base URL.
-    The default model of codex 0.172 (`gpt-6.2-sol`) uses a "code mode" tool shape (one `exec` JavaScript tool in an
-    `additional_tools` input item); the fake server does not script it, so the runs pin `gpt-5.1-codex` in the CLI's
-    config. The events the parser reads (agent_message, command_execution, turn.completed, turn.failed, error) are the same
-    whatever the model, but a run with the default model is not covered. Its `error` events are mostly transient
+    The default model of codex 0.172 (`gpt-6.2-sol`) uses a "code mode" tool shape: the request has no `tools` array,
+    the tools arrive in an `additional_tools` input item holding a `functions` namespace with ONE freeform (`custom`,
+    lark grammar "raw source") tool, `exec`, which runs JavaScript in a V8 isolate (no Node, no network) where every other
+    tool is `await tools.<name>(...)` (`exec_command({cmd, yield_time_ms})`, `apply_patch(patchText)`, ...). The fake
+    Responses server now serves that shape: it reads the tool names out of `additional_tools`, and emits a
+    `custom_tool_call` item (events `response.custom_tool_call_input.delta/done`) whose `input` is the JavaScript. The
+    runtime runs offline: the "codex" runs below use NO model pin and drive `tools.exec_command(...)` (edit, full,
+    read-only, rejected key, timeout, cancel) and `tools.apply_patch(...)` plus a failing command. The stream is the same
+    JSONL as the older shape: the nested calls come out as `command_execution` and `file_change` items, the `exec` call
+    itself prints nothing, and a JavaScript error inside `exec` prints nothing either (the model alone sees it; verified,
+    the run ends cleanly). So the parser needed no change. The older shape (a model pinned to `gpt-5.1-codex`, a plain
+    `shell` function call) is kept as "codex-pinned" and still passes. Its `error` events are mostly transient
     ("Reconnecting... 2/5") and no longer fail a run; only `turn.failed`, or a stream that ends in an error, does.
-    `file_change`, `mcp_tool_call` and `web_search` items are parsed from the documented shapes and were not seen in a run.
+    `mcp_tool_call` and `web_search` items are parsed from the documented shapes and were not seen in a run
+    (`file_change` was, through apply_patch).
+  * OpenCode (opencode-ai 1.19.6, `npm install opencode-ai`): `opencode run --format json` prints JSONL
+    (`step_start`, `text`, `tool_use` with `state{status,input,output|error}`, `step_finish` with `tokens` and `cost`,
+    `error`; exit 1 after an `error`), read by the `opencode-json` parser. Verified end to end: edit, full (`--auto`),
+    read-only, rejected key (`Incorrect API key provided`, 401, exit 1), no key, timeout, cancel, and the credentials
+    path a user really has (sealed `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL` against the Anthropic fake, and
+    `OPENAI_API_KEY`/`OPENAI_BASE_URL` against the Responses fake, with no config file at all) plus a custom
+    OpenAI-compatible provider in `opencode.json` against the chat-completions fake. Findings, all fixed in the builtin:
+    (1) with no key OpenCode does not fail, it silently uses its own hosted free model (opencode zen) and sends the task
+    there: the command sets `disabled_providers: ["opencode"]` through `OPENCODE_CONFIG_CONTENT`, so a run without a key
+    fails with "Anthropic API key is missing" (diagnosed); (2) `ANTHROPIC_BASE_URL` and `OPENAI_BASE_URL` are ignored
+    (the run went to api.anthropic.com), the base URL is read only from the provider options, so the command writes
+    `provider.<id>.options.baseURL` (plus `/v1`) from the sealed variables; (3) read-only: the builtin `plan` agent is
+    NOT read-only (it denied the edit tool but its bash tool wrote the file), so the builtin defines a `readonly` agent
+    (permission `*: deny` except read, grep, glob, list) and runs `--agent readonly`; verified, the CLI then offers only
+    glob, grep and read, a shell call fails ("unavailable tool"), and reading still works. OpenCode is therefore no
+    longer refused for read-only roles. Not verified: OpenRouter (`OPENROUTER_API_KEY`) and providers other than
+    anthropic, openai and a custom openai-compatible one; the `readonly` agent has the default system prompt of OpenCode;
+    a real model; Linux; the postinstall of the npm package (the binary ran without it being approved).
   * omp: `omp -p --mode json` prints a stable JSONL event stream (session header, agent_start, message_start/update/end,
     tool_execution_start/end, turn_end, agent_end). The `omp-json` parser reads the assistant `message_end` events for
     the text and usage (`totalTokens`, `cost.total`) and `stopReason: "error"` for a failure (exit 1, `errorMessage`).
@@ -437,7 +464,7 @@ the task budget, and refuses to start once the budget is spent.
     count_tokens or models call was seen). A process the CLI starts in its own session (codex, omp commands) survives a
     kill of the process group: the clitest sandbox kills the descendants as a container does; `adapters/sandbox/local`
     kills the process group only.
-  * Not verified: OpenCode (not installed here, its output is read as text), a real model, the Claude Code stream with
+  * Not verified: a real model (every run used a scripted fake), the Claude Code stream with
     `--include-partial-messages`, very long runs, and Windows.
 * `omp` (Oh My Pi, github.com/can1357/oh-my-pi, `bun install -g @oh-my-pi/pi-coding-agent`) is run as
   `omp -p --mode json ... </dev/null` (stdin is closed because omp reads a non-terminal stdin to EOF before it starts).
