@@ -2,6 +2,7 @@
 import { useMemo } from "react";
 import { useOverview } from "@/api/queries";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "@/components/ui/command";
+import { requestOnboarding } from "@/lib/onboarding";
 import { useTheme } from "@/lib/theme";
 import { StatusDot } from "../common";
 import { useDialogs } from "../dialogs";
@@ -20,7 +21,8 @@ const PAGES: [string, string][] = [
   ["/memory", "Library (my memory)"],
   ["/schedules", "My schedules"],
   ["/usage", "My usage"],
-  ["/capabilities", "My capabilities"],
+  ["/capabilities", "My tools & skills"],
+  ["/help", "Help"],
   ["/profile", "Profile and settings"],
 ];
 
@@ -74,11 +76,31 @@ export function Palette({ open, setOpen }: { open: boolean; setOpen: (o: boolean
             ))}
           </CommandGroup>
         ) : null}
+        <CommandGroup heading="Try">
+          <CommandItem value="try start a session and ask an agent" onSelect={go(() => newSession(project?.id))}>
+            Try: start a session and ask an agent
+          </CommandItem>
+          <CommandItem value="try create a project from a template" onSelect={go(newProject)}>
+            Try: create a project from a template
+          </CommandItem>
+          <CommandItem value="try take the 1 minute tour" onSelect={go(() => requestOnboarding("tour"))}>
+            Try: take the one-minute tour
+          </CommandItem>
+        </CommandGroup>
         <CommandGroup heading="Actions">
           <CommandItem onSelect={go(() => newSession(project?.id))}>New session</CommandItem>
           <CommandItem onSelect={go(newProject)}>New project</CommandItem>
           {pa?.canWrite ? <CommandItem onSelect={go(pa.importAgents)} disabled={!pa.canImport}>Import AGENTS.md into the project memory</CommandItem> : null}
           {pa ? <CommandItem onSelect={go(pa.exportMemory)}>Export the project's MEMORY.md</CommandItem> : null}
+          <CommandItem value="show keyboard shortcuts help" onSelect={go(() => requestOnboarding("shortcuts"))}>
+            Show keyboard shortcuts <CommandShortcut>?</CommandShortcut>
+          </CommandItem>
+          <CommandItem value="open help center articles" onSelect={go(() => tabs.open("/help"))}>
+            Open help
+          </CommandItem>
+          <CommandItem value="getting started welcome replay" onSelect={go(() => requestOnboarding("welcome"))}>
+            Getting started
+          </CommandItem>
           <CommandItem onSelect={go(() => setTheme(resolvedTheme === "dark" ? "light" : "dark"))}>Toggle theme</CommandItem>
           <CommandItem onSelect={go(() => setExplorer((v) => !v))}>
             Toggle explorer <CommandShortcut>⌘B</CommandShortcut>

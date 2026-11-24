@@ -1,3 +1,4 @@
+import { EmptyGuide } from "@/components/app/EmptyGuide";
 import { Link } from "@tanstack/react-router";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Brain, Check, ChevronDown, FileText, History, Info, Pencil, Pin, PinOff, Plus, Search, Sparkles, Trash2, X } from "lucide-react";
@@ -437,14 +438,14 @@ function Layer({ scope, readOnly, compact }: { scope: MemScope; readOnly: boolea
       ))}
 
       {!review.length && !pinned.length && !groups.length ? (
-        <Empty icon={<Brain className="size-8" />} title={query || kind ? "No matches" : "No memory yet"}>
-          {query || kind ? null : (
-            <div className="space-y-2 text-left">
-              <p>{layerHint}</p>
-              <p className="text-xs">The agent proposes what is worth keeping after each run; you review it here. You can also add notes yourself and pin the ones every run needs.</p>
-            </div>
-          )}
-        </Empty>
+        query || kind ? (
+          <Empty icon={<Brain className="size-8" />} title="No matches" />
+        ) : (
+          <EmptyGuide icon={<Brain className="size-8" />} title="No memory yet" what={layerHint} slug="memory">
+            <p className="max-w-sm text-xs text-muted-foreground">The agent proposes what is worth keeping after each run; you review it here. You can also add notes yourself and pin the ones every run needs.</p>
+            {!readOnly ? <Button size="sm" onClick={() => setDialog({})}>Write the first note</Button> : null}
+          </EmptyGuide>
+        )
       ) : null}
 
       {dialog ? <EntryDialog key={dialog.entry?.id ?? "new"} scope={scope} entry={dialog.entry} open onClose={() => setDialog(null)} /> : null}

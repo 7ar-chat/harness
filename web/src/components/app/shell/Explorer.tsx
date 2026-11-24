@@ -1,5 +1,5 @@
 // The explorer: project switcher, what needs the person, sessions, work, setup, and the personal space.
-import { Download, Ellipsis, FileText, ChevronDown, ChevronRight, ChevronsUpDown, Inbox, LayoutDashboard, LogOut, Monitor, Moon, Plus, Sun, Trash2, UserCog, Users, Brain, WifiOff, Bot } from "lucide-react";
+import { CircleHelp, Compass, Download, Ellipsis, FileText, ChevronDown, ChevronRight, ChevronsUpDown, Inbox, LayoutDashboard, LogOut, Monitor, Moon, Plus, Sun, Trash2, UserCog, Users, Brain, WifiOff, Bot } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { getDevUser, setDevUser } from "@/api/client";
@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useFeed } from "@/lib/feed";
+import { onboardingAuto, requestOnboarding } from "@/lib/onboarding";
+import { GettingStarted } from "../onboarding/GettingStarted";
 import { useTheme } from "@/lib/theme";
 import { isUnread } from "@/lib/unread";
 import { cn } from "@/lib/utils";
@@ -41,10 +43,10 @@ function Section({ title, count, action, children, defaultOpen = true }: { title
 
 const rowCls = "group/row relative flex min-h-7 items-center gap-2 rounded-md px-2.5 py-1 text-[13px] text-sidebar-foreground outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring aria-[current=page]:bg-sidebar-accent aria-[current=page]:font-medium aria-[current=page]:text-sidebar-accent-foreground";
 
-function Row({ href, k, icon, children, meta, onNavigate, label }: { href: string; k: string; icon?: ReactNode; children: ReactNode; meta?: ReactNode; onNavigate?: () => void; label?: string }) {
+function Row({ href, k, icon, children, meta, onNavigate, label, title }: { href: string; k: string; icon?: ReactNode; children: ReactNode; meta?: ReactNode; onNavigate?: () => void; label?: string; title?: string }) {
   const { tabs } = useShell();
   return (
-    <NavLink href={href} onNavigate={onNavigate} aria-current={tabs.active?.key === k ? "page" : undefined} aria-label={label} className={rowCls}>
+    <NavLink href={href} onNavigate={onNavigate} aria-current={tabs.active?.key === k ? "page" : undefined} aria-label={label} title={title} className={rowCls}>
       {icon}
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {meta}
@@ -134,6 +136,16 @@ export function UserMenu() {
         <DropdownMenuItem onSelect={() => tabs.open("/memory")}>
           <Brain /> My memory
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => requestOnboarding("welcome")}>
+          <Compass /> Getting started
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => requestOnboarding("tour")}>
+          <Compass /> Take the tour
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => tabs.open("/help")}>
+          <CircleHelp /> Help
+        </DropdownMenuItem>
         {isAdmin ? (
           <DropdownMenuItem onSelect={() => tabs.open("/admin")}>
             <Users /> Admin
@@ -175,8 +187,20 @@ export function UserMenu() {
   );
 }
 
+const HINTS: Record<string, string> = {
+  board: "Sessions and tasks as cards, by state",
+  requirements: "Goals you write down; agents break them into tasks",
+  tasks: "Work handed off to agents, and what starts it",
+  workflows: "Repeatable flows of steps, and their runs",
+  roles: "How agents behave, and what runs them",
+  schedules: "Jobs that repeat on a timetable",
+  memory: "What agents remember about the project",
+  members: "Who can see and change the project",
+  capabilities: "Tools and skills your agents can use",
+  audit: "Who did what, and when",
+};
 const SetupLink = ({ pid, section, k, label, onNavigate, meta }: { pid: string; section: string; k?: string; label: string; onNavigate?: () => void; meta?: ReactNode }) => (
-  <Row href={projectHref(pid, section)} k={k ?? `p:${pid}:${section}`} onNavigate={onNavigate} meta={meta}>
+  <Row href={projectHref(pid, section)} k={k ?? `p:${pid}:${section}`} onNavigate={onNavigate} meta={meta} title={HINTS[section]}>
     {label}
   </Row>
 );
@@ -256,6 +280,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
         {conn === "offline" ? <WifiOff className="size-4 shrink-0 text-destructive" aria-label="Offline, reconnecting" /> : null}
       </div>
       <nav aria-label="Explorer" className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-2">
+        {onboardingAuto() ? <GettingStarted variant="explorer" projectId={projectId} onNavigate={onNavigate} /> : null}
         <div className="flex flex-col gap-px pt-1">
           <Row href="/" k="home" icon={<LayoutDashboard className="size-4 text-muted-foreground" />} onNavigate={onNavigate}>
             Dashboard
@@ -328,7 +353,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
               <SetupLink pid={project.id} section="schedules" label="Schedules" onNavigate={onNavigate} />
               <SetupLink pid={project.id} section="memory" label="Memory & docs" onNavigate={onNavigate} meta={memPending ? <span className="rounded-full bg-warning px-1.5 text-[10px] font-medium text-warning-foreground" aria-label={`${memPending} memories to review`}>{memPending}</span> : null} />
               <SetupLink pid={project.id} section="members" label="Members & access" onNavigate={onNavigate} />
-              <SetupLink pid={project.id} section="capabilities" label="Capabilities" onNavigate={onNavigate} />
+              <SetupLink pid={project.id} section="capabilities" label="Tools & skills" onNavigate={onNavigate} />
               <SetupLink pid={project.id} section="audit" label="Audit log" onNavigate={onNavigate} />
             </Section>
           </>
@@ -371,8 +396,8 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
           <Row href="/schedules" k="page:/schedules" onNavigate={onNavigate}>
             My schedules
           </Row>
-          <Row href="/capabilities" k="page:/capabilities" onNavigate={onNavigate}>
-            My capabilities
+          <Row href="/capabilities" k="page:/capabilities" onNavigate={onNavigate} title="Tools and skills your assistant can use">
+            My tools & skills
           </Row>
         </Section>
       </nav>

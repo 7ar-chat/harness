@@ -1,3 +1,4 @@
+import { HelpButton } from "@/components/app/help";
 // The workflow designer: the canvas, the inspector of the selected step, the checks, the version history and publishing.
 import { ArrowLeft, Copy, History, LayoutGrid, Plus, Rocket, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -139,6 +140,11 @@ export function NodeInspector({
             <Switch checked={!!node.useRepo} disabled={disabled} onCheckedChange={(v) => set({ useRepo: v })} aria-label="Run in the repository" />
           </label>
         </>
+      ) : null}
+      {node.kind === "gate" ? (
+        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+          A gate waits here until a person decides. <HelpButton slug="gates" />
+        </p>
       ) : null}
       {node.kind === "gate" ? (
         <Field label="Approvers" hint="Logins, role:member or role:owner, separated by commas. Project owners can always decide.">

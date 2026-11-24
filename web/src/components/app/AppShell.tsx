@@ -14,6 +14,7 @@ import { ShellProvider, useNarrow, type PanelTab, type ShellState } from "./shel
 import { clamp, ResizeHandle } from "./shell/ResizeHandle";
 import { EditorTabs } from "./shell/EditorTabs";
 import { ExplorerBody } from "./shell/Explorer";
+import { OnboardingLayer } from "./onboarding/OnboardingLayer";
 import { Palette, ProjectSwitcher } from "./shell/Palette";
 import { TabHost } from "./shell/TabHost";
 import { StatusBar } from "./shell/StatusBar";
@@ -174,6 +175,7 @@ function Shell({ login, palette, setPalette, switcher, setSwitcher }: { login: s
           </Sheet>
         </>
       ) : null}
+      <OnboardingLayer />
       <Palette open={palette} setOpen={setPalette} />
       <ProjectSwitcher open={switcher} setOpen={setSwitcher} />
     </ShellProvider>

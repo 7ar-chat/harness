@@ -5,6 +5,7 @@ import { Outlet } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AdminPage } from "@/pages/Admin";
 import { Dashboard } from "@/pages/Dashboard";
+import { HelpPage } from "@/pages/Help";
 import { InboxPage } from "@/pages/Inbox";
 import { JobsPage } from "@/pages/Jobs";
 import { MemoryPage } from "@/pages/Memory";
@@ -31,6 +32,7 @@ const PAGES: Record<string, () => ReactNode> = {
   "/memory": () => <MemoryPage />,
   "/profile": () => <ProfilePage />,
   "/admin": () => <AdminPage />,
+  "/help": () => <HelpPage />,
 };
 
 function TabPage({ tab }: { tab: EditorTab }) {

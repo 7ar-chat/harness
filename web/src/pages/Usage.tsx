@@ -1,4 +1,6 @@
 // What the agents consumed: tokens (cache reads and writes apart), what it cost, by kind of work, and the monthly cap.
+import { HelpButton } from "@/components/app/help";
+import { EmptyGuide } from "@/components/app/EmptyGuide";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -127,7 +129,10 @@ export function CapCard({ cap, canSet, projectId }: { cap: UsageCap; canSet: boo
   return (
     <section className="space-y-3 rounded-lg border p-3" aria-label="Monthly cap">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-medium">Monthly cap{projectId ? " of the project" : ""}</h2>
+        <div className="flex items-center gap-1">
+          <h2 className="text-sm font-medium">Monthly cap{projectId ? " of the project" : ""}</h2>
+          <HelpButton slug="budgets" label="Monthly cap" />
+        </div>
         <span className="text-sm tabular-nums text-muted-foreground">
           {money(cap.spentUsd)} spent this month{cap.monthlyUsd > 0 ? ` of ${money(cap.monthlyUsd)}` : ", no cap"}
         </span>
@@ -171,7 +176,7 @@ export function CapCard({ cap, canSet, projectId }: { cap: UsageCap; canSet: boo
 
 function RowsTable({ view, group }: { view: UsageView; group: UsageGroup }) {
   const first = { day: "Day", model: "Model", thread: "Session", user: "Person" }[group];
-  if (!view.rows.length) return <Empty title="Nothing used in this period" />;
+  if (!view.rows.length) return <EmptyGuide title="Nothing used in this period" what="Every run is priced here by model, session and person once an agent has worked. You can set a monthly cap above." slug="budgets" />;
   return (
     <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-sm" aria-label={`Usage ${GROUPS.find((g) => g.key === group)?.label.toLowerCase()}`}>

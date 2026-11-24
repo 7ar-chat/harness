@@ -9,6 +9,7 @@ import { Empty, ErrorState, Spinner } from "@/components/app/common";
 import { Button } from "@/components/ui/button";
 import { AdminPage } from "@/pages/Admin";
 import { Dashboard } from "@/pages/Dashboard";
+import { HelpPage } from "@/pages/Help";
 import { InboxPage } from "@/pages/Inbox";
 import { JobsPage } from "@/pages/Jobs";
 import { MemoryPage } from "@/pages/Memory";
@@ -109,6 +110,12 @@ const routeTree = root.addChildren([
   createRoute({ getParentRoute: () => root, path: "/usage", component: UsagePage }),
   createRoute({ getParentRoute: () => root, path: "/connectors", component: ConnectorsPage }),
   createRoute({ getParentRoute: () => root, path: "/capabilities", component: CapabilitiesPage }),
+  createRoute({
+    getParentRoute: () => root,
+    path: "/help",
+    component: HelpPage,
+    validateSearch: (s: Record<string, unknown>): { a?: string } => ({ a: typeof s.a === "string" && s.a ? s.a : undefined }),
+  }),
   createRoute({ getParentRoute: () => root, path: "/admin", component: AdminPage }),
 ]);
 

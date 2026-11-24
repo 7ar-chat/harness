@@ -2,6 +2,7 @@
 // An executor is a CLI agent (Claude Code, Codex, OpenCode, or a command the project defines) that runs inside the sandbox in place
 // of the internal agent loop; a role that names one makes the delegate tool and factory tasks of that role use it. API keys are
 // write-only: the server stores them sealed and never sends them back.
+import { HelpButton } from "@/components/app/help";
 import { KeyRound, Pencil, Plus, Terminal, Trash2 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -233,7 +234,10 @@ export function ProjectExecutors({ projectId, canEdit }: { projectId: string; ca
     <section className="space-y-3" aria-label="Executors">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-base font-semibold">Executors</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-base font-semibold">Executors</h2>
+            <HelpButton slug="executors" />
+          </div>
           <p className="max-w-2xl text-sm text-muted-foreground">
             The 7ar harness is the recommended way to run a role and needs no setup. These are optional external coding agents that run in the sandbox: give a role an executor and the delegate tool and tasks of that role use it, under the task&apos;s policy.
           </p>

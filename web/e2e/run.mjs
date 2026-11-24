@@ -150,6 +150,16 @@ async function main() {
     page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
   };
   ctx.on("page", watch);
+  // The welcome, the tour and the checklist are for newcomers: this browser is marked as onboarded so they do not cover the other
+  // scenarios. The i* scenarios use a fresh browser context (a new person) instead.
+  const onboarded = () => {
+    try {
+      localStorage.setItem("7ar.onboarding.v1.local", JSON.stringify({ welcomed: true, toured: true, dismissed: true }));
+    } catch {
+      /* a sandboxed frame has no storage */
+    }
+  };
+  await ctx.addInitScript(onboarded);
   const page = await ctx.newPage();
 
   // ---- assertion helpers (observable outcomes only; waits are locator/poll waits, never fixed sleeps) ----------
@@ -190,6 +200,7 @@ async function main() {
   const sessionState = { w: null, d: null };
 
   // E2E_ONLY=h1,h4 runs just those scenarios (matched on the name's prefix before the dot) while developing one.
+  let shotPage = page; // the page a failure screenshot is taken of
   const only = process.env.E2E_ONLY?.split(",");
   async function step(name, fn) {
     if (only && !only.includes(name.split(".")[0])) return;
@@ -204,7 +215,7 @@ async function main() {
       results.push({ name, ok: false, ms: Date.now() - t0, err: e.stack ?? String(e) });
       fs.mkdirSync(failDir, { recursive: true });
       const shot = path.join(failDir, `${name.replace(/\W+/g, "-")}.png`);
-      await page.screenshot({ path: shot }).then(() => (results.at(-1).shot = shot)).catch(() => {});
+      await shotPage.screenshot({ path: shot }).then(() => (results.at(-1).shot = shot)).catch(() => {});
       // The run goes on: a scenario that does not depend on the failed one still says whether it passes.
     }
   }
@@ -771,6 +782,7 @@ async function main() {
     await sweep(page, "desktop");
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
     phone.on("page", watch);
+    await phone.addInitScript(onboarded);
     try {
       await sweep(await phone.newPage(), "phone 390x844");
     } finally {
@@ -792,6 +804,182 @@ async function main() {
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     await poll(() => page.url().endsWith(`#/t/${th.id}`), "the card click to open the session");
   });
+
+  // ---- i: onboarding. A fresh browser context is a new person: nothing is marked as seen. -----------------------------------------
+  const fresh = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  fresh.on("page", watch);
+  const np = await fresh.newPage();
+  shotPage = np;
+  const nvisible = (loc, what) => visible(loc, what);
+  let emptyId = "";
+  const ishot = async (pg, name) => {
+    if (!process.env.E2E_SHOTS) return;
+    fs.mkdirSync(process.env.E2E_SHOTS, { recursive: true });
+    await pg.waitForTimeout(500);
+    await pg.screenshot({ path: path.join(process.env.E2E_SHOTS, `${name}.png`) });
+  };
+  const userMenu = async (name) => {
+    await np.getByRole("button", { name: "User menu" }).first().click();
+    await np.getByRole("menuitem", { name }).click();
+  };
+
+  await step("i1. first run: the welcome appears for a new person, can be skipped, stays away and is reopened from the user menu", async () => {
+    await np.goto(`${base}/#/`);
+    const dlg = np.getByRole("dialog", { name: "Welcome to 7ar" });
+    await nvisible(dlg, "the welcome dialog");
+    await nvisible(dlg.getByRole("heading", { name: "Project" }), "the first idea");
+    await ishot(np, "onboarding-welcome");
+    await dlg.getByRole("button", { name: "Next" }).click();
+    await nvisible(dlg.getByRole("heading", { name: "Session" }), "the second idea");
+    await dlg.getByRole("button", { name: "Skip for now" }).click();
+    await gone(np.getByRole("dialog"), "the welcome closed");
+    await np.reload();
+    await nvisible(np.getByRole("main").getByRole("heading", { name: "Dashboard" }), "the dashboard");
+    eq(await np.getByRole("dialog", { name: "Welcome to 7ar" }).count(), 0, "the welcome stays away once seen");
+    await userMenu("Getting started");
+    await nvisible(np.getByRole("dialog", { name: "Welcome to 7ar" }), "the welcome reopened from the user menu");
+    for (let i = 0; i < 4; i++) await np.getByRole("dialog").getByRole("button", { name: /^(Next|Where to start)$/ }).click();
+    await nvisible(np.getByRole("dialog").getByRole("button", { name: /Try it with a sample/ }), "the first actions");
+    await ishot(np, "onboarding-first-actions");
+    await np.keyboard.press("Escape");
+    await gone(np.getByRole("dialog"), "the welcome closed with Escape");
+  });
+
+  await step("i2. the getting-started checklist shows real progress and can be dismissed", async () => {
+    await np.goto(`${base}/#/`);
+    const main = np.getByRole("main");
+    const card = main.getByRole("region", { name: "Getting started" });
+    await nvisible(card, "the checklist on the dashboard");
+    // the server has projects and sessions by now: those steps are ticked from the data, the teammate step is a link to Members
+    const bar = card.getByRole("progressbar", { name: "Getting started progress" });
+    const done = await card.getByText(/\(done\)/).count();
+    eq(await bar.getAttribute("aria-valuenow"), String(done), "the progress bar counts the ticked steps");
+    if (done < 2) throw new Error(`expected the project and session steps to be ticked, got ${done}`);
+    await nvisible(card.getByRole("button", { name: /Create a project.*\(done\)/ }), "the project step ticked");
+    await nvisible(card.getByRole("button", { name: /Start your first session.*\(done\)/ }), "the session step ticked");
+    const member = card.getByRole("link", { name: /Invite a teammate/ });
+    if (!/tab=members/.test((await member.getAttribute("href")) ?? "")) throw new Error("the teammate step does not link to the members tab");
+    const explorer = np.getByRole("navigation", { name: "Explorer" }).getByRole("region", { name: "Getting started" });
+    await nvisible(explorer, "the explorer card");
+    await ishot(np, "onboarding-dashboard-checklist");
+    await card.getByRole("button", { name: "Dismiss" }).click();
+    await gone(card, "the checklist dismissed");
+    eq(await explorer.filter({ visible: true }).count(), 0, "the explorer card is dismissed with it");
+    await np.reload();
+    await nvisible(main.getByRole("heading", { name: "Dashboard" }), "the dashboard again");
+    eq(await main.getByRole("region", { name: "Getting started" }).count(), 0, "dismissed for good");
+  });
+
+  await step("i3. empty states teach: what it is, the first action and a Learn more link to the help", async () => {
+    const empty = (emptyId = (await post("/projects", { name: "E2E empty guides" })).id);
+    await np.goto(`${base}/#/p/${empty}?tab=board`);
+    const main = np.getByRole("main");
+    const guide = main.getByRole("region", { name: "No sessions yet" });
+    await nvisible(guide, "the board guide");
+    await nvisible(guide.getByRole("button", { name: "Start your first session" }), "its primary action");
+    await ishot(np, "onboarding-empty-board");
+    for (const [tab, title, action] of [
+      ["requirements", "No requirements yet", "Write your first requirement"],
+      ["tasks", "No tasks yet", "Create your first task"],
+      ["schedules", "No schedules yet", "Create your first schedule"],
+      ["workflows", "No workflows yet", "Start with a blank workflow"],
+    ]) {
+      await np.goto(`${base}/#/p/${empty}?tab=${tab}`);
+      const g = np.getByRole("main").getByRole("region", { name: title });
+      await nvisible(g, `the ${tab} guide`);
+      await nvisible(g.getByRole("button", { name: action }), `${tab}: ${action}`);
+      await nvisible(g.getByRole("link", { name: "Learn more" }), `${tab}: Learn more`);
+    }
+    await np.goto(`${base}/#/p/${empty}?tab=tasks`);
+    await np.getByRole("main").getByRole("region", { name: "No tasks yet" }).getByRole("link", { name: "Learn more" }).click();
+    await nvisible(np.getByRole("main").getByRole("heading", { name: "Hand off a task and review the pull request", level: 2 }), "the matching help article");
+  });
+
+  await step("i4. the help center: search finds an article, deep links open it", async () => {
+    await np.goto(`${base}/#/help`);
+    const main = np.getByRole("main");
+    await main.getByRole("searchbox", { name: "Search the help" }).fill("autonomous");
+    const hit = main.getByRole("list", { name: "Search results" }).getByRole("button", { name: /Policies/ });
+    await nvisible(hit, "the policies article in the results");
+    await hit.click();
+    await nvisible(main.getByRole("heading", { name: /^Policies/, level: 2 }), "the article");
+    await nvisible(main.getByRole("cell", { name: /Supervised/ }), "the policy table");
+    await ishot(np, "onboarding-help-article");
+    await np.goto(`${base}/#/help?a=budgets`);
+    await nvisible(np.getByRole("main").getByRole("heading", { name: "Budgets and spend caps", level: 2 }), "a deep link opens its article");
+    await nvisible(np.getByRole("tab", { name: "Help" }), "Help is a tab");
+  });
+
+  await step("i5. contextual help: a ? beside a section opens its article in a side sheet", async () => {
+    const empty = emptyId;
+    await np.goto(`${base}/#/p/${empty}?tab=tasks`);
+    await np.getByRole("main").getByRole("button", { name: "Tasks (help)" }).first().click();
+    const sheet = np.getByRole("dialog");
+    await nvisible(sheet.getByRole("heading", { name: "Tasks" }), "the article in the sheet");
+    await np.keyboard.press("Escape");
+    await gone(np.getByRole("dialog"), "the sheet closed");
+    // the policy of a new task has its own ? and says in one line what it means
+    await np.getByRole("main").getByRole("button", { name: "Create your first task" }).click();
+    const dlg = np.getByRole("dialog");
+    await dlg.getByRole("button", { name: "Policy (help)" }).click();
+    await nvisible(np.getByRole("dialog", { name: /Policies/ }), "the policies article over the form");
+    await np.keyboard.press("Escape");
+    // model, budget and attempts are behind Advanced
+    await nvisible(dlg.getByRole("button", { name: /Advanced options/ }), "advanced options");
+    eq(await dlg.getByLabel("Budget (USD)").count(), 0, "the budget is hidden until Advanced is open");
+    await dlg.getByRole("button", { name: /Advanced options/ }).click();
+    await nvisible(dlg.getByLabel("Budget (USD)"), "the budget under Advanced");
+    await np.keyboard.press("Escape");
+  });
+
+  await step("i6. the guided tour runs from the menu, moves with the keyboard and closes; ? and the palette teach the shortcuts", async () => {
+    await np.goto(`${base}/#/`);
+    await userMenu("Take the tour");
+    const tour = np.getByTestId("tour");
+    await nvisible(tour.getByRole("heading", { name: "The explorer" }), "the first step");
+    await ishot(np, "onboarding-tour");
+    await np.keyboard.press("ArrowRight");
+    await nvisible(tour.getByRole("heading", { name: "Editor tabs" }), "the tabs step");
+    await tour.getByRole("button", { name: "Next" }).click();
+    await nvisible(tour.getByRole("heading", { name: "Needs you" }), "the Needs you step");
+    await tour.getByRole("button", { name: "Next" }).click();
+    await nvisible(tour.getByRole("heading", { name: "The status bar" }), "the status bar step");
+    await tour.getByRole("button", { name: "Next" }).click();
+    await nvisible(tour.getByRole("heading", { name: /Ctrl\/Cmd \+ K/ }), "the palette step");
+    await tour.getByRole("button", { name: "Done" }).click();
+    await gone(tour, "the tour closed");
+    await userMenu("Take the tour");
+    await nvisible(tour, "the tour replayed");
+    await np.keyboard.press("Escape");
+    await gone(tour, "the tour closed with Escape");
+    await np.keyboard.press("?");
+    await nvisible(np.getByRole("dialog", { name: "Keyboard shortcuts" }), "the shortcuts sheet");
+    await np.keyboard.press("Escape");
+    await gone(np.getByRole("dialog"), "the shortcuts closed");
+    await np.keyboard.press("Control+k");
+    await nvisible(np.getByRole("option", { name: /Try: start a session/ }), "a suggestion in the palette");
+    await nvisible(np.getByRole("option", { name: "Open help" }), "the help command");
+    await np.keyboard.press("Escape");
+  });
+
+  await step("i7. try it with a sample: a project from a template and a first session that starts working", async () => {
+    await np.goto(`${base}/#/`);
+    await userMenu("Getting started");
+    await nvisible(np.getByRole("dialog", { name: "Welcome to 7ar" }), "the welcome");
+    const dlg = np.getByRole("dialog"); // its title changes on the last step
+    for (let i = 0; i < 4; i++) await dlg.getByRole("button", { name: /^(Next|Where to start)$/ }).click();
+    await dlg.getByRole("button", { name: /Try it with a sample/ }).click();
+    await np.waitForURL(/#\/t\/[^/]+$/);
+    const id = np.url().split("/t/")[1];
+    const t = await poll(async () => {
+      const x = await thread(id);
+      return x.messages.length ? x : null;
+    }, "the sample's first message");
+    if (!t.projectId) throw new Error("the sample session is not in a project");
+    await idle(id);
+  });
+
+  await fresh.close();
 
   // Opt-in: E2E_SHOTS=<dir> saves screenshots of the main surfaces (not a scenario, nothing is asserted).
   if (process.env.E2E_SHOTS) {
@@ -829,6 +1017,7 @@ async function main() {
     await shot(page, `/t/${sessionState.w}`, "session-light");
     await page.evaluate(() => localStorage.setItem("theme", "dark"));
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await phone.addInitScript(onboarded);
     const pp = await phone.newPage();
     await shot(pp, `/t/${sessionState.w}`, "phone-session");
     await shot(pp, `/p/${proj.id}?tab=board`, "phone-board");
@@ -836,6 +1025,17 @@ async function main() {
     await pp.waitForTimeout(600);
     await pp.screenshot({ path: path.join(dir, "phone-explorer.png") });
     await phone.close();
+    // onboarding on a phone: the dashboard with the checklist (a person who has been welcomed)
+    const phone2 = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await phone2.addInitScript(() => {
+      try {
+        localStorage.setItem("7ar.onboarding.v1.local", JSON.stringify({ welcomed: true }));
+      } catch {
+        /* no storage */
+      }
+    });
+    await shot(await phone2.newPage(), "/", "onboarding-phone-dashboard");
+    await phone2.close();
   }
 
   await ctx.close();

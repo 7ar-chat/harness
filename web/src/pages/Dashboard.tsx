@@ -1,14 +1,19 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { formatDistanceToNowStrict } from "date-fns";
-import { Check, FolderPlus, Inbox, LayoutDashboard, Plus, X } from "lucide-react";
+import { Check, FolderPlus, Inbox, LayoutDashboard, Plus, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/api/client";
 import { useNeedsReview } from "@/api/factory";
 import { qk, toastError, useOverview } from "@/api/queries";
 import type { Thread, ThreadStatus, ThreadSummary } from "@/api/types";
-import { Empty, ErrorState, ListSkeleton, StatusBadge, isActive, needsYou } from "@/components/app/common";
+import { ErrorState, ListSkeleton, StatusBadge, isActive, needsYou } from "@/components/app/common";
 import { useDialogs } from "@/components/app/dialogs";
+import { EmptyGuide } from "@/components/app/EmptyGuide";
+import { GettingStarted } from "@/components/app/onboarding/GettingStarted";
+import { useTrySample } from "@/components/app/onboarding/sample";
+import { useShell } from "@/components/app/shell/context";
+import { onboardingAuto } from "@/lib/onboarding";
 import { ImportEntry } from "@/components/app/github-import";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -88,6 +93,8 @@ export function Dashboard() {
   const { data, isLoading, error, refetch } = useOverview();
   const { newProject, newSession, importGithub } = useDialogs();
   const needsReview = useNeedsReview().data?.count ?? 0;
+  const sample = useTrySample();
+  const { projectId } = useShell();
   if (isLoading) return <ListSkeleton rows={5} />;
   if (error || !data) return <ErrorState error={error} retry={() => void refetch()} />;
   const rows: Row[] = [
@@ -107,6 +114,7 @@ export function Dashboard() {
             <Plus /> New session
           </Button>
         </div>
+        {onboardingAuto() ? <GettingStarted variant="dashboard" projectId={projectId} /> : null}
         {needsReview ? (
           <Link to="/inbox" className="flex items-center gap-2 rounded-lg border border-warning/60 bg-warning/10 p-3 text-sm hover:bg-warning/20">
             <Inbox className="size-4" />
@@ -117,15 +125,15 @@ export function Dashboard() {
           </Link>
         ) : null}
         {!data.projects.length && !data.personal.length ? (
-          <Empty icon={<FolderPlus className="size-10" />} title="Create your first project">
-            <p>A project is a repository whose sessions, memory and members are shared with your team.</p>
-            <div className="mt-3 flex flex-wrap justify-center gap-2">
-              <Button onClick={newProject}>
-                <Plus /> New project
-              </Button>
-              <ImportEntry onImport={importGithub} />
-            </div>
-          </Empty>
+          <EmptyGuide icon={<FolderPlus className="size-10" />} title="Create your first project" what="A project is a repository whose sessions, memory and members are shared with your team." slug="the-basics">
+            <Button onClick={newProject}>
+              <Plus /> New project
+            </Button>
+            <ImportEntry onImport={importGithub} />
+            <Button variant="outline" onClick={() => void sample.start()} disabled={sample.busy}>
+              <Sparkles /> Try it with a sample
+            </Button>
+          </EmptyGuide>
         ) : null}
         <section aria-labelledby="active-h" className="space-y-3">
           <h2 id="active-h" className="text-sm font-medium text-muted-foreground">

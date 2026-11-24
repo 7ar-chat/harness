@@ -18,6 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { SectionIntro } from "@/components/app/SectionIntro";
 import { CapabilitiesPanel } from "@/components/app/capabilities";
 import { isUnread } from "@/lib/unread";
 import { Board } from "./Board";
@@ -273,6 +274,7 @@ export function ProjectPage() {
     <ScrollArea className="h-full">
       <div className="space-y-4 p-4 md:p-6">
         {/* The tab strip is the shell's: the explorer and the editor tabs choose the section, the address holds it. */}
+        <SectionIntro section={tab ?? "board"} />
         <Tabs value={tab ?? "board"}>
           <TabsContent value="board" className="mt-0">
             <Board projectId={projectId} />

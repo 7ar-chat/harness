@@ -1,3 +1,4 @@
+import { EmptyGuide } from "@/components/app/EmptyGuide";
 import { formatDistanceToNowStrict } from "date-fns";
 import { ArrowDown, ArrowUp, Copy, Download, FileText, Search, Trash2, Upload } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -162,9 +163,13 @@ export function ReferencesPanel() {
             </div>
           ))}
           {shown.length === 0 ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">
-              {all.length ? "No reference matches your search." : "Nothing here yet. Drop files anywhere on this page, or use Add references: PDF, Word, text, spreadsheet, slides or image, up to 20 MB each."}
-            </div>
+            all.length ? (
+              <div className="py-10 text-center text-sm text-muted-foreground">No reference matches your search.</div>
+            ) : (
+              <EmptyGuide title="No references yet" what="Nothing here yet. Drop files anywhere on this page, or use Add references: PDF, Word, text, spreadsheet, slides or image, up to 20 MB each.">
+                <Button size="sm" onClick={() => input.current?.click()}>Upload your first reference</Button>
+              </EmptyGuide>
+            )
           ) : null}
         </div>
       )}

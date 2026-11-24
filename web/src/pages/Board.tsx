@@ -1,9 +1,12 @@
 // The project's board: every session as a card in Ready, Running, Needs you, In review or Done.
+import { EmptyGuide } from "@/components/app/EmptyGuide";
+import { useDialogs } from "@/components/app/dialogs";
 import { Link } from "@tanstack/react-router";
 import { formatDistanceToNowStrict } from "date-fns";
 import { ExternalLink, GitPullRequest } from "lucide-react";
 import { useBoard, useSeen, type BoardCard, type BoardColumn } from "@/api/queries";
-import { Empty, ErrorState, ListSkeleton, StatusDot } from "@/components/app/common";
+import { ErrorState, ListSkeleton, StatusDot } from "@/components/app/common";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { isUnread } from "@/lib/unread";
 
@@ -57,10 +60,13 @@ function Card({ card }: { card: BoardCard }) {
 
 export function Board({ projectId }: { projectId: string }) {
   const board = useBoard(projectId);
+  const { newSession } = useDialogs();
   if (board.isLoading) return <ListSkeleton rows={3} />;
   if (board.error || !board.data) return <ErrorState error={board.error} retry={() => void board.refetch()} />;
   const cols = board.data.columns;
-  if (cols.every((c) => c.cards.length === 0)) return <Empty title="No sessions yet">Start a session with the + next to the project; it shows up here as it works.</Empty>;
+  if (cols.every((c) => c.cards.length === 0)) return <EmptyGuide title="No sessions yet" what="Start a session with the + next to the project; it shows up here as it works." slug="sessions">
+        <Button size="sm" onClick={() => newSession(projectId)}>Start your first session</Button>
+      </EmptyGuide>;
   return (
     <div className="grid gap-3 md:grid-cols-5" aria-label="Board">
       {cols.map((col) => (

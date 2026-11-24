@@ -1,11 +1,12 @@
 // The "Needs review" inbox: everything across projects that waits on the person.
+import { EmptyGuide } from "@/components/app/EmptyGuide";
 import { Link } from "@tanstack/react-router";
 import { formatDistanceToNowStrict } from "date-fns";
 import { ExternalLink, GitPullRequest, Inbox as InboxIcon } from "lucide-react";
 import { useState } from "react";
 import { useNeedsReview } from "@/api/factory";
 import type { InboxGate, InboxTask } from "@/api/types";
-import { Empty, ErrorState, ListSkeleton } from "@/components/app/common";
+import { ErrorState, ListSkeleton } from "@/components/app/common";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -116,7 +117,7 @@ export function InboxPage() {
           <InboxIcon className="size-5" /> Needs review
           {count ? <span className="rounded-full bg-warning px-2 text-xs text-warning-foreground">{count}</span> : null}
         </h1>
-        {!count ? <Empty title="Nothing waits for you">Blocked tasks, pull requests to review and sessions that ask for you show up here.</Empty> : null}
+        {!count ? <EmptyGuide title="Nothing waits for you" what="Blocked tasks, pull requests to review and sessions that ask for you show up here." slug="the-basics" /> : null}
         {gates.length ? (
           <section aria-labelledby="inbox-gates" className="space-y-3">
             <h2 id="inbox-gates" className="text-sm font-medium text-muted-foreground">

@@ -471,7 +471,7 @@ export function ConnectorsPage() {
 
 export function CapabilitiesPage() {
   return (
-    <SidePage title="Capabilities" hint="MCP servers that give your assistant more tools in your personal sessions.">
+    <SidePage title="Tools & skills" hint="MCP servers that give your assistant more tools in your personal sessions.">
       <CapabilitiesPanel scope={{ kind: "user" }} />
     </SidePage>
   );
