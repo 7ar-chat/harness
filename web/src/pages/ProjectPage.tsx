@@ -79,7 +79,7 @@ function Members({ pid, owner, self }: { pid: string; owner: boolean; self: stri
       </ul>
       {owner ? (
         <div className="space-y-3">
-          <h3 className="text-sm font-medium">Invite by email</h3>
+          <h2 className="text-sm font-medium">Invite by email</h2>
           <form
             className="flex flex-wrap gap-2"
             onSubmit={(e) => {

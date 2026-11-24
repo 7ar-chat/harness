@@ -178,7 +178,7 @@ function RowsTable({ view, group }: { view: UsageView; group: UsageGroup }) {
   const first = { day: "Day", model: "Model", thread: "Session", user: "Person" }[group];
   if (!view.rows.length) return <EmptyGuide title="Nothing used in this period" what="Every run is priced here by model, session and person once an agent has worked. You can set a monthly cap above." slug="budgets" />;
   return (
-    <div className="overflow-x-auto rounded-lg border" tabIndex={0} role="region" aria-label="Table, scrolls sideways">
+    <div className="overflow-x-auto rounded-lg border" tabIndex={0} role="region" aria-label="Usage, scrolls sideways">
       <table className="w-full text-sm" aria-label={`Usage ${GROUPS.find((g) => g.key === group)?.label.toLowerCase()}`}>
         <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
           <tr>

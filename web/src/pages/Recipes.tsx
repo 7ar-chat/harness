@@ -65,7 +65,7 @@ function RecipeCard({ r, onUse, canUse, onDelete, onEdit, onDuplicate }: { r: Re
         <span className="mt-0.5 text-muted-foreground" title={KIND_LABEL[r.kind]}>
           {KIND_ICON[r.kind]}
         </span>
-        <h3 className="min-w-0 flex-1 text-sm leading-snug font-semibold">{r.name}</h3>
+        <h2 className="min-w-0 flex-1 text-sm leading-snug font-semibold">{r.name}</h2>
         {r.scope !== "builtin" ? <Badge variant="secondary">{r.scope === "project" ? (r.projectName ?? SCOPE_LABEL.project) : SCOPE_LABEL[r.scope]}</Badge> : null}
       </div>
       <p className="text-sm text-muted-foreground">{r.summary}</p>
