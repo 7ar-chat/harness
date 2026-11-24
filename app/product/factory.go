@@ -16,6 +16,7 @@ import (
 	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/githost"
 	"github.com/7ar-chat/harness/core/store"
+	"github.com/7ar-chat/harness/core/usage"
 	"github.com/7ar-chat/harness/hosts/client"
 	"github.com/7ar-chat/harness/hosts/inproc"
 )
@@ -724,10 +725,30 @@ func (s *server) factoryReport(w http.ResponseWriter, r *http.Request, c Caller)
 	if n, err := strconv.Atoi(r.URL.Query().Get("days")); err == nil && n > 0 {
 		days = min(n, 90)
 	}
-	rep, err := s.factory().Report(r.Context(), p.ID, time.Now().Add(-time.Duration(days)*24*time.Hour))
+	since := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
+	rep, err := s.factory().Report(r.Context(), p.ID, since)
 	if err != nil {
 		fail(w, err)
 		return
+	}
+	if s.opt.Usage != nil && s.opt.Usage.Store != nil { // the per-day and per-model breakdowns come from the ledger
+		for _, g := range []string{usage.GroupDay, usage.GroupModel} {
+			u, err := s.usageStore().Report(r.Context(), usage.Query{ProjectID: p.ID, From: since, Group: g})
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			rows := make([]harness.SpendBreakdown, 0, len(u.Rows))
+			for _, x := range u.Rows {
+				rows = append(rows, harness.SpendBreakdown{Key: x.Key, USD: x.CostUSD, Runs: x.Runs, InputTokens: x.InputTokens, OutputTokens: x.OutputTokens,
+					CacheReadTokens: x.CacheReadTokens, CacheWriteTokens: x.CacheWriteTokens, Unpriced: x.Unpriced})
+			}
+			if g == usage.GroupDay {
+				rep.ByDay = rows
+			} else {
+				rep.ByModel = rows
+			}
+		}
 	}
 	writeJSON(w, http.StatusOK, rep)
 }

@@ -245,6 +245,7 @@ func (s *server) Install(hs *httpapi.Server) error {
 	s.routeRequirements()
 	s.routeSchedules()
 	s.routeUsage()
+	s.routeInsights()
 	s.routeWorkflows()
 	s.routeGitHosts()
 	if s.opt.Supervisor != nil {

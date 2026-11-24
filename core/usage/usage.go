@@ -27,6 +27,8 @@ const (
 	GroupModel  = "model"
 	GroupThread = "thread"
 	GroupUser   = "user"
+	// GroupDayModel keys a row "2026-11-03|model": the day (in Query.Loc) and the model, for charts that stack models by day.
+	GroupDayModel = "daymodel"
 )
 
 // Scopes of a cap.
@@ -91,6 +93,10 @@ type Query struct {
 	// ProjectID restricts to a project; User to a person (both empty: everything).
 	ProjectID string
 	User      string
+	// ThreadID restricts to one conversation.
+	ThreadID string
+	// Loc is the time zone days are cut in (nil: UTC).
+	Loc *time.Location
 	// From is inclusive, To exclusive; a zero bound is open.
 	From, To time.Time
 	// Group is one of the Group constants ("": a single total).
@@ -105,6 +111,9 @@ func (q Query) Matches(e Entry) bool {
 		return false
 	}
 	if q.User != "" && e.User != q.User {
+		return false
+	}
+	if q.ThreadID != "" && e.ThreadID != q.ThreadID {
 		return false
 	}
 	if !q.From.IsZero() && e.At.Before(q.From) {
@@ -175,7 +184,7 @@ func Aggregate(entries []Entry, q Query) *Report {
 		if q.Group == "" {
 			continue
 		}
-		key := groupKey(e, q.Group)
+		key := groupKey(e, q.Group, q.Loc)
 		r := rows[key]
 		if r == nil {
 			r = &UsageRow{Key: key}
@@ -193,7 +202,7 @@ func Aggregate(entries []Entry, q Query) *Report {
 	sort.Slice(rep.Rows, func(i, j int) bool {
 		a, b := rep.Rows[i], rep.Rows[j]
 		switch {
-		case q.Group == GroupDay:
+		case q.Group == GroupDay || q.Group == GroupDayModel:
 			return a.Key < b.Key
 		case a.CostUSD != b.CostUSD:
 			return a.CostUSD > b.CostUSD
@@ -214,10 +223,15 @@ func Aggregate(entries []Entry, q Query) *Report {
 	return rep
 }
 
-func groupKey(e Entry, group string) string {
+func groupKey(e Entry, group string, loc *time.Location) string {
+	if loc == nil {
+		loc = time.UTC
+	}
 	switch group {
 	case GroupDay:
-		return e.At.UTC().Format("2006-01-02")
+		return e.At.In(loc).Format("2006-01-02")
+	case GroupDayModel:
+		return e.At.In(loc).Format("2006-01-02") + "|" + e.Model
 	case GroupModel:
 		return e.Model
 	case GroupThread:
@@ -231,7 +245,7 @@ func groupKey(e Entry, group string) string {
 // ValidGroup reports whether g is a Group constant or empty.
 func ValidGroup(g string) bool {
 	switch g {
-	case "", GroupDay, GroupModel, GroupThread, GroupUser:
+	case "", GroupDay, GroupModel, GroupThread, GroupUser, GroupDayModel:
 		return true
 	}
 	return false

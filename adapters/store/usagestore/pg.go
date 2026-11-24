@@ -84,6 +84,9 @@ func where(q usage.Query) (string, []any) {
 	if q.User != "" {
 		add("usr = $%d", q.User)
 	}
+	if q.ThreadID != "" {
+		add("thread_id = $%d", q.ThreadID)
+	}
 	if !q.From.IsZero() {
 		add("at >= $%d", q.From.UTC())
 	}

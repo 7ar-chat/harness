@@ -20,6 +20,7 @@ const PAGES: [string, string][] = [
   ["/memory", "Library (my memory)"],
   ["/schedules", "My schedules"],
   ["/usage", "My usage"],
+  ["/insights", "My insights"],
   ["/capabilities", "My capabilities"],
   ["/profile", "Profile and settings"],
 ];

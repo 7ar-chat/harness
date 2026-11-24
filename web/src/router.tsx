@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { AdminPage } from "@/pages/Admin";
 import { Dashboard } from "@/pages/Dashboard";
 import { InboxPage } from "@/pages/Inbox";
+import { InsightsPage } from "@/pages/Insights";
 import { JobsPage } from "@/pages/Jobs";
 import { MemoryPage } from "@/pages/Memory";
 import { CapabilitiesPage, ConnectorsPage, ProfilePage, ReferencesPage } from "@/pages/Profile";
@@ -77,7 +78,7 @@ const root = createRootRoute({
   ),
 });
 
-const tabs = ["board", "overview", "members", "memory", "capabilities", "roles", "schedules", "usage", "audit", "tasks", "requirements", "workflows", "settings"] as const;
+const tabs = ["board", "overview", "members", "memory", "capabilities", "roles", "schedules", "usage", "insights", "audit", "tasks", "requirements", "workflows", "settings"] as const;
 type Tab = (typeof tabs)[number];
 
 const routeTree = root.addChildren([
@@ -107,6 +108,7 @@ const routeTree = root.addChildren([
   createRoute({ getParentRoute: () => root, path: "/inbox", component: InboxPage }),
   createRoute({ getParentRoute: () => root, path: "/schedules", component: SchedulesPage }),
   createRoute({ getParentRoute: () => root, path: "/usage", component: UsagePage }),
+  createRoute({ getParentRoute: () => root, path: "/insights", component: InsightsPage }),
   createRoute({ getParentRoute: () => root, path: "/connectors", component: ConnectorsPage }),
   createRoute({ getParentRoute: () => root, path: "/capabilities", component: CapabilitiesPage }),
   createRoute({ getParentRoute: () => root, path: "/admin", component: AdminPage }),

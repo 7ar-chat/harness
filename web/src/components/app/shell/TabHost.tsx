@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AdminPage } from "@/pages/Admin";
 import { Dashboard } from "@/pages/Dashboard";
 import { InboxPage } from "@/pages/Inbox";
+import { InsightsPage } from "@/pages/Insights";
 import { JobsPage } from "@/pages/Jobs";
 import { MemoryPage } from "@/pages/Memory";
 import { CapabilitiesPage, ConnectorsPage, ProfilePage, ReferencesPage } from "@/pages/Profile";
@@ -28,6 +29,7 @@ const PAGES: Record<string, () => ReactNode> = {
   "/capabilities": () => <CapabilitiesPage />,
   "/schedules": () => <SchedulesPage />,
   "/usage": () => <UsagePage />,
+  "/insights": () => <InsightsPage />,
   "/memory": () => <MemoryPage />,
   "/profile": () => <ProfilePage />,
   "/admin": () => <AdminPage />,

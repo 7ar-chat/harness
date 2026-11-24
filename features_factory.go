@@ -204,6 +204,9 @@ func (f *Factory) LearningView(ctx context.Context, projectID, view string, n in
 	return nil, fmt.Errorf("%w: unknown learning view %q", factory.ErrInvalid, view)
 }
 
+// SpendBreakdown is the spend of one day or one model in a factory Report.
+type SpendBreakdown = budget.Breakdown
+
 // Report is the project's factory spend since a time, for dashboards.
 func (f *Factory) Report(ctx context.Context, projectID string, since time.Time) (budget.Report, error) {
 	return budget.Summary(ctx, f.Store, projectID, since)

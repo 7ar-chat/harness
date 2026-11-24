@@ -15,6 +15,13 @@ export interface Attachment {
   data: string;
 }
 
+export interface Attention {
+  slowest: TaskRef[];
+  blockedLongest: TaskRef[];
+  mostExpensive: TaskRef[];
+  mostReworked: TaskRef[];
+}
+
 export interface AuditEntry {
   id: number;
   projectId?: string;
@@ -35,6 +42,22 @@ export interface Author {
 }
 
 export type AuthorKind = "user" | "supervisor" | "system";
+
+export interface Breakdown {
+  Key: string;
+  USD: number;
+  Runs: number;
+  InputTokens: number;
+  OutputTokens: number;
+  CacheReadTokens: number;
+  CacheWriteTokens: number;
+  Unpriced: number;
+}
+
+export interface Bucket {
+  label: string;
+  count: number;
+}
 
 export interface Budget {
   maxUsd?: number;
@@ -107,6 +130,61 @@ export interface ConnectorPending {
   expiresAt: string;
 }
 
+export interface Cost {
+  totalUsd: number;
+  perMergedUsd: number;
+  unpricedRuns: number;
+  runs: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  models: ModelCost[];
+  byDay: DayCost[];
+  byRole: RoleCost[];
+  byExecutor: RoleCost[];
+  topTasks: TaskRef[];
+}
+
+export interface Count {
+  name: string;
+  count: number;
+}
+
+export interface CountPair {
+  passed: number;
+  failed: number;
+}
+
+export interface DayCost {
+  day: string;
+  usd: number;
+  byModel?: Record<string, number>;
+}
+
+export interface Delivery {
+  started: number;
+  merged: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+  blocked: number;
+  mergeRate: number;
+  firstPassRate: number;
+  cycleMedianSec: number;
+  cycleP90Sec: number;
+  waitMedianSec: number;
+  neededHumanOverDay: number;
+  reworkPerPr: number;
+  reworkSpread: number[];
+  ci: CountPair;
+  workingSec: number;
+  waitingSec: number;
+  cycleBuckets: Bucket[];
+  byRole: Count[];
+  byExecutor: Count[];
+}
+
 export interface DispatchBudget {
   maxUsd?: number;
   maxTokens?: number;
@@ -155,6 +233,8 @@ export interface FactoryReport {
   Total: Spend;
   ByState: Record<string, number>;
   Top: TaskSpend[];
+  ByDay: Breakdown[];
+  ByModel: Breakdown[];
 }
 
 export type FactoryState = "pending" | "ready" | "running" | "review" | "blocked" | "done" | "failed" | "cancelled";
@@ -235,6 +315,12 @@ export interface FeedEvent {
 export type FeedType = "thread.created" | "thread.updated" | "thread.deleted" | "run.started" | "run.finished" | "message.sent" | "member.changed" | "project.changed" | "memory.changed" | "task.created" | "task.updated" | "task.blocked" | "requirement.changed" | "workflow.changed" | "workflow.run" | "workflow.gate";
 
 export type FileType = "file" | "directory";
+
+export interface Flow {
+  requirementsOpened: number;
+  requirementsDone: number;
+  weeks: WeekPoint[];
+}
 
 export interface GitCredential {
   hasToken: boolean;
@@ -323,6 +409,25 @@ export interface Input {
   required?: boolean;
   default?: string;
   long?: boolean;
+}
+
+export interface InsightsView {
+  projectId?: string;
+  from: string;
+  to: string;
+  days: number;
+  tz: string;
+  generatedAt: string;
+  summary: string;
+  empty: boolean;
+  delivery: Delivery;
+  flow: Flow;
+  cost: Cost;
+  quality: Quality;
+  people: Person[];
+  workflows: WorkflowStats;
+  attention: Attention;
+  tasks: TaskRow[];
 }
 
 export interface Invite {
@@ -474,6 +579,17 @@ export interface Message {
 
 export type MessageRole = "user" | "assistant" | "tool" | "system";
 
+export interface ModelCost {
+  model: string;
+  runs: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  costUsd: number;
+  unpriced?: boolean;
+}
+
 export interface ModelInfo {
   provider?: string;
   contextWindow?: number;
@@ -555,6 +671,15 @@ export interface PendingQuestion {
   allowFreeText: boolean;
 }
 
+export interface Person {
+  login: string;
+  sessions: number;
+  runs: number;
+  costUsd: number;
+  approvals: number;
+  denied: number;
+}
+
 export interface PlanItem {
   id: string;
   title: string;
@@ -632,6 +757,16 @@ export interface PullRequest {
   number?: number;
   url?: string;
   headSha?: string;
+}
+
+export interface Quality {
+  reviewApproved: number;
+  reviewBlocked: number;
+  reviewBlockRate: number;
+  policyDenied: number;
+  policyAsked: number;
+  loopGuardTrips: number;
+  escalations: number;
 }
 
 export interface QuestionOption {
@@ -721,6 +856,12 @@ export interface ResumeRequest {
 }
 
 export type Role = "owner" | "member" | "viewer";
+
+export interface RoleCost {
+  name: string;
+  tasks: number;
+  usd: number;
+}
 
 export interface RoleDoc {
   scope: string;
@@ -915,6 +1056,33 @@ export interface SupervisorSettings {
   stuckMinutes: number;
 }
 
+export interface TaskRef {
+  id: string;
+  title: string;
+  state: string;
+  value: number;
+  detail?: string;
+}
+
+export interface TaskRow {
+  id: string;
+  title: string;
+  role: string;
+  state: string;
+  source: string;
+  createdAt: string;
+  finishedAt?: string;
+  cycleSec: number;
+  humanWaitSec: number;
+  rework: number;
+  attempts: number;
+  costUsd: number;
+  tokens: number;
+  unpriced?: boolean;
+  prUrl?: string;
+  executors?: string;
+}
+
 export interface TaskSpend {
   ID: string;
   Title: string;
@@ -980,6 +1148,13 @@ export interface ThreadSummary {
   updatedAt: string;
 }
 
+export interface ThreadUsage {
+  threadId: string;
+  taskId?: string;
+  total: UsageTotals;
+  byModel: UsageRow[];
+}
+
 export interface ToolCall {
   id: string;
   type: string;
@@ -1036,6 +1211,12 @@ export interface User {
   avatarUrl: string;
   hasCustomAvatar: boolean;
   status?: string;
+}
+
+export interface WeekPoint {
+  week: string;
+  merged: number;
+  started: number;
 }
 
 export interface Workflow {
@@ -1118,6 +1299,18 @@ export interface WorkflowRunDetail {
   run: WorkflowRun;
   gates: WorkflowGateView[];
   canSteer: boolean;
+}
+
+export interface WorkflowStats {
+  runs: number;
+  done: number;
+  failed: number;
+  successRate: number;
+  slowestNode?: string;
+  slowestNodeSec?: number;
+  gateWaits: number;
+  gateWaitMedianSec: number;
+  gateWaitTotalSec: number;
 }
 
 export interface WorkflowTemplate {

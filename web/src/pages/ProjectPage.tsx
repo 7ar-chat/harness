@@ -26,6 +26,7 @@ import { TasksTab } from "./Tasks";
 import { Requirements } from "./Requirements";
 import { RolesPanel } from "./Roles";
 import { SchedulesPanel } from "./Schedules";
+import { InsightsPanel } from "./Insights";
 import { UsagePanel } from "./Usage";
 import { WorkflowsPanel } from "./Workflows";
 
@@ -323,6 +324,9 @@ export function ProjectPage() {
           </TabsContent>
           <TabsContent value="usage" className="mt-0">
             <UsagePanel projectId={projectId} />
+          </TabsContent>
+          <TabsContent value="insights" className="mt-0">
+            <InsightsPanel projectId={projectId} />
           </TabsContent>
           <TabsContent value="workflows" className="mt-0">
             <WorkflowsPanel projectId={projectId} role={p.role} />

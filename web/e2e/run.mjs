@@ -736,8 +736,8 @@ async function main() {
 
   await step("h5. Route sweep: every top-level route and project tab renders without errors, on desktop and on a phone", async () => {
     const hp = (await post("/projects", { name: "E2E sweep" })).id;
-    const top = ["/", "/supervisor", "/inbox", "/jobs", "/references", "/connectors", "/capabilities", "/schedules", "/usage", "/memory", "/profile", "/admin"];
-    const tabs = ["board", "overview", "members", "memory", "capabilities", "roles", "schedules", "usage", "audit", "tasks", "requirements", "workflows", "settings"];
+    const top = ["/", "/supervisor", "/inbox", "/jobs", "/references", "/connectors", "/capabilities", "/schedules", "/usage", "/insights", "/memory", "/profile", "/admin"];
+    const tabs = ["board", "overview", "members", "memory", "capabilities", "roles", "schedules", "usage", "insights", "audit", "tasks", "requirements", "workflows", "settings"];
     const failures = [];
     const bad = [/Something went wrong/, /^Not found$/, /You do not have access to this/, /Try again/];
     const sweep = async (pg, label) => {
@@ -793,6 +793,72 @@ async function main() {
     await poll(() => page.url().endsWith(`#/t/${th.id}`), "the card click to open the session");
   });
 
+  await step("j1. Insights on a fresh project explains that numbers appear after the first merged task", async () => {
+    const jp = (await post("/projects", { name: "E2E insights empty" })).id;
+    await page.goto(`${base}/#/p/${jp}?tab=insights`);
+    await page.reload();
+    await visible(page.getByText("Insights appear after the first merged task"), "the empty state");
+    const link = page.getByRole("link", { name: "Hand off a first task" }).filter({ visible: true }).first();
+    await visible(link, "the link to hand off a first task");
+    await link.click();
+    await poll(() => page.url().includes("tab=tasks"), "the link opens the Tasks tab");
+  });
+
+  await step("j2. Insights after a task ran: summary, headline numbers and charts render", async () => {
+    await page.goto(`${base}/#/p/${proj.id}?tab=insights`);
+    await page.reload();
+    const main = page.getByRole("main");
+    const summary = main.getByTestId("insights-summary").filter({ visible: true }).first();
+    await visible(summary, "the plain-language summary");
+    const text = await summary.innerText();
+    if (!/started \d+ tasks?/.test(text) && !/merged \d+ PR/.test(text)) throw new Error(`unexpected summary: ${text}`);
+    for (const label of ["Merged PRs", "First-pass success", "Cost per PR"]) await visible(main.getByText(label, { exact: true }), label);
+    await visible(main.getByRole("img", { name: /Cost per day/ }), "the cost chart");
+    await visible(main.getByRole("img", { name: /Merged PRs per week/ }), "the throughput chart");
+    const ins = await api(`/projects/${proj.id}/insights?range=30d`);
+    if (!(ins.cost.totalUsd > 0) || ins.delivery.started < 1) throw new Error(`insights numbers: ${JSON.stringify(ins.delivery)} ${JSON.stringify(ins.cost.totalUsd)}`);
+    await main.getByRole("button", { name: "7 days" }).filter({ visible: true }).first().click();
+    await poll(async () => (await api(`/projects/${proj.id}/insights?range=7d`)).days === 7, "a 7 day range");
+    // a conversation's own cost line
+    const tu = await api(`/threads/${sessionState.w}/usage`);
+    if (!(tu.total.costUsd > 0)) throw new Error(`thread usage: ${JSON.stringify(tu)}`);
+  });
+
+  await step("j3. the downloaded report is a self-contained page that opens without errors or requests", async () => {
+    const q = `range=30d&tz=UTC`;
+    const html = await (await fetch(`${base}/api/projects/${proj.id}/insights/report?${q}&format=html`)).text();
+    for (const bad of ["<script", "<link", "<img", "<iframe", "url(", "@import"]) if (html.toLowerCase().includes(bad)) throw new Error(`the report contains ${bad}`);
+    if (/https?:\/\/(?!www\.w3\.org\/2000\/svg)/.test(html)) throw new Error("the report mentions an external URL");
+    if (!html.includes("<svg")) throw new Error("the report has no charts");
+    const csv = await (await fetch(`${base}/api/projects/${proj.id}/insights/report?${q}&format=csv`)).text();
+    if (!csv.startsWith("id,title,role,state") || !csv.includes("Say hello")) throw new Error(`csv: ${csv.slice(0, 200)}`);
+    const raw = await (await fetch(`${base}/api/projects/${proj.id}/insights/report?${q}&format=json`)).json();
+    if (!raw.summary) throw new Error("json report without summary");
+    // open the saved file in a fresh page: nothing but the document itself may be requested
+    const file = path.join(tmp, "insights-report.html");
+    fs.writeFileSync(file, html);
+    const rp = await ctx.newPage();
+    const requested = [];
+    rp.on("request", (r) => requested.push(r.url()));
+    const before = problems.length;
+    await rp.goto(`file://${file}`);
+    await rp.getByRole("heading", { name: /^Insights:/ }).waitFor({ state: "visible", timeout: T });
+    if (requested.some((u) => !u.startsWith("file://"))) throw new Error(`the report requested ${requested.join(", ")}`);
+    if ((await rp.locator("svg").count()) < 3) throw new Error("charts missing in the opened report");
+    if (process.env.E2E_SHOTS) {
+      fs.mkdirSync(process.env.E2E_SHOTS, { recursive: true });
+      await rp.screenshot({ path: path.join(process.env.E2E_SHOTS, "insights-report.png"), fullPage: true });
+    }
+    if (problems.length > before) throw new Error(`console problems in the report: ${problems.slice(before).join("; ")}`);
+    await rp.close();
+    // and the app's own menu offers the downloads
+    await page.goto(`${base}/#/p/${proj.id}?tab=insights`);
+    await page.reload();
+    await page.getByRole("button", { name: "Download report" }).filter({ visible: true }).first().click();
+    await visible(page.getByRole("menuitem", { name: /Task table \(CSV\)/ }), "the CSV item");
+    await page.keyboard.press("Escape");
+  });
+
   // Opt-in: E2E_SHOTS=<dir> saves screenshots of the main surfaces (not a scenario, nothing is asserted).
   if (process.env.E2E_SHOTS) {
     const dir = process.env.E2E_SHOTS;
@@ -820,18 +886,20 @@ async function main() {
     await shot(page, `/p/${proj.wf}?tab=workflows&run=${runs[0]?.id ?? ""}`, "workflow-run");
     await shot(page, `/p/${proj.id}?tab=settings`, "settings");
     
-    for (const t of ["requirements", "roles", "members", "memory", "capabilities", "usage", "schedules", "audit"]) await shot(page, `/p/${proj.id}?tab=${t}`, `tab-${t}`);
-    for (const r of ["/inbox", "/profile", "/jobs", "/admin", "/connectors"]) await shot(page, r, `page${r.replace("/", "-")}`);
+    for (const t of ["requirements", "roles", "members", "memory", "capabilities", "usage", "insights", "schedules", "audit"]) await shot(page, `/p/${proj.id}?tab=${t}`, `tab-${t}`);
+    for (const r of ["/insights", "/inbox", "/profile", "/jobs", "/admin", "/connectors"]) await shot(page, r, `page${r.replace("/", "-")}`);
     await shot(page, `/p/${proj.wf}?tab=workflows`, "workflows");
     await page.evaluate(() => localStorage.setItem("theme", "light"));
     await page.reload();
     await shot(page, `/p/${proj.id}?tab=board`, "board-light");
     await shot(page, `/t/${sessionState.w}`, "session-light");
+    await shot(page, `/p/${proj.id}?tab=insights`, "insights-light");
     await page.evaluate(() => localStorage.setItem("theme", "dark"));
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const pp = await phone.newPage();
     await shot(pp, `/t/${sessionState.w}`, "phone-session");
     await shot(pp, `/p/${proj.id}?tab=board`, "phone-board");
+    await shot(pp, `/p/${proj.id}?tab=insights`, "phone-insights");
     await pp.getByRole("button", { name: "Open navigation" }).click();
     await pp.waitForTimeout(600);
     await pp.screenshot({ path: path.join(dir, "phone-explorer.png") });

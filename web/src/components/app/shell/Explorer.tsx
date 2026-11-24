@@ -321,6 +321,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
               <SetupLink pid={project.id} section="requirements" label="Requirements" onNavigate={onNavigate} />
               <SetupLink pid={project.id} section="tasks" label="Tasks & triggers" onNavigate={onNavigate} />
               <SetupLink pid={project.id} section="workflows" label="Workflows & runs" onNavigate={onNavigate} />
+              <SetupLink pid={project.id} section="insights" label="Insights" onNavigate={onNavigate} />
             </Section>
 
             <Section title="Setup">
@@ -389,9 +390,14 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
             ) : null}
           </>
         ) : (
-          <Row href="/usage" k="page:/usage" onNavigate={onNavigate}>
-            Usage & caps
-          </Row>
+          <>
+            <Row href="/insights" k="page:/insights" onNavigate={onNavigate}>
+              My insights
+            </Row>
+            <Row href="/usage" k="page:/usage" onNavigate={onNavigate}>
+              Usage & caps
+            </Row>
+          </>
         )}
         <UserMenu />
       </div>

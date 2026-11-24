@@ -664,6 +664,57 @@ function Report({ projectId }: { projectId: string }) {
   );
 }
 
+type Breakdown = NonNullable<ReturnType<typeof useFactoryReport>["data"]>["ByDay"][number];
+
+/** Spend per day (bars) and per model (cache reads and writes apart), from the usage ledger. */
+function Breakdowns({ days, models }: { days: Breakdown[]; models: Breakdown[] }) {
+  if (!days.length && !models.length) return null;
+  const max = Math.max(...days.map((d) => d.USD), 1e-9);
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      {days.length ? (
+        <section className="rounded-lg border p-3">
+          <h3 className="mb-2 text-sm font-medium">Spend per day</h3>
+          <ul className="space-y-1">
+            {days.map((d) => (
+              <li key={d.Key} className="flex items-center gap-2 text-xs">
+                <span className="w-20 shrink-0 text-muted-foreground">{d.Key}</span>
+                <span className="h-2 rounded-sm bg-primary" style={{ width: `${Math.max(2, (d.USD / max) * 100)}%`, maxWidth: "70%" }} aria-hidden />
+                <span className="ml-auto tabular-nums">{usd(d.USD)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {models.length ? (
+        <section className="rounded-lg border p-3">
+          <h3 className="mb-2 text-sm font-medium">Spend per model</h3>
+          <table className="w-full text-xs">
+            <thead className="text-muted-foreground">
+              <tr>
+                <th className="text-left font-medium">Model</th>
+                <th className="text-right font-medium">Cache read</th>
+                <th className="text-right font-medium">Cache write</th>
+                <th className="text-right font-medium">Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {models.map((m) => (
+                <tr key={m.Key} className="border-t">
+                  <td className="py-1">{m.Key}{m.Unpriced ? " (no price)" : ""}</td>
+                  <td className="text-right tabular-nums">{m.CacheReadTokens.toLocaleString()}</td>
+                  <td className="text-right tabular-nums">{m.CacheWriteTokens.toLocaleString()}</td>
+                  <td className="text-right tabular-nums">{usd(m.USD)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
 function ReportBody({ r }: { r: NonNullable<ReturnType<typeof useFactoryReport>["data"]> }) {
   const states = Object.entries(r.ByState ?? {}).filter(([, n]) => n > 0);
   return (
@@ -684,6 +735,7 @@ function ReportBody({ r }: { r: NonNullable<ReturnType<typeof useFactoryReport>[
           ))}
         </div>
       ) : null}
+      <Breakdowns days={r.ByDay ?? []} models={r.ByModel ?? []} />
       {r.Top?.length ? (
         <section>
           <h3 className="mb-2 text-sm font-medium">Most expensive tasks</h3>

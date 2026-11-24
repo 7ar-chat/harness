@@ -23,6 +23,22 @@ type Report struct {
 	ByState map[factory.State]int
 	// Top are the most expensive of those tasks, dearest first.
 	Top []TaskSpend
+	// ByDay and ByModel break the project's spend since Since down (filled by the host from its usage ledger; empty
+	// without one). Days are UTC dates, oldest first; models dearest first.
+	ByDay   []Breakdown
+	ByModel []Breakdown
+}
+
+// Breakdown is the spend of one day or one model, cache reads and writes apart.
+type Breakdown struct {
+	Key              string
+	USD              float64
+	Runs             int64
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	Unpriced         int64
 }
 
 // TaskSpend is one task of a Report.

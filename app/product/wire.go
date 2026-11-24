@@ -1,5 +1,6 @@
 package product
 
+import "github.com/7ar-chat/harness/core/insights"
 import "github.com/7ar-chat/harness/core/requirements"
 import "github.com/7ar-chat/harness/core/roles"
 import "github.com/7ar-chat/harness/core/schedule"
@@ -10,6 +11,8 @@ import "github.com/7ar-chat/harness/core/workflows"
 // or changed view struct belongs here (a route that builds its answer from a map has no type to list: keep the answers named structs).
 func WireTypes() map[string]any {
 	return map[string]any{
+		"InsightsView":         insights.Result{},
+		"ThreadUsage":          threadUsageView{},
 		"User":                 userView{},
 		"ProjectWithRole":      projectView{},
 		"Member":               memberView{},
