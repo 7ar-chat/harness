@@ -621,6 +621,19 @@ export interface ModelList {
   info?: Record<string, ModelInfo>;
 }
 
+export interface MyNotifications {
+  events: NotifyEvent[];
+  effective: Record<string, string[]>;
+  available: string[];
+  email?: string;
+  quietStart: string;
+  quietEnd: string;
+  timezone: string;
+  digest: boolean;
+  webhook: NotificationWebhook;
+  recent: NotifyLogEntry[];
+}
+
 export interface NodeRun {
   nodeId: string;
   state: string;
@@ -638,6 +651,74 @@ export interface NodeRun {
   note?: string;
   startedAt?: string;
   finishedAt?: string;
+}
+
+export interface NotificationWebhook {
+  hint?: string;
+  hasSecret: boolean;
+  set: boolean;
+}
+
+export interface NotifyChannel {
+  id: string;
+  kind: string;
+  name: string;
+  hint?: string;
+  hasSecret: boolean;
+  enabled: boolean;
+  createdAt: string;
+}
+
+export interface NotifyEvent {
+  kind: string;
+  label: string;
+  help: string;
+  urgent: boolean;
+  default: boolean;
+}
+
+export interface NotifyLogEntry {
+  id: string;
+  projectId?: string;
+  login?: string;
+  event: string;
+  title: string;
+  channel: string;
+  status: string;
+  error?: string;
+  at: string;
+}
+
+export interface NotifyRule {
+  channels: string[];
+  person: boolean;
+}
+
+export interface NotifyRules {
+  projectId: string;
+  events: Record<string, NotifyRule>;
+  dedupeMinutes: number;
+  digest: boolean;
+  updatedBy?: string;
+  updatedAt: string;
+}
+
+export interface NotifyTestResult {
+  channel: string;
+  status: string;
+  error?: string;
+}
+
+export interface NotifyTestResults {
+  results: NotifyTestResult[];
+}
+
+export interface NotifyView {
+  events: NotifyEvent[];
+  rules: NotifyRules;
+  channels: NotifyChannel[];
+  canEdit: boolean;
+  canSecure: boolean;
 }
 
 export interface OnFailure {
@@ -937,6 +1018,7 @@ export interface RequirementSettings {
   autoDispatch: boolean;
   policy?: string;
   budget?: DispatchBudget;
+  commentOnIssue: boolean;
 }
 
 export interface RequirementTask {

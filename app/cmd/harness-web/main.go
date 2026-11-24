@@ -154,6 +154,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	prod.Roles, prod.Executors = bt.roles, bt.executors
 	prod.GitHosts = bt.githosts
 	prod.Recipes = bt.recipes
+	if bt.notifications != nil {
+		prod.Notifications = &product.NotificationsOptions{Store: bt.notifications, AllowPrivate: getenv("HARNESS_NOTIFY_ALLOW_PRIVATE") == "1"}
+	}
 	prod.TrustIdentityHeaders = trusted
 	if bt.wfs != nil {
 		prod.Workflows = bt.wfs

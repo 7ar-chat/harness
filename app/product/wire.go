@@ -2,6 +2,7 @@ package product
 
 import "github.com/7ar-chat/harness/core/insights"
 import "github.com/7ar-chat/harness/core/recipes"
+import "github.com/7ar-chat/harness/core/notify"
 import "github.com/7ar-chat/harness/core/requirements"
 import "github.com/7ar-chat/harness/core/roles"
 import "github.com/7ar-chat/harness/core/schedule"
@@ -78,5 +79,14 @@ func WireTypes() map[string]any {
 		"RecipeBody":           recipeBody{},
 		"RecipeShareBody":      shareBody{},
 		"RecipeShareParam":     shareParam{},
+		"NotifyEvent":          notify.EventInfo{},
+		"NotifyRules":          notify.Rules{},
+		"NotifyRule":           notify.Rule{},
+		"NotifyChannel":        NotificationChannel{},
+		"NotifyView":           NotificationsView{},
+		"NotifyTestResult":     NotificationTestResult{},
+		"NotifyTestResults":    NotificationTestResults{},
+		"NotifyLogEntry":       notify.LogEntry{},
+		"MyNotifications":      MyNotifications{},
 	}
 }

@@ -26,6 +26,7 @@ import { TasksTab } from "./Tasks";
 import { Requirements } from "./Requirements";
 import { RolesPanel } from "./Roles";
 import { RecipesPanel } from "./Recipes";
+import { ProjectNotifications } from "./Notifications";
 import { SchedulesPanel } from "./Schedules";
 import { InsightsPanel } from "./Insights";
 import { UsagePanel } from "./Usage";
@@ -325,6 +326,9 @@ export function ProjectPage() {
           </TabsContent>
           <TabsContent value="recipes" className="mt-0">
             <RecipesPanel projectId={projectId} canEdit={canWrite(p.role)} owner={owner} />
+          </TabsContent>
+          <TabsContent value="notifications" className="mt-0">
+            <ProjectNotifications projectId={projectId} canEdit={owner} />
           </TabsContent>
           <TabsContent value="usage" className="mt-0">
             <UsagePanel projectId={projectId} />

@@ -78,7 +78,7 @@ const root = createRootRoute({
   ),
 });
 
-const tabs = ["board", "overview", "members", "memory", "capabilities", "roles", "schedules", "recipes", "usage", "insights", "audit", "tasks", "requirements", "workflows", "settings"] as const;
+const tabs = ["board", "overview", "members", "memory", "capabilities", "roles", "schedules", "recipes", "usage", "insights", "notifications", "audit", "tasks", "requirements", "workflows", "settings"] as const;
 type Tab = (typeof tabs)[number];
 
 const routeTree = root.addChildren([
