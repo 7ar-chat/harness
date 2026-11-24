@@ -1,7 +1,7 @@
 import { HelpButton } from "@/components/app/help";
 // The workflow designer: the canvas, the inspector of the selected step, the checks, the version history and publishing.
 import { ArrowLeft, Copy, History, LayoutGrid, Plus, Rocket, Save, ShieldCheck, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useRoles } from "@/api/roles";
 import { issuesOf, useDuplicateWorkflow, usePublishWorkflow, useRestoreWorkflow, useUpdateWorkflow, useWorkflowHistory, useWorkflows, validateWorkflow, type Workflow } from "@/api/workflows";
@@ -262,6 +262,11 @@ export function Designer({ projectId, workflow, canEdit, onBack }: { projectId: 
   const [inputs, setInputs] = useState(workflow.inputs ?? []);
   const [nodes, setNodes] = useState<Node[]>(workflow.nodes);
   const [selected, setSelected] = useState<string | null>(null);
+  const inspectorRef = useRef<HTMLElement>(null);
+  // On a phone the inspector sits below the canvas: bring it into view when a step is chosen.
+  useEffect(() => {
+    if (selected && typeof window !== "undefined" && window.innerWidth < 1024) inspectorRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [selected]);
   const [edge, setEdge] = useState<{ from: string; to: string } | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [server, setServer] = useState<Issue[]>([]);
@@ -442,7 +447,7 @@ export function Designer({ projectId, workflow, canEdit, onBack }: { projectId: 
           </section>
         </div>
 
-        <aside className="space-y-4 rounded-lg border p-4" aria-label="Inspector">
+        <aside ref={inspectorRef} className="space-y-4 rounded-lg border p-4" aria-label="Inspector">
           {sel ? (
             <>
               <NodeInspector

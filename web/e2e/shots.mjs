@@ -95,6 +95,7 @@ export async function runShots(h) {
       };
       await dlg("dlg-new-task", async () => {
         await pg.goto(`${base}/#/p/${pid}?tab=tasks`);
+        await pg.getByRole("button", { name: /New task/ }).first().waitFor({ state: "visible", timeout: 15000 });
         await settle(pg);
         await clickVis(pg.getByRole("button", { name: /New task/ }));
       });
@@ -116,7 +117,7 @@ export async function runShots(h) {
         await pg.getByRole("dialog").getByText("Webhook", { exact: true }).click();
       });
       await dlg("dlg-executor-editor", async () => {
-        await pg.goto(`${base}/#/profile`);
+        await pg.goto(`${base}/#/p/${pid}?tab=roles`);
         await settle(pg);
         await clickVis(pg.getByRole("button", { name: /New executor/ }));
       });
