@@ -562,6 +562,9 @@ func runDetail(run workflows.Run, login, role string) WorkflowRunDetail {
 }
 
 func gateTitle(n workflows.Node) string {
+	if n.Kind.Command() { // a command waiting for approval to run (a supervised policy)
+		return "Run " + firstNonEmpty(n.Title, n.ID) + "?"
+	}
 	if n.Title != "" {
 		return n.Title
 	}

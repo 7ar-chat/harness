@@ -170,6 +170,9 @@ type Factory struct {
 	// Answer is the last assistant message of a thread: what a task that reached review (a pull request was
 	// opened) reported, which the task itself does not record until it is done.
 	Answer func(ctx context.Context, threadID string) (string, error)
+	// Policy is the factory policy engine (nil unless FactoryOptions.Policy): the host uses it to judge the commands of
+	// workflow steps that run directly in a sandbox.
+	Policy *factorypolicy.Engine
 	// Dataset serves the learning dataset (one JSON line per finished task); nil without Learning. It does no
 	// authentication: mount it behind the host's own.
 	Dataset http.Handler
@@ -443,6 +446,7 @@ func FactoryFeature(o FactoryOptions) Feature {
 					},
 				})
 				hs.BeforeTool = append([]agent.BeforeToolHook{pe}, hs.BeforeTool...)
+				f.Policy = pe
 			})
 		}
 		for _, h := range o.ExtraBeforeTool {

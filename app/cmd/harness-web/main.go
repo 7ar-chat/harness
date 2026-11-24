@@ -160,7 +160,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 			// Workflow runs are factory tasks: the engine creates them through the task service and moves a run on
 			// when the factory's OnTaskState hook (and a slow poll, for what a restart missed) says a task moved.
 			eng := wfengine.New(wfengine.Options{Store: bt.wfs, Tasks: f.Tasks, Answer: f.Answer,
-				Requirement: product.RequirementText(bt.reqs)})
+				Requirement: product.RequirementText(bt.reqs), Sandbox: workflowSandbox(h), SandboxEnabled: h.SandboxEnabled,
+				Judge: workflowJudge(h), Preview: workflowPreview(bt.preview)})
 			prod.WorkflowEngine = eng
 			go func() { _ = eng.Run(hctx) }()
 		}

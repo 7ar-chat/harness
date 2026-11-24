@@ -251,7 +251,7 @@ func waitingGate(p *pass, nodeID string) (*core.NodeRun, core.Node, error) {
 		return nil, core.Node{}, err
 	}
 	n, _ := p.r.Node(nodeID)
-	if n.Kind != core.KindGate {
+	if n.Kind != core.KindGate && !n.Kind.Command() {
 		return nil, n, stateErr("step %s is not a gate", nodeID)
 	}
 	if s.State != core.NodeWaiting {
@@ -266,11 +266,18 @@ func waitingGate(p *pass, nodeID string) (*core.NodeRun, core.Node, error) {
 // Approve implements core.Engine.
 func (e *Engine) Approve(ctx context.Context, runID, nodeID, actor, comment string) (*core.Run, error) {
 	return e.mutate(ctx, runID, func(p *pass) error {
-		s, _, err := waitingGate(p, nodeID)
+		s, n, err := waitingGate(p, nodeID)
 		if err != nil {
 			return err
 		}
 		comment = strings.TrimSpace(comment)
+		if n.Kind.Command() {
+			// a command waiting for approval to run (a supervised policy): it starts on the next settle
+			s.State, s.Approved = core.NodePending, true
+			p.log("gate", nodeID, actor, "approved running the command"+suffix(comment))
+			p.note("gate", nodeID)
+			return nil
+		}
 		s.State, s.Result, s.FinishedAt = core.NodeDone, comment, e.o.Now().UTC()
 		s.Note = "approved by " + actor
 		p.log("gate", nodeID, actor, "approved"+suffix(comment))
@@ -283,13 +290,17 @@ func (e *Engine) Approve(ctx context.Context, runID, nodeID, actor, comment stri
 // feedback, and everything from there on runs again.
 func (e *Engine) SendBack(ctx context.Context, runID, nodeID, actor, feedback string) (*core.Run, error) {
 	return e.mutate(ctx, runID, func(p *pass) error {
-		_, n, err := waitingGate(p, nodeID)
+		s, n, err := waitingGate(p, nodeID)
 		if err != nil {
 			return err
 		}
 		feedback = strings.TrimSpace(feedback)
 		if feedback == "" {
 			return fmt.Errorf("%w: say what must change", core.ErrInvalid)
+		}
+		if n.Kind.Command() {
+			e.fail(p, s, "declined by "+actor+": "+feedback)
+			return nil
 		}
 		p.log("gate", nodeID, actor, "sent back"+suffix(feedback))
 		e.rework(p, n, "Sent back by "+actor+": "+feedback, "sent back")
@@ -301,9 +312,12 @@ func (e *Engine) SendBack(ctx context.Context, runID, nodeID, actor, feedback st
 // AddContext implements core.Engine: a note the steps after the gate are given; the gate keeps waiting.
 func (e *Engine) AddContext(ctx context.Context, runID, nodeID, actor, text string) (*core.Run, error) {
 	return e.mutate(ctx, runID, func(p *pass) error {
-		s, _, err := waitingGate(p, nodeID)
+		s, n, err := waitingGate(p, nodeID)
 		if err != nil {
 			return err
+		}
+		if n.Kind.Command() {
+			return stateErr("step %s waits for approval to run: approve it or send it back", nodeID)
 		}
 		text = strings.TrimSpace(text)
 		if text == "" {

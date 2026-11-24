@@ -129,6 +129,21 @@ function StepPanel({ run, nodeId, projectId, canSteer, mayDecide }: { run: Workf
           ) : null}
         </div>
       ) : null}
+      {step.direct ? (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">
+            Ran in the run's sandbox, no model involved{step.exitCode != null ? ` (exit code ${step.exitCode})` : step.state === "running" ? " (running)" : ""}.
+          </p>
+          {step.url ? (
+            <a href={step.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+              <ExternalLink className="size-3" /> Open the preview
+            </a>
+          ) : null}
+          {step.log ? (
+            <pre aria-label="Step output" className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-2 font-mono text-xs">{step.log}</pre>
+          ) : null}
+        </div>
+      ) : null}
       {step.childRunId ? (
         <p className="text-xs text-muted-foreground">Runs the workflow as run {step.childRunId.slice(0, 8)} ({step.taskState}).</p>
       ) : null}
@@ -168,11 +183,13 @@ function StepPanel({ run, nodeId, projectId, canSteer, mayDecide }: { run: Workf
       {step.state === "waiting" ? (
         mayDecide ? (
           <div className="space-y-2 rounded-md border border-warning/60 p-3">
-            <p className="text-xs">This gate waits for you. Approvers: {(node.approvers ?? []).join(", ")}.</p>
+            <p className="text-xs">
+              {node.kind === "gate" ? `This gate waits for you. Approvers: ${(node.approvers ?? []).join(", ")}.` : `This command waits for your approval before it runs: ${node.command ?? ""}`}
+            </p>
             <GateActions runId={run.id} nodeId={nodeId} />
           </div>
         ) : (
-          <p className="rounded-md border p-2 text-xs text-muted-foreground">Waiting for {(node.approvers ?? []).join(", ")} to decide.</p>
+          <p className="rounded-md border p-2 text-xs text-muted-foreground">Waiting for {node.kind === "gate" ? (node.approvers ?? []).join(", ") : "a project owner"} to decide.</p>
         )
       ) : null}
 

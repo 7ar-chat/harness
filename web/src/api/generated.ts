@@ -510,6 +510,11 @@ export interface NodeRun {
   context?: string[];
   manual?: boolean;
   note?: string;
+  log?: string;
+  url?: string;
+  direct?: boolean;
+  approved?: boolean;
+  exitCode?: number;
   startedAt?: string;
   finishedAt?: string;
 }
@@ -1080,6 +1085,7 @@ export interface WorkflowNode {
   outputs?: string[];
   useRepo?: boolean;
   waitMerge?: boolean;
+  repo?: string;
   command?: string;
   approvers?: string[];
   workflowId?: string;

@@ -214,6 +214,26 @@ func (pv *Preview) start(ctx context.Context, rc tools.RunContext) (any, error) 
 	if err != nil {
 		return nil, err
 	}
+	return pv.startIn(ctx, sb, rc.ThreadID)
+}
+
+// StartIn starts the app of the project in sb (the sandbox filed under key, which is also what the address of the
+// preview names) and returns where it is served and the end of its log. A workflow's preview step uses it. ok is
+// false, with the reason in log, when the sandbox cannot show a preview.
+func (pv *Preview) StartIn(ctx context.Context, sb sandbox.Sandbox, key string) (url, log string, ok bool, err error) {
+	res, err := pv.startIn(ctx, sb, key)
+	if err != nil {
+		return "", "", false, err
+	}
+	r, _ := res.(previewResult)
+	switch r.State {
+	case "running", "starting":
+		return r.URL, r.Message + "\n" + r.Log, true, nil
+	}
+	return "", r.Message + "\n" + r.Log, false, nil
+}
+
+func (pv *Preview) startIn(ctx context.Context, sb sandbox.Sandbox, threadID string) (any, error) {
 	if sandbox.PortsOf(sb) == nil {
 		return previewResult{State: "unavailable", Message: "This sandbox cannot show a preview: its ports are not reachable."}, nil
 	}
@@ -221,8 +241,8 @@ func (pv *Preview) start(ctx context.Context, rc tools.RunContext) (any, error) 
 	if err != nil {
 		return previewResult{State: "error", Message: err.Error()}, nil
 	}
-	pv.cache.Delete(rc.ThreadID)
-	base := pv.Base(rc.ThreadID)
+	pv.cache.Delete(threadID)
+	base := pv.Base(threadID)
 	env := map[string]string{"REPO_DIR": RepoDir, "PREVIEW_DIR": previewDir, "RUN": m.Run, "INSTALL": m.Install,
 		"PORT": fmt.Sprint(m.Port), "PREVIEW_BASE": base, "WAIT": "240"}
 	if m.Base == "strip" {
