@@ -1,4 +1,5 @@
 // Scheduled agent tasks: a prompt the agent runs by itself on a cron or interval schedule. The project tab and the personal page share the panel.
+import { EmptyGuide } from "@/components/app/EmptyGuide";
 import { Link } from "@tanstack/react-router";
 import { formatDistanceToNowStrict } from "date-fns";
 import { ChevronDown, ChevronRight, Clock, Pencil, Play, Plus, Share2, Trash2 } from "lucide-react";
@@ -418,7 +419,9 @@ export function SchedulesPanel({ projectId, canEdit, owner }: { projectId?: stri
           ))}
         </ul>
       ) : (
-        <Empty title="No schedules yet">{canEdit ? (projectId ? "Start from a recipe, or create one to have an agent do something every morning, every week or every hour." : "Create one to have an agent do something every morning, every week or every hour.") : "Members can create schedules."}</Empty>
+        <EmptyGuide title="No schedules yet" what={canEdit ? (projectId ? "Start from a recipe, or create one to have an agent do something every morning, every week or every hour." : "Create one to have an agent do something every morning, every week or every hour.") : "Members can create schedules."} slug="schedule-a-job">
+          {canEdit ? <Button onClick={() => setEditing("new")}>Create your first schedule</Button> : null}
+        </EmptyGuide>
       )}
       <ScheduleDialog projectId={projectId} schedule={editing && editing !== "new" ? editing : undefined} open={editing !== null} onClose={() => setEditing(null)} />
     </div>

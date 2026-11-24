@@ -62,6 +62,10 @@ export async function request<T>(method: string, path: string, body?: unknown): 
     onUnauthorized();
     throw new ApiError(401, "unauthenticated", "Authentication required.");
   }
+  if (r.ok && method === "POST" && /^\/threads\/[^/]+\/resume$/.test(path) && (body as { decision?: string } | undefined)?.decision === "approve") {
+    // the getting-started checklist ticks "approve an action" from this
+    window.dispatchEvent(new CustomEvent("7ar:step", { detail: "approved" }));
+  }
   if (r.status === 204) return undefined as T;
   const text = await r.text();
   let json: unknown = undefined;

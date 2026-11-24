@@ -180,7 +180,7 @@ describe("Profile capabilities", () => {
   it("manages the user's own servers through /api/me/capabilities", async () => {
     const m = mockFetch({ ...shellRoutes(), "GET /api/connectors": [], "GET /api/me/capabilities": [docs] });
     await renderApp("/capabilities");
-    expect(await within(screen.getByRole("main")).findByRole("heading", { name: "Capabilities", level: 1 })).toBeTruthy();
+    expect(await within(screen.getByRole("main")).findByRole("heading", { name: "Tools & skills", level: 1 })).toBeTruthy();
     expect(await screen.findByText("Docs search")).toBeTruthy();
     expect(m.find("GET", "/api/me/capabilities")).toHaveLength(1);
   });

@@ -1,4 +1,6 @@
 // The project's requirements: what the project wants done, followed from the idea to the merged pull request.
+import { HelpButton } from "@/components/app/help";
+import { EmptyGuide } from "@/components/app/EmptyGuide";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useProjectSearch } from "@/lib/place";
 import { AlertTriangle, ArrowLeft, ExternalLink, GitPullRequest, Pencil, Plus, Trash2 } from "lucide-react";
@@ -280,7 +282,10 @@ function AutoDispatch({ projectId }: { projectId: string }) {
           <Input id="req-budget" type="number" min="0" step="0.5" value={usd} onChange={(e) => setUsd(e.target.value)} className="w-32" />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="req-policy">Policy</Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor="req-policy">Policy</Label>
+            <HelpButton slug="policies" label="Policy" />
+          </div>
           <select id="req-policy" className={selectClass} value={policy} onChange={(e) => setPolicy(e.target.value)}>
             <option value="supervised">Supervised</option>
             <option value="sandboxed">Sandboxed</option>
@@ -394,7 +399,9 @@ export function Requirements({ projectId, role }: { projectId: string; role: Rol
       {role === "owner" ? <AutoDispatch projectId={projectId} /> : null}
 
       {items.length === 0 ? (
-        <Empty title="No requirements yet">Write down what the project wants done{github.data?.connected ? ", or import the open issues of its repository" : ""}.</Empty>
+        <EmptyGuide title="No requirements yet" what={`Write down what the project wants done${github.data?.connected ? ", or import the open issues of its repository" : ""}.`} slug="requirements">
+          {canWork ? <Button size="sm" onClick={() => setEditing({})}>Write your first requirement</Button> : null}
+        </EmptyGuide>
       ) : (
         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
           <ul aria-label="Requirements" className="space-y-2">

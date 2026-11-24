@@ -1,5 +1,5 @@
 // The status bar: repository and branch, running sessions, spend against the cap, sandbox, user.
-import { PanelBottom, PanelLeft } from "lucide-react";
+import { CircleHelp, PanelBottom, PanelLeft } from "lucide-react";
 import { useMe, useOverview } from "@/api/queries";
 import { useUsage } from "@/api/schedulesUsage";
 import { useEnvironments } from "@/chat/environment";
@@ -14,7 +14,7 @@ const Btn = ({ pressed, className, ...p }: { pressed?: boolean } & React.ButtonH
 );
 
 export function StatusBar() {
-  const { projectId, explorer, setExplorer, panel, setPanel, needsCount } = useShell();
+  const { projectId, explorer, setExplorer, panel, setPanel, needsCount, tabs } = useShell();
   const overview = useOverview().data;
   const me = useMe().data?.user;
   const envs = useEnvironments().data;
@@ -42,7 +42,11 @@ export function StatusBar() {
       ) : null}
       <span className="ml-auto hidden whitespace-nowrap md:inline">sandbox: {envs?.default ?? "default"}</span>
       <span className="hidden whitespace-nowrap md:inline">{me?.login}</span>
-      <Btn pressed={panel} onClick={() => setPanel((v) => !v)} aria-label="Toggle panel (Ctrl/Cmd+J)" title="Toggle panel (Ctrl/Cmd+J)" className="ml-auto md:ml-0">
+      <Btn onClick={() => tabs.open("/help")} aria-label="Help" title="Help and getting started" className="ml-auto md:ml-0">
+        <CircleHelp className="size-3.5" />
+        <span className="hidden sm:inline">Help</span>
+      </Btn>
+      <Btn pressed={panel} onClick={() => setPanel((v) => !v)} aria-label="Toggle panel (Ctrl/Cmd+J)" title="Toggle panel (Ctrl/Cmd+J)" className="md:ml-0">
         <PanelBottom className="size-3.5" />
         <span className="hidden sm:inline">Panel</span>
         {needsCount ? (

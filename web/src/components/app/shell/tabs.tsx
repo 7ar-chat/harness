@@ -31,7 +31,7 @@ export const PROJECT_SECTIONS: Record<string, string> = {
   recipes: "Recipes",
   memory: "Memory & docs",
   members: "Members & access",
-  capabilities: "Capabilities",
+  capabilities: "Tools & skills",
   audit: "Audit log",
   usage: "Usage & caps",
   notifications: "Notifications",
@@ -45,13 +45,14 @@ const PAGES: Record<string, string> = {
   "/jobs": "Jobs",
   "/references": "References",
   "/connectors": "Connectors",
-  "/capabilities": "Capabilities",
+  "/capabilities": "My tools & skills",
   "/schedules": "Schedules",
   "/usage": "Usage",
   "/insights": "Insights",
   "/memory": "Library",
   "/profile": "Settings",
   "/admin": "Admin",
+  "/help": "Help",
 };
 
 export const pageTitle = (path: string) => PAGES[path];

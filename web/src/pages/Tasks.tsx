@@ -1,4 +1,5 @@
 // The "Tasks" tab of a project: the agent factory's tasks, triggers and spend report.
+import { EmptyGuide } from "@/components/app/EmptyGuide";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useProjectSearch } from "@/lib/place";
 import { formatDistanceToNowStrict } from "date-fns";
@@ -11,10 +12,12 @@ import {
 } from "@/api/factory";
 import { useRoles } from "@/api/roles";
 import type { Role } from "@/api/types";
+import { HelpButton } from "@/components/app/help";
 import { Empty, ErrorState, ListSkeleton } from "@/components/app/common";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -243,6 +246,12 @@ const POLICIES = [
   ["sandboxed", "Sandboxed: push and merge ask"],
   ["autonomous", "Autonomous: only protected rules deny"],
 ] as const;
+const POLICY_HINT: Record<string, string> = {
+  default: "Uses the setting your administrator chose. A good choice when unsure.",
+  supervised: "Every risky call asks you first. Safest while you are learning.",
+  sandboxed: "The agent works freely in its own copy; only pushing and merging ask.",
+  autonomous: "Nothing asks you; only protected rules deny. For jobs you trust, with a budget.",
+};
 
 function CreateTaskDialog({ projectId, owner, open, onOpenChange, existing }: { projectId: string; owner: boolean; open: boolean; onOpenChange: (o: boolean) => void; existing: FactoryTask[] }) {
   const create = useCreateTask(projectId);
@@ -250,6 +259,7 @@ function CreateTaskDialog({ projectId, owner, open, onOpenChange, existing }: { 
   const projectRoles = (useRoles(projectId).data ?? []).filter((r) => r.enabled && !ROLES.includes(r.name));
   const [f, setF] = useState({ title: "", spec: "", role: "coder", model: "", policy: "default", maxUsd: "", maxAttempts: "", autoMerge: false });
   const [deps, setDeps] = useState<string[]>([]);
+  const [advanced, setAdvanced] = useState(false);
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
   const open_ = existing.filter((t) => !isTerminalState(t.state));
   const submit = (e: React.FormEvent) => {
@@ -318,16 +328,15 @@ function CreateTaskDialog({ projectId, owner, open, onOpenChange, existing }: { 
                   Runs on the external executor {projectRoles.find((r) => r.name === f.role)?.executor}, under the policy below. It uses your API key from Settings.
                 </p>
               ) : (
-                <p className="text-xs text-muted-foreground">Runs on the 7ar harness (recommended), under the policy below.</p>
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">Runs on the 7ar harness (recommended), under the policy below. <HelpButton slug="executors" /></p>
               )}
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="task-model">Model</Label>
-              <Input id="task-model" value={f.model} onChange={(e) => set("model", e.target.value)} placeholder="Server default" />
             </div>
           </div>
           <div className="space-y-1">
-            <Label>Policy</Label>
+            <div className="flex items-center gap-1">
+              <Label>Policy</Label>
+              <HelpButton slug="policies" label="Policy" />
+            </div>
             <Select value={f.policy} onValueChange={(v) => set("policy", v)}>
               <SelectTrigger aria-label="Policy" className="w-full">
                 <SelectValue />
@@ -340,10 +349,25 @@ function CreateTaskDialog({ projectId, owner, open, onOpenChange, existing }: { 
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">{POLICY_HINT[f.policy]}</p>
           </div>
+          <Collapsible open={advanced} onOpenChange={setAdvanced} className="space-y-3">
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="ghost" size="sm" className="-ml-2 gap-1">
+                {advanced ? <ChevronDown /> : <ChevronRight />} Advanced options
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-3">
+          <div className="space-y-1">
+              <Label htmlFor="task-model">Model</Label>
+              <Input id="task-model" value={f.model} onChange={(e) => set("model", e.target.value)} placeholder="Server default" />
+            </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label htmlFor="task-budget">Budget (USD)</Label>
+              <div className="flex items-center gap-1">
+                <Label htmlFor="task-budget">Budget (USD)</Label>
+                <HelpButton slug="budgets" label="Budget" />
+              </div>
               <Input id="task-budget" type="number" min="0" step="0.5" value={f.maxUsd} onChange={(e) => set("maxUsd", e.target.value)} placeholder="No cap" />
             </div>
             <div className="space-y-1">
@@ -371,6 +395,8 @@ function CreateTaskDialog({ projectId, owner, open, onOpenChange, existing }: { 
             </div>
             <Switch id="task-merge" disabled={!owner} checked={f.autoMerge} onCheckedChange={(v) => set("autoMerge", v)} />
           </div>
+            </CollapsibleContent>
+          </Collapsible>
           <DialogFooter>
             <Button type="submit" disabled={create.isPending || !f.title.trim() || !f.spec.trim()}>
               Create task
@@ -438,7 +464,13 @@ function TaskList({ projectId, role }: { projectId: string; role: Role }) {
           ))}
         </ul>
       ) : (
-        <Empty title={all.length ? "No task in this state" : "No tasks yet"}>{all.length ? null : "Create one to put an agent to work unattended."}</Empty>
+        all.length ? (
+          <Empty title="No task in this state" />
+        ) : (
+          <EmptyGuide title="No tasks yet" what="Create one to put an agent to work unattended." slug="hand-off-a-task">
+            {canWrite ? <Button size="sm" onClick={() => setCreating(true)}>Create your first task</Button> : null}
+          </EmptyGuide>
+        )
       )}
       <CreateTaskDialog projectId={projectId} owner={role === "owner"} open={creating} onOpenChange={setCreating} existing={all} />
     </div>
@@ -601,14 +633,17 @@ function Triggers({ projectId, owner }: { projectId: string; owner: boolean }) {
   const list = q.data ?? [];
   return (
     <div className="space-y-3">
-      {owner ? (
-        <div className="flex flex-wrap justify-end gap-2">
-          <AddFromRecipe projectId={projectId} kind="trigger" size="sm" />
-          <Button size="sm" onClick={() => setCreating(true)}>
-            <Plus /> New trigger
-          </Button>
-        </div>
-      ) : null}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <HelpButton slug="triggers" />
+        {owner ? (
+          <>
+            <AddFromRecipe projectId={projectId} kind="trigger" size="sm" />
+            <Button size="sm" onClick={() => setCreating(true)}>
+              <Plus /> New trigger
+            </Button>
+          </>
+        ) : null}
+      </div>
       {list.length ? (
         <ul className="divide-y rounded-lg border">
           {list.map((t) => (
@@ -639,7 +674,9 @@ function Triggers({ projectId, owner }: { projectId: string; owner: boolean }) {
           ))}
         </ul>
       ) : (
-        <Empty title="No triggers">{owner ? "A trigger creates tasks on a schedule or from a GitHub event. Start from a recipe, or create your own." : "A project owner can add triggers."}</Empty>
+        <EmptyGuide title="No triggers" what={owner ? "A trigger creates tasks on a schedule or from a GitHub event. Start from a recipe, or create your own." : "A project owner can add triggers."} slug="triggers">
+          {owner ? <Button size="sm" onClick={() => setCreating(true)}>Create your first trigger</Button> : null}
+        </EmptyGuide>
       )}
       <CreateTriggerDialog projectId={projectId} open={creating} onOpenChange={setCreating} />
       <ShareRecipeDialog projectId={projectId} source={sharing} onClose={() => setSharing(null)} />

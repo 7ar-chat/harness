@@ -84,6 +84,9 @@ describe("Tasks tab", () => {
     await renderApp("/p/p1?tab=tasks");
     fireEvent.click(await page().findByRole("button", { name: /New task/ }));
     const d = within(await screen.findByRole("dialog"));
+    // model, budget, attempts, dependencies and merging are behind "Advanced options"
+    expect(d.queryByLabelText("Budget (USD)")).toBeNull();
+    fireEvent.click(d.getByRole("button", { name: /Advanced options/ }));
     expect(d.getByRole("switch", { name: "Merge automatically" }).hasAttribute("disabled")).toBe(true);
     fireEvent.change(d.getByLabelText("Title"), { target: { value: "Fix flaky test" } });
     fireEvent.change(d.getByLabelText("Spec"), { target: { value: "make it stable" } });

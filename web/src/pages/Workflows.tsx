@@ -1,6 +1,7 @@
 // The Workflows tab of a project: its procedures (SOPs) as versioned graphs, the builtin templates to start from, the designer, and
 // the runs with their live state and controls. A workflow is a graph of steps (an agent, a command, a human gate, another
 // workflow); a run turns each step into a factory task in dependency order.
+import { EmptyGuide } from "@/components/app/EmptyGuide";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useProjectSearch } from "@/lib/place";
 import { formatDistanceToNowStrict } from "date-fns";
@@ -171,7 +172,7 @@ function RunsList({ projectId, onOpen }: { projectId: string; onOpen: (id: strin
   const q = useWorkflowRuns(projectId);
   if (q.isLoading) return <ListSkeleton rows={3} />;
   if (q.error) return <ErrorState error={q.error} retry={() => void q.refetch()} />;
-  if (!q.data?.length) return <Empty title="No runs yet">Publish a workflow and run it: each run is listed here with the state of its steps.</Empty>;
+  if (!q.data?.length) return <EmptyGuide title="No runs yet" what="Publish a workflow and run it: each run is listed here with the state of its steps." slug="workflows" />;
   return (
     <ul className="divide-y rounded-lg border">
       {q.data.map((r) => {
@@ -249,7 +250,9 @@ export function WorkflowsPanel({ projectId, role }: { projectId: string; role: R
               ))}
             </div>
           ) : (
-            <Empty title="No workflows yet">Start from a template below, or build one from scratch.</Empty>
+            <EmptyGuide title="No workflows yet" what="Start from a template below, or build one from scratch." slug="workflow-from-template">
+              {canEdit ? <Button variant="outline" onClick={blank} disabled={create.isPending}>Start with a blank workflow</Button> : null}
+            </EmptyGuide>
           )}
           {canEdit ? <Templates projectId={projectId} onCreated={(w) => go({ wf: w.id })} /> : null}
         </TabsContent>
