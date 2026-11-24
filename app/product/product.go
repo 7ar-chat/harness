@@ -17,6 +17,7 @@ import (
 
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/core/capabilities"
+	"github.com/7ar-chat/harness/core/recipes"
 	"github.com/7ar-chat/harness/core/requirements"
 	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/core/store"
@@ -83,6 +84,9 @@ type Options struct {
 	Executors *ExecutorAPI
 	// Schedules, with Team, serves scheduled agent tasks and fires them (see schedules.go). Nil: no routes, nothing runs.
 	Schedules *SchedulesOptions
+	// Recipes, with Team, serves the recipe gallery and the recipes of the instance, projects and people (see
+	// recipes.go); the builtin gallery is code. Nil: no routes.
+	Recipes recipes.Store
 	// Usage, with Team, serves the usage report and the spend caps (see usage.go). Nil: no routes.
 	Usage *UsageOptions
 	// Workflows, with Team, serves the workflow routes (see workflows.go): the procedures of projects and their
@@ -244,6 +248,7 @@ func (s *server) Install(hs *httpapi.Server) error {
 	s.routeBoard()
 	s.routeRequirements()
 	s.routeSchedules()
+	s.routeRecipes()
 	s.routeUsage()
 	s.routeInsights()
 	s.routeWorkflows()

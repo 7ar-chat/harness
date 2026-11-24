@@ -43,7 +43,7 @@ export interface TriggerInput {
   event?: string;
   match?: Record<string, string>;
   enabled: boolean;
-  template: { title: string; spec: string; role?: string; policy?: string };
+  template: { title: string; spec: string; role?: string; policy?: string; model?: string; baseBranch?: string; budget?: Budget };
 }
 
 export interface LearningCluster {

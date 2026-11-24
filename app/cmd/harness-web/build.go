@@ -17,6 +17,7 @@ import (
 	"github.com/7ar-chat/harness/adapters/store/githoststore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore"
 	"github.com/7ar-chat/harness/adapters/store/pgstore/migrate"
+	"github.com/7ar-chat/harness/adapters/store/recipestore"
 	"github.com/7ar-chat/harness/adapters/store/reqstore"
 	"github.com/7ar-chat/harness/adapters/store/rolestore"
 	"github.com/7ar-chat/harness/adapters/store/schedstore"
@@ -31,6 +32,7 @@ import (
 	"github.com/7ar-chat/harness/core/executors"
 	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/githost"
+	"github.com/7ar-chat/harness/core/recipes"
 	"github.com/7ar-chat/harness/core/requirements"
 	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/core/schedule"
@@ -74,6 +76,8 @@ type built struct {
 	roles roles.Store
 	// wfs is the store of workflows and their runs (team mode only).
 	wfs workflows.Store
+	// recipes is the store of shared recipes (team mode only).
+	recipes recipes.Store
 	// executors serves the external coding agents and their sealed credentials (nil without the marketplace).
 	executors *product.ExecutorAPI
 	// githosts serves the code hosts besides GitHub.com (team mode with a secret key).
@@ -107,6 +111,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 	var us usage.Store
 	var ss schedule.Store
 	var wfs workflows.Store
+	var rcs recipes.Store
 	var ghr githost.Registry
 	_, havePG := os.LookupEnv("POSTGRES_HOST")
 	switch {
@@ -128,6 +133,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 		xs = executorstore.NewPG(pool, nil)
 		us, ss = usagestore.NewPG(pool, nil), schedstore.NewPG(pool, nil)
 		wfs = workflowstore.NewPG(pool, nil)
+		rcs = recipestore.NewPG(pool, nil)
 		ghr = githoststore.NewPG(pool, nil)
 	case durable || team:
 		st, err := harness.OpenLocalStore(cfg.LocalStateDir)
@@ -186,6 +192,12 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 				return nil, fmt.Errorf("open the workflows store: %w", err)
 			}
 			wfs = wff
+			rcf, err := recipestore.Open(filepath.Join(stateDir(cfg), "recipes.json"), nil)
+			if err != nil {
+				_ = closers.Close()
+				return nil, fmt.Errorf("open the recipes store: %w", err)
+			}
+			rcs = rcf
 			gf, err := githoststore.Open(filepath.Join(stateDir(cfg), "githosts.json"), nil)
 			if err != nil {
 				_ = closers.Close()
@@ -253,7 +265,7 @@ func buildWith(ctx context.Context, cfg *config.Config, durable, team bool) (*bu
 			_ = closers.Close()
 			return nil, err
 		}
-		b.caps, b.reqs, b.wfs = caps, reqs, wfs
+		b.caps, b.reqs, b.wfs, b.recipes = caps, reqs, wfs, rcs
 		if rs != nil {
 			b.roles = rs
 			o.Roles = product.NewRoleRegistry(ts, rs)

@@ -153,6 +153,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	}
 	prod.Roles, prod.Executors = bt.roles, bt.executors
 	prod.GitHosts = bt.githosts
+	prod.Recipes = bt.recipes
 	prod.TrustIdentityHeaders = trusted
 	if bt.wfs != nil {
 		prod.Workflows = bt.wfs

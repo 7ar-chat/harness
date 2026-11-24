@@ -305,6 +305,7 @@ func (s *server) deleteProject(w http.ResponseWriter, r *http.Request, c Caller)
 		return
 	}
 	s.dropProjectSchedules(r.Context(), p.ID)
+	s.dropProjectRecipes(r.Context(), p.ID)
 	// The project's marketplace installs (and their sealed keys) go with it; the project is already gone, so a
 	// failure here is logged and leaves rows nobody can reach.
 	if s.opt.Capabilities != nil {

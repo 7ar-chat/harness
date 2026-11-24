@@ -2,7 +2,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useProjectSearch } from "@/lib/place";
 import { formatDistanceToNowStrict } from "date-fns";
-import { ArrowLeft, ExternalLink, GitPullRequest, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, ExternalLink, GitPullRequest, Plus, Share2, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { isUnsupported } from "@/api/client";
 import {
@@ -22,6 +22,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { AddFromRecipe, ShareRecipeDialog, type ShareSource } from "./Recipes";
 
 const ago = (iso: string) => `${formatDistanceToNowStrict(new Date(iso))} ago`;
 const usd = (n: number) => `$${n.toFixed(n >= 100 ? 0 : 2)}`;
@@ -126,6 +128,7 @@ function TaskBody({ projectId, detail, canWrite }: { projectId: string; detail: 
   const { task: t, events } = detail;
   const cancel = useCancelTask(projectId);
   const [confirm, setConfirm] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const ci = latest(events, "ci", "state");
   const review = latest(events, "review", "verdict");
   return (
@@ -184,11 +187,19 @@ function TaskBody({ projectId, detail, canWrite }: { projectId: string; detail: 
           <ResumeForm projectId={projectId} task={t} />
         </section>
       ) : null}
-      {canWrite && !isTerminalState(t.state) ? (
-        <Button variant="outline" size="sm" onClick={() => setConfirm(true)}>
-          Cancel task
-        </Button>
-      ) : null}
+      <div className="flex flex-wrap gap-2">
+        {canWrite && !isTerminalState(t.state) ? (
+          <Button variant="outline" size="sm" onClick={() => setConfirm(true)}>
+            Cancel task
+          </Button>
+        ) : null}
+        {canWrite ? (
+          <Button variant="outline" size="sm" onClick={() => setSharing(true)}>
+            <Share2 /> Share as recipe
+          </Button>
+        ) : null}
+      </div>
+      <ShareRecipeDialog projectId={projectId} source={sharing ? { from: "task", id: t.id, name: t.title, text: t.spec } : null} onClose={() => setSharing(false)} />
       <section>
         <h3 className="mb-2 text-sm font-medium">History</h3>
         <Timeline events={events} />
@@ -404,9 +415,12 @@ function TaskList({ projectId, role }: { projectId: string; role: Role }) {
           })}
         </div>
         {canWrite ? (
-          <Button size="sm" className="ml-auto" onClick={() => setCreating(true)}>
-            <Plus /> New task
-          </Button>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <AddFromRecipe projectId={projectId} kind="task" size="sm" />
+            <Button size="sm" onClick={() => setCreating(true)}>
+              <Plus /> New task
+            </Button>
+          </div>
         ) : null}
       </div>
       {shown.length ? (
@@ -433,18 +447,27 @@ function TaskList({ projectId, role }: { projectId: string; role: Role }) {
 
 function CreateTriggerDialog({ projectId, open, onOpenChange }: { projectId: string; open: boolean; onOpenChange: (o: boolean) => void }) {
   const create = useCreateTrigger(projectId);
-  const blank = { name: "", kind: "cron" as "cron" | "webhook", schedule: "", event: "", label: "", title: "", spec: "", enabled: true };
+  const projectRoles = (useRoles(projectId).data ?? []).filter((r) => r.enabled && !ROLES.includes(r.name));
+  const blank = { name: "", kind: "cron" as "cron" | "webhook", schedule: "", event: "", label: "", title: "", spec: "", enabled: true, role: "coder", policy: "default", maxUsd: "", baseBranch: "", model: "" };
   const [f, setF] = useState(blank);
+  const [adv, setAdv] = useState(false);
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const body: TriggerInput = { name: f.name.trim(), kind: f.kind, enabled: f.enabled, template: { title: f.title.trim(), spec: f.spec.trim() } };
+    const maxUsd = num(f.maxUsd);
+    const template: TriggerInput["template"] = { title: f.title.trim(), spec: f.spec.trim() };
+    if (f.role !== "coder") template.role = f.role;
+    if (f.policy !== "default") template.policy = f.policy;
+    if (maxUsd) template.budget = { maxUsd };
+    if (f.baseBranch.trim()) template.baseBranch = f.baseBranch.trim();
+    if (f.model.trim()) template.model = f.model.trim();
+    const body: TriggerInput = { name: f.name.trim(), kind: f.kind, enabled: f.enabled, template };
     if (f.kind === "cron") body.schedule = f.schedule.trim();
     else {
       body.event = f.event.trim();
       if (f.label.trim()) body.match = { label: f.label.trim() };
     }
-    create.mutate(body, { onSuccess: () => { setF(blank); onOpenChange(false); } });
+    create.mutate(body, { onSuccess: () => { setF(blank); setAdv(false); onOpenChange(false); } });
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -495,6 +518,63 @@ function CreateTriggerDialog({ projectId, open, onOpenChange }: { projectId: str
             <Label htmlFor="trg-spec">Task spec</Label>
             <Textarea id="trg-spec" rows={4} value={f.spec} onChange={(e) => set("spec", e.target.value)} />
           </div>
+          <Collapsible open={adv} onOpenChange={setAdv}>
+            <CollapsibleTrigger className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground">
+              {adv ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />} Advanced
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-3 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Role</Label>
+                  <Select value={f.role} onValueChange={(v) => set("role", v)}>
+                    <SelectTrigger aria-label="Task role" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROLES.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {r}
+                        </SelectItem>
+                      ))}
+                      {projectRoles.map((r) => (
+                        <SelectItem key={r.name} value={r.name}>
+                          {r.name}
+                          {r.executor ? ` (runs on ${r.executor})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Policy</Label>
+                  <Select value={f.policy} onValueChange={(v) => set("policy", v)}>
+                    <SelectTrigger aria-label="Task policy" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {POLICIES.map(([v, l]) => (
+                        <SelectItem key={v} value={v}>
+                          {l}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="trg-budget">Budget per task (USD)</Label>
+                  <Input id="trg-budget" type="number" min="0" step="0.5" value={f.maxUsd} onChange={(e) => set("maxUsd", e.target.value)} placeholder="No cap" />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="trg-base">Base branch</Label>
+                  <Input id="trg-base" value={f.baseBranch} onChange={(e) => set("baseBranch", e.target.value)} placeholder="The project's default" />
+                </div>
+                <div className="col-span-2 space-y-1">
+                  <Label htmlFor="trg-model">Model</Label>
+                  <Input id="trg-model" value={f.model} onChange={(e) => set("model", e.target.value)} placeholder="Server default" />
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
           <div className="flex items-center justify-between rounded-md border p-3">
             <Label htmlFor="trg-enabled">Enabled</Label>
             <Switch id="trg-enabled" checked={f.enabled} onCheckedChange={(v) => set("enabled", v)} />
@@ -515,13 +595,15 @@ function Triggers({ projectId, owner }: { projectId: string; owner: boolean }) {
   const del = useDeleteTrigger(projectId);
   const [creating, setCreating] = useState(false);
   const [target, setTarget] = useState<{ id: string; name: string }>();
+  const [sharing, setSharing] = useState<ShareSource | null>(null);
   if (q.isLoading) return <ListSkeleton rows={2} />;
   if (q.error) return <ErrorState error={q.error} retry={() => void q.refetch()} />;
   const list = q.data ?? [];
   return (
     <div className="space-y-3">
       {owner ? (
-        <div className="flex justify-end">
+        <div className="flex flex-wrap justify-end gap-2">
+          <AddFromRecipe projectId={projectId} kind="trigger" size="sm" />
           <Button size="sm" onClick={() => setCreating(true)}>
             <Plus /> New trigger
           </Button>
@@ -544,17 +626,23 @@ function Triggers({ projectId, owner }: { projectId: string; owner: boolean }) {
                 </div>
               </div>
               {owner ? (
-                <Button variant="ghost" size="icon" aria-label={`Delete ${t.name}`} onClick={() => setTarget({ id: t.id, name: t.name })}>
-                  <Trash2 />
-                </Button>
+                <>
+                  <Button variant="ghost" size="icon" aria-label={`Share ${t.name} as a recipe`} title="Share as recipe" onClick={() => setSharing({ from: "trigger", id: t.id, name: t.name, text: t.template.spec })}>
+                    <Share2 />
+                  </Button>
+                  <Button variant="ghost" size="icon" aria-label={`Delete ${t.name}`} onClick={() => setTarget({ id: t.id, name: t.name })}>
+                    <Trash2 />
+                  </Button>
+                </>
               ) : null}
             </li>
           ))}
         </ul>
       ) : (
-        <Empty title="No triggers">{owner ? "A trigger creates tasks on a schedule or from a GitHub event." : "A project owner can add triggers."}</Empty>
+        <Empty title="No triggers">{owner ? "A trigger creates tasks on a schedule or from a GitHub event. Start from a recipe, or create your own." : "A project owner can add triggers."}</Empty>
       )}
       <CreateTriggerDialog projectId={projectId} open={creating} onOpenChange={setCreating} />
+      <ShareRecipeDialog projectId={projectId} source={sharing} onClose={() => setSharing(null)} />
       <AlertDialog open={!!target} onOpenChange={(o) => !o && setTarget(undefined)}>
         <AlertDialogContent>
           <AlertDialogHeader>
