@@ -69,7 +69,7 @@ export function WhyNot({ log }: { log: NotifyLogEntry[] }) {
 function Log({ entries, showWho }: { entries: NotifyLogEntry[]; showWho?: boolean }) {
   if (!entries.length) return <Empty title="Nothing sent yet">Every message, held message and failure shows up here.</Empty>;
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div className="overflow-x-auto rounded-lg border" tabIndex={0} role="region" aria-label="Table, scrolls sideways">
       <table className="w-full text-sm" aria-label="Delivery log">
         <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
           <tr>
@@ -277,7 +277,7 @@ export function ProjectNotifications({ projectId, canEdit }: { projectId: string
 
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Rules</h3>
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border" tabIndex={0} role="region" aria-label="Table, scrolls sideways">
           <table className="w-full text-sm" aria-label="Notification rules">
             <thead className="bg-muted/40 text-xs text-muted-foreground">
               <tr>
@@ -388,7 +388,7 @@ export function MyNotificationsCard() {
         <CardDescription>Where the things that concern you reach you. The app always has them; add Telegram or Slack in Connectors, email comes from your profile.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border" tabIndex={0} role="region" aria-label="Table, scrolls sideways">
           <table className="w-full text-sm" aria-label="My notifications">
             <thead className="bg-muted/40 text-xs text-muted-foreground">
               <tr>

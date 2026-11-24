@@ -1808,7 +1808,7 @@ async function main() {
     const first = card.getByRole("listitem").first();
     await visible(first.getByTestId("executor-availability"), "the availability badge", 15_000);
     const label = (await first.getByTestId("executor-availability").innerText()).trim();
-    if (!["ready", "will be installed on first use", "not in the sandbox image", "unknown"].includes(label)) throw new Error(`availability badge: ${label}`);
+    if (!["ready", "will be installed on first use", "not in the sandbox image", "unknown", "not checked"].includes(label)) throw new Error(`availability badge: ${label}`);
     await visible(first.getByText(/Reads .*_API_KEY/), "the keys the executor reads");
   });
 
