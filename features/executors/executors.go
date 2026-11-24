@@ -337,7 +337,7 @@ func (p *Provider) Run(ctx context.Context, req executors.Request, onOutput func
 
 var (
 	missingRe = regexp.MustCompile(`(?i)command not found|: not found|no such file or directory|executable file not found|is not recognized`)
-	authRe    = regexp.MustCompile(`(?i)\b401\b|invalid[ _-]?(x-)?api[ _-]?key|incorrect api key|unauthori[sz]ed|authentication[ _-](failed|error|required)|not logged in|please (log ?in|run .*login)|missing (an )?api key|no api key|api key (is )?(not set|required|missing)|permission_denied|invalid_api_key`)
+	authRe    = regexp.MustCompile(`(?i)\b401\b|invalid[ _-]?(x-)?api[ _-]?key|incorrect api key|unauthori[sz]ed|authentication[ _-](failed|error|required)|not logged in|please (log ?in|run .*login)|missing (an )?api key|no api key|api key (is )?(not set|required|missing)|permission_denied|invalid_api_key|no default model selected|set an api key environment variable`)
 )
 
 // Diagnose reads the end of a failed CLI run and, when it shows that the CLI is missing or could not authenticate,

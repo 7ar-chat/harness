@@ -400,8 +400,13 @@ the task budget, and refuses to start once the budget is spent.
 * `omp` (Oh My Pi, github.com/can1357/oh-my-pi, `bun install -g @oh-my-pi/pi-coding-agent`) is run as `omp -p ... </dev/null`
   (stdin is closed because omp reads a non-terminal stdin to EOF before it starts). A headless omp cannot answer an
   approval prompt, so the edit and full levels both use `--approval-mode yolo` and the sandbox is the boundary; the
-  read-only level is `--tools read,grep,glob --approval-mode always-ask`, which comes from the omp.sh docs' own
-  read-only example and has not been run against a real omp. Its JSON stream has no documented schema, so its output
+  read-only level is `--tools read,grep,glob --approval-mode always-ask` (from the omp.sh docs' own read-only example).
+  Checked against the real CLI (omp 19.1.1, claude-code and codex installed from npm, `--help` and a run with no key, no
+  model call): every flag the three adapters use exists (`omp -p/--tools/--approval-mode`, `claude -p/--output-format
+  stream-json/--permission-mode plan|acceptEdits/--allowedTools/--dangerously-skip-permissions`, `codex exec --json/--sandbox
+  read-only|workspace-write/--skip-git-repo-check/--dangerously-bypass-approvals-and-sandbox`), omp accepts the tool names
+  `read`, `grep` and `glob`, and a missing key makes omp exit 1 with a message the executor recognises. What no check has done
+  is run a model through them: the streamed output of Claude Code and Codex is still parsed from recorded samples. Its JSON stream has no documented schema, so its output
   is read as text and its spend is not booked. Keys it reads: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
   `OPENROUTER_API_KEY`, `GEMINI_API_KEY` and the two base URLs.
 

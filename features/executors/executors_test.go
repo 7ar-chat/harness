@@ -443,3 +443,13 @@ func TestUnknownExecutorAndEmptyTask(t *testing.T) {
 		t.Fatal("empty task accepted")
 	}
 }
+
+// The text omp (v19) really prints when it starts without a key, captured by running the CLI with no credentials.
+func TestDiagnoseOmpWithoutAKey(t *testing.T) {
+	omp, _ := executors.BuiltinNamed(executors.OMP)
+	out := "No default model selected. Use /login, set an API key environment variable, or select a local model with /model or --model.\n\nSet an API key environment variable:\n  ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, etc.\n"
+	got := Diagnose(omp, out)
+	if !strings.Contains(got, "could not authenticate") || !strings.Contains(got, "Settings > Executors") || !strings.Contains(got, "ANTHROPIC_API_KEY") {
+		t.Fatalf("Diagnose = %q", got)
+	}
+}
