@@ -71,7 +71,7 @@ type rig struct {
 
 func newRig(t *testing.T, cli string, script clitest.Script) *rig {
 	t.Helper()
-	bin := cliDir(t, cli)
+	bin := cliDir(t, strings.SplitN(cli, "-", 2)[0])
 	sb := clitest.NewWorkspace(t, bin)
 	var srv *clitest.Server
 	r := &rig{sb: sb}
@@ -89,6 +89,24 @@ func newRig(t *testing.T, cli string, script clitest.Script) *rig {
 		sb.Base["CODEX_HOME"] = sb.Home() + "/.codex"
 		sb.HomeFile(t, ".codex/config.toml", "model = \"gpt-5.1-codex\"\n")
 		r.creds = map[string]string{"OPENAI_API_KEY": "test-key", "OPENAI_BASE_URL": srv.Base() + "/v1"}
+	case "opencode":
+		srv = clitest.NewOpenAIChat(script)
+		r.name, r.bin = executors.OpenCode, "opencode"
+		sb.HomeFile(t, ".config/opencode/opencode.json", `{"$schema":"https://opencode.ai/config.json","model":"fake/fake-model","provider":{"fake":{"npm":"@ai-sdk/openai-compatible","name":"Fake","options":{"baseURL":"`+srv.Base()+`/v1","apiKey":"test-key"},"models":{"fake-model":{"name":"Fake"}}}}}`)
+		r.creds = map[string]string{}
+	case "opencode-env":
+		// No config file at all: what a user seals for the executor (key and base URL variables) is all there is.
+		srv = clitest.NewAnthropic(script)
+		r.name, r.bin = executors.OpenCode, "opencode"
+		r.creds = map[string]string{"ANTHROPIC_API_KEY": "test-key", "ANTHROPIC_BASE_URL": srv.Base()}
+	case "opencode-openai":
+		srv = clitest.NewResponses(script)
+		r.name, r.bin = executors.OpenCode, "opencode"
+		r.creds = map[string]string{"OPENAI_API_KEY": "test-key", "OPENAI_BASE_URL": srv.Base()}
+	case "opencode-nokey":
+		srv = clitest.NewAnthropic(script)
+		r.name, r.bin = executors.OpenCode, "opencode"
+		r.creds = map[string]string{}
 	case "omp":
 		srv = clitest.NewOpenAIChat(script)
 		r.name, r.bin = executors.OMP, "omp"
@@ -145,7 +163,7 @@ func (r *rig) fixture(t *testing.T, name string) {
 	}
 }
 
-func clis() []string { return []string{"claude", "codex", "omp"} }
+func clis() []string { return []string{"claude", "codex", "omp", "opencode"} }
 
 // TestEditLevel: the CLI really uses its file tool in the repository, the runner streams it, reads the final
 // summary, the usage, the changed files and the diff stat.
@@ -206,6 +224,8 @@ func TestReadOnlyLevelRefusesToWrite(t *testing.T) {
 		// an item for a command that was refused, so only the model's own words show it. The file is what proves it.
 		"codex": "I will create hello.txt.",
 		"omp":   "Tool bash not found", // the tool is not offered at all
+		// the readonly agent offers only glob, grep and read: the scripted shell call is turned into an "invalid" call.
+		"opencode": "unavailable tool",
 	}
 	for _, cli := range clis() {
 		t.Run(cli, func(t *testing.T) {
@@ -291,5 +311,74 @@ func TestCancelStopsTheCLI(t *testing.T) {
 				t.Errorf("took %s to stop", d)
 			}
 		})
+	}
+}
+
+// TestOpenCodeFromEnvironment: with no config file, only the sealed variables, OpenCode talks to the Anthropic API at
+// the base URL it was given (as the other executors do).
+func TestOpenCodeFromEnvironment(t *testing.T) {
+	r := newRig(t, "opencode-env", writeThenSummarize("Created hello.txt."))
+	res, live := r.run(t, executors.Request{Policy: "sandboxed"})
+	t.Logf("%+v\n%s", res, live)
+	if res.Failed() || r.hello() != helloContent {
+		t.Fatalf("result %+v hello=%q\n%s", res, r.hello(), live)
+	}
+}
+
+// TestOpenCodeFromEnvironmentOpenAI: the same for the OpenAI provider (the Responses API).
+func TestOpenCodeFromEnvironmentOpenAI(t *testing.T) {
+	r := newRig(t, "opencode-openai", writeThenSummarize("Created hello.txt."))
+	res, live := r.run(t, executors.Request{Policy: "sandboxed"})
+	if res.Failed() || r.hello() != helloContent {
+		t.Fatalf("result %+v hello=%q\n%s", res, r.hello(), live)
+	}
+	if n := len(r.srv.Log.MainRequests()); n < 2 {
+		t.Errorf("%d requests", n)
+	}
+}
+
+// TestOpenCodeNoKey: with no credentials OpenCode must fail with a diagnosis, NOT fall back to its hosted free model
+// (which would send the task to a third party): the fake server must see nothing and the run must say the key is missing.
+func TestOpenCodeNoKey(t *testing.T) {
+	r := newRig(t, "opencode-nokey", writeThenSummarize("never"))
+	res, live := r.run(t, executors.Request{Policy: "sandboxed", Timeout: 60 * time.Second})
+	if !res.Failed() || !strings.Contains(res.Problem, "could not authenticate") {
+		t.Fatalf("result %+v\n%s", res, live)
+	}
+	if r.hello() != "" {
+		t.Errorf("wrote %q", r.hello())
+	}
+	r.fixture(t, "opencode-nokey")
+	t.Logf("summary=%q problem=%q", res.Summary, res.Problem)
+}
+
+// TestOpenCodeReadOnlyShell: the plan agent also refuses a write made through the shell tool.
+func TestOpenCodeReadOnlyShell(t *testing.T) {
+	r := newRig(t, "opencode", func(q *clitest.Request) clitest.Step {
+		if len(q.ToolResults) == 0 {
+			return clitest.Step{Text: "Writing through the shell.", Tools: []clitest.ToolUse{clitest.ShellStep(q, "printf hi > hello.txt")}}
+		}
+		return clitest.Step{Text: "Done."}
+	})
+	res, live := r.run(t, executors.Request{ReadOnly: true})
+	t.Logf("%+v\n%s", res, live)
+	if r.hello() != "" {
+		t.Fatalf("a read-only run wrote hello.txt through the shell: %q", r.hello())
+	}
+}
+
+// TestOpenCodeReadOnlyCanRead: the readonly agent still reads the repository.
+func TestOpenCodeReadOnlyCanRead(t *testing.T) {
+	var got string
+	r := newRig(t, "opencode", func(q *clitest.Request) clitest.Step {
+		if len(q.ToolResults) == 0 {
+			return clitest.Step{Text: "Reading.", Tools: []clitest.ToolUse{{Name: q.Tool("read"), Args: map[string]any{"filePath": "a.txt"}}}}
+		}
+		got = strings.Join(q.ToolResults, "\n")
+		return clitest.Step{Text: "a.txt says hi."}
+	})
+	res, live := r.run(t, executors.Request{ReadOnly: true})
+	if res.Failed() || res.Summary != "a.txt says hi." || !strings.Contains(got, "hi") {
+		t.Fatalf("result %+v tool result %q\n%s", res, got, live)
 	}
 }

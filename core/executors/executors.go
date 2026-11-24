@@ -41,10 +41,11 @@ const (
 
 // Output parsers (Executor.Parser).
 const (
-	ParserText       = "text"
-	ParserClaudeJSON = "claude-stream-json"
-	ParserCodexJSONL = "codex-jsonl"
-	ParserOMPJSON    = "omp-json"
+	ParserText         = "text"
+	ParserClaudeJSON   = "claude-stream-json"
+	ParserCodexJSONL   = "codex-jsonl"
+	ParserOMPJSON      = "omp-json"
+	ParserOpenCodeJSON = "opencode-json"
 )
 
 // Names of the builtin executors.
@@ -154,7 +155,7 @@ func (e *Executor) Validate() error {
 		return invalid("the command contains control characters")
 	case !binRe.MatchString(e.Binary):
 		return invalid("name the program the command runs (binary), for the installer check")
-	case e.Parser != "" && e.Parser != ParserText && e.Parser != ParserClaudeJSON && e.Parser != ParserCodexJSONL && e.Parser != ParserOMPJSON:
+	case e.Parser != "" && e.Parser != ParserText && e.Parser != ParserClaudeJSON && e.Parser != ParserCodexJSONL && e.Parser != ParserOMPJSON && e.Parser != ParserOpenCodeJSON:
 		return invalid("unknown output parser")
 	case len(e.InstallCommand) > MaxCommand:
 		return invalid("the install command is too long")
@@ -254,11 +255,31 @@ func Builtins() []Executor {
 			CredentialEnv: []string{"CODEX_API_KEY", "OPENAI_API_KEY", "OPENAI_BASE_URL"}, Parser: ParserCodexJSONL,
 		},
 		{
+			// Verified against opencode 1.19.6 (features/executors/clitest): `opencode run --format json` prints one JSON
+			// event per line (step_start, text, tool_use, step_finish with the token counts, error) and exits 1 after an
+			// error event. Three findings shaped the command:
+			//  - with no key at all OpenCode does NOT fail: it falls back to its own hosted free model (opencode zen) and
+			//    sends the task there. disabled_providers=["opencode"] (OPENCODE_CONFIG_CONTENT, which merges over the
+			//    user's config) turns that off, so a run without a key fails with "API key is missing".
+			//  - ANTHROPIC_BASE_URL and OPENAI_BASE_URL are ignored (the run went to api.anthropic.com), the base URL is
+			//    only read from the provider options of the config, so the command writes them there (".../v1" is added:
+			//    the AI SDK wants it, the sealed value has none, as for Claude Code).
+			//  - read-only is the builtin "plan" agent: it denies every edit (and shell write), verified by a scripted
+			//    write that failed with "a rule which prevents you from using this specific tool call". The plan agent may
+			//    still write markdown under .opencode/plans/. Edit needs no flag (file edits and the shell are allowed in
+			//    a headless run, anything that would ask is refused); full adds --auto (answers the asks yes).
 			Name: OpenCode, Title: "OpenCode", Kind: KindBuiltin, Enabled: true,
-			Description: "the open source coding agent CLI (opencode run); no read-only mode",
-			Command:     `opencode run {task}`,
-			Binary:      "opencode", InstallCommand: "npm install -g opencode-ai",
-			CredentialEnv: []string{"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY"}, Parser: ParserText,
+			Description: "the open source coding agent CLI (opencode run --format json), streaming its steps",
+			Command: `A="${ANTHROPIC_BASE_URL:+\"baseURL\":\"${ANTHROPIC_BASE_URL%/}/v1\"}"; O="${OPENAI_BASE_URL:+\"baseURL\":\"${OPENAI_BASE_URL%/}/v1\"}"; ` +
+				`OPENCODE_CONFIG_CONTENT="{\"disabled_providers\":[\"opencode\"],\"agent\":{\"readonly\":{\"mode\":\"primary\",\"description\":\"reads the code, changes nothing\",\"permission\":{\"*\":\"deny\",\"read\":\"allow\",\"grep\":\"allow\",\"glob\":\"allow\",\"list\":\"allow\"}}},\"provider\":{\"anthropic\":{\"options\":{$A}},\"openai\":{\"options\":{$O}}}}" ` +
+				`opencode run --format json {mode} {task} </dev/null`,
+			ModeFlags: map[Level]string{
+				LevelReadOnly: `--agent readonly`,
+				LevelEdit:     ``,
+				LevelFull:     `--auto`,
+			},
+			Binary: "opencode", InstallCommand: "npm install -g opencode-ai",
+			CredentialEnv: []string{"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_BASE_URL", "OPENAI_BASE_URL"}, Parser: ParserOpenCodeJSON,
 		},
 		{
 			// From omp.sh/docs (cli, modes, approvals, env): -p prints the final assistant text and exits; a headless

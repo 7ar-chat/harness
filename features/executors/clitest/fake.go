@@ -122,8 +122,11 @@ func WriteFileStep(r *Request, path, content string) ToolUse {
 	for _, name := range []string{"Write", "write", "write_file"} {
 		if t := r.Tool(name); t != "" {
 			key := "path"
-			if strings.Contains(string(r.ToolSchemas[t]), `"file_path"`) { // Claude Code
+			switch sch := string(r.ToolSchemas[t]); {
+			case strings.Contains(sch, `"file_path"`): // Claude Code
 				key = "file_path"
+			case strings.Contains(sch, `"filePath"`): // OpenCode
+				key = "filePath"
 			}
 			return ToolUse{t, map[string]any{key: path, "content": content}}
 		}

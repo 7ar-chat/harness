@@ -36,6 +36,8 @@ func NewParser(name string) Parser {
 		return &codexParser{}
 	case ParserOMPJSON:
 		return &ompParser{}
+	case ParserOpenCodeJSON:
+		return &openCodeParser{}
 	}
 	return &textParser{}
 }
@@ -250,7 +252,7 @@ func toolHint(raw json.RawMessage) string {
 	if json.Unmarshal(raw, &in) != nil {
 		return ""
 	}
-	for _, k := range []string{"file_path", "path", "command", "cmd", "pattern", "url", "query", "description"} {
+	for _, k := range []string{"file_path", "filePath", "path", "command", "cmd", "pattern", "url", "query", "description"} {
 		if v, ok := in[k].(string); ok && v != "" {
 			return firstLine(v, 160)
 		}
@@ -480,6 +482,95 @@ func (p *ompParser) Line(line string) string {
 }
 
 func (p *ompParser) Summary() Summary {
+	s := p.sum
+	s.Text = p.text
+	if p.failed {
+		s.Failed, s.Err = true, p.errText
+	}
+	return s
+}
+
+// openCodeParser reads `opencode run --format json` (checked against opencode 1.19.6): one JSON event per line, each
+// {type, timestamp, sessionID, part|error}: step_start; text (part.text, one per assistant message); tool_use (part.tool,
+// part.state{status completed|error, input, output|error, title}); step_finish (part.tokens{total,input,output,
+// reasoning,cache{read,write}}, part.cost, part.reason "tool-calls" or "stop"); and error ({name, data{message}}), after
+// which the CLI exits 1. The final text is the last text part.
+type openCodeParser struct {
+	sum     Summary
+	text    string
+	failed  bool
+	errText string
+}
+
+func (p *openCodeParser) Line(line string) string {
+	var ev struct {
+		Type string `json:"type"`
+		Part struct {
+			Text  string `json:"text"`
+			Tool  string `json:"tool"`
+			State struct {
+				Status string          `json:"status"`
+				Input  json.RawMessage `json:"input"`
+				Output string          `json:"output"`
+				Error  string          `json:"error"`
+				Title  string          `json:"title"`
+			} `json:"state"`
+			Tokens struct {
+				Total  int64 `json:"total"`
+				Input  int64 `json:"input"`
+				Output int64 `json:"output"`
+				Reason int64 `json:"reasoning"`
+				Cache  struct {
+					Read  int64 `json:"read"`
+					Write int64 `json:"write"`
+				} `json:"cache"`
+			} `json:"tokens"`
+			Cost float64 `json:"cost"`
+		} `json:"part"`
+		Error struct {
+			Name string `json:"name"`
+			Data struct {
+				Message string `json:"message"`
+			} `json:"data"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &ev); err != nil {
+		return nonJSON(line)
+	}
+	switch ev.Type {
+	case "text":
+		if t := strings.TrimSpace(ev.Part.Text); t != "" {
+			p.text = t
+			return t
+		}
+	case "tool_use":
+		st := ev.Part.State
+		switch st.Status {
+		case "error":
+			return "[tool error] " + ev.Part.Tool + ": " + firstLine(st.Error, maxProgress)
+		case "completed":
+			return "[tool " + ev.Part.Tool + "] " + toolHint(st.Input)
+		}
+	case "step_finish":
+		t := ev.Part.Tokens
+		total := t.Total
+		if total == 0 {
+			total = t.Input + t.Output + t.Reason + t.Cache.Read + t.Cache.Write
+		}
+		p.sum.Tokens += total
+		p.sum.USD += ev.Part.Cost
+	case "error":
+		p.failed = true
+		p.errText = ev.Error.Data.Message
+		if p.errText == "" {
+			p.errText = ev.Error.Name
+		}
+		return "[error] " + firstLine(p.errText, maxProgress)
+	}
+	return ""
+}
+
+func (p *openCodeParser) Summary() Summary {
 	s := p.sum
 	s.Text = p.text
 	if p.failed {
