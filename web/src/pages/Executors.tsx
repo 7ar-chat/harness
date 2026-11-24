@@ -78,6 +78,22 @@ function CredentialsForm({ ex, project, onDone }: { ex: ExecutorView; project?: 
   );
 }
 
+const AVAILABILITY: Record<string, { label: string; title: string; variant: "secondary" | "outline" }> = {
+  ready: { label: "ready", title: "The CLI is in the default sandbox image", variant: "secondary" },
+  install: { label: "will be installed on first use", title: "Not in the sandbox image: a run installs it first", variant: "outline" },
+  missing: { label: "not in the sandbox image", title: "Ask an admin to add it to the sandbox image", variant: "outline" },
+  unknown: { label: "unknown", title: "No sandbox to check, or the check has not answered yet", variant: "outline" },
+};
+
+function AvailabilityBadge({ value }: { value?: string }) {
+  const a = AVAILABILITY[value ?? "unknown"] ?? AVAILABILITY.unknown!;
+  return (
+    <Badge variant={a.variant} title={a.title} data-testid="executor-availability">
+      {a.label}
+    </Badge>
+  );
+}
+
 function ExecutorLine({ ex, project, actions }: { ex: ExecutorView; project?: string; actions?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
@@ -89,6 +105,7 @@ function ExecutorLine({ ex, project, actions }: { ex: ExecutorView; project?: st
         <Badge variant={ex.kind === "builtin" ? "secondary" : "outline"}>{ex.kind === "builtin" ? "Builtin" : "Project"}</Badge>
         {!ex.enabled ? <Badge variant="outline">disabled</Badge> : null}
         {ex.configured ? <Badge variant="secondary">credentials set</Badge> : null}
+        <AvailabilityBadge value={ex.availability} />
         <div className="ml-auto flex items-center gap-1">
           {ex.credentialEnv?.length ? (
             <Button size="sm" variant="outline" aria-expanded={open} aria-label={`Credentials for ${ex.name}`} onClick={() => setOpen((o) => !o)}>
@@ -99,6 +116,11 @@ function ExecutorLine({ ex, project, actions }: { ex: ExecutorView; project?: st
         </div>
       </div>
       {ex.description ? <p className="text-sm text-muted-foreground">{ex.description}</p> : null}
+      {ex.credentialEnv?.length ? (
+        <p className="text-xs text-muted-foreground">
+          Reads <code>{ex.credentialEnv.join(", ")}</code> from your Settings{ex.installCommand ? <>; installed on first use with <code>{ex.installCommand}</code></> : null}.
+        </p>
+      ) : null}
       {open ? <CredentialsForm ex={ex} project={project} onDone={() => setOpen(false)} /> : null}
     </li>
   );

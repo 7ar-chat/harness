@@ -40,6 +40,17 @@ describe("the Executors card in Settings", () => {
     expect(within(rows[1]!).queryByText("credentials set")).toBeNull();
   });
 
+  it("shows whether the CLI is in the sandbox image and which keys it reads", async () => {
+    mockFetch(routes({ "GET /api/executors": [ex("claude-code", { availability: "ready" }), ex("codex", { availability: "install" }), ex("omp", { availability: "unknown" })] }));
+    await renderApp("/profile");
+    const list = await screen.findByRole("list", { name: "Executors" });
+    const rows = within(list).getAllByRole("listitem");
+    expect(within(rows[0]!).getByText("ready")).toBeTruthy();
+    expect(within(rows[1]!).getByText("will be installed on first use")).toBeTruthy();
+    expect(within(rows[2]!).getByText("unknown")).toBeTruthy();
+    expect(within(rows[0]!).getByText("ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL")).toBeTruthy();
+  });
+
   it("seals credentials: a password field, only the changed values are sent, and they are never shown back", async () => {
     const f = mockFetch(routes({ "PUT /api/me/executors/codex/credentials": ex("codex", { configured: true }) }));
     await renderApp("/profile");

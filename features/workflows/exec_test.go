@@ -220,7 +220,9 @@ func TestWithoutASandboxTheCommandRunsAsATask(t *testing.T) {
 	// Arrange
 	r := newRig(t)
 	r.eng = wf.New(wf.Options{Store: r.store, Tasks: r.tasks,
-		Sandbox:        func(context.Context, core.Run, string, string) (sandbox.Sandbox, error) { return nil, errors.New("unused") },
+		Sandbox: func(context.Context, core.Run, string, string) (sandbox.Sandbox, error) {
+			return nil, errors.New("unused")
+		},
 		SandboxEnabled: func() bool { return false }})
 	w := r.publish("fallback", script("s", "make test"))
 

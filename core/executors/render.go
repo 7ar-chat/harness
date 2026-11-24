@@ -22,6 +22,9 @@ func Render(r *Result) string {
 	if r.Tokens > 0 || r.USD > 0 {
 		fmt.Fprintf(&b, "usage: %d tokens, $%.4f (as the CLI reported)\n", r.Tokens, r.USD)
 	}
+	if r.Problem != "" {
+		b.WriteString("problem: " + r.Problem + "\n")
+	}
 	b.WriteString("--- summary ---\n")
 	switch {
 	case r.Summary != "":

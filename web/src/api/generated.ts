@@ -147,6 +147,7 @@ export interface Executor {
 export interface ExecutorView extends Executor {
   configured: boolean;
   editable: boolean;
+  availability: string;
 }
 
 export interface FactoryReport {

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -322,6 +323,9 @@ func (p *Provider) Run(ctx context.Context, req executors.Request, onOutput func
 	}
 	res.Tokens, res.USD = sum.Tokens, sum.USD
 	res.Output = tail.String()
+	if res.Failed() {
+		res.Problem = Diagnose(*ex, res.Output+"\n"+res.Summary)
+	}
 	// What changed is read even when the run failed or timed out: the work may be partly done.
 	gctx, gcancel := context.WithTimeout(context.WithoutCancel(ctx), probeTimeout)
 	defer gcancel()
@@ -329,6 +333,28 @@ func (p *Provider) Run(ctx context.Context, req executors.Request, onOutput func
 	res.DiffStat = clip(redact(res.DiffStat), maxDiff)
 	p.finish(context.WithoutCancel(ctx), req, res, ex)
 	return res, nil
+}
+
+var (
+	missingRe = regexp.MustCompile(`(?i)command not found|: not found|no such file or directory|executable file not found|is not recognized`)
+	authRe    = regexp.MustCompile(`(?i)\b401\b|invalid[ _-]?(x-)?api[ _-]?key|incorrect api key|unauthori[sz]ed|authentication[ _-](failed|error|required)|not logged in|please (log ?in|run .*login)|missing (an )?api key|no api key|api key (is )?(not set|required|missing)|permission_denied|invalid_api_key`)
+)
+
+// Diagnose reads the end of a failed CLI run and, when it shows that the CLI is missing or could not authenticate,
+// returns a message for the user with the fix ("" otherwise).
+func Diagnose(ex executors.Executor, output string) string {
+	keys := strings.Join(ex.CredentialEnv, ", ")
+	switch {
+	case authRe.MatchString(output):
+		msg := fmt.Sprintf("%s could not authenticate: add your key in Settings > Executors", ex.Name)
+		if keys != "" {
+			msg += " (it reads " + keys + ")"
+		}
+		return msg + ", then run it again."
+	case missingRe.MatchString(output) && strings.Contains(strings.ToLower(output), strings.ToLower(ex.Binary)):
+		return fmt.Sprintf("%s (%s) is not installed in the sandbox image: ask an admin to add it, or enable executor installs so it is installed on first use.", ex.Name, ex.Binary)
+	}
+	return ""
 }
 
 // finish books what the run reported against the task and records the audit event.
@@ -345,8 +371,16 @@ func (p *Provider) finish(ctx context.Context, req executors.Request, res *execu
 	case ex == nil:
 		text = fmt.Sprintf("executor %s was cancelled", res.Executor)
 	}
+	if res.Problem != "" {
+		data["problem"] = res.Problem
+		text += ": " + res.Problem
+	}
 	if res.Tokens > 0 || res.USD > 0 {
 		data["tokens"], data["usd"] = res.Tokens, res.USD
+	} else if ex != nil {
+		// No numbers are invented from the wall time: the run is marked unpriced.
+		data["unpriced"] = true
+		text += "; cost not reported by this CLI"
 	}
 	p.event(ctx, req.TaskID, factory.EventExecutor, text, data)
 	if p.o.Store == nil {
