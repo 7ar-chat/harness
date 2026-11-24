@@ -172,6 +172,7 @@ export function RecipeGallery({ kind, canUse, onUse, onDelete }: { kind?: Recipe
 
 function ParamField({ p, value, error, onChange }: { p: Param; value: string; error?: string; onChange: (v: string) => void }) {
   const id = `rp-${p.key}`;
+  const [customCron, setCustomCron] = useState(false); // "Custom" chosen: only then the raw cron expression is shown
   const effective = value !== "" ? value : (p.default ?? "");
   let input: ReactNode;
   switch (p.type) {
@@ -199,9 +200,16 @@ function ParamField({ p, value, error, onChange }: { p: Param; value: string; er
       break;
     case "cron": {
       const preset = CRON_CHOICES.find((c) => c.cron === effective)?.cron ?? "custom";
+      const raw = preset === "custom" || customCron;
       input = (
         <div className="grid gap-2 sm:grid-cols-2">
-          <Select value={preset} onValueChange={(v) => v !== "custom" && onChange(v)}>
+          <Select
+            value={raw ? "custom" : preset}
+            onValueChange={(v) => {
+              setCustomCron(v === "custom");
+              if (v !== "custom") onChange(v);
+            }}
+          >
             <SelectTrigger className="w-full" aria-label={`${p.label}: common choices`}>
               <SelectValue />
             </SelectTrigger>
@@ -214,7 +222,7 @@ function ParamField({ p, value, error, onChange }: { p: Param; value: string; er
               <SelectItem value="custom">Custom</SelectItem>
             </SelectContent>
           </Select>
-          <Input id={id} value={value} placeholder={p.default} onChange={(e) => onChange(e.target.value)} className="font-mono" aria-invalid={!!error} aria-label={p.label} />
+          {raw ? <Input id={id} value={value} placeholder={p.default} onChange={(e) => onChange(e.target.value)} className="font-mono" aria-invalid={!!error} aria-label={p.label} /> : null}
         </div>
       );
       break;
@@ -354,7 +362,7 @@ export function RecipeWizard({ projectId, recipe, canCreate, onClose }: { projec
               </p>
               {isSchedule || b.cron ? (
                 <p className="text-xs text-muted-foreground">
-                  Runs on <code>{cron}</code> ({zone})
+                  Runs {CRON_CHOICES.find((c) => c.cron === cron)?.label.replace(/^Every day/, "every day").replace(/^Every/, "every").replace(/^Weekdays/, "weekdays") ?? <>on <code>{cron}</code></>} ({zone})
                 </p>
               ) : b.event ? (
                 <p className="text-xs text-muted-foreground">

@@ -107,6 +107,9 @@ describe("the Recipes tab", () => {
     await renderApp("/p/p1?tab=recipes");
     fireEvent.click(await page().findByRole("button", { name: "Use this recipe" }));
     const dlg = within(await screen.findByRole("dialog"));
+    expect(dlg.queryByLabelText("When to run")).toBeNull(); // a common choice: no raw cron on screen
+    fireEvent.click(dlg.getByRole("combobox", { name: "When to run: common choices" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Custom" }));
     fireEvent.change(dlg.getByLabelText("When to run"), { target: { value: "every day" } });
     expect(dlg.getByText("Five fields, for example 0 2 * * *")).toBeTruthy();
     expect((dlg.getByRole("button", { name: "Create" }) as HTMLButtonElement).disabled).toBe(true);
