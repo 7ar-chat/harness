@@ -504,7 +504,7 @@ async function main() {
     await visible(note, "the notice");
     await visible(note.getByText(/Reviews are off/), "the notice says reviews are off");
     eq(await page.getByText(/not independent/).count(), 0, "no claim that reviews are not independent");
-    eq(await note.getByRole("link", { name: "Learn more" }).getAttribute("href"), "#/help?a=reviews", "the Learn more link");
+    eq(((await note.getByRole("link", { name: "Learn more" }).getAttribute("href")) ?? "").endsWith("#/help?a=reviews"), true, "the Learn more link");
     await page.getByRole("button", { name: /New task/ }).click();
     const dlg = page.getByRole("dialog");
     await dlg.getByRole("button", { name: /Advanced options/ }).click();
@@ -1267,11 +1267,19 @@ async function main() {
     const member = card.getByRole("link", { name: /Invite a teammate/ });
     if (!/tab=members/.test((await member.getAttribute("href")) ?? "")) throw new Error("the teammate step does not link to the members tab");
     const explorer = np.getByRole("navigation", { name: "Explorer" }).getByRole("region", { name: "Getting started" });
-    await nvisible(explorer, "the explorer card");
+    eq(await explorer.filter({ visible: true }).count(), 0, "the explorer shows no second Getting started next to the dashboard card");
     await ishot(np, "onboarding-dashboard-checklist");
+    // on another page the folded line is there; dismissing the dashboard card dismisses it too
+    await np.goto(`${base}/#/inbox`);
+    await nvisible(explorer, "the explorer card on another page");
+    await np.goto(`${base}/#/`);
+    await nvisible(card, "the checklist on the dashboard again");
     await card.getByRole("button", { name: "Dismiss" }).click();
     await gone(card, "the checklist dismissed");
+    await np.goto(`${base}/#/inbox`);
+    await nvisible(np.getByRole("navigation", { name: "Explorer" }), "the explorer");
     eq(await explorer.filter({ visible: true }).count(), 0, "the explorer card is dismissed with it");
+    await np.goto(`${base}/#/`);
     await np.reload();
     await nvisible(main.getByRole("heading", { name: "Dashboard" }), "the dashboard again");
     eq(await main.getByRole("region", { name: "Getting started" }).count(), 0, "dismissed for good");

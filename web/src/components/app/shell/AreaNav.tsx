@@ -20,8 +20,8 @@ export function AreaNav({ area, current, projectId, owner = true, navClassName, 
   const tabId = (id: string) => `${uid}-tab-${id}`;
   return (
     <>
-      <div className={cn("-mx-1 overflow-x-auto px-1 pb-1", navClassName)}>
-        <div ref={list} role="tablist" aria-label={`${area.label} views`} className="inline-flex w-max gap-1 rounded-lg bg-muted p-1">
+      <div className={cn("pb-1", navClassName)}>
+        <div ref={list} role="tablist" aria-label={`${area.label} views`} className="inline-flex max-w-full flex-wrap gap-1 rounded-lg bg-muted p-1">
           {views.map((v, i) => {
             const on = v.id === current;
             return (
