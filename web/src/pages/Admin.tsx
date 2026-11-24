@@ -67,7 +67,7 @@ export function AdminPage() {
   const tab = TABS.find((t) => t.value === status)!;
   return (
     <div className="h-full overflow-y-auto">
-      <div className="flex max-w-3xl flex-col gap-4 p-4 md:p-6">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 md:p-8">
         <div>
           <h1 className="text-xl font-semibold">Admin</h1>
           <p className="text-sm text-muted-foreground">Who may sign in to this server, and which git servers agents may use.</p>

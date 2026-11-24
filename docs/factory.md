@@ -163,6 +163,7 @@ GET    /api/projects/{pid}/tasks/{tid}              baseBranch?,budget?,maxAttem
 POST   /api/projects/{pid}/tasks/{tid}/cancel | /resume {feedback?, budget?}
 GET/POST /api/projects/{pid}/triggers (owner)   DELETE /api/projects/{pid}/triggers/{trid} (owner)
 GET    /api/projects/{pid}/factory/report?days=
+GET    /api/projects/{pid}/factory/status      (members and owners) {review: "independent"|"same_model"|"off", independentReview, canAutoMerge}
 POST   /hooks/github                           (HMAC-verified; no session)
 ```
 
