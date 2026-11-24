@@ -2,6 +2,7 @@ package executors
 
 import (
 	"fmt"
+	"github.com/7ar-chat/harness/core/money"
 	"strings"
 	"time"
 )
@@ -20,7 +21,7 @@ func Render(r *Result) string {
 	}
 	b.WriteString(head + "\n")
 	if r.Tokens > 0 || r.USD > 0 {
-		fmt.Fprintf(&b, "usage: %d tokens, $%.4f (as the CLI reported)\n", r.Tokens, r.USD)
+		fmt.Fprintf(&b, "usage: %d tokens, %s (as the CLI reported)\n", r.Tokens, money.FormatUSD(r.USD))
 	}
 	if r.Problem != "" {
 		b.WriteString("problem: " + r.Problem + "\n")

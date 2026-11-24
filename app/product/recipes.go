@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/7ar-chat/harness/core/money"
 	"io"
 	"log/slog"
 	"net/http"
@@ -863,9 +864,9 @@ func recipeCost(r recipes.Recipe) string {
 	}
 	switch r.Kind {
 	case recipes.KindSchedule:
-		return fmt.Sprintf("About $%.2f or less per run", r.Suggest.MaxUSD)
+		return fmt.Sprintf("About %s or less per run", money.FormatUSD(r.Suggest.MaxUSD))
 	default:
-		return fmt.Sprintf("Capped at $%.2f per task", r.Suggest.MaxUSD)
+		return fmt.Sprintf("Capped at %s per task", money.FormatUSD(r.Suggest.MaxUSD))
 	}
 }
 

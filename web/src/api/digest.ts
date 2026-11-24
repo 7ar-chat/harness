@@ -1,7 +1,7 @@
 // The weekly digest of a project (GET/PUT .../digest, POST .../digest/send) and the TAPD connection of its requirements.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api, isUnsupported } from "./client";
+import { api, ApiError, isUnsupported } from "./client";
 import { toastError } from "./queries";
 import type { DigestSendResult, DigestView, RequirementImport, TapdStatus } from "./types";
 
@@ -43,15 +43,21 @@ export const usePutDigest = (pid: string) => {
   });
 };
 
-export const useSendDigest = (pid: string) => {
+/** A week without activity is not sent unless the person confirms: the server answers 409 quiet_week and the caller asks. */
+export const isQuietWeek = (e: unknown) => e instanceof ApiError && e.status === 409 && e.code === "quiet_week";
+
+export const useSendDigest = (pid: string, onQuietWeek?: (message: string) => void) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api.post<DigestSendResult>(`/projects/${pid}/digest/send`),
+    mutationFn: (b: { force?: boolean } = {}) => api.post<DigestSendResult>(`/projects/${pid}/digest/send`, b.force ? { force: true } : {}),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: digestKey(pid) });
       toast.success("Digest sent");
     },
-    onError: toastError,
+    onError: (e) => {
+      if (isQuietWeek(e) && onQuietWeek) return onQuietWeek((e as ApiError).message);
+      toastError(e);
+    },
   });
 };
 

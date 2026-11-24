@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { openSse } from "@/lib/sse";
 import { cue, soundFor } from "@/lib/sound";
 import { qk, useMe } from "@/api/queries";
+import { digestKey } from "@/api/digest";
 import { fk } from "@/api/factory";
 import type { FeedEvent, Overview, ThreadStatus } from "@/api/types";
 
@@ -33,6 +34,13 @@ const NEEDS_YOU: Record<string, string> = {
   waiting_input: "has a question for you",
   failed: "failed",
 };
+
+/** digest.ready: the project to tell this person about, or null when they do not have it in their overview. */
+export function digestToast(o: Overview | undefined, ev: FeedEvent): { projectId: string; name: string } | null {
+  if (ev.type !== "digest.ready" || !ev.projectId) return null;
+  const p = o?.projects.find((x) => x.id === ev.projectId);
+  return p ? { projectId: p.id, name: p.name } : null;
+}
 
 /** Mirror a feed event into the cached overview so the sidebar updates before the refetch lands. */
 export function patchOverview(o: Overview, ev: FeedEvent): Overview {
@@ -85,6 +93,12 @@ export function FeedProvider({ children }: { children: ReactNode }) {
       if (ev.type === "task.created" || ev.type === "task.updated" || ev.type === "task.blocked") void qc.invalidateQueries({ queryKey: fk.all });
       if (ev.type === "workflow.changed" || ev.type === "workflow.run" || ev.type === "workflow.gate") void qc.invalidateQueries({ queryKey: ["workflows"] });
       if (ev.type === "memory.changed" || ev.type === "run.finished") void qc.invalidateQueries({ queryKey: ["memory"] });
+      if (ev.type === "digest.ready") {
+        if (ev.projectId) void qc.invalidateQueries({ queryKey: digestKey(ev.projectId) });
+        void qc.invalidateQueries({ queryKey: ["me-notifications"] });
+        const d = digestToast(qc.getQueryData<Overview>(qk.overview), ev);
+        if (d) toast("The weekly digest is ready", { description: d.name, action: { label: "Open", onClick: () => void navigate({ to: "/p/$projectId", params: { projectId: d.projectId }, search: { tab: "insights" } }) } });
+      }
       if (ev.type === "schedule.updated") void qc.invalidateQueries({ queryKey: ["schedules"] });
       const sound = soundFor(ev, { me: meRef.current, watching: document.hasFocus() && !document.hidden ? openThread.current : undefined });
       if (sound) cue(sound);

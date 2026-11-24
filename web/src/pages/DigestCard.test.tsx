@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { mockFetch } from "@/test/fetch";
+import { mockFetch, reply } from "@/test/fetch";
 import { me, overview, project, shellRoutes } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 
@@ -65,6 +65,28 @@ describe("Weekly digest card", () => {
     expect(within(list).getByText("sent on request")).toBeTruthy();
     expect(within(list).getByRole("link", { name: "Open report" }).getAttribute("href")).toBe("/api/projects/p1/digest/dg_1/report");
     expect(within(list).getByRole("link", { name: /Download the report/ }).getAttribute("href")).toBe("/api/projects/p1/digest/dg_1/report?download=1");
+  });
+
+  it("asks before sending a quiet week and sends with force when the owner confirms", async () => {
+    const sent = { id: "dg_2", createdAt: "2026-11-24T09:00:00Z", from: "2026-11-17T09:00:00Z", to: "2026-11-24T09:00:00Z", summary: "A quiet week", trigger: "manual", url: "/api/projects/p1/digest/dg_2/report" };
+    const msg = "Nothing happened in the last 7 days. Send a short 'quiet week' digest anyway?";
+    const m = mockFetch(
+      routes("owner", view(), {
+        "POST /api/projects/p1/digest/send": (c: { body: unknown }) => ((c.body as { force?: boolean } | undefined)?.force ? { digest: sent } : reply(409, { error: { code: "quiet_week", message: msg } })),
+      }),
+    );
+    await renderApp("/p/p1?tab=insights");
+    const card = within(await screen.findByTestId("digest-card"));
+    fireEvent.click(card.getByRole("button", { name: /Send one now/ }));
+    const dialog = within(await screen.findByRole("alertdialog"));
+    expect(dialog.getByText(msg)).toBeTruthy();
+    fireEvent.click(dialog.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(m.find("POST", "/api/projects/p1/digest/send")).toHaveLength(1);
+    fireEvent.click(card.getByRole("button", { name: /Send one now/ }));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Send anyway" }));
+    await waitFor(() => expect(m.find("POST", "/api/projects/p1/digest/send")).toHaveLength(3));
+    expect(m.find("POST", "/api/projects/p1/digest/send")[2]?.body).toEqual({ force: true });
   });
 
   it("is read-only for a member", async () => {

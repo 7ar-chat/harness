@@ -3,10 +3,11 @@ import { CircleHelp, PanelBottom, PanelLeft } from "lucide-react";
 import { useMe, useOverview } from "@/api/queries";
 import { useUsage } from "@/api/schedulesUsage";
 import { useEnvironments } from "@/chat/environment";
+import { formatUsd } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { useShell } from "./context";
 
-const usd = (n: number) => `$${n.toFixed(n >= 100 ? 0 : 2)}`;
+const usd = formatUsd;
 const repoName = (url?: string) => (url ? url.replace(/^(https?:\/\/|ssh:\/\/|git@)/, "").replace(/^[^/:]+[/:]/, "").replace(/\.git$/, "") : "");
 
 const Btn = ({ pressed, className, ...p }: { pressed?: boolean } & React.ButtonHTMLAttributes<HTMLButtonElement>) => (

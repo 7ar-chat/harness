@@ -5,6 +5,7 @@ import { Download, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useDigest, usePutDigest, useSendDigest, type DigestView } from "@/api/digest";
 import { localZone } from "@/api/insights";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -92,7 +93,8 @@ function Form({ projectId, v }: { projectId: string; v: DigestView }) {
 /** The card. Hidden when the server keeps no digests. */
 export function DigestCard({ projectId }: { projectId: string }) {
   const q = useDigest(projectId);
-  const send = useSendDigest(projectId);
+  const [quiet, setQuiet] = useState<string>();
+  const send = useSendDigest(projectId, (m) => setQuiet(m));
   if (q.isLoading || q.error || !q.data) return null;
   const v = q.data;
   return (
@@ -108,7 +110,7 @@ export function DigestCard({ projectId }: { projectId: string }) {
           </p>
         </div>
         {v.canEdit ? (
-          <Button variant="outline" size="sm" disabled={send.isPending} onClick={() => send.mutate()}>
+          <Button variant="outline" size="sm" disabled={send.isPending} onClick={() => send.mutate({})}>
             <Send className="size-4" aria-hidden /> Send one now
           </Button>
         ) : null}
@@ -140,6 +142,18 @@ export function DigestCard({ projectId }: { projectId: string }) {
           </ul>
         )}
       </div>
+      <AlertDialog open={quiet !== undefined} onOpenChange={(o) => !o && setQuiet(undefined)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>A quiet week</AlertDialogTitle>
+            <AlertDialogDescription>{quiet}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => send.mutate({ force: true })}>Send anyway</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

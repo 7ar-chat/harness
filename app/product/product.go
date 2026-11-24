@@ -266,6 +266,7 @@ func (s *server) Install(hs *httpapi.Server) error {
 	s.routeUsage()
 	s.routeInsights()
 	s.routeDigest()
+	s.routeActivity()
 	if err := s.routeTapd(); err != nil {
 		return err
 	}

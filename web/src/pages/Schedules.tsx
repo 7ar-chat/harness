@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { AddFromRecipe, ShareRecipeDialog } from "@/lib/lazyPages";
+import { formatUsd } from "@/lib/money";
 
 /** The schedules people reach for most; anything else is typed as cron ("0 9 * * 1-5") or "@every 90m". */
 export const CRON_PRESETS: { label: string; cron: string }[] = [
@@ -58,7 +59,7 @@ export function formatIn(iso: string, timeZone: string): string {
 }
 
 const rel = (iso: string) => formatDistanceToNowStrict(new Date(iso), { addSuffix: true });
-const money = (usd: number) => (usd >= 1 ? `$${usd.toFixed(2)}` : `$${usd.toFixed(4)}`);
+const money = formatUsd;
 const dur = (a: string, b?: string) => {
   if (!b) return "";
   const s = Math.max(0, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 1000));

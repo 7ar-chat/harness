@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { formatUsd } from "@/lib/money";
 
 const RANGES: { key: string; label: string }[] = [
   { key: "day", label: "Last 24 hours" },
@@ -33,7 +34,7 @@ const KINDS: { key: string; label: string }[] = [
   { key: "schedule", label: "Scheduled tasks" },
 ];
 
-export const money = (usd: number) => (usd >= 100 ? `$${usd.toFixed(0)}` : usd >= 1 ? `$${usd.toFixed(2)}` : usd === 0 ? "$0" : `$${usd.toFixed(4)}`);
+export const money = formatUsd;
 export const tokens = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e4 ? `${(n / 1e3).toFixed(1)}k` : n.toLocaleString());
 
 /** The share of the input served from the provider's cache, 0 to 1. */

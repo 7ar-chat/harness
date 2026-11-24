@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/7ar-chat/harness/core/money"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -369,7 +370,7 @@ func (s *server) checkBudgets(project, login string) {
 		}
 		for _, l := range who {
 			s.emitNotification(notify.Event{Key: fmt.Sprintf("budget:%s:%s:%s:%s", scope, id, month, name), Window: notifyBudgetWindow, Kind: kind, ProjectID: proj,
-				Title: title, Body: fmt.Sprintf("$%.2f of $%.2f this month", v.SpentUSD, v.MonthlyUSD), Login: l,
+				Title: title, Body: fmt.Sprintf("%s of %s this month", money.FormatUSD(v.SpentUSD), money.FormatUSD(v.MonthlyUSD)), Login: l,
 				URL: s.appURL("/#/usage"), Data: map[string]any{"spentUsd": v.SpentUSD, "monthlyUsd": v.MonthlyUSD}})
 		}
 	}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FeedEvent, Overview, ThreadSummary } from "@/api/types";
-import { patchOverview } from "./feed";
+import { digestToast, patchOverview } from "./feed";
 
 const th = (id: string, extra: Partial<ThreadSummary> = {}): ThreadSummary => ({ id, title: `T ${id}`, status: "idle", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z", ...extra });
 const overview = (): Overview => ({
@@ -52,5 +52,16 @@ describe("patchOverview", () => {
     expect(o).toEqual(before);
     patchOverview(before, ev({}));
     expect(JSON.stringify(before)).toBe(snapshot);
+  });
+});
+
+describe("digestToast", () => {
+  const e = (x: Partial<FeedEvent>) => ev({ type: "digest.ready", threadId: undefined, ...x });
+  it("names the project for a member and stays quiet for everyone else", () => {
+    expect(digestToast(overview(), e({ projectId: "pr" }))).toEqual({ projectId: "pr", name: "proj" });
+    expect(digestToast(overview(), e({ projectId: "other" }))).toBeNull();
+    expect(digestToast(undefined, e({ projectId: "pr" }))).toBeNull();
+    expect(digestToast(overview(), e({}))).toBeNull();
+    expect(digestToast(overview(), ev({ type: "run.started", projectId: "pr" }))).toBeNull();
   });
 });

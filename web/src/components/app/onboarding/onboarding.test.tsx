@@ -78,6 +78,20 @@ describe("getting-started checklist", () => {
     expect(card().getByRole("link", { name: /Set a spend cap/ }).getAttribute("href")).toContain("tab=usage");
   });
 
+  it("ticks the approval step from the server's audit counts, in a browser that never approved", async () => {
+    mockFetch({ ...withProject().routes, "GET /api/me/activity-summary": { approvalsDecided: 2, tasksHandedOff: 0, sessionsStarted: 1, membersInvited: 0 } });
+    await renderApp("/");
+    expect(await card().findByText(/4 of 7 done/)).toBeTruthy();
+    expect(card().getByRole("link", { name: /Approve your first action.*\(done\)/ })).toBeTruthy();
+  });
+
+  it("leaves the approval step open when the server counts none and nothing was marked", async () => {
+    mockFetch({ ...withProject().routes, "GET /api/me/activity-summary": { approvalsDecided: 0, tasksHandedOff: 0, sessionsStarted: 1, membersInvited: 0 } });
+    await renderApp("/");
+    expect(await card().findByText(/3 of 7 done/)).toBeTruthy();
+    expect(card().getByRole("link", { name: /Approve your first action.*\(to do\)/ })).toBeTruthy();
+  });
+
   it("can be dismissed for good", async () => {
     mockFetch(shellRoutes());
     await renderApp("/");

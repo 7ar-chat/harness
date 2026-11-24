@@ -27,9 +27,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { AddFromRecipe, ShareRecipeDialog } from "@/lib/lazyPages";
 import type { ShareSource } from "./Recipes";
+import { formatUsd } from "@/lib/money";
 
 const ago = (iso: string) => `${formatDistanceToNowStrict(new Date(iso))} ago`;
-const usd = (n: number) => `$${n.toFixed(n >= 100 ? 0 : 2)}`;
+const usd = formatUsd;
 const num = (s: string) => {
   const n = Number(s);
   return s.trim() !== "" && Number.isFinite(n) && n > 0 ? n : undefined;

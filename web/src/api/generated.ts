@@ -7,6 +7,13 @@ export interface ActiveRun {
   status: string;
 }
 
+export interface ActivitySummary {
+  approvalsDecided: number;
+  tasksHandedOff: number;
+  sessionsStarted: number;
+  membersInvited: number;
+}
+
 export type ApprovalDecision = "approve" | "deny" | "respond";
 
 export interface Attachment {

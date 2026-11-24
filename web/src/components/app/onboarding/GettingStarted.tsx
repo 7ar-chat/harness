@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, X } from "lucide-react";
 import { api } from "@/api/client";
+import { useActivitySummary } from "@/api/activity";
 import { fk } from "@/api/factory";
 import { useMembers, useOverview } from "@/api/queries";
 import { useUsage } from "@/api/schedulesUsage";
@@ -34,6 +35,8 @@ export function useChecklist(projectId?: string): { steps: Step[]; done: number 
   const pid = projectId ?? overview?.projects[0]?.id ?? "";
   const tasks = useQuery({ queryKey: fk.tasks(pid), queryFn: () => api.get<FactoryTask[]>(`/projects/${pid}/tasks?limit=500`), enabled: !!pid, retry: false });
   const members = useMembers(pid);
+  // Approving is something the server knows from the audit log: anyone who ever approved ticks it, in any browser. The local mark ticks it at once.
+  const activity = useActivitySummary().data;
   const usage = useUsage({ projectId: pid || undefined, range: "month", group: "day" });
   const projects = overview?.projects ?? [];
   const sessions = [...(overview?.personal ?? []), ...projects.flatMap((p) => p.threads)].filter((t) => t.kind !== "supervisor");
@@ -43,7 +46,7 @@ export function useChecklist(projectId?: string): { steps: Step[]; done: number 
     { id: "github", label: "Connect GitHub or add a repository", hint: "So agents can work on your real code.", done: gh.ready || projects.some((p) => !!p.repoUrl), href: "/connectors" },
     { id: "project", label: "Create a project", hint: "A repository your agents work in.", done: hasProject, onGo: newProject },
     { id: "session", label: "Start your first session", hint: "Chat with an agent and watch it work.", done: sessions.length > 0, onGo: () => newSession(pid || undefined) },
-    { id: "approve", label: "Approve your first action", hint: "Agents ask before risky steps. Answer one.", done: !!state.marked?.approved, href: helpHref("approvals") },
+    { id: "approve", label: "Approve your first action", hint: "Agents ask before risky steps. Answer one.", done: !!state.marked?.approved || (activity?.approvalsDecided ?? 0) > 0, href: helpHref("approvals") },
     { id: "task", label: "Hand off your first task", hint: "Let an agent work on its own and open a pull request.", done: (tasks.data?.length ?? 0) > 0, href: pid ? projectHref(pid, "tasks") : undefined, onGo: needProject(() => undefined) },
     { id: "member", label: "Invite a teammate", hint: "Share the project with the people you work with.", done: (members.data?.length ?? 0) > 1, href: pid ? projectHref(pid, "members") : undefined, onGo: needProject(() => undefined) },
     { id: "cap", label: "Set a spend cap", hint: "A monthly limit, so cost never surprises you.", done: (usage.data?.cap?.monthlyUsd ?? 0) > 0, href: pid ? projectHref(pid, "usage") : "/usage" },

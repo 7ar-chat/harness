@@ -243,7 +243,7 @@ func TestFormatting(t *testing.T) {
 			t.Errorf("Duration(%v) = %q, want %q", in, got, want)
 		}
 	}
-	if insights.Money(0.004) != "$0.0040" || insights.Money(41.2) != "$41.20" {
+	if insights.Money(0.004) != "$0.004" || insights.Money(41.2) != "$41.20" {
 		t.Error("money")
 	}
 	if insights.Percentile([]float64{4, 1, 3, 2}, 0.5) != 2 || insights.Percentile(nil, 0.9) != 0 {

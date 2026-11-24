@@ -18,7 +18,7 @@ describe("Usage page", () => {
   it("shows the cost, the cache split, the kinds of work and the daily chart", async () => {
     const m = mockFetch({ ...shellRoutes(), "GET /api/usage": view() });
     await renderApp("/usage");
-    expect((await page().findAllByText("$0.4321")).length).toBeGreaterThan(0);
+    expect((await page().findAllByText("$0.43")).length).toBeGreaterThan(0);
     expect(page().getByText("60%")).toBeTruthy(); // 18k of 30k input read from the cache
     expect(page().getByLabelText(/Fresh input 28%, Cache read 56%, Cache write 9%, Output 6%/, { selector: "div" })).toBeTruthy();
     expect(page().getByText("Interactive sessions")).toBeTruthy();
@@ -110,9 +110,9 @@ describe("Usage page", () => {
 describe("usage formatting", () => {
   it("formats money, token counts and the cache hit rate", () => {
     expect(money(0)).toBe("$0");
-    expect(money(0.01234)).toBe("$0.0123");
+    expect(money(0.00234)).toBe("$0.0023");
     expect(money(12.345)).toBe("$12.35");
-    expect(money(1234.5)).toBe("$1235");
+    expect(money(1234.5)).toBe("$1,234.50");
     expect(tokens(950)).toBe("950");
     expect(tokens(25_000)).toBe("25.0k");
     expect(tokens(3_400_000)).toBe("3.40M");

@@ -131,6 +131,6 @@ describe("insights formatting", () => {
     expect(duration(11400)).toBe("3h 10m");
     expect(duration(2 * 86400 + 4 * 3600)).toBe("2d 4h");
     expect(money(41.2)).toBe("$41.20");
-    expect(money(0.004)).toBe("$0.0040");
+    expect(money(0.004)).toBe("$0.004");
   });
 });

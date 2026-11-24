@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/7ar-chat/harness/core/money"
 	"log/slog"
 	"math"
 	"net/http"
@@ -500,7 +501,7 @@ func validBudget(b factory.Budget) error {
 func describeBudget(b factory.Budget) string {
 	usd, tokens := "no $ cap", "no token cap"
 	if b.MaxUSD > 0 {
-		usd = fmt.Sprintf("$%.2f", b.MaxUSD)
+		usd = money.FormatUSD(b.MaxUSD)
 	}
 	if b.MaxTokens > 0 {
 		tokens = fmt.Sprintf("%d tokens", b.MaxTokens)
@@ -523,7 +524,7 @@ func (s *server) changeBudget(w http.ResponseWriter, r *http.Request, c Caller, 
 	}
 	if b.MaxUSD > 0 && b.MaxUSD <= t.Spent.USD || b.MaxTokens > 0 && b.MaxTokens <= t.Spent.Tokens {
 		writeError(w, http.StatusBadRequest, "invalid_budget",
-			fmt.Sprintf("the task already spent $%.2f and %d tokens; set a higher cap, or 0 to remove it.", t.Spent.USD, t.Spent.Tokens))
+			fmt.Sprintf("the task already spent %s and %d tokens; set a higher cap, or 0 to remove it.", money.FormatUSD(t.Spent.USD), t.Spent.Tokens))
 		return false
 	}
 	ctx := r.Context()

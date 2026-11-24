@@ -18,6 +18,7 @@ package insights
 
 import (
 	"fmt"
+	"github.com/7ar-chat/harness/core/money"
 	"math"
 	"sort"
 	"strings"
@@ -934,13 +935,8 @@ func Duration(sec float64) string {
 	return fmt.Sprintf("%dd %dh", days, h)
 }
 
-// Money formats dollars: "$41.20", with more digits under a cent.
-func Money(usd float64) string {
-	if usd > 0 && usd < 0.01 {
-		return fmt.Sprintf("$%.4f", usd)
-	}
-	return fmt.Sprintf("$%.2f", usd)
-}
+// Money formats dollars the one way the product shows them (see core/money).
+func Money(usd float64) string { return money.FormatUSD(usd) }
 
 // Percent formats a 0..1 share as "82%".
 func Percent(r float64) string { return fmt.Sprintf("%.0f%%", r*100) }

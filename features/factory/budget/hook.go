@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/7ar-chat/harness/core/money"
 	"log/slog"
 	"slices"
 
@@ -52,7 +53,7 @@ func (g *Guard) finished(ctx context.Context, f *runtime.Finish) {
 	}
 	g.event(ctx, taskID, factory.TaskEvent{
 		Kind: factory.EventBudget,
-		Text: fmt.Sprintf("run spent $%.4f, %d tokens (task total $%.4f, %d tokens)", spend.USD, spend.Tokens, t.Spent.USD, t.Spent.Tokens),
+		Text: fmt.Sprintf("run spent %s, %d tokens (task total %s, %d tokens)", money.FormatUSD(spend.USD), spend.Tokens, money.FormatUSD(t.Spent.USD), t.Spent.Tokens),
 		Data: map[string]any{
 			"runId": run.ID, "usd": spend.USD, "tokens": spend.Tokens, "unpriced": spend.Unpriced,
 			"totalUsd": t.Spent.USD, "totalTokens": t.Spent.Tokens,

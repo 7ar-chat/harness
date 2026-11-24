@@ -10,12 +10,13 @@ import { useGateAction } from "@/api/workflows";
 import type { InboxDoc, FeedEvent } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { useFeed } from "@/lib/feed";
+import { formatUsd } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { StatusDot } from "../common";
 import { NavLink, useShell, type PanelTab } from "./context";
 import { projectHref } from "./tabs";
 
-const usd = (n: number) => `$${n.toFixed(n >= 100 ? 0 : 2)}`;
+const usd = formatUsd;
 const ago = (iso: string) => {
   try {
     return `${formatDistanceToNowStrict(new Date(iso))} ago`;

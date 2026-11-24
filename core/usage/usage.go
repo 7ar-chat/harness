@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/7ar-chat/harness/core/money"
 	"sort"
 	"time"
 )
@@ -60,7 +61,7 @@ func (e *CapError) Error() string {
 	if e.Scope == ScopeProject {
 		who = "This project's monthly spend cap"
 	}
-	return fmt.Sprintf("%s ($%.2f) is used up: $%.2f spent this month. An owner can raise it on the Usage page.", who, e.CapUSD, e.SpentUSD)
+	return fmt.Sprintf("%s (%s) is used up: %s spent this month. An owner can raise it on the Usage page.", who, money.FormatUSD(e.CapUSD), money.FormatUSD(e.SpentUSD))
 }
 
 // Is makes errors.Is(err, ErrCapReached) true.

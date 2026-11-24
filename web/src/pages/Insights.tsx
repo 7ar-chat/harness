@@ -10,8 +10,9 @@ import { DigestCard } from "./DigestCard";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { formatUsd } from "@/lib/money";
 
-export const money = (usd: number) => (usd >= 100 ? `$${usd.toFixed(0)}` : usd >= 0.01 || usd === 0 ? `$${usd.toFixed(2)}` : `$${usd.toFixed(4)}`);
+export const money = formatUsd;
 
 /** Seconds as "3h 10m", "2d 4h", "45s". */
 export function duration(sec: number): string {

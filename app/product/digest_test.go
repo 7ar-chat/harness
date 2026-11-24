@@ -3,6 +3,7 @@ package product
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -297,22 +298,62 @@ func TestADigestThatFailsIsRetriedAndNotLost(t *testing.T) {
 	}
 }
 
-func TestSendOneNowIsOwnerOnlyRateLimitedAndWorksForAnEmptyWeek(t *testing.T) {
+func TestSendOneNowAsksBeforeSendingAQuietWeek(t *testing.T) {
+	d := newDigestRig(t, berlin(t, "2026-11-25 10:00"))
+	// Nothing happened: 409 quiet_week with a kind message, nothing stored, and the rate limit is not spent.
+	var raw map[string]any
+	resp := d.do("POST", d.path("/send"), "alice", "")
+	if resp.StatusCode != 409 {
+		t.Fatalf("quiet week = %d, want 409", resp.StatusCode)
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&raw)
+	resp.Body.Close()
+	e, _ := raw["error"].(map[string]any)
+	if e["code"] != "quiet_week" || !strings.Contains(fmt.Sprint(e["message"]), "Nothing happened in the last 7 days") {
+		t.Fatalf("body = %v", raw)
+	}
+	if len(d.history()) != 0 {
+		t.Fatal("a quiet week was stored without being confirmed")
+	}
+	d.json("POST", d.path("/send"), "alice", `{"force":false}`, 409)
+	// Send anyway.
+	got := d.json("POST", d.path("/send"), "alice", `{"force":true}`, 200)
+	if got["digest"].(map[string]any)["trigger"] != "manual" || len(d.history()) != 1 {
+		t.Fatalf("forced send = %v", got)
+	}
+	// With activity the question is not asked.
+	d.clock.set(berlin(t, "2026-11-25 10:05"))
+	d.activity()
+	d.clock.set(berlin(t, "2026-11-25 10:10"))
+	d.json("POST", d.path("/send"), "alice", "", 200)
+}
+
+func TestTheWeeklyJobStillSkipsAQuietWeek(t *testing.T) {
+	d := newDigestRig(t, berlin(t, "2026-11-24 10:00"))
+	d.enable(1, 9, "Europe/Berlin")
+	d.clock.set(berlin(t, "2026-12-01 09:05"))
+	d.tick(1)
+	if len(d.history()) != 0 {
+		t.Fatal("the job sent a quiet week")
+	}
+}
+
+func TestSendOneNowIsOwnerOnlyAndRateLimited(t *testing.T) {
 	d := newDigestRig(t, berlin(t, "2026-11-25 10:00"))
 	sink := newHookSink(t)
 	d.routeToWebhook(sink)
 	d.json("POST", d.path("/send"), "bob", "", 403)
 	d.json("POST", d.path("/send"), "vic", "", 403)
 	d.json("POST", d.path("/send"), "eve", "", 404)
-	got := d.json("POST", d.path("/send"), "alice", "", 200)
+	got := d.json("POST", d.path("/send"), "alice", `{"force":true}`, 200)
 	item := got["digest"].(map[string]any)
 	if item["trigger"] != "manual" || item["id"] == "" {
 		t.Fatalf("digest = %v", item)
 	}
-	d.json("POST", d.path("/send"), "alice", "", 429) // the clock did not move
+	d.json("POST", d.path("/send"), "alice", `{"force":true}`, 429) // the clock did not move
 	sink.wait(t, 1)
 	d.clock.set(berlin(t, "2026-11-25 10:01"))
-	d.json("POST", d.path("/send"), "alice", "", 200)
+	d.json("POST", d.path("/send"), "alice", `{"force":true}`, 200)
 	if h := d.history(); len(h) != 2 {
 		t.Fatalf("history = %d", len(h))
 	}
@@ -323,7 +364,7 @@ func TestSendOneNowIsOwnerOnlyRateLimitedAndWorksForAnEmptyWeek(t *testing.T) {
 
 func TestDeletingTheProjectDropsItsDigests(t *testing.T) {
 	d := newDigestRig(t, berlin(t, "2026-11-25 10:00"))
-	d.json("POST", d.path("/send"), "alice", "", 200)
+	d.json("POST", d.path("/send"), "alice", `{"force":true}`, 200)
 	d.json("DELETE", "/api/projects/"+d.project, "alice", "", 204)
 	if l, _ := d.pd.ListDigests(context.Background(), d.project, 0); len(l) != 0 {
 		t.Fatal("digests of a deleted project remain")

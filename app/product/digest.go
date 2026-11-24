@@ -24,7 +24,8 @@ import (
 //
 //	GET  /api/projects/{pid}/digest              → DigestView: the setting, the next time, the history   (project viewer+)
 //	PUT  /api/projects/{pid}/digest {enabled,weekday,hour,timezone} → DigestView                          (owner)
-//	POST /api/projects/{pid}/digest/send         → DigestSendResult: generate one now, whatever the week held   (owner)
+//	POST /api/projects/{pid}/digest/send {force?} → DigestSendResult: generate one now (owner). A week without
+//	     activity answers 409 quiet_week unless force is true: the person is asked, and "Send anyway" passes force.
 //	GET  /api/projects/{pid}/digest/{id}/report[?download=1]  → the stored report page                      (project viewer+)
 //
 // Replicas: every replica runs the job, and a digest is generated only by the replica that wins the store's claim of
@@ -190,7 +191,7 @@ func (s *server) saveDigestSettings(ctx context.Context, set projdata.DigestSett
 }
 
 // generateDigest builds, stores and announces one digest. It returns nil, nil for a week without activity unless
-// force is set (an owner asked for it).
+// force is set (an owner confirmed a quiet-week digest). The weekly job never forces.
 func (s *server) generateDigest(ctx context.Context, p *store.Project, set projdata.DigestSettings, trigger, slotKey string, from, to time.Time, loc *time.Location, force bool, now time.Time) (*projdata.Digest, error) {
 	res, err := s.computeInsights(ctx, p.ID, "", from, to, loc)
 	if err != nil {
@@ -345,6 +346,12 @@ func (s *server) sendDigest(w http.ResponseWriter, r *http.Request, c Caller) {
 	if !ok {
 		return
 	}
+	var body struct {
+		Force bool `json:"force"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
 	now := s.digestNow()
 	s.dg.mu.Lock()
 	if last := s.dg.lastManual[p.ID]; now.Sub(last) < digestManualWait && !last.After(now) {
@@ -360,11 +367,16 @@ func (s *server) sendDigest(w http.ResponseWriter, r *http.Request, c Caller) {
 		return
 	}
 	from, to, loc := set.ManualRange(now)
-	d, err := s.generateDigest(r.Context(), p, set, projdata.TriggerManual, "manual:"+uuid.NewString(), from, to, loc, true, now)
-	if err != nil || d == nil {
-		if err == nil {
-			err = errors.New("no digest was generated")
-		}
+	d, err := s.generateDigest(r.Context(), p, set, projdata.TriggerManual, "manual:"+uuid.NewString(), from, to, loc, body.Force, now)
+	if err == nil && d == nil {
+		// A quiet week: nothing was sent, so the rate limit is not spent; the web asks the person and asks again with force.
+		s.dg.mu.Lock()
+		delete(s.dg.lastManual, p.ID)
+		s.dg.mu.Unlock()
+		writeError(w, http.StatusConflict, "quiet_week", fmt.Sprintf("Nothing happened in the last %d days. Send a short 'quiet week' digest anyway?", int(to.Sub(from).Hours()/24+0.5)))
+		return
+	}
+	if err != nil {
 		slog.Warn("digest: sending one now failed", "project", p.ID, "error", err)
 		writeError(w, http.StatusInternalServerError, "digest_failed", "The digest could not be generated.")
 		return

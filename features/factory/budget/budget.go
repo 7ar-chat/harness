@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/7ar-chat/harness/core/money"
 	"log/slog"
 	"strings"
 	"sync"
@@ -200,7 +201,7 @@ func (g *Guard) block(ctx context.Context, t factory.Task, reason string) {
 func budgetReason(b factory.Budget, s factory.Spend) string {
 	var parts []string
 	if b.MaxUSD > 0 && s.USD >= b.MaxUSD {
-		parts = append(parts, fmt.Sprintf("$%.2f spent of $%.2f", s.USD, b.MaxUSD))
+		parts = append(parts, fmt.Sprintf("%s spent of %s", money.FormatUSD(s.USD), money.FormatUSD(b.MaxUSD)))
 	}
 	if b.MaxTokens > 0 && s.Tokens >= b.MaxTokens {
 		parts = append(parts, fmt.Sprintf("%d tokens used of %d", s.Tokens, b.MaxTokens))
@@ -212,7 +213,7 @@ func budgetReason(b factory.Budget, s factory.Spend) string {
 func spendOf(b factory.Budget, s factory.Spend) string {
 	var parts []string
 	if b.MaxUSD > 0 {
-		parts = append(parts, fmt.Sprintf("$%.2f of $%.2f", s.USD, b.MaxUSD))
+		parts = append(parts, fmt.Sprintf("%s of %s", money.FormatUSD(s.USD), money.FormatUSD(b.MaxUSD)))
 	}
 	if b.MaxTokens > 0 {
 		parts = append(parts, fmt.Sprintf("%d of %d tokens", s.Tokens, b.MaxTokens))
