@@ -1,7 +1,7 @@
 // Production-shaped end-to-end suite: `npm run e2e:stack` from web/ (opt-in; never part of `npm run e2e`).
 // Real OIDC (Dex) sign-in, several people, two harness-web replicas behind a round-robin proxy, a separate
 // harness-worker, Postgres + Redis + S3 (RustFS) in Docker. See docs/e2e-stack.md.
-//   node e2e/stack/run.mjs [--only s1,s3] [--keep-logs]
+//   node e2e/stack/run.mjs [--only s1,s3] [--step text] [--keep-logs]
 // Exit codes: 0 = PASS or SKIP (prerequisite missing, said on stdout), 1 = FAIL.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -17,6 +17,7 @@ const skip = (why) => {
   process.exit(0);
 };
 const args = process.argv.slice(2);
+const stepFilter = args.includes("--step") ? args[args.indexOf("--step") + 1] : null; // debugging: run the steps whose name contains this
 const only = args.includes("--only") ? args[args.indexOf("--only") + 1].split(",") : null;
 
 if (spawnSync("go", ["version"], { stdio: "ignore" }).status !== 0) skip("`go` is not available on PATH");
@@ -58,6 +59,7 @@ try {
     const started = Date.now();
     console.log(`\n== ${id}: ${mod.title}`);
     for (const [name, fn] of mod.steps) {
+      if (stepFilter && !name.includes(stepFilter)) continue;
       const s = Date.now();
       try {
         await fn(env);
