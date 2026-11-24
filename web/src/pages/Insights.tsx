@@ -221,6 +221,90 @@ function TimeSplit({ d }: { d: InsightsView["delivery"] }) {
   );
 }
 
+const WAIT_KINDS = [
+  ["tools", "Tool approvals", "A risky tool call that waited in a session."],
+  ["tasks", "Task escalations", "A task blocked until a person decided."],
+  ["gates", "Workflow gates", "A workflow step that waited for a person."],
+] as const;
+
+/** The headline "waiting on a person", split by what was waited for. Tool approvals are only known from when they started being recorded. */
+function WaitBreakdown({ w }: { w?: InsightsView["waiting"] }) {
+  if (!w) return null;
+  const known = WAIT_KINDS.some(([k]) => w[k].n > 0);
+  return (
+    <section className="rounded-lg border" aria-label="Time waiting on a person">
+      <h3 className="p-3 pb-1 text-sm font-medium">Time waiting on a person</h3>
+      {known ? (
+        <table className="w-full text-sm">
+          <thead className="text-xs text-muted-foreground">
+            <tr>
+              <th className="p-2 pl-3 text-left font-medium">What was waited for</th>
+              <th className="p-2 text-right font-medium">Decided</th>
+              <th className="p-2 text-right font-medium">Median wait</th>
+              <th className="p-2 pr-3 text-right font-medium">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {WAIT_KINDS.map(([k, label, hint]) => (
+              <tr key={k} className="border-t" title={hint}>
+                <td className="p-2 pl-3">{label}</td>
+                <td className="p-2 text-right tabular-nums">{w[k].n || "n/a"}</td>
+                <td className="p-2 text-right tabular-nums">{w[k].n ? duration(w[k].medianSec) : "n/a"}</td>
+                <td className="p-2 pr-3 text-right tabular-nums">{w[k].n ? duration(w[k].totalSec) : "n/a"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="p-3 pt-1 text-sm text-muted-foreground">Nothing was decided by a person in this period, or it was decided before waits were recorded.</p>
+      )}
+    </section>
+  );
+}
+
+function People({ people }: { people: InsightsView["people"] }) {
+  if (!people.length) return null;
+  return (
+    <section className="rounded-lg border" aria-label="People">
+      <h3 className="p-3 pb-1 text-sm font-medium">People</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-xs text-muted-foreground">
+            <tr>
+              <th className="p-2 pl-3 text-left font-medium">Member</th>
+              <th className="p-2 text-right font-medium">Sessions</th>
+              <th className="p-2 text-right font-medium">Runs</th>
+              <th className="p-2 text-right font-medium">Approvals decided</th>
+              <th className="p-2 text-right font-medium" title="Median time between a request and this person's decision (tool approvals, task escalations, workflow gates)">
+                Median wait
+              </th>
+              <th className="p-2 pr-3 text-right font-medium">Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {people.map((p) => {
+              const l = p.latency;
+              const detail = l?.n ? WAIT_KINDS.filter(([k]) => p.waits[k].n > 0).map(([k, label]) => `${label}: ${duration(p.waits[k].medianSec)} (${p.waits[k].n})`).join("; ") : "";
+              return (
+                <tr key={p.login} className="border-t">
+                  <td className="p-2 pl-3">{p.login}</td>
+                  <td className="p-2 text-right tabular-nums">{p.sessions}</td>
+                  <td className="p-2 text-right tabular-nums">{p.runs}</td>
+                  <td className="p-2 text-right tabular-nums">{p.approvals}</td>
+                  <td className="p-2 text-right tabular-nums" title={detail || "Not recorded for these decisions"}>
+                    {l?.n ? duration(l.medianSec) : "n/a"}
+                  </td>
+                  <td className="p-2 pr-3 text-right tabular-nums">{money(p.costUsd)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 type Ref = InsightsView["attention"]["slowest"][number];
 
 function Attention({ title, items, fmt, empty, projectId }: { title: string; items: Ref[]; fmt: (v: number) => string; empty: string; projectId?: string }) {
@@ -319,6 +403,7 @@ function Body({ d, projectId }: { d: InsightsView; projectId?: string }) {
         </Chart>
         <TimeSplit d={dl} />
       </div>
+      <WaitBreakdown w={d.waiting} />
       <h2 className="pt-2 text-sm font-semibold">What needs attention</h2>
       <div className="grid gap-3 sm:grid-cols-2">
         <Attention title="Slowest tasks" items={d.attention.slowest} fmt={duration} empty="Nothing finished or running yet." projectId={projectId} />
@@ -326,6 +411,7 @@ function Body({ d, projectId }: { d: InsightsView; projectId?: string }) {
         <Attention title="Most expensive" items={d.attention.mostExpensive} fmt={money} empty="No priced spend yet." projectId={projectId} />
         <Attention title="Most reworked" items={d.attention.mostReworked} fmt={(v) => `${v} round${v === 1 ? "" : "s"}`} empty="No task needed rework." projectId={projectId} />
       </div>
+      <People people={d.people} />
       {c.models.length ? (
         <section className="rounded-lg border">
           <h3 className="p-3 pb-1 text-sm font-medium">Cost by model</h3>

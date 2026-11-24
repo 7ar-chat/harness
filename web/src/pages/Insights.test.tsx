@@ -92,6 +92,38 @@ describe("Insights tab", () => {
   });
 });
 
+describe("approval latency in Insights", () => {
+  const lat = (n: number, medianSec: number, totalSec = medianSec * n) => ({ n, medianSec, totalSec });
+  const none = lat(0, 0, 0);
+  const people = [
+    { login: "ann", sessions: 2, runs: 9, costUsd: 3, approvals: 4, denied: 1, latency: lat(3, 1200), waits: { tools: lat(3, 1200), tasks: none, gates: none } },
+    { login: "bob", sessions: 0, runs: 1, costUsd: 0, approvals: 1, denied: 0, latency: none, waits: { tools: none, tasks: none, gates: none } },
+  ];
+
+  it("shows each person's median wait, n/a where it was not recorded, and the headline split by kind", async () => {
+    mockFetch(routes(view({ people, waiting: { tools: lat(3, 1200, 3600), tasks: lat(2, 36000, 80000), gates: none } })));
+    await renderApp("/p/p1?tab=insights");
+
+    const ppl = within(await page().findByRole("region", { name: "People" }));
+    const ann = within(ppl.getByRole("row", { name: /ann/ }));
+    expect(ann.getByText("20m")).toBeTruthy();
+    expect(within(ppl.getByRole("row", { name: /bob/ })).getByText("n/a")).toBeTruthy();
+
+    const wait = within(page().getByRole("region", { name: "Time waiting on a person" }));
+    const tools = within(wait.getByRole("row", { name: /Tool approvals/ }));
+    expect(tools.getByText("20m")).toBeTruthy();
+    expect(tools.getByText("1h")).toBeTruthy();
+    expect(within(wait.getByRole("row", { name: /Task escalations/ })).getByText("10h")).toBeTruthy();
+    expect(within(wait.getByRole("row", { name: /Workflow gates/ })).getAllByText("n/a").length).toBe(3);
+  });
+
+  it("says plainly when nothing was recorded", async () => {
+    mockFetch(routes(view({ people: [], waiting: { tools: none, tasks: none, gates: none } })));
+    await renderApp("/p/p1?tab=insights");
+    expect(await page().findByText(/before waits were recorded/)).toBeTruthy();
+  });
+});
+
 describe("insights formatting", () => {
   it("formats durations and money", () => {
     expect(duration(0)).toBe("0s");

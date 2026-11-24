@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/core/store"
@@ -162,8 +163,29 @@ func (s *server) AfterRun(c Caller, run *client.Run, action string, detail map[s
 	if s.team == nil || run == nil {
 		return
 	}
+	if action == "run.resume" {
+		detail = s.withRequestTime(detail, run.ID)
+	}
 	s.note(c, run.ThreadID, action, detail, FeedEvent{Type: "run.started", RunID: run.ID})
 	s.follow(c, run)
+}
+
+// withRequestTime adds when the approval that the resumed run decided was asked for (requestedAt), so insights can say
+// how long the person took. A run that decided nothing leaves the detail as it is.
+func (s *server) withRequestTime(detail map[string]any, runID string) map[string]any {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	a, err := s.H.Store.ResumedApproval(ctx, runID)
+	if err != nil || a == nil || a.CreatedAt.IsZero() {
+		return detail
+	}
+	out := make(map[string]any, len(detail)+2)
+	for k, v := range detail {
+		out[k] = v
+	}
+	out["requestedAt"] = a.CreatedAt.UTC().Format(time.RFC3339Nano)
+	out["approval"] = a.ID
+	return out
 }
 
 // pendingToolName is the tool the thread is waiting for a decision on ("" when none).
