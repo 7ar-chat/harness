@@ -34,6 +34,41 @@ describe("SessionPage", () => {
     expect(page().queryByText(/Send a message to start/)).toBeNull();
   });
 
+  it("shows the role the last reply took on, and no role chip otherwise (never the access role)", async () => {
+    // Arrange
+    mockFetch(routes(full({ role: "owner", agentRole: "reviewer", messages: [msg("a1", "assistant", "Reviewed.")] })));
+    // Act
+    await renderApp("/t/t1");
+    // Assert
+    expect((await page().findByTestId("agent-role")).textContent).toContain("reviewer");
+    expect(page().queryByText("role owner")).toBeNull();
+  });
+
+  it("has no role chip for a thread that ran without a role", async () => {
+    mockFetch(routes(full({ role: "owner", messages: [msg("a1", "assistant", "Done.")] })));
+    await renderApp("/t/t1");
+    await page().findByText("Done.");
+    expect(page().queryByTestId("agent-role")).toBeNull();
+    expect(page().queryByText(/^role /)).toBeNull();
+  });
+
+  it("a personal session puts the explorer in the Personal context, not in the first project", async () => {
+    // Arrange: a project exists, the open session belongs to nobody's project
+    const p = project("p1", { name: "payments", role: "owner" });
+    mockFetch({
+      ...routes(full({ messages: [msg("a1", "assistant", "Mine.")] })),
+      ...shellRoutes(overview({ projects: [{ ...p, threads: [] }], personal: [summary("t1", { title: "Flaky test" })] }), me({ projects: [p] })),
+    });
+    // Act
+    await renderApp("/t/t1");
+    await page().findByText("Mine.");
+    // Assert
+    const explorer = within(screen.getByRole("navigation", { name: "Explorer" }));
+    expect(explorer.queryByRole("region", { name: "Work" })).toBeNull();
+    expect(explorer.getByText(/Personal\. Pick a project/)).toBeTruthy();
+    expect(screen.getAllByText("Personal").length).toBeGreaterThan(0);
+  });
+
   it("invites you to start when the thread has no messages", async () => {
     // Arrange
     mockFetch(routes(full()));

@@ -10,6 +10,7 @@ import { JobsPage } from "@/pages/Jobs";
 import { MemoryPage } from "@/pages/Memory";
 import { CapabilitiesPage, ConnectorsPage, ProfilePage, ReferencesPage } from "@/pages/Profile";
 import { ProjectPage } from "@/pages/ProjectPage";
+import { RolesPage } from "@/pages/Roles";
 import { SchedulesPage } from "@/pages/Schedules";
 import { SessionTab, SupervisorPage } from "@/pages/SessionPage";
 import { UsagePage } from "@/pages/Usage";
@@ -28,6 +29,7 @@ const PAGES: Record<string, () => ReactNode> = {
   "/connectors": () => <ConnectorsPage />,
   "/capabilities": () => <CapabilitiesPage />,
   "/schedules": () => <SchedulesPage />,
+  "/roles": () => <RolesPage />,
   "/usage": () => <UsagePage />,
   "/memory": () => <MemoryPage />,
   "/profile": () => <ProfilePage />,

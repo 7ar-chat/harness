@@ -19,6 +19,7 @@ const PAGES: [string, string][] = [
   ["/connectors", "Connectors"],
   ["/memory", "Library (my memory)"],
   ["/schedules", "My schedules"],
+  ["/roles", "My roles (personal)"],
   ["/usage", "My usage"],
   ["/capabilities", "My capabilities"],
   ["/profile", "Profile and settings"],

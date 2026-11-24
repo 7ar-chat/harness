@@ -956,6 +956,7 @@ export interface Thread extends ThreadBase {
   createdBy?: string;
   kind?: ThreadKind;
   role?: Role;
+  agentRole?: string;
   status: ThreadStatus;
 }
 

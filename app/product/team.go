@@ -167,6 +167,9 @@ type threadView struct {
 	CreatedBy string `json:"createdBy,omitempty"`
 	Kind      string `json:"kind,omitempty"`
 	Role      string `json:"role,omitempty"`
+	// AgentRole is the role the thread's last run took on (a role of the project, of the user, or a builtin one),
+	// "" when it ran without one. It is not the caller's access role (Role).
+	AgentRole string `json:"agentRole,omitempty"`
 	Status    string `json:"status"`
 }
 

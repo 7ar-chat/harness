@@ -44,6 +44,7 @@ const PAGES: Record<string, string> = {
   "/connectors": "Connectors",
   "/capabilities": "Capabilities",
   "/schedules": "Schedules",
+  "/roles": "My roles",
   "/usage": "Usage",
   "/memory": "Library",
   "/profile": "Settings",
