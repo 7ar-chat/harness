@@ -150,10 +150,10 @@ export function viewHref(area: Area, view: AreaView, projectId?: string): string
   return `/p/${projectId ?? ""}?tab=${view.id}`;
 }
 
-/** Where a click on the area itself goes: the view last shown there, else its first. */
-export function areaHref(area: Area, projectId?: string, owner = true): string {
+/** Where a click on the area itself goes: the view shown there now, else the one last shown, else its first. */
+export function areaHref(area: Area, projectId?: string, owner = true, shown?: string): string {
   const views = visibleViews(area, { owner });
-  const id = rememberedView(area, projectId);
+  const id = shown ?? rememberedView(area, projectId);
   const view = views.find((v) => v.id === id) ?? views[0]!;
   return viewHref(area, view, projectId);
 }

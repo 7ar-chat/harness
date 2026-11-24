@@ -38,6 +38,38 @@ When an agent wants to run something risky, asks a question, or finishes work to
 **First steps:** create a project, start a session, then hand off a task.`,
   },
   {
+    slug: "where-things-are",
+    title: "Where things are",
+    group: "Start here",
+    summary: "Four areas for a project, one for you. Each has a few views.",
+    keywords: "navigation menu explorer areas tabs views find where",
+    body: `The explorer on the left is short on purpose. Every place is an **area**, and an area has a few **views** you switch between with the tabs at the top of its page.
+
+| Area | Views |
+| --- | --- |
+| **Work** | Board, Requirements, Tasks (with their triggers) |
+| **Automation** | Workflows (and their runs), Schedules, Recipes |
+| **Insights** | Overview, Usage & caps, Activity (who did what) |
+| **Settings** | General, Members & access, Roles & executors, Tools & skills, Memory & docs, Notifications |
+| **Me** | Library, Connectors, Memory, My roles, My schedules, My tools & skills, My insights, My usage |
+
+**Me** is yours across every project. **My assistant** is your personal agent. The **Settings** link at the bottom of the explorer is for your account.
+
+Looking for something by name? Press **Ctrl/Cmd + K** and type it: every view is in the palette. Ready-made setups such as job search are not areas, see [Use cases](help:use-cases).`,
+  },
+  {
+    slug: "use-cases",
+    title: "Use cases",
+    group: "Concepts",
+    summary: "Ready-made setups built on top of the platform, such as job search.",
+    keywords: "use case job search jobs cv templates ready made",
+    body: `7ar is a platform: projects, sessions, tasks, workflows and memory. A **use case** is a ready-made setup built on top of it for one purpose. It is not a part of the platform itself, so it does not have a place in the explorer.
+
+Today there is one: **Job search assistant**. It reads your CV, finds and tracks openings, and asks you only what it cannot know.
+
+You find use cases on the **Dashboard**, in the **Use cases** row, and in the command palette (**Ctrl/Cmd + K**, then type "use case"). A use case only shows up when your server has it turned on. More will be added the same way.`,
+  },
+  {
     slug: "sessions",
     title: "Sessions",
     group: "Concepts",
@@ -263,7 +295,7 @@ Only project owners can add or remove people.`,
     keywords: "mention at role reviewer",
     body: `In the message box of a session, type **@**. A list of roles appears. Pick one, then write your message: the reply is given by that role.
 
-Create roles under **Roles & executors**. See [Roles](help:roles).`,
+Create roles under **Settings**, then **Roles & executors**. See [Roles](help:roles).`,
   },
   {
     slug: "glossary",
@@ -317,7 +349,7 @@ Open its session. If it shows **Needs approval** or **Needs answer**, it is wait
 The agent factory has to be enabled on your server. Ask your administrator.
 
 ## A run was refused
-A spend cap may be reached. Check **Usage & caps** and raise it, or wait for next month.
+A spend cap may be reached. Open **Insights**, then **Usage & caps**, and raise it, or wait for next month.
 
 ## Where did my files go?
 Each session works in its own copy. Look in the session's **Files** and **Diff** tabs. Work you want to keep goes into a pull request.

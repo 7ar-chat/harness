@@ -21,7 +21,7 @@ import { StatusDot, UserAvatar } from "../common";
 import { useDialogs } from "../dialogs";
 import { NavLink, useShell } from "./context";
 import { useProjectActions } from "./projectActions";
-import { ME_AREA, PROJECT_AREAS, areaHref, locateTab } from "./areas";
+import { ME_AREA, PROJECT_AREAS, areaHref, locatePath, locateTab } from "./areas";
 import { projectHref, type EditorTab } from "./tabs";
 
 const byRecent = (a: ThreadSummary, b: ThreadSummary) => b.updatedAt.localeCompare(a.updatedAt);
@@ -217,6 +217,12 @@ export function UserMenu() {
   );
 }
 
+/** The view an editor tab shows in an area, when it is in that area. */
+function shownView(t: EditorTab | undefined, projectId: string | undefined, area: string): string | undefined {
+  if (areaOfTab(t, projectId) !== area) return undefined;
+  return area === "me" ? locatePath(t!.href)?.view.id : (t!.section ?? "board");
+}
+
 /** The area an editor tab belongs to ("work", "settings", "me"), whatever view or detail it shows. */
 function areaOfTab(t: EditorTab | undefined, projectId?: string): string | undefined {
   if (!t) return undefined;
@@ -372,7 +378,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
               {PROJECT_AREAS.map((area) => (
                 <Row
                   key={area.id}
-                  href={areaHref(area, project.id, project.role === "owner")}
+                  href={areaHref(area, project.id, project.role === "owner", shownView(tabs.active, project.id, area.id))}
                   k={`area:${area.id}`}
                   current={areaOfTab(tabs.active, project.id) === area.id}
                   onNavigate={onNavigate}
@@ -410,7 +416,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
           {personal.slice(0, 8).map((t) => (
             <SessionRow key={t.id} t={t} onNavigate={onNavigate} />
           ))}
-          <Row href={areaHref(ME_AREA)} k="area:me" current={areaOfTab(tabs.active, projectId) === "me"} onNavigate={onNavigate} title={ME_AREA.hint}>
+          <Row href={areaHref(ME_AREA, undefined, true, shownView(tabs.active, projectId, "me"))} k="area:me" current={areaOfTab(tabs.active, projectId) === "me"} onNavigate={onNavigate} title={ME_AREA.hint}>
             {ME_AREA.label}
           </Row>
         </Section>
