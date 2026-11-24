@@ -138,6 +138,14 @@ async function main() {
     FACTORY_RETRY_BACKOFF_SECONDS: "1",
     // The admin page and the git hosts need a secret key (to seal tokens and SSH keys) and an administrator.
     HARNESS_SECRET_KEY: "e2e-secret-key-0123456789abcdef0123456789",
+    // E2E_POSTGRES=host:port:user:password:database runs the whole app on Postgres instead of its file stores (the stores
+    // have conformance suites, this proves the real flows on them). A fresh schema per run keeps runs apart.
+    ...(process.env.E2E_POSTGRES
+      ? (([host, port, user, password, db]) => ({
+          POSTGRES_HOST: host, POSTGRES_PORT: port, POSTGRES_USER: user, POSTGRES_PASSWORD: password, POSTGRES_DB: db,
+          POSTGRES_SSLMODE: "disable", POSTGRES_SCHEMA: `e2e_${Date.now()}`,
+        }))(process.env.E2E_POSTGRES.split(":"))
+      : {}),
     HARNESS_ADMINS: "local",
     HARNESS_NOTIFY_ALLOW_PRIVATE: "1", // the webhook receiver above is on loopback (scenarios l*)
     // The document library and the job search are optional features whose routes answer 404 without a directory; they are on
@@ -148,6 +156,7 @@ async function main() {
   server = spawn(bin, ["-local", "-team"], { cwd: tmp, env, stdio: ["ignore", "pipe", "pipe"] });
   let serverLog = "";
   server.stderr.on("data", (d) => (serverLog += d));
+  if (process.env.E2E_SERVER_LOG) server.stderr.on("data", (d) => fs.appendFileSync(process.env.E2E_SERVER_LOG, d)); // opt-in: keep the server log for debugging
   const base = await new Promise((resolve, reject) => {
     let out = "";
     const timer = setTimeout(() => reject(new Error(`harness-web did not report its address in 30s:\n${out}${serverLog}`)), 30_000);
@@ -1456,7 +1465,8 @@ async function main() {
     await list.getByRole("button", { name: "Delete Evening hello" }).click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Delete", exact: true }).click();
     await gone(list.getByText("Evening hello"), "the schedule is gone from the list");
-    eq((await api(`/projects/${hp}/schedules`)).length, 0, "stored: no schedule left");
+    // the list hides the row as soon as the delete is confirmed; the store follows a moment later (slower on Postgres)
+    await poll(async () => (await api(`/projects/${hp}/schedules`)).length === 0, "stored: no schedule left");
   });
 
   await step("m4. Steer now: a queued message goes into the reply that is running", async () => {

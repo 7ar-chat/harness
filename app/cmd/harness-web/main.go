@@ -188,6 +188,13 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	}
 	if *team && !hasLogin { // team mode without a login: every request acts as -user (local development)
 		fmt.Fprintln(stderr, "harness-web: team mode without OIDC_ISSUER or GITHUB_LOGIN_CLIENT_ID: everyone is", *user)
+		// Nobody signs in here, so nobody would ever create the user's row: tables that point at it (seen markers on
+		// Postgres) would refuse every write. The dev user is recorded once, approved.
+		if teamStore != nil {
+			if _, err := teamStore.UpsertUser(ctx, store.User{Login: *user, Name: *user}); err != nil {
+				return fail(stderr, fmt.Errorf("recording the dev user: %w", err))
+			}
+		}
 	}
 	if mo, ok := config.ModelPriceOptions(); ok { // loaded in the background: the list gains its info once it arrives
 		opts.ModelInfo = client.TableLookup(modelinfo.LoadAsync(hctx, mo), cfg.LLMProviderName, cfg.LLMProvider)

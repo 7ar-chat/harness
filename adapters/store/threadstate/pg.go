@@ -38,7 +38,7 @@ func (s *PG) UpdateThreadState(ctx context.Context, threadID, key string, fn fun
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	// The row may not exist yet: an advisory lock on (thread, key) serialises the first writers too.
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, threadID+"\x00"+key); err != nil {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, threadID+"\x1f"+key); err != nil {
 		return err
 	}
 	var old []byte
