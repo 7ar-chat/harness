@@ -225,9 +225,8 @@ export async function runP(h) {
       // 5. a task from the Tasks tab
       await nav();
       const explorer = pg.getByRole("navigation", { name: "Explorer" });
-      const setup = explorer.getByRole("button", { name: /^Setup/ });
-      if ((await setup.getAttribute("aria-expanded")) === "false") await click(setup, "Setup");
-      await click(explorer.getByRole("link", { name: /^Tasks/ }), "Tasks");
+      await click(explorer.getByRole("link", { name: "Work", exact: true }), "Work");
+      await click(pg.getByRole("main").getByRole("tab", { name: "Tasks", exact: true }), "the Tasks view");
       const first = pg.getByRole("main").getByRole("button", { name: /Create your first task|New task/ });
       await check("tasks", first, "the create task button");
       await click(first, "New task");
@@ -246,7 +245,8 @@ export async function runP(h) {
       await gone(pg.getByRole("dialog"), "the task form closed");
       // 6. a recipe
       await nav();
-      await click(explorer.getByRole("link", { name: /^Recipes/ }), "Recipes");
+      await click(explorer.getByRole("link", { name: "Automation", exact: true }), "Automation");
+      await click(pg.getByRole("main").getByRole("tab", { name: "Recipes", exact: true }), "the Recipes view");
       const search = pg.getByLabel("Search recipes");
       await check("recipes", search, "the recipe search");
       await search.fill("digest");
@@ -277,5 +277,60 @@ export async function runP(h) {
   await step("p2. Newcomer walkthrough: welcome, sample, approval, Needs you, task, recipe and help, each next action on the first screen, at most 4 clicks to the first agent output", async () => {
     const all = [...(await walk({ width: 1440, height: 900 }, "desktop")), ...(await walk({ width: 390, height: 844 }, "phone"))];
     if (all.length) throw new Error(all.join("\n"));
+  });
+
+  // t. The short navigation: four project areas and Me, views as sub-navigation, job search as a use case
+  await step("t1. Navigation: the explorer lists the short set; Work and its views change the tab id in the URL; Job search is a use case on the Dashboard and in the palette, not in the explorer", async () => {
+    const pid = proj?.id ?? (await post("/projects", { name: "E2E nav" })).id;
+    const c = await mk("dark", DESK);
+    const pg = await c.newPage();
+    try {
+      await pg.goto(`${base}/#/p/${pid}`);
+      const explorer = pg.getByRole("navigation", { name: "Explorer" });
+      await visible(explorer.getByRole("link", { name: "Work", exact: true }), "the Work area");
+      const short = ["Dashboard", "Needs you", "Work", "Automation", "Insights", "Settings", "My assistant", "Me"];
+      const names = (await explorer.getByRole("link").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
+      eq(names.filter((n) => short.includes(n)), short, "the explorer's places, in order");
+      for (const old of [/^Jobs?\b/i, /^Job search/i, /^References/, /^Connectors/, /^Members/, /^Usage/, /^Audit/, /^Recipes/, /^Schedules/, /^Roles/, /^Insights \S/, /^My (memory|schedules|roles|tools)/]) {
+        const left = names.filter((n) => old.test(n));
+        eq(left, [], `no explorer link like ${old}`);
+      }
+      eq(await pg.getByRole("link", { name: "Settings", exact: true }).count(), 2, "the project's Settings and the account's Settings");
+      // Work, then its views: the tab id follows
+      await explorer.getByRole("link", { name: "Work", exact: true }).click();
+      const main = pg.getByRole("main");
+      await visible(main.getByRole("tablist", { name: "Work views" }), "the Work views");
+      const tabId = () => new URL(pg.url().replace("#/", "")).searchParams.get("tab");
+      eq(tabId(), "board", "Work opens on the board");
+      await main.getByRole("tab", { name: "Tasks", exact: true }).click();
+      await poll(async () => tabId() === "tasks", "tab=tasks in the URL");
+      await main.getByRole("tab", { name: "Requirements", exact: true }).click();
+      await poll(async () => tabId() === "requirements", "tab=requirements in the URL");
+      await visible(pg.getByRole("tablist", { name: "Open editors" }).getByRole("tab", { name: "Work · Requirements", selected: true }), "one editor tab for the area, titled with the view");
+      // the area remembers its view; an old deep link still lands in the right area
+      await explorer.getByRole("link", { name: "Insights", exact: true }).click();
+      await main.getByRole("tab", { name: "Usage & caps", exact: true }).focus();
+      await pg.keyboard.press("ArrowRight");
+      await poll(async () => tabId() === "audit", "ArrowRight moved to Activity (tab=audit)");
+      await pg.goto(`${base}/#/p/${pid}?tab=members`);
+      await visible(main.getByRole("tab", { name: "Members & access", selected: true }), "the Members view in Settings");
+      eq(await explorer.getByRole("link", { name: "Settings", exact: true }).first().getAttribute("aria-current"), "page", "the area is highlighted");
+      // Me
+      await pg.goto(`${base}/#/references`);
+      await visible(main.getByRole("tablist", { name: "Me views" }), "the Me views");
+      // Job search: a use case
+      await pg.goto(`${base}/#/`);
+      const cases = pg.getByRole("region", { name: "Use cases" });
+      await visible(cases.getByRole("link", { name: /Job search assistant/ }), "the Job search card on the Dashboard");
+      await pg.keyboard.press("Control+k");
+      await pg.getByPlaceholder(/Jump to a session/).fill("use case");
+      const entry = pg.getByRole("option", { name: "Use case: Job search" });
+      await visible(entry, "the palette entry");
+      await entry.click();
+      await poll(async () => /#\/jobs$/.test(pg.url()), "the job search page opened");
+      await visible(main.getByRole("heading", { name: "Job search" }), "the Job search page");
+    } finally {
+      await c.close();
+    }
   });
 }
