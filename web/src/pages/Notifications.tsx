@@ -243,15 +243,6 @@ export function ProjectNotifications({ projectId, canEdit }: { projectId: string
   const setRule = (e: NotifyEvent, next: NotifyRule) => put({ ...rules.events, [e.kind]: next });
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <Bell className="size-5" /> Notifications
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Who hears about what in this project. By default the person an item concerns is told where they chose (see My settings). Add channels to tell the whole team.
-        </p>
-      </header>
-
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">Channels</h3>

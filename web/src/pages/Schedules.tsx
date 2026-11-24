@@ -400,9 +400,11 @@ export function SchedulesPanel({ projectId, canEdit, owner }: { projectId?: stri
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Have an agent repeat a piece of work: it runs the prompt on its schedule, as an ordinary session you can open, with its cost on the Usage page. A run stops at its time limit.
-        </p>
+        {projectId ? <span /> : (
+          <p className="max-w-2xl text-sm text-muted-foreground">
+            Have an agent repeat a piece of work: it runs the prompt on its schedule, as an ordinary session you can open, with its cost on the Usage page. A run stops at its time limit.
+          </p>
+        )}
         {canEdit ? (
           <div className="flex flex-wrap gap-2">
             {projectId ? <AddFromRecipe projectId={projectId} kind="schedule" /> : null}

@@ -707,7 +707,7 @@ export function RecipesPanel({ projectId, canEdit, owner }: { projectId: string;
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Ready-made schedules, tasks and triggers. Pick one, fill in a few words, and it becomes a schedule, a task or a trigger of this project. To share your own, use <em>Share as recipe</em> on a schedule or a task.
+          A recipe becomes a schedule, a task or a trigger of this project. To share your own, use <em>Share as recipe</em> on a schedule or a task.
         </p>
         <Button variant="outline" onClick={() => setImporting(true)} disabled={!canEdit}>
           <Upload /> Import a file
