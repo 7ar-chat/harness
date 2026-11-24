@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -58,9 +59,6 @@ func (h *Harness) QueueMessage(ctx context.Context, user, threadID, text string,
 	if err := h.ownsThread(ctx, user, threadID); err != nil {
 		return chatqueue.Item{}, nil, err
 	}
-	if len(o.Attachments) > 0 {
-		return chatqueue.Item{}, nil, fmt.Errorf("%w: attachments cannot be queued", ErrInvalidRequest)
-	}
 	if o.Model == "" {
 		return chatqueue.Item{}, nil, fmt.Errorf("%w: model is required", ErrInvalidRequest)
 	}
@@ -73,8 +71,21 @@ func (h *Harness) QueueMessage(ctx context.Context, user, threadID, text string,
 	if _, err := runMode(o.Mode); err != nil {
 		return chatqueue.Item{}, nil, err
 	}
+	if err := checkAttachments(o.Attachments); err != nil {
+		return chatqueue.Item{}, nil, err
+	}
+	// The files are stored in the thread's workspace now; the queued message carries their references.
+	var stored []store.Attachment
+	if len(o.Attachments) > 0 {
+		meta, err := h.storeAttachments(ctx, user, threadID, o.Attachments)
+		if err != nil {
+			return chatqueue.Item{}, nil, err
+		}
+		stored, _ = meta["attachments"].([]store.Attachment)
+	}
 	it, err := h.Queued.Add(ctx, threadID, text, chatqueue.Options{
-		Model: o.Model, ReasoningEffort: o.ReasoningEffort, Skills: o.Skills, Interactive: o.Interactive,
+		Attachments: stored,
+		Model:       o.Model, ReasoningEffort: o.ReasoningEffort, Skills: o.Skills, Interactive: o.Interactive,
 		Mode: string(o.Mode), Sandbox: string(o.Sandbox), Role: o.Role,
 		Author: o.Author, AuthorKind: o.AuthorKind, OnBehalfOf: o.OnBehalfOf,
 	})
@@ -109,6 +120,15 @@ func (h *Harness) RemoveQueued(ctx context.Context, user, threadID, id string) e
 	return err
 }
 
+// ClearQueue discards every waiting message of the thread and returns how many there were.
+func (h *Harness) ClearQueue(ctx context.Context, user, threadID string) (int, error) {
+	if err := h.ownsThread(ctx, user, threadID); err != nil {
+		return 0, err
+	}
+	items, err := h.Queued.Clear(ctx, threadID)
+	return len(items), err
+}
+
 // SendQueuedNow takes a waiting message out of the queue and delivers it at once: as a steer of the running
 // reply (steered=true), or as a run when the thread is idle. store.ErrNotFound when it is not waiting any more.
 func (h *Harness) SendQueuedNow(ctx context.Context, user, threadID, id string) (steered bool, run *store.Run, err error) {
@@ -124,7 +144,15 @@ func (h *Harness) SendQueuedNow(ctx context.Context, user, threadID, id string) 
 		if !ok {
 			return false, nil, store.ErrNotFound
 		}
-		err = h.SteerAs(ctx, user, th.ActiveRun.ID, it.Text, Author{Login: it.Options.Author, Kind: it.Options.AuthorKind, OnBehalfOf: it.Options.OnBehalfOf})
+		steerText := it.Text
+		if len(it.Options.Attachments) > 0 {
+			var paths []string
+			for _, a := range it.Options.Attachments {
+				paths = append(paths, a.Path)
+			}
+			steerText += "\n\n(Attached files, in the workspace: " + strings.Join(paths, ", ") + ")"
+		}
+		err = h.SteerAs(ctx, user, th.ActiveRun.ID, steerText, Author{Login: it.Options.Author, Kind: it.Options.AuthorKind, OnBehalfOf: it.Options.OnBehalfOf})
 		if err != nil {
 			// The reply ended meanwhile (or took no more steers): the message goes back to the front, and the
 			// hook of that run, or the caller's next try, sends it.
@@ -168,7 +196,7 @@ func (h *Harness) sendQueued(ctx context.Context, user, threadID string, it chat
 	run, err := h.Send(ctx, user, threadID, it.Text, RunOptions{
 		Model: o.Model, ReasoningEffort: o.ReasoningEffort, Skills: o.Skills, Interactive: o.Interactive,
 		Sandbox: SandboxMode(o.Sandbox), Mode: RunMode(o.Mode), Role: o.Role, MessageID: it.ID,
-		Author: o.Author, AuthorKind: o.AuthorKind, OnBehalfOf: o.OnBehalfOf,
+		Author: o.Author, AuthorKind: o.AuthorKind, OnBehalfOf: o.OnBehalfOf, stored: o.Attachments,
 	})
 	switch {
 	case err == nil:

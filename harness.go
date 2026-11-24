@@ -317,6 +317,8 @@ type RunOptions struct {
 	// Attachments are images sent with the message (at most MaxAttachments of
 	// MaxAttachmentBytes each); they are stored in the thread's workspace.
 	Attachments []Attachment
+	// stored are attachments already in the thread's workspace (a queued message's): Send references them.
+	stored []store.Attachment
 	// Author is the user who typed the message when it is not the thread's
 	// owner (a project member), with AuthorKind and OnBehalfOf for a
 	// supervisor; they are recorded on the message and shown to the model in
@@ -403,6 +405,9 @@ func (h *Harness) Send(ctx context.Context, user, threadID, text string, o RunOp
 	meta, err := h.storeAttachments(ctx, user, threadID, o.Attachments)
 	if err != nil {
 		return nil, err
+	}
+	if len(o.stored) > 0 && meta == nil {
+		meta = map[string]any{"attachments": o.stored}
 	}
 	mode := ""
 	if o.Interactive {

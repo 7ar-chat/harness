@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTask } from "@/api/factory";
 import { useOverview, useRequirement } from "@/api/queries";
 import { useWorkflows } from "@/api/workflows";
+import { useQueuedCount } from "@/chat/queue";
 import { cn } from "@/lib/utils";
 import { StatusDot } from "../common";
 import { PROJECT_SECTIONS, pageTitle, type EditorTab, type Tabs } from "./tabs";
@@ -41,6 +42,7 @@ export function useTabLabel(tab: EditorTab, multi: boolean): string {
 function TabButton({ tab, active, multi, tabs, dragging, setDragging }: { tab: EditorTab; active: boolean; multi: boolean; tabs: Tabs; dragging?: string; setDragging: (k?: string) => void }) {
   const label = useTabLabel(tab, multi);
   const overview = useOverview().data;
+  const queued = useQueuedCount(tab.id ?? "", tab.kind === "session");
   const status = tab.kind === "session" ? [...(overview?.personal ?? []), ...(overview?.projects ?? []).flatMap((p) => p.threads)].find((x) => x.id === tab.id)?.status : undefined;
   return (
     <div
@@ -78,6 +80,11 @@ function TabButton({ tab, active, multi, tabs, dragging, setDragging }: { tab: E
       >
         {status ? <StatusDot status={status} /> : null}
         <span className="truncate">{label}</span>
+        {queued > 0 ? (
+          <span className="shrink-0 rounded-full bg-primary/15 px-1.5 text-[10.5px] font-medium text-primary" title={`${queued} queued message${queued === 1 ? "" : "s"}`} aria-label={`${queued} queued`}>
+            {queued} queued
+          </span>
+        ) : null}
       </button>
       <button
         type="button"

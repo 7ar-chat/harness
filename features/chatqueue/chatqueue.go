@@ -43,6 +43,8 @@ type Options struct {
 	Author          string   `json:"author,omitempty"`
 	AuthorKind      string   `json:"authorKind,omitempty"`
 	OnBehalfOf      string   `json:"onBehalfOf,omitempty"`
+	// Attachments are the files sent with the message, already stored in the thread's workspace when it was queued.
+	Attachments []store.Attachment `json:"attachments,omitempty"`
 }
 
 // Item is a queued message. Its id is the id of the user message it becomes, which makes sending it idempotent.
@@ -134,6 +136,16 @@ func (q *Queue) Remove(ctx context.Context, threadID, id string) (Item, bool, er
 		return encode(out)
 	})
 	return got, found, err
+}
+
+// Clear empties the queue and returns what was waiting.
+func (q *Queue) Clear(ctx context.Context, threadID string) ([]Item, error) {
+	var got []Item
+	err := q.St.UpdateThreadState(ctx, threadID, Key, func(old json.RawMessage) (json.RawMessage, error) {
+		got = decode(old)
+		return nil, nil
+	})
+	return got, err
 }
 
 // Prepend puts a message back at the front of the queue (a steer that did not take). A message already queued

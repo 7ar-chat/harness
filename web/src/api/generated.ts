@@ -655,11 +655,19 @@ export interface QueueItem {
   text: string;
   model?: string;
   createdAt: string;
+  attachments?: QueuedAttachment[];
 }
 
 export interface QueueSendResult {
   steered: boolean;
   run?: Run;
+}
+
+export interface QueuedAttachment {
+  name: string;
+  path: string;
+  mimeType: string;
+  sizeBytes: number;
 }
 
 export interface Requirement {

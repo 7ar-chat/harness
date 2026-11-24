@@ -8,6 +8,7 @@ import { qk, threadQuery, toastError } from "@/api/queries";
 import type { Attachment, Author, QueueAck, ResumeRequest, Run, RunRequest, Thread } from "@/api/types";
 import { initialLive, reduceEvents, type AguiEvent, type Interrupt, type LiveState } from "@/lib/agui";
 import { openSse } from "@/lib/sse";
+import { useLive } from "@/lib/tabActive";
 import { messagesFromLive, messagesFromThread, type ChatMessage } from "./model";
 import { queueKey } from "./queue";
 
@@ -57,11 +58,19 @@ export function useChat(threadId: string, settings: RunSettings, users: (login: 
   const closeRef = useRef<() => void>();
   const followingRef = useRef<string | null>(null);
   const lastDoneRef = useRef<string | null>(null);
+  // A hidden tab holds no stream: it is closed while the tab is not shown and reopened from the last event seen.
+  const shown = useLive();
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
+  const pausedRef = useRef(false);
+  const reconnectRef = useRef<(() => void) | undefined>();
 
   const stop = useCallback(() => {
     closeRef.current?.();
     closeRef.current = undefined;
     followingRef.current = null;
+    pausedRef.current = false;
+    reconnectRef.current = undefined;
   }, []);
 
   const follow = useCallback(
@@ -87,28 +96,46 @@ export function useChat(threadId: string, settings: RunSettings, users: (login: 
         void qc.invalidateQueries({ queryKey: queueKey(threadId) }); // the server sends the next queued message by itself
         dispatch({ type: "done" });
       };
-      closeRef.current = openSse({
-        url: () => `/api/runs/${runId}/events?after=${seq}`,
-        maxRetries: 6,
-        onGiveUp: () => void finish(),
-        onMessage: (m) => {
-          if (!m.data) return;
-          if (m.id) seq = Number(m.id) || seq;
-          let ev: AguiEvent;
-          try {
-            ev = JSON.parse(m.data) as AguiEvent;
-          } catch {
-            return;
-          }
-          dispatch({ type: "event", ev });
-          if (ev.type === "RUN_FINISHED" || ev.type === "RUN_ERROR") void finish();
-        },
-      });
+      const connect = () => {
+        closeRef.current = openSse({
+          url: () => `/api/runs/${runId}/events?after=${seq}`,
+          maxRetries: 6,
+          onGiveUp: () => void finish(),
+          onMessage: (m) => {
+            if (!m.data) return;
+            if (m.id) seq = Number(m.id) || seq;
+            let ev: AguiEvent;
+            try {
+              ev = JSON.parse(m.data) as AguiEvent;
+            } catch {
+              return;
+            }
+            dispatch({ type: "event", ev });
+            if (ev.type === "RUN_FINISHED" || ev.type === "RUN_ERROR") void finish();
+          },
+        });
+      };
+      reconnectRef.current = connect;
+      if (shownRef.current) connect();
+      else pausedRef.current = true; // followed while hidden: the stream opens when the tab is shown
     },
     [qc, stop, threadId],
   );
 
   useEffect(() => stop, [stop]);
+
+  useEffect(() => {
+    if (!shown) {
+      if (closeRef.current && followingRef.current) {
+        closeRef.current();
+        closeRef.current = undefined;
+        pausedRef.current = true;
+      }
+    } else if (pausedRef.current && followingRef.current) {
+      pausedRef.current = false;
+      reconnectRef.current?.();
+    }
+  }, [shown]);
 
   // Someone else (or an earlier visit) started a run: follow it.
   const activeId = q.data?.activeRun?.id;
@@ -125,7 +152,6 @@ export function useChat(threadId: string, settings: RunSettings, users: (login: 
       try {
         if (runId) {
           // A reply is running: the message waits in the thread's queue (server side) and is sent when it ends.
-          if (attachments.length) throw new Error("Images can be sent once the reply has ended.");
           const ack = await api.post<QueueAck>(`/threads/${threadId}/queue`, {
             message: text,
             model: settings.model || undefined,
@@ -135,7 +161,8 @@ export function useChat(threadId: string, settings: RunSettings, users: (login: 
             sandbox: settings.sandbox,
             role: pick.role || undefined,
             skills: pick.skills?.length ? pick.skills : undefined,
-          } satisfies Omit<RunRequest, "attachments">);
+            attachments: attachments.length ? attachments : undefined,
+          } satisfies RunRequest);
           if (ack.run) follow(ack.run.id); // the reply had just ended: the message started a run
           void qc.invalidateQueries({ queryKey: queueKey(threadId) });
           return;

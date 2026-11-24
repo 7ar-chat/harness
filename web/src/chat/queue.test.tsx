@@ -11,7 +11,7 @@ const item = (id: string, text: string): QueueItem => ({ id, text, createdAt: T 
 
 function Harness({ running = true }: { running?: boolean }) {
   const q = useQueue("t1");
-  return <QueueCard items={q.items} running={running} readOnly={false} remove={q.remove} sendNow={q.sendNow} pending={q.pending} />;
+  return <QueueCard items={q.items} running={running} readOnly={false} remove={q.remove} sendNow={q.sendNow} discardAll={q.discardAll} pending={q.pending} />;
 }
 const wrap = (ui: ReactNode) => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -20,7 +20,7 @@ const wrap = (ui: ReactNode) => {
 
 describe("QueueCard", () => {
   it("renders nothing for an empty queue", () => {
-    const { container } = wrap(<QueueCard items={[]} running readOnly={false} remove={vi.fn()} sendNow={vi.fn()} pending={false} />);
+    const { container } = wrap(<QueueCard items={[]} running readOnly={false} remove={vi.fn()} sendNow={vi.fn()} discardAll={vi.fn()} pending={false} />);
     expect(container.innerHTML).toBe("");
   });
 
@@ -45,6 +45,25 @@ describe("QueueCard", () => {
     await waitFor(() => expect(f.find("POST", "/api/threads/t1/queue/q1/send")).toHaveLength(1));
     fireEvent.click(screen.getByRole("button", { name: "Remove: b" }));
     await waitFor(() => expect(f.find("DELETE", "/api/threads/t1/queue/q2")).toHaveLength(1));
+  });
+
+  it("shows the images a queued message carries", async () => {
+    mockFetch({ "GET /api/threads/t1/queue": [{ ...item("q1", "look"), attachments: [{ name: "shot.png", path: "/workspace/shot.png", mimeType: "image/png", sizeBytes: 70 }] }] });
+    wrap(<Harness />);
+    expect(await screen.findByText("shot.png")).toBeTruthy();
+  });
+
+  it("a queue left behind offers Send now for the first message and Discard all", async () => {
+    const f = mockFetch({
+      "GET /api/threads/t1/queue": [item("q1", "one"), item("q2", "two")],
+      "POST /api/threads/t1/queue/q1/send": { steered: false },
+      "DELETE /api/threads/t1/queue": { discarded: 2 },
+    });
+    wrap(<Harness running={false} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Send now" }));
+    await waitFor(() => expect(f.find("POST", "/api/threads/t1/queue/q1/send")).toHaveLength(1));
+    fireEvent.click(screen.getByRole("button", { name: /Discard all/ }));
+    await waitFor(() => expect(f.find("DELETE", "/api/threads/t1/queue")).toHaveLength(1));
   });
 
   it("offers Send now, and says why it waits, when no reply is running", async () => {

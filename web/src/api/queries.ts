@@ -1,4 +1,5 @@
 import { keepPreviousData, queryOptions, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLivePoll } from "@/lib/tabActive";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { api, ApiError, isUnsupported, putBytes } from "./client";
@@ -215,7 +216,7 @@ function useAction<V, R>(fn: (v: V) => Promise<R>, invalidate: (v: V, r: R) => r
 export const useTemplates = () => useQuery({ queryKey: ["templates"], queryFn: () => api.get<ProjectTemplate[]>("/templates"), staleTime: Infinity });
 /** Where the thread's app is previewed and whether it answers; polled while the Preview tab is open. */
 export const usePreview = (threadId: string, enabled: boolean) =>
-  useQuery({ queryKey: ["preview", threadId], queryFn: () => api.get<PreviewInfo>(`/threads/${threadId}/preview`), enabled, refetchInterval: 4000, retry: false });
+  useQuery({ queryKey: ["preview", threadId], queryFn: () => api.get<PreviewInfo>(`/threads/${threadId}/preview`), enabled, refetchInterval: useLivePoll(4000), retry: false });
 export const useCreateProject = () =>
   useAction((b: { name: string; description?: string; repoUrl?: string; defaultBranch?: string; template?: string }) => api.post<Project>("/projects", b), () => [qk.me, qk.overview], "Project created");
 export const useUpdateProject = (id: string) =>
@@ -353,7 +354,7 @@ export interface JobsOverview {
   questions: JobQuestion[];
 }
 const jobsKey = ["jobs"] as const;
-export const useJobs = () => useQuery({ queryKey: jobsKey, queryFn: () => api.get<JobsOverview>("/me/jobs"), retry: false, refetchInterval: 30000 });
+export const useJobs = () => useQuery({ queryKey: jobsKey, queryFn: () => api.get<JobsOverview>("/me/jobs"), retry: false, refetchInterval: useLivePoll(30000) });
 export const useSaveJobProfile = () => useAction((p: JobProfile) => api.put<JobProfile>("/me/jobs/profile", p), () => [jobsKey], "Saved");
 export const useAddJobBoard = () => useAction((url: string) => api.post<{ openJobs: number }>("/me/jobs/boards", { url }), () => [jobsKey], "Board added");
 export const useScanJobs = () => useAction(() => api.post<{ added: number; boards: number; errors?: string[] }>("/me/jobs/scan"), () => [jobsKey]);

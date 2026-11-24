@@ -17,6 +17,7 @@ import (
 //
 //	POST   /api/threads/{id}/queue            RunRequest → 201 QueueAck  (a message for the reply that is running)
 //	GET    /api/threads/{id}/queue            → [QueueItem]
+//	DELETE /api/threads/{id}/queue            → 200 {"discarded": n}  (every waiting message)
 //	DELETE /api/threads/{id}/queue/{qid}      → 204
 //	POST   /api/threads/{id}/queue/{qid}/send → 202 QueueSendResult  (steer the running reply, or send now)
 //	GET    /api/environments                  → EnvironmentList
@@ -27,6 +28,7 @@ import (
 func (s *Server) routeChat() {
 	s.Route("POST /threads/{id}/queue", s.queueAdd)
 	s.Route("GET /threads/{id}/queue", s.queueList)
+	s.Route("DELETE /threads/{id}/queue", s.queueClear)
 	s.Route("DELETE /threads/{id}/queue/{qid}", s.queueRemove)
 	s.Route("POST /threads/{id}/queue/{qid}/send", s.queueSend)
 	s.Route("GET /environments", s.environments)
@@ -69,17 +71,34 @@ func toClientRun(r *store.Run) *client.Run {
 		LastSeq: r.LastSeq, CreatedAt: r.CreatedAt, Sandbox: r.Sandbox}
 }
 
+func queueAttachments(list []client.Attachment) []harness.Attachment {
+	var out []harness.Attachment
+	for _, a := range list {
+		out = append(out, harness.Attachment{Name: a.Name, MIME: a.MIME, Data: a.Data})
+	}
+	return out
+}
+
 func toQueueItem(it harness.QueuedMessage) client.QueueItem {
-	return client.QueueItem{ID: it.ID, Text: it.Text, Model: it.Options.Model, CreatedAt: it.CreatedAt}
+	q := client.QueueItem{ID: it.ID, Text: it.Text, Model: it.Options.Model, CreatedAt: it.CreatedAt}
+	for _, a := range it.Options.Attachments {
+		q.Attachments = append(q.Attachments, client.QueuedAttachment{Name: a.Name, Path: a.Path, MimeType: a.MimeType, SizeBytes: a.SizeBytes})
+	}
+	return q
+}
+
+func (s *Server) queueClear(w http.ResponseWriter, r *http.Request, c Caller) {
+	n, err := s.H.ClearQueue(r.Context(), c.Login, r.PathValue("id"))
+	if err != nil {
+		failHarness(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"discarded": n})
 }
 
 func (s *Server) queueAdd(w http.ResponseWriter, r *http.Request, c Caller) {
 	var body client.RunRequest
 	if !decode(w, r, &body) {
-		return
-	}
-	if len(body.Attachments) > 0 {
-		fail(w, client.Errorf(client.ErrInvalidRequest, "Attachments cannot be queued: send them once the reply has ended."))
 		return
 	}
 	id := r.PathValue("id")
@@ -92,7 +111,8 @@ func (s *Server) queueAdd(w http.ResponseWriter, r *http.Request, c Caller) {
 	it, run, err := s.H.QueueMessage(r.Context(), c.Login, id, body.Message, harness.RunOptions{
 		Model: o.Model, ReasoningEffort: o.ReasoningEffort, Skills: o.Skills, Interactive: o.Interactive,
 		Sandbox: harness.SandboxMode(o.Sandbox), Mode: harness.RunMode(o.Mode), Role: o.Role,
-		Author: a.Login, AuthorKind: a.Kind, OnBehalfOf: a.OnBehalfOf,
+		Attachments: queueAttachments(o.Attachments),
+		Author:      a.Login, AuthorKind: a.Kind, OnBehalfOf: a.OnBehalfOf,
 	})
 	if err != nil {
 		failHarness(w, err)
