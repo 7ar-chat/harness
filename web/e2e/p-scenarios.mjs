@@ -333,4 +333,58 @@ export async function runP(h) {
       await c.close();
     }
   });
+
+  // t2 (opt-in, E2E_SHOTS=<dir>): the navigation screens, saved to look at; nothing is asserted.
+  await step("t2. Navigation screenshots (E2E_SHOTS)", async () => {
+    const dir = process.env.E2E_SHOTS;
+    if (!dir) return;
+    fs.mkdirSync(dir, { recursive: true });
+    const pid = proj?.id ?? (await post("/projects", { name: "E2E nav" })).id;
+    for (const [theme, size, name] of configs) {
+      const phone = size.width < 500;
+      const c = await mk(theme, size);
+      const pg = await c.newPage();
+      const shot = async (what) => {
+        await settle(pg).catch(() => {});
+        await pg.screenshot({ path: path.join(dir, `nav-${name.replace(" ", "-")}-${what}.png`) });
+      };
+      try {
+        const at = async (hash, ready) => {
+          await pg.goto(`${base}/#${hash}`);
+          await ready.waitFor({ state: "visible", timeout: T });
+        };
+        const views = (n) => pg.getByRole("tablist", { name: n });
+        await at(`/p/${pid}?tab=board`, views("Work views"));
+        if (phone) {
+          await pg.getByRole("button", { name: /Toggle explorer/ }).click().catch(() => {});
+          await shot("explorer-drawer");
+          await pg.keyboard.press("Escape");
+        } else {
+          await shot("work-board-explorer-open");
+        }
+        for (const [hash, list, what] of [
+          [`/p/${pid}?tab=requirements`, "Work views", "work-requirements"],
+          [`/p/${pid}?tab=tasks`, "Work views", "work-tasks"],
+          [`/p/${pid}?tab=workflows`, "Automation views", "automation"],
+          [`/p/${pid}?tab=insights`, "Insights views", "insights"],
+          [`/p/${pid}?tab=members`, "Settings views", "settings-members"],
+          [`/references`, "Me views", "me"],
+        ]) {
+          await at(hash, views(list));
+          await shot(what);
+        }
+        if (!phone) {
+          await at(`/p/${pid}?tab=board`, views("Work views"));
+          await pg.keyboard.press("Control+b");
+          await pg.waitForTimeout(400);
+          await shot("work-board-explorer-collapsed");
+        }
+        await pg.goto(`${base}/#/`);
+        await pg.getByRole("heading", { name: "Dashboard" }).waitFor({ state: "visible", timeout: T });
+        await shot("dashboard");
+      } finally {
+        await c.close();
+      }
+    }
+  });
 }

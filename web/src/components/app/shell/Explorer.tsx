@@ -291,7 +291,6 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
     ...(review?.threads ?? []).filter((it) => mine(it.projectId ?? "")).map((it) => ({ key: `s:${it.thread.id}`, tone: "text-warning", label: it.thread.title || "(untitled)", href: `/t/${it.thread.id}`, k: `t:${it.thread.id}`, kind: "session" })),
   ];
   const visible = needs.slice(0, 6);
-  const personalCount = personal.length;
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className={cn("flex shrink-0 items-center gap-2 px-2 pb-1 pt-2", narrow && "pr-12")}>
@@ -403,7 +402,6 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
 
         <Section
           title="Personal"
-          defaultOpen={!project || personalCount > 0}
           action={
             <button type="button" onClick={() => newSession()} aria-label="New personal session" title="New session" className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring">
               <Plus className="size-3.5" />
