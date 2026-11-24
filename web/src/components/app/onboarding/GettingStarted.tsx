@@ -91,9 +91,9 @@ function StepRow({ s, compact, onNavigate }: { s: Step; compact?: boolean; onNav
 }
 
 export function GettingStarted({ variant, projectId, onNavigate }: { variant: "dashboard" | "explorer"; projectId?: string; onNavigate?: () => void }) {
-  const { state, patch } = useOnboarding();
+  const { state, patch, ready } = useOnboarding();
   const { steps, done } = useChecklist(projectId);
-  if (state.dismissed || done === steps.length) return null;
+  if (!ready || state.dismissed || done === steps.length) return null;
   const pct = Math.round((done / steps.length) * 100);
   const title = "Getting started";
   if (variant === "explorer") {

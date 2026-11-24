@@ -798,6 +798,15 @@ export interface Pos {
   y: number;
 }
 
+export interface Preferences {
+  values: Record<string, unknown>;
+  updatedAt?: string;
+}
+
+export interface PreferencesPatch {
+  values: Record<string, unknown>;
+}
+
 export interface PreviewInfo {
   url: string;
   running: boolean;
@@ -945,6 +954,17 @@ export interface RecipeBody {
   scope: string;
   projectId: string;
   version: number;
+}
+
+export interface RecipeCheck {
+  ok: boolean;
+  error?: string;
+  preview?: RecipeDryRun;
+}
+
+export interface RecipeCheckBody {
+  recipe: RecipeBody;
+  params: Record<string, string>;
 }
 
 export interface RecipeDoc {

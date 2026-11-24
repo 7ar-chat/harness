@@ -14,6 +14,7 @@ import { useFeed } from "@/lib/feed";
 import { onboardingAuto, requestOnboarding } from "@/lib/onboarding";
 import { GettingStarted } from "../onboarding/GettingStarted";
 import { useTheme } from "@/lib/theme";
+import { rememberUi } from "@/lib/serverPrefs";
 import { isUnread } from "@/lib/unread";
 import { cn } from "@/lib/utils";
 import { StatusDot, UserAvatar } from "../common";
@@ -46,6 +47,7 @@ function Section({ title, count, action, badge, children, defaultOpen = true, fo
     } catch {
       /* the choice just is not remembered */
     }
+    rememberUi({ section: [title, next] });
   };
   return (
     <section aria-label={title} className="pb-1">

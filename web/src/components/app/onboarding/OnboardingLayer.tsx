@@ -16,7 +16,7 @@ const typing = (t: EventTarget | null) => {
 };
 
 export function OnboardingLayer() {
-  const { login, state, patch } = useOnboarding();
+  const { login, state, patch, ready } = useOnboarding();
   const overviewLoaded = !!useOverview().data;
   const { newProject, newSession } = useDialogs();
   const { setPanel, setExplorer, narrow } = useShell();
@@ -28,10 +28,10 @@ export function OnboardingLayer() {
 
   // first visit: the welcome opens once the person and their data are known
   useEffect(() => {
-    if (auto || !login || !overviewLoaded || state.welcomed || !onboardingAuto()) return;
+    if (auto || !login || !ready || !overviewLoaded || state.welcomed || !onboardingAuto()) return;
     setAuto(true);
     setWelcome(true);
-  }, [auto, login, overviewLoaded, state.welcomed]);
+  }, [auto, login, ready, overviewLoaded, state.welcomed]);
 
   useEffect(() => {
     const w = () => setWelcome(true);

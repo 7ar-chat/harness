@@ -233,6 +233,55 @@ func (s *PG) SetUserPrefs(ctx context.Context, login string, prefs map[string]an
 	return err
 }
 
+func (s *PG) Preferences(ctx context.Context, login string) (store.UserPreferences, error) {
+	out := store.UserPreferences{Values: map[string]json.RawMessage{}}
+	var raw []byte
+	err := s.pool.QueryRow(ctx, `SELECT doc, updated_at FROM work_user_preferences WHERE login = $1`, login).Scan(&raw, &out.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return out, nil
+	}
+	if err != nil {
+		return out, err
+	}
+	if err := json.Unmarshal(raw, &out.Values); err != nil || out.Values == nil {
+		out.Values = map[string]json.RawMessage{}
+	}
+	return out, nil
+}
+
+func (s *PG) PatchPreferences(ctx context.Context, login string, patch map[string]json.RawMessage) (store.UserPreferences, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return store.UserPreferences{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var ok bool
+	if err := tx.QueryRow(ctx, `SELECT true FROM work_users WHERE login = $1`, login).Scan(&ok); err != nil {
+		return store.UserPreferences{}, notFound(err)
+	}
+	// The row exists from now on and is locked for the merge, so two devices saving at once both apply.
+	if _, err := tx.Exec(ctx, `INSERT INTO work_user_preferences (login) VALUES ($1) ON CONFLICT (login) DO NOTHING`, login); err != nil {
+		return store.UserPreferences{}, err
+	}
+	var raw []byte
+	var prev time.Time
+	if err := tx.QueryRow(ctx, `SELECT doc, updated_at FROM work_user_preferences WHERE login = $1 FOR UPDATE`, login).Scan(&raw, &prev); err != nil {
+		return store.UserPreferences{}, err
+	}
+	var cur map[string]json.RawMessage
+	_ = json.Unmarshal(raw, &cur)
+	vals, err := store.MergePreferences(cur, patch)
+	if err != nil {
+		return store.UserPreferences{}, err
+	}
+	b, _ := json.Marshal(vals)
+	out := store.UserPreferences{Values: vals}
+	if err := tx.QueryRow(ctx, `UPDATE work_user_preferences SET doc = $2, updated_at = GREATEST(clock_timestamp(), updated_at + interval '1 microsecond') WHERE login = $1 RETURNING updated_at`, login, b).Scan(&out.UpdatedAt); err != nil {
+		return store.UserPreferences{}, err
+	}
+	return out, tx.Commit(ctx)
+}
+
 func (s *PG) SeenThreads(ctx context.Context, login string) (map[string]time.Time, error) {
 	rows, err := s.pool.Query(ctx, `SELECT thread_id, seen_at FROM work_thread_seen WHERE login = $1`, login)
 	if err != nil {

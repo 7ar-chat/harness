@@ -1,16 +1,17 @@
 // Recipes: a gallery of ready-made schedules, tasks and triggers you start in two clicks, and the ones your team shares.
 import { Link } from "@tanstack/react-router";
-import { BookOpen, CalendarClock, ChevronDown, ChevronRight, Download, ListChecks, Plus, Search, Trash2, Upload, Webhook } from "lucide-react";
+import { BookOpen, CalendarClock, ChevronDown, ChevronRight, Copy, Download, Pencil, ListChecks, Plus, Search, Trash2, Upload, Webhook } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ApiError } from "@/api/client";
 import { useMe } from "@/api/queries";
 import { useSchedulePreview } from "@/api/schedulesUsage";
 import {
-  CATEGORIES, CATEGORY_LABEL, SCOPE_LABEL, checkValues, exportRecipe, fillTemplate, useApplyRecipe, useDeleteRecipe, useImportRecipe, useRecipes, useShareRecipe, valuesOf,
+  CATEGORIES, CATEGORY_LABEL, SCOPE_LABEL, checkValues, exportRecipe, fillTemplate, useApplyRecipe, useDeleteRecipe, useDuplicateRecipe, useImportRecipe, useRecipes, useShareRecipe, valuesOf,
   type Param, type Recipe, type RecipeApplied, type RecipeKind, type RecipeScope,
 } from "@/api/recipes";
 import { Empty, ErrorState, ListSkeleton } from "@/components/app/common";
+import { RecipeEditor } from "@/pages/RecipeEditor";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,7 +58,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 }
 
 /** One recipe as a card: what it is, what it makes, what it may cost, and the way in. */
-function RecipeCard({ r, onUse, canUse, onDelete }: { r: Recipe; onUse: (r: Recipe) => void; canUse: boolean; onDelete?: (r: Recipe) => void }) {
+function RecipeCard({ r, onUse, canUse, onDelete, onEdit, onDuplicate }: { r: Recipe; onUse: (r: Recipe) => void; canUse: boolean; onDelete?: (r: Recipe) => void; onEdit: (r: Recipe) => void; onDuplicate: (r: Recipe) => void }) {
   return (
     <li className="flex min-w-0 flex-col gap-2 rounded-lg border bg-card p-4" aria-label={r.name}>
       <div className="flex items-start gap-2">
@@ -79,6 +80,14 @@ function RecipeCard({ r, onUse, canUse, onDelete }: { r: Recipe; onUse: (r: Reci
         <Button size="icon" variant="ghost" aria-label={`Export ${r.name}`} title="Export as a file" onClick={() => void exportRecipe(r).catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Export failed"))}>
           <Download />
         </Button>
+        {r.canEdit ? (
+          <Button size="icon" variant="ghost" aria-label={`Edit ${r.name}`} title="Edit" onClick={() => onEdit(r)}>
+            <Pencil />
+          </Button>
+        ) : null}
+        <Button size="icon" variant="ghost" aria-label={`Duplicate ${r.name}`} title="Duplicate to my recipes" onClick={() => onDuplicate(r)}>
+          <Copy />
+        </Button>
         {r.canEdit && onDelete ? (
           <Button size="icon" variant="ghost" aria-label={`Delete ${r.name}`} onClick={() => onDelete(r)}>
             <Trash2 />
@@ -97,6 +106,8 @@ export function RecipeGallery({ kind, canUse, onUse, onDelete }: { kind?: Recipe
   const [cat, setCat] = useState("");
   const [only, setOnly] = useState<"" | RecipeKind>("");
   const [mine, setMine] = useState(false);
+  const [editing, setEditing] = useState<Recipe | null>(null);
+  const dup = useDuplicateRecipe();
   const shown = useMemo(() => {
     const t = text.trim().toLowerCase();
     return (q.data ?? []).filter(
@@ -144,7 +155,7 @@ export function RecipeGallery({ kind, canUse, onUse, onDelete }: { kind?: Recipe
       {shown.length ? (
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Recipes">
           {shown.map((r) => (
-            <RecipeCard key={r.id} r={r} canUse={canUse} onUse={onUse} onDelete={onDelete} />
+            <RecipeCard key={r.id} r={r} canUse={canUse} onUse={onUse} onDelete={onDelete} onEdit={setEditing} onDuplicate={(x) => dup.mutate(x)} />
           ))}
         </ul>
       ) : (
@@ -152,6 +163,7 @@ export function RecipeGallery({ kind, canUse, onUse, onDelete }: { kind?: Recipe
           {text || cat || mine ? "Try another word or clear the filters." : "Share a schedule or a task as a recipe, or import a recipe file."}
         </Empty>
       )}
+      {editing ? <RecipeEditor key={editing.id} recipe={editing} onClose={() => setEditing(null)} /> : null}
     </div>
   );
 }
