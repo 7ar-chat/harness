@@ -1,6 +1,7 @@
 package teamstore
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -245,6 +246,12 @@ func (s *PG) Preferences(ctx context.Context, login string) (store.UserPreferenc
 	}
 	if err := json.Unmarshal(raw, &out.Values); err != nil || out.Values == nil {
 		out.Values = map[string]json.RawMessage{}
+	}
+	for k, v := range out.Values { // jsonb spaces the text out; the API shows the compact form every store keeps
+		var c bytes.Buffer
+		if json.Compact(&c, v) == nil {
+			out.Values[k] = c.Bytes()
+		}
 	}
 	return out, nil
 }

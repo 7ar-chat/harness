@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,11 +43,15 @@ func MergePreferences(cur, patch map[string]json.RawMessage) (map[string]json.Ra
 		if !json.Valid(v) {
 			return nil, fmt.Errorf("%w: the value of %q is not JSON", ErrPreferencesKey, k)
 		}
-		if string(v) == "null" {
+		var c bytes.Buffer // stored compact, so every store reads back the same bytes
+		if err := json.Compact(&c, v); err != nil {
+			return nil, fmt.Errorf("%w: the value of %q is not JSON", ErrPreferencesKey, k)
+		}
+		if c.String() == "null" {
 			delete(out, k)
 			continue
 		}
-		out[k] = v
+		out[k] = c.Bytes()
 	}
 	b, err := json.Marshal(out)
 	if err != nil {

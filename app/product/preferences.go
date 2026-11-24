@@ -60,6 +60,12 @@ func (s *server) patchPreferences(w http.ResponseWriter, r *http.Request, c Call
 		return
 	}
 	p, err := s.team.PatchPreferences(r.Context(), c.Actor, body.Values)
+	if errors.Is(err, store.ErrNotFound) {
+		// A person who was never recorded (a local or development server without a sign-in) gets a plain account, once.
+		if _, uerr := s.team.UpsertUser(r.Context(), store.User{Login: c.Actor, Name: c.Actor}); uerr == nil {
+			p, err = s.team.PatchPreferences(r.Context(), c.Actor, body.Values)
+		}
+	}
 	switch {
 	case errors.Is(err, store.ErrPreferencesTooLarge):
 		writeError(w, http.StatusRequestEntityTooLarge, "too_large", "Preferences are at most 8 KB in all.")

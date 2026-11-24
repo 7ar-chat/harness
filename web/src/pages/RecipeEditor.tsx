@@ -473,7 +473,14 @@ export function RecipeEditor({ recipe, onClose }: { recipe: Recipe; onClose: () 
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => del.mutate(base.id, { onSuccess: onClose })}>Delete</AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => {
+                setShowHistory(false); // its list would be asked for again as soon as the recipe is gone
+                del.mutate(base.id, { onSuccess: onClose });
+              }}
+            >
+              Delete
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
