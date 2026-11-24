@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/adapters/store/capstore"
 	"github.com/7ar-chat/harness/adapters/store/executorstore"
+	"github.com/7ar-chat/harness/adapters/store/factorystore"
 	"github.com/7ar-chat/harness/adapters/store/reqstore"
 	"github.com/7ar-chat/harness/adapters/store/rolestore"
 	"github.com/7ar-chat/harness/adapters/store/schedstore"
@@ -15,6 +17,7 @@ import (
 	"github.com/7ar-chat/harness/adapters/store/workflowstore"
 	"github.com/7ar-chat/harness/ai/llm/llmtest"
 	"github.com/7ar-chat/harness/core/executors"
+	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/requirements"
 	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/core/schedule"
@@ -33,6 +36,7 @@ type cleanRig struct {
 	wfs     *workflowstore.Mem
 	sched   *schedstore.Mem
 	roles   *rolestore.Mem
+	fac     *factorystore.Mem
 	project string
 }
 
@@ -44,7 +48,7 @@ func newCleanRig(t *testing.T) *cleanRig {
 			t.Fatal(err)
 		}
 	}
-	c := &cleanRig{team: tm, reqs: reqstore.NewMem(nil), defs: executorstore.NewMem(nil), wfs: workflowstore.NewMem(nil), sched: schedstore.NewMem(), roles: rolestore.NewMem(nil)}
+	c := &cleanRig{team: tm, reqs: reqstore.NewMem(nil), defs: executorstore.NewMem(nil), wfs: workflowstore.NewMem(nil), sched: schedstore.NewMem(), roles: rolestore.NewMem(nil), fac: factorystore.NewMem(nil)}
 	api, err := NewExecutorAPI(tm, capstore.NewMem(nil), c.defs, []byte("a-secret-key-for-the-test-0123456789"))
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +56,10 @@ func newCleanRig(t *testing.T) *cleanRig {
 	c.rig = newRig(t, rigOpts{team: true, model: llmtest.New(llmtest.Turn{Chunks: llmtest.Text("ok")}),
 		prod: Options{Team: tm, Requirements: c.reqs, Executors: api, Workflows: c.wfs, Roles: c.roles, Capabilities: capstore.NewMem(nil),
 			Schedules: &SchedulesOptions{Store: c.sched, NoRun: true}, SecretKey: []byte("a-secret-key-for-the-test-0123456789")},
-		mod: func(o *harness.Options) { o.Roles = NewRoleRegistry(tm, c.roles) }})
+		mod: func(o *harness.Options) {
+			o.Roles = NewRoleRegistry(tm, c.roles)
+			o.Features = append(harness.ProfileMinimal(), harness.FactoryFeature(harness.FactoryOptions{Store: c.fac, PollEvery: time.Hour}))
+		}})
 	c.project = c.json("POST", "/api/projects", "alice", `{"name":"api"}`, 201)["id"].(string)
 	return c
 }
@@ -122,6 +129,7 @@ func TestDeletingAProjectRemovesEverythingItOwned(t *testing.T) {
 	other := c.json("POST", "/api/projects", "alice", `{"name":"keep"}`, 201)["id"].(string)
 	thread := c.json("POST", "/api/threads", "alice", `{"projectId":"`+c.project+`"}`, 201)["id"].(string)
 	c.putDocs(thread)
+	taskIDs := map[string][]string{}
 	seed := func(pid string) {
 		if _, _, err := c.reqs.Create(c.ctx, requirements.Requirement{ProjectID: pid, Title: "r"}); err != nil {
 			t.Fatal(err)
@@ -140,6 +148,27 @@ func TestDeletingAProjectRemovesEverythingItOwned(t *testing.T) {
 			t.Fatal(err)
 		}
 		if _, err := c.sched.Create(c.ctx, schedule.Schedule{ProjectID: pid, Owner: "alice", RunAs: "alice", Name: "n", Prompt: "p", Cron: "@daily", Enabled: true}); err != nil {
+			t.Fatal(err)
+		}
+		// Factory: a running task with a thread and history (and a learning record among its events), a finished one, a trigger.
+		th := c.json("POST", "/api/threads", "alice", `{"projectId":"`+pid+`"}`, 201)["id"].(string)
+		for _, state := range []factory.State{factory.StateRunning, factory.StateDone} {
+			task, _, err := c.fac.CreateTask(c.ctx, factory.Task{ProjectID: pid, Owner: "alice", Title: "t " + string(state), Spec: "s", ThreadID: th})
+			if err != nil {
+				t.Fatal(err)
+			}
+			taskIDs[pid] = append(taskIDs[pid], task.ID)
+			if _, err := c.fac.UpdateTask(c.ctx, task.ID, factory.Patch{State: &state}); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.fac.AppendEvent(c.ctx, factory.TaskEvent{TaskID: task.ID, Kind: factory.EventContext, Text: "context"}); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.fac.SetThreadInfo(c.ctx, factory.ThreadInfo{ThreadID: "ti-" + task.ID, TaskID: task.ID}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := c.fac.PutTrigger(c.ctx, factory.Trigger{ProjectID: pid, Owner: "alice", Name: "nightly", Kind: factory.TriggerCron, Schedule: "@daily", Enabled: true}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -164,6 +193,21 @@ func TestDeletingAProjectRemovesEverythingItOwned(t *testing.T) {
 		n["runs"] = len(runs)
 		sl, _ := c.sched.List(c.ctx, pid, "")
 		n["schedules"] = len(sl)
+		tasks, _ := c.fac.ListTasks(c.ctx, factory.Filter{ProjectID: pid})
+		n["tasks"] = len(tasks)
+		events := 0
+		infos := 0
+		for _, id := range taskIDs[pid] {
+			ev, _ := c.fac.ListEvents(c.ctx, id, 0)
+			events += len(ev)
+			if _, err := c.fac.GetThreadInfo(c.ctx, "ti-"+id); err == nil {
+				infos++
+			}
+		}
+		n["task events"] = events
+		n["task thread infos"] = infos
+		trs, _ := c.fac.ListTriggers(c.ctx, pid)
+		n["triggers"] = len(trs)
 		return n
 	}
 	for k, v := range count(c.project) {
@@ -172,8 +216,12 @@ func TestDeletingAProjectRemovesEverythingItOwned(t *testing.T) {
 		}
 	}
 	for k, v := range count(other) {
-		if v != 1 {
-			t.Errorf("the other project has %d %s, want 1", v, k)
+		want := 1
+		if k == "tasks" || k == "task events" || k == "task thread infos" {
+			want = 2
+		}
+		if v != want {
+			t.Errorf("the other project has %d %s, want %d", v, k, want)
 		}
 	}
 	if got := c.docs(thread); len(got) != 0 {
