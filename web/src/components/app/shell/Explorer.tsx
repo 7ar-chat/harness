@@ -21,7 +21,8 @@ import { StatusDot, UserAvatar } from "../common";
 import { useDialogs } from "../dialogs";
 import { NavLink, useShell } from "./context";
 import { useProjectActions } from "./projectActions";
-import { projectHref } from "./tabs";
+import { ME_AREA, PROJECT_AREAS, areaHref, locateTab } from "./areas";
+import { projectHref, type EditorTab } from "./tabs";
 
 const byRecent = (a: ThreadSummary, b: ThreadSummary) => b.updatedAt.localeCompare(a.updatedAt);
 
@@ -65,14 +66,12 @@ function Section({ title, label, count, action, badge, children, defaultOpen = t
   );
 }
 
-const SETUP_SECTIONS = ["roles", "schedules", "recipes", "notifications", "memory", "members", "capabilities", "audit"];
-
 const rowCls = "group/row relative flex min-h-7 items-center gap-2 rounded-md px-2.5 py-1 text-[13px] text-sidebar-foreground outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring aria-[current=page]:bg-sidebar-accent aria-[current=page]:font-medium aria-[current=page]:text-sidebar-accent-foreground";
 
-function Row({ href, k, icon, children, meta, onNavigate, label, title }: { href: string; k: string; icon?: ReactNode; children: ReactNode; meta?: ReactNode; onNavigate?: () => void; label?: string; title?: string }) {
+function Row({ href, k, icon, children, meta, onNavigate, label, title, current }: { href: string; k: string; icon?: ReactNode; children: ReactNode; meta?: ReactNode; onNavigate?: () => void; label?: string; title?: string; current?: boolean }) {
   const { tabs } = useShell();
   return (
-    <NavLink href={href} onNavigate={onNavigate} aria-current={tabs.active?.key === k ? "page" : undefined} aria-label={label} title={title} className={rowCls}>
+    <NavLink href={href} onNavigate={onNavigate} aria-current={(current ?? tabs.active?.key === k) ? "page" : undefined} aria-label={label} title={title} className={rowCls}>
       {icon}
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {meta}
@@ -218,23 +217,13 @@ export function UserMenu() {
   );
 }
 
-const HINTS: Record<string, string> = {
-  board: "Sessions and tasks as cards, by state",
-  requirements: "Goals you write down; agents break them into tasks",
-  tasks: "Work handed off to agents, and what starts it",
-  workflows: "Repeatable flows of steps, and their runs",
-  roles: "How agents behave, and what runs them",
-  schedules: "Work an agent repeats on a timetable",
-  memory: "What agents remember about the project",
-  members: "Who can see and change the project",
-  capabilities: "Tools and skills your agents can use",
-  audit: "Who did what, and when",
-};
-const SetupLink = ({ pid, section, k, label, onNavigate, meta }: { pid: string; section: string; k?: string; label: string; onNavigate?: () => void; meta?: ReactNode }) => (
-  <Row href={projectHref(pid, section)} k={k ?? `p:${pid}:${section}`} onNavigate={onNavigate} meta={meta} title={HINTS[section]}>
-    {label}
-  </Row>
-);
+/** The area an editor tab belongs to ("work", "settings", "me"), whatever view or detail it shows. */
+function areaOfTab(t: EditorTab | undefined, projectId?: string): string | undefined {
+  if (!t) return undefined;
+  if (t.key === "page:me") return "me";
+  if (t.projectId && t.projectId === projectId) return locateTab(t.section ?? "board")?.area.id;
+  return undefined;
+}
 
 /** The project's actions (they used to be a header on every project page). */
 function ProjectMenu() {
@@ -379,28 +368,20 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
               )}
             </Section>
 
-            <Section title="Work">
-              <SetupLink pid={project.id} section="board" label="Board" onNavigate={onNavigate} />
-              <SetupLink pid={project.id} section="requirements" label="Requirements" onNavigate={onNavigate} />
-              <SetupLink pid={project.id} section="tasks" label="Tasks & triggers" onNavigate={onNavigate} />
-              <SetupLink pid={project.id} section="workflows" label="Workflows & runs" onNavigate={onNavigate} />
-              <SetupLink pid={project.id} section="insights" label="Insights" onNavigate={onNavigate} />
-            </Section>
-
-            <Section
-              title="Setup"
-              defaultOpen={false}
-              forceOpen={SETUP_SECTIONS.some((x) => tabs.active?.key === `p:${project.id}:${x}`)}
-              badge={memPending ? <span className="rounded-full bg-warning px-1.5 text-[10px] font-medium text-warning-foreground" aria-label={`${memPending} memories to review`}>{memPending}</span> : null}
-            >
-              <SetupLink pid={project.id} section="roles" label="Roles & executors" onNavigate={onNavigate} />
-              <SetupLink pid={project.id} section="schedules" label="Schedules" onNavigate={onNavigate} />
-              <SetupLink pid={project.id} section="recipes" label="Recipes" onNavigate={onNavigate} />
-              <SetupLink pid={project.id} section="notifications" label="Notifications" onNavigate={onNavigate} />
-              <SetupLink pid={project.id} section="memory" label="Memory & docs" onNavigate={onNavigate} meta={memPending ? <span className="rounded-full bg-warning px-1.5 text-[10px] font-medium text-warning-foreground" aria-label={`${memPending} memories to review`}>{memPending}</span> : null} />
-              <SetupLink pid={project.id} section="members" label="Members & access" onNavigate={onNavigate} />
-              <SetupLink pid={project.id} section="capabilities" label="Tools & skills" onNavigate={onNavigate} />
-              <SetupLink pid={project.id} section="audit" label="Audit log" onNavigate={onNavigate} />
+            <Section title="Project">
+              {PROJECT_AREAS.map((area) => (
+                <Row
+                  key={area.id}
+                  href={areaHref(area, project.id, project.role === "owner")}
+                  k={`area:${area.id}`}
+                  current={areaOfTab(tabs.active, project.id) === area.id}
+                  onNavigate={onNavigate}
+                  title={area.hint}
+                  meta={area.id === "settings" && memPending ? <span className="rounded-full bg-warning px-1.5 text-[10px] font-medium text-warning-foreground" aria-label={`${memPending} memories to review`}>{memPending}</span> : null}
+                >
+                  {area.label}
+                </Row>
+              ))}
             </Section>
           </>
         ) : overview && overview.projects.length ? (
@@ -429,51 +410,15 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
           {personal.slice(0, 8).map((t) => (
             <SessionRow key={t.id} t={t} onNavigate={onNavigate} />
           ))}
-          <Row href="/jobs" k="page:/jobs" onNavigate={onNavigate}>
-            Job search
-          </Row>
-          <Row href="/references" k="page:/references" onNavigate={onNavigate}>
-            References
-          </Row>
-          <Row href="/connectors" k="page:/connectors" onNavigate={onNavigate}>
-            Connectors
-          </Row>
-          <Row href="/memory" k="page:/memory" onNavigate={onNavigate}>
-            My memory
-          </Row>
-          <Row href="/schedules" k="page:/schedules" onNavigate={onNavigate}>
-            My schedules
-          </Row>
-          <Row href="/roles" k="page:/roles" onNavigate={onNavigate} title="Your own agent roles, in every project">
-            My roles
-          </Row>
-          <Row href="/capabilities" k="page:/capabilities" onNavigate={onNavigate} title="Tools and skills your assistant can use">
-            My tools & skills
+          <Row href={areaHref(ME_AREA)} k="area:me" current={areaOfTab(tabs.active, projectId) === "me"} onNavigate={onNavigate} title={ME_AREA.hint}>
+            {ME_AREA.label}
           </Row>
         </Section>
       </nav>
       <div className="shrink-0 border-t border-sidebar-border px-2 py-1">
-        {project ? (
-          <>
-            <Row href={projectHref(project.id, "usage")} k={`p:${project.id}:usage`} onNavigate={onNavigate}>
-              Usage & caps
-            </Row>
-            {project.role === "owner" ? (
-              <Row href={projectHref(project.id, "settings")} k={`p:${project.id}:settings`} onNavigate={onNavigate}>
-                Project settings
-              </Row>
-            ) : null}
-          </>
-        ) : (
-          <>
-            <Row href="/insights" k="page:/insights" onNavigate={onNavigate}>
-              My insights
-            </Row>
-            <Row href="/usage" k="page:/usage" onNavigate={onNavigate}>
-              Usage & caps
-            </Row>
-          </>
-        )}
+        <Row href="/profile" k="page:/profile" onNavigate={onNavigate} title="Your account and preferences">
+          Settings
+        </Row>
         <UserMenu />
       </div>
     </div>

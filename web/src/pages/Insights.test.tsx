@@ -87,7 +87,7 @@ describe("Insights tab", () => {
   it("is also a personal page across projects", async () => {
     const m = mockFetch({ ...shellRoutes(), "GET /api/me/insights": view({ projectId: undefined }) });
     await renderApp("/insights");
-    expect(await page().findByText("My insights")).toBeTruthy();
+    expect(await page().findByRole("heading", { name: "My insights" })).toBeTruthy();
     expect(m.calls.some((c) => c.url.startsWith("/api/me/insights?range=30d"))).toBe(true);
   });
 });

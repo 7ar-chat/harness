@@ -11,6 +11,8 @@ import { AdminPage, CapabilitiesPage, ConnectorsPage, HelpPage, InsightsPage, Jo
 import { PlaceCtx, placeOf } from "@/lib/place";
 import { TabActiveProvider } from "@/lib/tabActive";
 import { ErrorBoundary } from "../ErrorBoundary";
+import { AreaNav } from "./AreaNav";
+import { ME_AREA, isMePath } from "./areas";
 import type { EditorTab, Tabs } from "./tabs";
 
 export const KEEP_ALIVE = 8;
@@ -32,10 +34,21 @@ const PAGES: Record<string, () => ReactNode> = {
   "/help": () => <HelpPage />,
 };
 
+/** The Me area: one tab, its views as a sub-navigation above the page of the shown view. */
+function MeArea({ path }: { path: string }) {
+  return (
+    <div className="flex h-full flex-col">
+      <AreaNav area={ME_AREA} current={path} navClassName="shrink-0 px-4 pt-3 md:px-6" panelClassName="relative min-h-0 flex-1">
+        {PAGES[path]?.()}
+      </AreaNav>
+    </div>
+  );
+}
+
 function TabPage({ tab }: { tab: EditorTab }) {
   if (tab.kind === "home") return <Dashboard />;
   if (tab.kind === "session") return <SessionTab threadId={tab.id ?? ""} />;
-  if (tab.kind === "page") return <>{PAGES[tab.href]?.()}</>;
+  if (tab.kind === "page") return isMePath(tab.href) ? <MeArea path={tab.href} /> : <>{PAGES[tab.href]?.()}</>;
   return (
     <PlaceCtx.Provider value={placeOf(tab.href)}>
       <ProjectPage />

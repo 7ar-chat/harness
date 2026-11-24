@@ -3,6 +3,7 @@
 import { useLocation, useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readJSON, writeJSON } from "@/lib/persist";
+import { locatePath, locateTab, viewTitle } from "./areas";
 
 export type TabKind = "home" | "session" | "project" | "requirement" | "task" | "workflow" | "run" | "page";
 
@@ -19,44 +20,34 @@ export interface EditorTab {
   section?: string;
 }
 
-export const PROJECT_SECTIONS: Record<string, string> = {
-  board: "Board",
-  overview: "Sessions",
-  requirements: "Requirements",
-  tasks: "Tasks & triggers",
-  workflows: "Workflows & runs",
-  insights: "Insights",
-  roles: "Roles & executors",
-  schedules: "Schedules",
-  recipes: "Recipes",
-  memory: "Memory & docs",
-  members: "Members & access",
-  capabilities: "Tools & skills",
-  audit: "Audit log",
-  usage: "Usage & caps",
-  notifications: "Notifications",
-  settings: "Project settings",
-};
-
 const PAGES: Record<string, string> = {
   "/": "Dashboard",
   "/supervisor": "My assistant",
   "/inbox": "Needs you",
   "/jobs": "Job search",
-  "/references": "References",
-  "/connectors": "Connectors",
-  "/capabilities": "My tools & skills",
-  "/schedules": "Schedules",
-  "/roles": "My roles",
-  "/usage": "Usage",
-  "/insights": "Insights",
-  "/memory": "My memory",
-  "/profile": "My settings",
+  "/references": "Me",
+  "/connectors": "Me",
+  "/capabilities": "Me",
+  "/schedules": "Me",
+  "/roles": "Me",
+  "/usage": "Me",
+  "/insights": "Me",
+  "/memory": "Me",
+  "/profile": "Settings",
   "/admin": "Admin",
   "/help": "Help",
 };
 
-export const pageTitle = (path: string) => PAGES[path];
+export const pageTitle = (path: string) => {
+  const l = locatePath(path);
+  return l ? viewTitle(l) : PAGES[path];
+};
+
+/** The words on a project place's tab: "Work · Board". */
+export function projectTitle(section: string | undefined): string {
+  const l = locateTab(section);
+  return l ? viewTitle(l) : (section ?? "");
+}
 
 /** The href of a project place. */
 export function projectHref(projectId: string, section?: string, extra: { task?: string; wf?: string; run?: string; req?: string } = {}) {
@@ -84,14 +75,31 @@ export function tabFor(pathname: string, search: Record<string, unknown>): Edito
     if (section === "tasks" && task) return { key: `p:${projectId}:task:${task}`, href: projectHref(projectId, "tasks", { task }), kind: "task", projectId, id: task, section };
     if (section === "workflows" && run) return { key: `p:${projectId}:run:${run}`, href: projectHref(projectId, "workflows", { run }), kind: "run", projectId, id: run, section };
     if (section === "workflows" && wf) return { key: `p:${projectId}:wf:${wf}`, href: projectHref(projectId, "workflows", { wf }), kind: "workflow", projectId, id: wf, section };
-    return { key: `p:${projectId}:${section}`, href: projectHref(projectId, str(search.tab)), kind: "project", projectId, section };
+    // One tab per area: the view shown is the tab's address, not its identity.
+    const area = locateTab(section)?.area.id ?? section;
+    return { key: `p:${projectId}:${area}`, href: projectHref(projectId, str(search.tab)), kind: "project", projectId, section };
   }
   if (pathname === "/") return { key: "home", href: "/", kind: "home" };
+  if (locatePath(pathname)) return { key: "page:me", href: pathname, kind: "page" };
   if (PAGES[pathname]) return { key: `page:${pathname}`, href: pathname, kind: "page" };
   return null;
 }
 
 const storageKey = (login: string) => `7ar.tabs.v1.${login}`;
+
+/** A strip stored before the areas existed holds one tab per view: fold them into one tab per area. */
+function normalize(list: EditorTab[]): EditorTab[] {
+  const out: EditorTab[] = [];
+  for (const t of list) {
+    let n = t;
+    if (t.kind === "project" || (t.kind === "page" && locatePath(t.href))) {
+      const [path = "", query = ""] = t.href.split("?");
+      n = tabFor(path, Object.fromEntries(new URLSearchParams(query))) ?? t;
+    }
+    if (!out.some((o) => o.key === n.key)) out.push(n);
+  }
+  return out;
+}
 
 const valid = (t: unknown): t is EditorTab => !!t && typeof (t as EditorTab).key === "string" && typeof (t as EditorTab).href === "string" && typeof (t as EditorTab).kind === "string";
 
@@ -110,13 +118,13 @@ export function useEditorTabs(login: string): Tabs {
   const pathname = useLocation({ select: (l) => l.pathname });
   const search = useLocation({ select: (l) => l.search }) as unknown as Record<string, unknown>;
   const current = useMemo(() => tabFor(pathname, search), [pathname, search]);
-  const [stored, setStored] = useState<EditorTab[]>(() => readJSON<unknown[]>(storageKey(login), []).filter(valid));
+  const [stored, setStored] = useState<EditorTab[]>(() => normalize(readJSON<unknown[]>(storageKey(login), []).filter(valid)));
   const loaded = useRef(login);
   // The user known after the first render (the shell mounts once /me answered, so this is rare): load their strip.
   useEffect(() => {
     if (loaded.current !== login) {
       loaded.current = login;
-      setStored(readJSON<unknown[]>(storageKey(login), []).filter(valid));
+      setStored(normalize(readJSON<unknown[]>(storageKey(login), []).filter(valid)));
     }
   }, [login]);
 

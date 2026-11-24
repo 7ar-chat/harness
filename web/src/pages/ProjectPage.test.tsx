@@ -72,25 +72,26 @@ describe("ProjectPage", () => {
     expect(within(page().getByRole("region", { name: "Ready" })).getByRole("link", { name: /Explain the retry logic/ })).toBeTruthy();
   });
 
-  it("gives owners a Settings entry and writers a New session button; viewers get neither", async () => {
+  it("gives owners the General settings view and writers a New session button; viewers get neither", async () => {
     mockFetch(routes("owner"));
-    const owner = await renderApp("/p/p1");
+    const owner = await renderApp("/p/p1?tab=members");
     await screen.findByRole("button", { name: /^Switch project/ });
-    expect(screen.getByRole("link", { name: "Project settings" })).toBeTruthy();
+    expect(await screen.findByRole("tab", { name: "General" })).toBeTruthy();
     expect(await openMenu()).toContain("New session");
     owner.unmount();
 
     mockFetch(routes("member"));
-    const member = await renderApp("/p/p1");
+    const member = await renderApp("/p/p1?tab=members");
     await screen.findByRole("button", { name: /^Switch project/ });
-    expect(screen.queryByRole("link", { name: "Project settings" })).toBeNull();
+    expect(await screen.findByRole("tab", { name: "Members & access" })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "General" })).toBeNull();
     expect(await openMenu()).toContain("New session");
     member.unmount();
 
     mockFetch(routes("viewer"));
     await renderApp("/p/p1");
     await screen.findByRole("button", { name: /^Switch project/ });
-    expect(screen.queryByRole("link", { name: "Project settings" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "General" })).toBeNull();
     const viewer = await openMenu();
     expect(viewer).not.toContain("New session");
     expect(viewer).not.toContain("Import AGENTS.md");
@@ -101,8 +102,9 @@ describe("ProjectPage", () => {
     mockFetch(routes("owner"));
     const { router } = await renderApp("/p/p1");
     await screen.findByRole("button", { name: /^Switch project/ });
-    fireEvent.click(screen.getByRole("button", { name: /^Setup/ })); // the Setup group starts folded
-    fireEvent.click(screen.getByRole("link", { name: "Members & access" }));
+    fireEvent.click(screen.getAllByRole("link", { name: "Settings" })[0]!); // the project's area (the last link is the personal Settings)
+    await waitFor(() => expect(router.state.location.search).toEqual({ tab: "settings" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Members & access" }));
     await waitFor(() => expect(router.state.location.search).toEqual({ tab: "members" }));
     expect(screen.getByRole("tab", { name: "Members & access", selected: true })).toBeTruthy();
     expect(await screen.findByText("Alice Doe")).toBeTruthy();
