@@ -33,6 +33,18 @@ const KIND_ICON: Record<string, ReactNode> = {
 /** Where a created thing lives, for the "Open" link after Create. */
 const KIND_TAB: Record<string, [string, string]> = { schedule: ["schedules", "Schedules"], task: ["tasks", "Tasks"], trigger: ["tasks", "Tasks & triggers"] };
 
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** A plain-words reading of the common cron shapes (minute hour * * weekday); undefined when the expression is something else. */
+export function describeCron(cron: string): string | undefined {
+  const m = /^(\d{1,2}) (\d{1,2}) \* \* (\*|[0-6]|1-5)$/.exec(cron.trim());
+  if (!m) return undefined;
+  const at = `${m[2]!.padStart(2, "0")}:${m[1]!.padStart(2, "0")}`;
+  if (m[3] === "*") return `every day at ${at}`;
+  if (m[3] === "1-5") return `on weekdays at ${at}`;
+  return `every ${WEEKDAYS[Number(m[3])]} at ${at}`;
+}
+
 const CRON_CHOICES: { label: string; cron: string }[] = [
   { label: "Every hour", cron: "0 * * * *" },
   { label: "Every day at 09:00", cron: "0 9 * * *" },
@@ -362,7 +374,7 @@ export function RecipeWizard({ projectId, recipe, canCreate, onClose }: { projec
               </p>
               {isSchedule || b.cron ? (
                 <p className="text-xs text-muted-foreground">
-                  Runs {CRON_CHOICES.find((c) => c.cron === cron)?.label.replace(/^Every day/, "every day").replace(/^Every/, "every").replace(/^Weekdays/, "weekdays") ?? <>on <code>{cron}</code></>} ({zone})
+                  Runs {describeCron(cron) ?? <>on <code>{cron}</code></>} ({zone})
                 </p>
               ) : b.event ? (
                 <p className="text-xs text-muted-foreground">
