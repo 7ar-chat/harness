@@ -57,6 +57,8 @@ type hub struct {
 	bus   FeedBus       // nil: single process
 	out   chan []byte   // events waiting to go to the bus
 	retry time.Duration // wait before subscribing to the bus again
+	// tap, when set, sees every event this process produces (the notification rules; see notifications.go).
+	tap func(FeedEvent)
 }
 
 func newHub() *hub {
@@ -157,6 +159,9 @@ func (h *hub) publish(ev FeedEvent) {
 		ev.At = time.Now().UTC()
 	}
 	h.deliver(ev)
+	if h.tap != nil {
+		h.tap(ev)
+	}
 	if h.bus == nil {
 		return
 	}

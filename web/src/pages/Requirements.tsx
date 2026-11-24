@@ -255,12 +255,14 @@ function AutoDispatch({ projectId }: { projectId: string }) {
   const [on, setOn] = useState(false);
   const [usd, setUsd] = useState("");
   const [policy, setPolicy] = useState("sandboxed");
+  const [comment, setComment] = useState(false);
   const s = q.data;
   useEffect(() => {
     if (!s) return;
     setOn(s.autoDispatch);
     setUsd(s.budget?.maxUsd ? String(s.budget.maxUsd) : "");
     setPolicy(s.policy || "sandboxed");
+    setComment(s.commentOnIssue);
   }, [s]);
   const budget = Number.parseFloat(usd);
   if (!s) return null; // the form starts from what is saved
@@ -285,10 +287,15 @@ function AutoDispatch({ projectId }: { projectId: string }) {
             <option value="autonomous">Autonomous</option>
           </select>
         </div>
-        <Button size="sm" disabled={!valid || save.isPending} onClick={() => save.mutate({ autoDispatch: on, policy, budget: budget > 0 ? { maxUsd: budget } : undefined })}>
+        <Button size="sm" disabled={!valid || save.isPending} onClick={() => save.mutate({ autoDispatch: on, policy, budget: budget > 0 ? { maxUsd: budget } : undefined, commentOnIssue: comment })}>
           Save
         </Button>
       </div>
+      <div className="flex items-center gap-2 border-t pt-2">
+        <Switch id="req-comment" checked={comment} onCheckedChange={setComment} aria-label="Comment on the source GitHub issue" />
+        <Label htmlFor="req-comment">Comment on the source GitHub issue</Label>
+      </div>
+      <p className="text-xs text-muted-foreground">When a requirement imported from a GitHub issue gets a pull request, say so on the issue, and write "Fixed by #142" when it merges. Off by default; the GitHub App needs the issues permission.</p>
     </section>
   );
 }

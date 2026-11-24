@@ -5,7 +5,9 @@
 // Fails on any console error/warning, pageerror or CSP violation (nothing is allow-listed except what is
 // documented at BENIGN below). Temp dirs and child processes are always cleaned up, also on failure and SIGINT.
 import { spawn, spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,6 +41,7 @@ try {
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "harness-e2e-"));
 let server = null;
 let fake = null;
+let hookSrv = null; // the webhook receiver of the notification scenarios (l*)
 let cleanupDone = null;
 const cleanup = () => (cleanupDone ??= doCleanup()); // one run, awaited by every caller (SIGINT and the normal exit)
 async function doCleanup() {
@@ -49,6 +52,8 @@ async function doCleanup() {
     if (!gone) server.kill("SIGKILL");
   }
   await fake?.close().catch(() => {});
+  hookSrv?.close();
+  hookSrv?.closeAllConnections?.();
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
@@ -68,6 +73,18 @@ async function main() {
   if (build.status !== 0) throw new Error(`go build failed:\n${build.stderr || build.stdout}`);
 
   fake = await startFakeLlm();
+  // A tiny webhook receiver on loopback: it records what it is sent and answers with `hook.code`.
+  const hook = { calls: [], code: 200 };
+  hookSrv = http.createServer((req, res) => {
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => {
+      hook.calls.push({ headers: req.headers, body: Buffer.concat(chunks).toString("utf8") });
+      res.writeHead(hook.code).end();
+    });
+  });
+  await new Promise((r) => hookSrv.listen(0, "127.0.0.1", r));
+  hook.url = `http://127.0.0.1:${hookSrv.address().port}/e2e-hook`;
   const dirs = { home: "home", ws: "workspace", state: "state" };
   for (const d of Object.values(dirs)) fs.mkdirSync(path.join(tmp, d));
   const ws = path.join(tmp, dirs.ws);
@@ -118,6 +135,7 @@ async function main() {
     // The admin page and the git hosts need a secret key (to seal tokens and SSH keys) and an administrator.
     HARNESS_SECRET_KEY: "e2e-secret-key-0123456789abcdef0123456789",
     HARNESS_ADMINS: "local",
+    HARNESS_NOTIFY_ALLOW_PRIVATE: "1", // the webhook receiver above is on loopback (scenarios l*)
     // The document library and the job search are optional features whose routes answer 404 without a directory; they are on
     // so that the References and Jobs pages render their real state (h5) instead of a "not available" one.
     HARNESS_DOCUMENTS_DIR: path.join(tmp, "documents"),
@@ -793,6 +811,99 @@ async function main() {
     await poll(() => page.url().endsWith(`#/t/${th.id}`), "the card click to open the session");
   });
 
+  // ---- l: notifications -------------------------------------------------------------------------------------------
+  const lp = {};
+  const signed = (c, secret) => c.headers["x-7ar-signature"] === "sha256=" + crypto.createHmac("sha256", secret).update(c.body).digest("hex");
+
+  await step("l1. Notifications tab: add a webhook channel with the wizard, it sends a signed test message", async () => {
+    lp.id = (await post("/projects", { name: "E2E notify" })).id;
+    await page.goto(`${base}/#/p/${lp.id}?tab=notifications`);
+    await page.reload();
+    const main = page.getByRole("main");
+    await visible(main.getByText("No channels yet"), "the empty state that explains channels");
+    await main.getByRole("button", { name: /Add channel/ }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByText("Webhook", { exact: true }).click();
+    await dlg.getByLabel("Name").fill("Ops hook");
+    await dlg.getByLabel("Webhook address").fill(hook.url);
+    await dlg.getByLabel("Signing secret (optional)").fill("e2e-signing-secret");
+    await dlg.getByRole("button", { name: /Add and send a test/ }).click();
+    await gone(page.getByRole("dialog"), "the wizard closed");
+    await poll(() => hook.calls.length >= 1, "the test message at the receiver");
+    const c = hook.calls[0];
+    eq(signed(c, "e2e-signing-secret"), true, "a valid X-7ar-Signature");
+    const body = JSON.parse(c.body);
+    eq([body.event, body.project], ["test", "E2E notify"], "the payload names the event and project");
+    // the address and the secret are never shown or returned
+    const chans = await api(`/projects/${lp.id}/notification-channels`);
+    eq(JSON.stringify(chans).includes("e2e-hook") || JSON.stringify(chans).includes("e2e-signing-secret"), false, "no address or secret in the API");
+    await visible(main.getByText("Ops hook").first(), "the channel in the list");
+    // the Test button on the row (the server allows one test a second per channel)
+    await new Promise((r) => setTimeout(r, 1200));
+    await main.getByRole("button", { name: /^Test$/ }).click();
+    await visible(main.getByText(/Delivered: the test message arrived/), "the delivered result");
+    // the log has it
+    await visible(main.getByRole("table", { name: "Delivery log" }).getByText("delivered").first(), "a delivered entry in the log");
+  });
+
+  await step("l2. a failing receiver is shown as failed with its reason, and highlighted in the log", async () => {
+    hook.code = 500;
+    await new Promise((r) => setTimeout(r, 1200)); // one test a second per channel
+    await page.getByRole("button", { name: /^Test$/ }).click();
+    await visible(page.getByRole("main").getByText(/Failed: the server answered 500/), "the failed result");
+    const row = page.getByRole("table", { name: "Delivery log" }).getByRole("row").filter({ hasText: "failed" }).first();
+    await visible(row, "a failed row in the log");
+    eq((await row.getAttribute("class")).includes("bg-destructive"), true, "the failed row is highlighted");
+    await visible(page.getByText("Why did I not get a message?"), "the why-not hint");
+    hook.code = 200;
+  });
+
+  await step("l3. a rule sends an approval that waits to the channel, and the delivery log shows it", async () => {
+    const main = page.getByRole("main");
+    await main.getByLabel("An approval is waiting: Ops hook").click(); // saved on the server, then shown ticked
+    const rules = await poll(async () => {
+      const v = await api(`/projects/${lp.id}/notifications`);
+      return v.rules.events["approval.waiting"]?.channels?.length ? v.rules : null;
+    }, "the rule saved");
+    eq(rules.events["approval.waiting"].person, true, "the person stays on");
+    const before = hook.calls.length;
+    const th = await post("/threads", { title: "E2E notify approval", projectId: lp.id });
+    await page.goto(`${base}/#/t/${th.id}`);
+    await visible(composer, "composer");
+    await send("please run the script");
+    await visible(page.getByRole("alertdialog", { name: "Approval needed" }), "the approval card");
+    await poll(() => hook.calls.length > before, "the approval event at the receiver");
+    const got = hook.calls.slice(before).map((c) => JSON.parse(c.body)).find((b) => b.event === "approval.waiting");
+    eq(Boolean(got), true, "an approval.waiting payload");
+    await poll(async () => (await api(`/projects/${lp.id}/notifications/log`)).some((e) => e.event === "approval.waiting" && e.status === "delivered"), "the log entry");
+    await page.getByRole("alertdialog", { name: "Approval needed" }).getByRole("button", { name: "Approve", exact: true }).click();
+    await visible(page.getByText("The script finished."), "the answer after approval");
+    await idle(th.id);
+    await page.goto(`${base}/#/p/${lp.id}?tab=notifications`);
+    await page.reload();
+    await visible(page.getByRole("table", { name: "Delivery log" }).getByText("An agent is waiting for your approval").first(), "the entry in the log table");
+  });
+
+  await step("l4. Settings: personal notification preferences with quiet hours save and survive a reload", async () => {
+    await page.goto(`${base}/#/profile`);
+    await page.reload();
+    const table = page.getByRole("table", { name: "My notifications" });
+    await visible(table, "my notifications table");
+    await page.getByLabel("Quiet hours", { exact: true }).click();
+    await page.getByLabel("Hourly digest").click();
+    await page.getByRole("button", { name: "Save notification settings" }).click();
+    const me = await poll(async () => {
+      const v = await api("/me/notifications");
+      return v.quietStart ? v : null;
+    }, "preferences saved");
+    eq([me.quietStart, me.quietEnd, me.digest], ["22:00", "07:00", true], "stored preferences");
+    await page.reload();
+    await visible(page.getByLabel("Quiet hours start"), "the quiet hours after a reload");
+    // nothing outside the app is set up: the test says so instead of failing
+    await page.getByRole("button", { name: /Send me a test/ }).click();
+    await visible(page.getByText(/nothing to test/), "the explanation");
+  });
+
   // Opt-in: E2E_SHOTS=<dir> saves screenshots of the main surfaces (not a scenario, nothing is asserted).
   if (process.env.E2E_SHOTS) {
     const dir = process.env.E2E_SHOTS;
@@ -823,6 +934,11 @@ async function main() {
     for (const t of ["requirements", "roles", "members", "memory", "capabilities", "usage", "schedules", "audit"]) await shot(page, `/p/${proj.id}?tab=${t}`, `tab-${t}`);
     for (const r of ["/inbox", "/profile", "/jobs", "/admin", "/connectors"]) await shot(page, r, `page${r.replace("/", "-")}`);
     await shot(page, `/p/${proj.wf}?tab=workflows`, "workflows");
+    await shot(page, `/p/${lp.id}?tab=notifications`, "notifications-project");
+    await shot(page, "/profile", "notifications-me");
+    await page.getByRole("table", { name: "My notifications" }).scrollIntoViewIfNeeded();
+    await page.getByLabel("Quiet hours", { exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(dir, "notifications-me.png") });
     await page.evaluate(() => localStorage.setItem("theme", "light"));
     await page.reload();
     await shot(page, `/p/${proj.id}?tab=board`, "board-light");

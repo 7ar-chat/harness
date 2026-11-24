@@ -692,6 +692,7 @@ func (s *server) workflowChanged(c workflows.Change) {
 		title += ": " + gateTitle(n)
 	}
 	s.hub.publish(FeedEvent{Type: typ, ProjectID: c.Run.ProjectID, Title: title, Status: status, Actor: c.Run.Owner, owner: c.Run.Owner})
+	s.workflowNotify(c, title)
 	if c.Kind == "finished" && c.Run.State == workflows.RunFailed {
 		slog.Info("workflows: a run failed", "run", c.Run.ID, "error", c.Run.Error)
 	}

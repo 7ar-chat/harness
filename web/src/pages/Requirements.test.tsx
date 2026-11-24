@@ -16,7 +16,7 @@ const routes = (role: "owner" | "member" | "viewer", list: unknown, extra: Recor
     "GET /api/projects/p1/members": [],
     "GET /api/projects/p1/github": { configured: true, connected: true, repo: "acme/payments" },
     "GET /api/projects/p1/requirements": list,
-    "GET /api/projects/p1/requirements/settings": { projectId: "p1", autoDispatch: false },
+    "GET /api/projects/p1/requirements/settings": { projectId: "p1", autoDispatch: false, commentOnIssue: false },
     ...extra,
   };
 };
@@ -122,7 +122,7 @@ describe("Requirements tab", () => {
     expect(save.disabled).toBe(false);
     fireEvent.click(save);
     await waitFor(() => expect(m.find("PUT", "/api/projects/p1/requirements/settings")).toHaveLength(1));
-    expect(m.find("PUT", "/api/projects/p1/requirements/settings")[0]?.body).toEqual({ autoDispatch: true, policy: "sandboxed", budget: { maxUsd: 2.5 } });
+    expect(m.find("PUT", "/api/projects/p1/requirements/settings")[0]?.body).toEqual({ autoDispatch: true, policy: "sandboxed", budget: { maxUsd: 2.5 }, commentOnIssue: false });
   });
 
   it("changes the status of a requirement from its panel", async () => {

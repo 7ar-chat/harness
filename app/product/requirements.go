@@ -617,6 +617,36 @@ func (s *server) requirementTaskMoved(t factory.Task, to factory.State) {
 			continue
 		}
 		s.hub.publish(FeedEvent{Type: "requirement.changed", ProjectID: t.ProjectID, Title: r.Title, owner: t.Owner})
+		s.commentOnIssue(ctx, r, t, to)
+	}
+}
+
+// commentOnIssue tells the source GitHub issue of a requirement that its pull request opened or merged, once, when the
+// project's owner turned that on (Settings.CommentOnIssue; off by default). A failure is logged, never raised.
+func (s *server) commentOnIssue(ctx context.Context, r requirements.Requirement, t factory.Task, to factory.State) {
+	if s.opt.GitHub == nil || s.team == nil || r.Source.Kind != requirements.SourceGitHubIssue || r.Source.Number <= 0 || t.PR.Number <= 0 {
+		return
+	}
+	var text string
+	switch {
+	case to == factory.StateReview && !(r.PR.Number == t.PR.Number && r.PR.State == "open"):
+		text = fmt.Sprintf("A pull request is open for this: #%d (%s)", t.PR.Number, t.PR.URL)
+	case to == factory.StateDone && r.PR.State != "merged":
+		text = fmt.Sprintf("Fixed by #%d", t.PR.Number)
+	default:
+		return
+	}
+	st, err := s.opt.Requirements.GetSettings(ctx, t.ProjectID)
+	if err != nil || !st.CommentOnIssue {
+		return
+	}
+	p, err := s.team.GetProject(ctx, t.ProjectID)
+	owner, repo, ok := strings.Cut(r.Source.Repo, "/")
+	if err != nil || p.GitHubInstallation == 0 || !ok {
+		return
+	}
+	if err := s.opt.GitHub.CommentOnIssue(ctx, p.GitHubInstallation, owner, repo, r.Source.Number, text); err != nil {
+		slog.Warn("requirements: commenting on the source issue failed", "requirement", r.ID, "error", err)
 	}
 }
 
@@ -655,6 +685,9 @@ func taskMove(r requirements.Requirement, t factory.Task, to factory.State) (req
 			set(requirements.StatusInProgress)
 		}
 		flag("task cancelled")
+		if t.PR.Number > 0 { // a pull request closed without a merge
+			p.PR = &requirements.LinkedPR{Number: t.PR.Number, URL: t.PR.URL, State: "closed"}
+		}
 	case factory.StateDone:
 		set(requirements.StatusDone)
 		flag("")

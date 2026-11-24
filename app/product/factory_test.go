@@ -130,6 +130,7 @@ type fxOpts struct {
 	secret string // webhook secret
 	tg     *cnTG  // a Telegram bot API double: turns the bridge on
 	notify func(ctx context.Context, login, text string)
+	prod   func(*Options) // adjusts the product options (a secret key, the notifications)
 }
 
 // fxEnv is a team server over a harness with the factory feature: alice owns the project "api", bob is a member,
@@ -159,6 +160,9 @@ func newFxEnv(t *testing.T, o fxOpts) *fxEnv {
 	if o.tg != nil {
 		prod.SecretKey, prod.PublicURL = cnKey, "https://harness.test/"
 		prod.Telegram = &Telegram{Token: cnTGToken, Username: "harness_bot", API: o.tg.srv.URL, PollSeconds: 1}
+	}
+	if o.prod != nil {
+		o.prod(&prod)
 	}
 	e.rig = newRig(t, rigOpts{
 		team: true, model: o.model, prod: prod, env: map[string]string{"LLM_DEFAULT_MODEL": "gpt-test"},

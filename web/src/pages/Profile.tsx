@@ -21,6 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { ExecutorsCard } from "@/pages/Executors";
+import { MyNotificationsCard } from "@/pages/Notifications";
 import { useFeed } from "@/lib/feed";
 import { blobToDataUrl } from "@/lib/utils";
 import { playSound, setSoundPrefs, useSoundPrefs, type Sound } from "@/lib/sound";
@@ -430,6 +431,7 @@ export function ProfilePage() {
           <p className="text-sm text-muted-foreground">Your name, avatar, sounds and notifications</p>
           <ProfileCard />
           <ExecutorsCard />
+          <MyNotificationsCard />
           <Preferences />
           <GitAccess />
         </div>

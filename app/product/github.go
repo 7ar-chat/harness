@@ -147,6 +147,17 @@ func (g *GitHubApp) do(ctx context.Context, method, path, bearer string, body an
 	return resp.StatusCode, nil
 }
 
+// CommentOnIssue posts a comment on an issue of owner/repo with an installation token limited to the repository (the
+// App needs the issues write permission).
+func (g *GitHubApp) CommentOnIssue(ctx context.Context, installation int64, owner, repo string, number int, body string) error {
+	tok, err := g.InstallationToken(ctx, installation, repo)
+	if err != nil {
+		return err
+	}
+	_, err = g.do(ctx, http.MethodPost, fmt.Sprintf("/repos/%s/%s/issues/%d/comments", owner, repo, number), tok, map[string]string{"body": body}, nil)
+	return err
+}
+
 // RepoInstallation returns the id of the App's installation on owner/repo.
 func (g *GitHubApp) RepoInstallation(ctx context.Context, owner, repo string) (int64, error) {
 	tok, err := g.jwt()

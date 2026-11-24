@@ -93,6 +93,9 @@ type Options struct {
 	// GitHosts serves the code hosts besides GitHub.com (see githosts.go): the admin's list of allowed hosts and the
 	// users' tokens and SSH keys. The same value is given to the factory (FactoryOptions.Hosts). Nil: no routes.
 	GitHosts *GitHosts
+	// Notifications configures the notification rules, channels and delivery log (see notifications.go). Nil: the rules
+	// live in memory; the defaults (the app plus each person's linked Telegram, Slack and email) still apply.
+	Notifications *NotificationsOptions
 	// TrustIdentityHeaders makes the server take the signed-in user from the headers of a trusted gateway (see
 	// trustedheaders.go). Nil: off.
 	TrustIdentityHeaders *TrustedHeaders
@@ -116,6 +119,8 @@ type server struct {
 	active activeCache
 	// sched is the scheduler of scheduled agent tasks (nil without Options.Schedules).
 	sched *schedulerState
+	// nf is the notification engine (see notifications.go).
+	nf *notifier
 }
 
 // New returns the HTTP handler: the API of h with the product on top.
@@ -234,7 +239,11 @@ func (s *server) Install(hs *httpapi.Server) error {
 	if s.opt.Bus != nil {
 		s.hub.attach(context.Background(), s.opt.Bus)
 	}
+	if err := s.setupNotifications(); err != nil {
+		return err
+	}
 	s.routeTeam()
+	s.routeNotifications()
 	s.routeAdmin()
 	s.routeCapabilities()
 	s.routeRoles()

@@ -14,6 +14,7 @@ import (
 
 	"github.com/7ar-chat/harness"
 	"github.com/7ar-chat/harness/core/agui"
+	"github.com/7ar-chat/harness/core/notify"
 	"github.com/7ar-chat/harness/core/schedule"
 	"github.com/7ar-chat/harness/core/store"
 	"github.com/7ar-chat/harness/hosts/client"
@@ -405,8 +406,22 @@ func (s *server) previewSchedule(w http.ResponseWriter, r *http.Request, _ Calle
 // scheduleExecutor runs a schedule's prompt as an ordinary agent run of its RunAs account.
 type scheduleExecutor struct{ s *server }
 
-// Execute implements harness.ScheduleExecutor.
+// Execute implements harness.ScheduleExecutor: it runs the schedule and tells the notification rules about a run that failed.
 func (e *scheduleExecutor) Execute(ctx context.Context, sc schedule.Schedule, run schedule.Run, started func(threadID, agentRunID string)) (harness.ScheduleOutcome, error) {
+	out, err := e.execute(ctx, sc, run, started)
+	if err != nil || out.Status == schedule.StatusFailed {
+		reason := out.Error
+		if err != nil {
+			reason = "the run could not start"
+		}
+		who := firstNonEmpty(sc.RunAs, sc.Owner)
+		e.s.emitNotification(notify.Event{Key: "schedule:" + sc.ID + ":" + run.ID, Kind: notify.ScheduleFailed, ProjectID: sc.ProjectID,
+			Title: "Scheduled run failed: " + sc.Name, Body: reason, Login: who, URL: e.s.appURL("/#/schedules"), Data: map[string]any{"scheduleId": sc.ID}})
+	}
+	return out, err
+}
+
+func (e *scheduleExecutor) execute(ctx context.Context, sc schedule.Schedule, run schedule.Run, started func(threadID, agentRunID string)) (harness.ScheduleOutcome, error) {
 	s := e.s
 	who := sc.RunAs
 	if u, err := s.team.GetUser(ctx, who); err == nil && !u.Active() {

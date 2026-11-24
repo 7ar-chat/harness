@@ -157,6 +157,9 @@ type Settings struct {
 	AutoDispatch bool           `json:"autoDispatch"`
 	Policy       string         `json:"policy,omitempty"`
 	Budget       DispatchBudget `json:"budget,omitzero"`
+	// CommentOnIssue posts on the source GitHub issue of a requirement when its pull request opens ("A pull request is
+	// open: #142") and when it merges ("Fixed by #142"). Off by default: the GitHub App then needs the issues permission.
+	CommentOnIssue bool `json:"commentOnIssue"`
 }
 
 // Errors of the port.

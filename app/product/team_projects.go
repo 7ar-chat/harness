@@ -12,6 +12,7 @@ import (
 	"github.com/7ar-chat/harness/core/blobs"
 	"github.com/7ar-chat/harness/core/capabilities"
 	"github.com/7ar-chat/harness/core/githost"
+	"github.com/7ar-chat/harness/core/notify"
 	"github.com/7ar-chat/harness/core/roles"
 	"github.com/7ar-chat/harness/core/store"
 )
@@ -305,6 +306,7 @@ func (s *server) deleteProject(w http.ResponseWriter, r *http.Request, c Caller)
 		return
 	}
 	s.dropProjectSchedules(r.Context(), p.ID)
+	s.dropProjectNotifications(r.Context(), p.ID)
 	// The project's marketplace installs (and their sealed keys) go with it; the project is already gone, so a
 	// failure here is logged and leaves rows nobody can reach.
 	if s.opt.Capabilities != nil {
@@ -385,9 +387,16 @@ func (s *server) putMember(w http.ResponseWriter, r *http.Request, c Caller) {
 		fail(w, err)
 		return
 	}
+	_, roleErr := s.team.MemberRole(r.Context(), p.ID, login)
 	if err := s.team.SetMember(r.Context(), p.ID, login, body.Role); err != nil {
 		s.memberError(w, err)
 		return
+	}
+	if roleErr != nil { // not a member before: tell the owners
+		for _, o := range s.projectOwners(r.Context(), p.ID) {
+			s.emitNotification(notify.Event{Key: "member:" + p.ID + ":" + login, Kind: notify.MemberJoined, ProjectID: p.ID, Title: login + " joined " + p.Name, Login: o,
+				URL: s.appURL("/#/p/" + p.ID + "?tab=members")})
+		}
 	}
 	s.note(Caller{Actor: c.Actor, ProjectID: p.ID}, "", "member.set", map[string]any{"login": login, "role": body.Role}, FeedEvent{Type: "member.changed", affects: login})
 	s.hub.publish(FeedEvent{Type: "member.changed", ProjectID: p.ID, Actor: c.Actor})

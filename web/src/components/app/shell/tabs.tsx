@@ -32,6 +32,7 @@ export const PROJECT_SECTIONS: Record<string, string> = {
   capabilities: "Capabilities",
   audit: "Audit log",
   usage: "Usage & caps",
+  notifications: "Notifications",
   settings: "Settings",
 };
 
