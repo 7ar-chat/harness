@@ -108,12 +108,15 @@ export async function startStack({ log = console.log, keepLogs = false } = {}) {
 
   try {
     // ---- ports ------------------------------------------------------------------------------------------------
-    const [pgPort, redisPort, dexPort, s3Port, proxyPort, web0Port, web1Port, workerPort] = await Promise.all(Array.from({ length: 8 }, freePort));
+    let pgPort, redisPort, dexPort, s3Port, proxyPort, web0Port, web1Port, workerPort, redirect;
+    for (let attempt = 1; ; attempt++) {
+    // (another process may take a "free" port before docker binds it: a clash is retried with new ports)
+    [pgPort, redisPort, dexPort, s3Port, proxyPort, web0Port, web1Port, workerPort] = await Promise.all(Array.from({ length: 8 }, freePort));
     Object.assign(S, { pgPort, redisPort, dexPort, s3Port, proxyPort, web0Port, web1Port, workerPort });
     S.base = `http://127.0.0.1:${proxyPort}`;
     S.replicas = [`http://127.0.0.1:${web0Port}`, `http://127.0.0.1:${web1Port}`];
     S.workerAdmin = `http://127.0.0.1:${workerPort}`;
-    const redirect = `${S.base}/auth/callback`;
+    redirect = `${S.base}/auth/callback`;
 
     // ---- docker: postgres, redis, dex, rustfs --------------------------------------------------------------------
     S.composeFile = path.join(tmp, "docker-compose.yml");
@@ -148,13 +151,22 @@ ${dexConfig({ dexPort, redirect }).replaceAll("$", "$$$$").replace(/^/gm, "     
     );
     log(`docker compose project ${project}: postgres :${pgPort}, redis :${redisPort}, dex :${dexPort}, s3 :${s3Port}`);
     const up = spawnSync("docker", ["compose", "-p", project, "-f", S.composeFile, "up", "-d", "--wait", "--wait-timeout", "120", "postgres", "redis", "dex", "s3"], { encoding: "utf8", timeout: 240_000 });
-    if (up.status !== 0) throw new Error(`docker compose up failed:\n${up.stderr || up.stdout}`);
+    if (up.status === 0) break;
+    if (attempt < 4 && /address already in use|port is already allocated/.test(up.stderr)) {
+      log("a port was taken meanwhile: retrying with new ports");
+      spawnSync("docker", ["compose", "-p", project, "-f", S.composeFile, "down", "-v", "--remove-orphans", "-t", "2"], { timeout: 90_000, stdio: "ignore" });
+      continue;
+    }
+    throw new Error(`docker compose up failed:\n${up.stderr || up.stdout}`);
+    }
     await poll(async () => (await fetch(`http://127.0.0.1:${dexPort}/dex/.well-known/openid-configuration`)).ok, "dex discovery", 60_000, 300);
     // RustFS: any answer on the port means the server is up (the bucket is created by harness: ARTIFACTS_S3_CREATE_BUCKET)
     await poll(async () => (await fetch(`http://127.0.0.1:${s3Port}/`).catch(() => null)) !== null, "rustfs", 60_000, 300);
 
     // ---- build ---------------------------------------------------------------------------------------------------
-    if (!fs.existsSync(path.join(repo, "hosts/httpapi/ui/index.html"))) {
+    const uiIndex = path.join(repo, "hosts/httpapi/ui/index.html");
+    const newestSrc = (d) => fs.readdirSync(d, { withFileTypes: true }).reduce((m, e) => Math.max(m, e.isDirectory() ? newestSrc(path.join(d, e.name)) : fs.statSync(path.join(d, e.name)).mtimeMs), 0);
+    if (!fs.existsSync(uiIndex) || fs.statSync(uiIndex).mtimeMs < newestSrc(path.join(repo, "web/src"))) {
       log("building the web UI (npm run build) ...");
       const b = spawnSync("npm", ["run", "build"], { cwd: path.join(repo, "web"), encoding: "utf8", timeout: 300_000 });
       if (b.status !== 0) throw new Error(`npm run build failed:\n${b.stderr || b.stdout}`);

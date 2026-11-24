@@ -85,6 +85,8 @@ export function makeEnv(S, browser, problems) {
         const alice = await env.person("alice");
         await alice.post(`/admin/users/${name}/approve`);
         await poll(async () => (await p.api("GET", "/me")).json?.user?.status === "approved", `${name} approved`);
+        // each replica caches a person's sign-up status for 5 s: wait until both let the person in
+        for (const replica of [0, 1]) await poll(async () => (await p.api("GET", "/overview", undefined, { replica })).status === 200, `${name} admitted on replica ${replica}`, 15_000, 250);
       }
     }
     return p;
