@@ -263,14 +263,14 @@ export function ReviewNotice({ projectId }: { projectId: string }) {
   const words = reviewWords(review);
   if (!review || !words || gone === review || readJSON(reviewKey(review), false)) return null;
   return (
-    <div role="note" aria-label="Review notice" className="flex items-start gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+    <div role="note" aria-label="Review notice" className="flex flex-col items-start gap-1 rounded-md sm:flex-row sm:gap-2 border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
       <p className="min-w-0 flex-1">
         {words.long} <LearnMore slug="reviews" />
       </p>
       <Button
         size="sm"
         variant="ghost"
-        className="-my-1 shrink-0"
+        className="-mb-1 -ml-2 shrink-0 sm:-my-1 sm:ml-0"
         onClick={() => {
           writeJSON(reviewKey(review), true);
           setGone(review);

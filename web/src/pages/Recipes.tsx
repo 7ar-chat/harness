@@ -725,10 +725,7 @@ export function RecipesPanel({ projectId, canEdit, owner }: { projectId: string;
   const del = useDeleteRecipe();
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          A recipe becomes a schedule, a task or a trigger of this project. To share your own, use <em>Share as recipe</em> on a schedule or a task.
-        </p>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <Button variant="outline" onClick={() => setImporting(true)} disabled={!canEdit}>
           <Upload /> Import a file
         </Button>

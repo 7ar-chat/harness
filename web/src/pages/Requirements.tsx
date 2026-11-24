@@ -273,7 +273,7 @@ function AutoDispatch({ projectId }: { projectId: string }) {
   return (
     <details className="rounded-lg border text-sm" open={on || comment}>
       <summary className="cursor-pointer select-none px-3 py-2 font-medium">
-        Automation <span className="font-normal text-muted-foreground">{on ? "Auto-dispatch is on" : "Off: hand ready requirements to agents by itself"}</span>
+        Hand off automatically <span className="font-normal text-muted-foreground">{on ? "On: ready requirements go to agents by themselves" : "Off: you hand ready requirements to agents"}</span>
       </summary>
     <section aria-label="Auto-dispatch" className="space-y-2 p-3 pt-1">
       <div className="flex items-center gap-2">

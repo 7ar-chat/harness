@@ -3,7 +3,7 @@ import { HelpButton } from "./help";
 
 const INTRO: Record<string, { title: string; text: string; slug?: string }> = {
   insights: { title: "Insights", text: "What this project's agents delivered, and what it cost.", slug: "insights" },
-  recipes: { title: "Recipes", text: "Ready-made schedules, tasks and triggers: pick one and fill in a few words.", slug: "recipes" },
+  recipes: { title: "Recipes", text: "Ready-made schedules, tasks and triggers: pick one and fill in a few words. To share your own, use Share as recipe on a schedule or a task.", slug: "recipes" },
   notifications: { title: "Notifications", text: "Who hears about what in this project. Add channels to tell the whole team." },
   board: { title: "Board", text: "Sessions and tasks as cards, grouped by where they stand.", slug: "sessions" },
   overview: { title: "Sessions", text: "Every session with an agent in this project.", slug: "sessions" },
