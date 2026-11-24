@@ -15,7 +15,11 @@ export async function runP(h) {
     await pg.waitForFunction(() => !document.querySelector('[data-slot="skeleton"], [aria-busy="true"], [aria-label="Loading"], [aria-label="Loading page"]'), null, { timeout: T });
     await pg.waitForTimeout(350); // fade-in transitions finish, so contrast is measured on settled colours
   };
+  // The one e2e user keeps its onboarding state on the server now (the account follows the person): a browser that is meant
+  // to be a newcomer must start from an empty server-side document, whatever earlier scenarios dismissed.
+  const forgetOnboarding = () => post("/me/preferences", { values: { onboarding: null, ui: null } }, "PATCH");
   const mk = async (theme, size, { seen = true } = {}) => {
+    if (!seen) await forgetOnboarding();
     const c = await browser.newContext({ viewport: size, bypassCSP: true, reducedMotion: "reduce" });
     c.on("page", watch);
     await c.addInitScript((t) => {
@@ -127,6 +131,7 @@ export async function runP(h) {
   // ---- p2: a newcomer's first minutes ---------------------------------------------------------------------------------------------------
   const TERMS = ["Policy", "Budget", "Executor", "Workflow", "Gate", "Trigger"];
   const walk = async (size, label) => {
+    await forgetOnboarding();
     const c = await browser.newContext({ viewport: size, bypassCSP: true, reducedMotion: "reduce" }); // a new person: nothing is marked as seen
     c.on("page", watch);
     await c.addInitScript(() => {

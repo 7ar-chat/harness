@@ -234,7 +234,7 @@ function WaitBreakdown({ w }: { w?: InsightsView["waiting"] }) {
   const known = WAIT_KINDS.some(([k]) => w[k].n > 0);
   return (
     <section className="rounded-lg border" aria-label="Time waiting on a person">
-      <h3 className="p-3 pb-1 text-sm font-medium">Time waiting on a person</h3>
+      <h2 className="p-3 pb-1 text-sm font-medium">Time waiting on a person</h2>
       {known ? (
         <table className="w-full text-sm">
           <thead className="text-xs text-muted-foreground">
@@ -267,8 +267,8 @@ function People({ people }: { people: InsightsView["people"] }) {
   if (!people.length) return null;
   return (
     <section className="rounded-lg border" aria-label="People">
-      <h3 className="p-3 pb-1 text-sm font-medium">People</h3>
-      <div className="overflow-x-auto">
+      <h2 className="p-3 pb-1 text-sm font-medium">People</h2>
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="People table">
         <table className="w-full text-sm">
           <thead className="text-xs text-muted-foreground">
             <tr>
@@ -415,8 +415,8 @@ function Body({ d, projectId }: { d: InsightsView; projectId?: string }) {
       <People people={d.people} />
       {c.models.length ? (
         <section className="rounded-lg border">
-          <h3 className="p-3 pb-1 text-sm font-medium">Cost by model</h3>
-          <div className="overflow-x-auto">
+          <h2 className="p-3 pb-1 text-sm font-medium">Cost by model</h2>
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Cost by model table">
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground">
                 <tr>

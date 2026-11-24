@@ -3,7 +3,7 @@
 // (the run is sent as that role / with that skill loaded); a requirement or a document is written into the message.
 import { useQueryClient } from "@tanstack/react-query";
 import { Bot, FileText, ListChecks, Sparkles, X } from "lucide-react";
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useReducer, useState, type KeyboardEvent } from "react";
 import { useCommands } from "@/api/queries";
 import { useRoles } from "@/api/roles";
 import { cn } from "@/lib/utils";
@@ -107,7 +107,17 @@ export function useMentionItems(projectId?: string): MentionItem[] {
     for (const c of commands ?? []) if (c.source === "skill") items.push({ kind: "skill", id: c.name, label: c.name, detail: c.description });
     return items;
   }, [roles, commands]);
-  // Read at every render: what other pages loaded since shows up without a refetch.
+  // The lists other pages loaded (a tab that stays open in the background) show up here without a refetch: read at every
+  // render, and render again when one of those two lists changes in the cache.
+  const [, refresh] = useReducer((n: number) => n + 1, 0);
+  useEffect(
+    () =>
+      qc.getQueryCache().subscribe((e) => {
+        const k = e.query.queryKey[0];
+        if (k === "requirements" || k === "documents") refresh();
+      }),
+    [qc],
+  );
   return [...own, ...cachedItems(qc.getQueriesData({ queryKey: ["requirements"] }), "requirement"), ...cachedItems(qc.getQueriesData({ queryKey: ["documents"] }), "document")];
 }
 
