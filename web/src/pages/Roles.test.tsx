@@ -65,6 +65,7 @@ describe("the Roles tab", () => {
     fireEvent.change(dialog().getByLabelText("Title"), { target: { value: "Scribe" } });
     fireEvent.change(dialog().getByLabelText("Description"), { target: { value: "writes things" } });
     fireEvent.change(dialog().getByLabelText("Instructions"), { target: { value: "Write clearly." } });
+    fireEvent.click(dialog().getByRole("button", { name: /Advanced/ }));
     fireEvent.change(dialog().getByLabelText("Model"), { target: { value: "cheap" } });
     fireEvent.change(dialog().getByLabelText("Allowed tools"), { target: { value: "read_file, search_*" } });
     fireEvent.change(dialog().getByLabelText("Denied tools"), { target: { value: "execute_command" } });
@@ -206,5 +207,59 @@ describe("the Roles tab", () => {
     mockFetch(routes("owner", undefined, { "GET /api/projects/p1/roles": reply(404, { error: { code: "not_found", message: "x" } }) }));
     await renderApp("/p/p1?tab=roles");
     expect(await page().findByText("Roles are not available")).toBeTruthy();
+  });
+});
+
+describe("the role editor's Advanced section", () => {
+  const adv = () => dialog().getByRole("button", { name: /Advanced/ });
+  const set = (listItem: unknown[] = [role("coder")]) => mockFetch(routes("owner", listItem));
+
+  it("is collapsed on a new role: only the newcomer's fields show, with a hint", async () => {
+    window.localStorage.clear();
+    set();
+    await renderApp("/p/p1?tab=roles");
+    fireEvent.click(await page().findByRole("button", { name: /New role/ }));
+    expect(adv().getAttribute("aria-expanded")).toBe("false");
+    expect(dialog().getByText("Most roles only need a name and instructions.")).toBeTruthy();
+    for (const l of ["Name", "Title", "Description", "Instructions"]) expect(dialog().getByLabelText(l)).toBeTruthy();
+    expect(dialog().getByRole("combobox", { name: "Executor" })).toBeTruthy();
+    expect(dialog().getByRole("switch", { name: "Enabled" })).toBeTruthy();
+    for (const l of ["Model", "Allowed tools", "Denied tools"]) expect(dialog().queryByLabelText(l)).toBeNull();
+    expect(dialog().queryByRole("combobox", { name: "Tool profile" })).toBeNull();
+    fireEvent.click(adv());
+    expect(adv().getAttribute("aria-expanded")).toBe("true");
+    expect(dialog().getByLabelText("Model")).toBeTruthy();
+    expect(dialog().getByRole("combobox", { name: "Permission mode" })).toBeTruthy();
+  });
+
+  it("remembers open and closed per browser", async () => {
+    window.localStorage.clear();
+    set();
+    await renderApp("/p/p1?tab=roles");
+    fireEvent.click(await page().findByRole("button", { name: /New role/ }));
+    fireEvent.click(adv());
+    expect(window.localStorage.getItem("7ar.advanced.role")).toBe("1");
+    fireEvent.click(adv());
+    expect(window.localStorage.getItem("7ar.advanced.role")).toBe("0");
+    window.localStorage.clear();
+  });
+
+  it("opens by itself when an advanced field holds a value", async () => {
+    window.localStorage.clear();
+    set([role("coder"), docs]);
+    await renderApp("/p/p1?tab=roles");
+    fireEvent.click(await page().findByRole("button", { name: "Edit docs" }));
+    expect(adv().getAttribute("aria-expanded")).toBe("true");
+    expect((dialog().getByLabelText("Model") as HTMLInputElement).value).toBe("cheap");
+  });
+
+  it("opens by itself when the problem is inside it", async () => {
+    window.localStorage.clear();
+    set([role("coder"), { ...docs, toolProfile: "write", permissionMode: "plan" }]);
+    await renderApp("/p/p1?tab=roles");
+    fireEvent.click(await page().findByRole("button", { name: "Edit docs" }));
+    expect(adv().getAttribute("aria-expanded")).toBe("true");
+    expect(dialog().getByRole("alert").textContent).toMatch(/plan mode/);
+    expect((dialog().getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

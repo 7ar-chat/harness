@@ -121,10 +121,27 @@ export async function runShots(h) {
         await settle(pg);
         await clickVis(pg.getByRole("button", { name: /New executor/ }));
       });
+      await dlg("dlg-executor-editor-advanced", async () => {
+        await pg.goto(`${base}/#/p/${pid}?tab=roles`);
+        await settle(pg);
+        await clickVis(pg.getByRole("button", { name: /New executor/ }));
+        const d = pg.getByRole("dialog");
+        const t = d.getByRole("button", { name: /^Advanced/ });
+        if ((await t.getAttribute("aria-expanded")) !== "true") await t.click();
+        await d.getByRole("combobox", { name: "Start from" }).click();
+        await pg.getByRole("option", { name: "Codex" }).click();
+      });
       await dlg("dlg-role-editor", async () => {
         await pg.goto(`${base}/#/roles`);
         await settle(pg);
         await clickVis(pg.getByRole("button", { name: /New role/ }));
+      });
+      await dlg("dlg-role-editor-advanced", async () => {
+        await pg.goto(`${base}/#/roles`);
+        await settle(pg);
+        await clickVis(pg.getByRole("button", { name: /New role/ }));
+        const t = pg.getByRole("dialog").getByRole("button", { name: /^Advanced/ });
+        if ((await t.getAttribute("aria-expanded")) !== "true") await t.click();
       });
       await dlg("dlg-tapd-connect", async () => {
         const p2 = (await post("/projects", { name: "E2E tapd shots" })).id;

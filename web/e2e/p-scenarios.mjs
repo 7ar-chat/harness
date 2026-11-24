@@ -89,6 +89,24 @@ export async function runP(h) {
         await pg.getByRole("button", { name: /Add channel/ }).filter({ visible: true }).first().click();
         await pg.getByRole("dialog").getByText("Webhook", { exact: true }).click();
         await dlgScan("channel wizard");
+        // the role and executor editors, with Advanced closed and then open
+        await pg.goto(`${base}/#/p/${pid}?tab=roles`);
+        await settle(pg);
+        for (const [what, button] of [["role editor", /New role/], ["executor editor", /New executor/]]) {
+          await pg.getByRole("button", { name: button }).filter({ visible: true }).first().click();
+          const d = pg.getByRole("dialog");
+          await d.waitFor({ state: "visible", timeout: T });
+          const toggle = d.getByRole("button", { name: /^Advanced/ });
+          if ((await toggle.getAttribute("aria-expanded")) === "true") await toggle.click();
+          await pg.waitForTimeout(300);
+          await scan(pg, `${name} dialog ${what} (Advanced closed)`);
+          await toggle.click();
+          await pg.waitForTimeout(300);
+          await scan(pg, `${name} dialog ${what} (Advanced open)`);
+          await toggle.click(); // leave the remembered choice as found
+          await pg.keyboard.press("Escape");
+          await gone(pg.getByRole("dialog"), `${what} closed`).catch(() => {});
+        }
         await pg.goto(`${base}/#/`);
         await settle(pg);
         await pg.keyboard.press("Control+k");

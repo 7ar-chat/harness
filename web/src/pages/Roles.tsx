@@ -10,6 +10,7 @@ import {
 import { useExecutors } from "@/api/executors";
 import type { ExecutorView, RoleView } from "@/api/types";
 import { ProjectExecutors } from "@/pages/Executors";
+import { Advanced } from "@/components/app/advanced";
 import { Empty, ErrorState, ListSkeleton } from "@/components/app/common";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -97,6 +98,9 @@ function RoleEditor({ pid, role, create, readOnly, onClose, onDuplicate }: { pid
   // An empty executor is left out of the body: a PUT replaces the role, so absent means the internal loop.
   const body = useMemo<RoleBody>(() => ({ ...d, executor: d.executor || undefined, allowTools: parseList(allow), denyTools: parseList(deny) }), [d, allow, deny]);
   const problem = readOnly ? undefined : validateRole(body);
+  // Advanced opens by itself when it holds a non-default value, or when the problem with the draft is one of its fields.
+  const advancedSet = !!(d.model || d.reasoningEffort || d.toolProfile || d.permissionMode || body.allowTools.length || body.denyTools.length || d.skills.length || d.mcp.length);
+  const advancedProblem = !!problem && validateRole({ ...body, name: "ok", prompt: "ok" }) === problem;
   const busy = create_.isPending || update.isPending;
   const editing = !create && !!role;
 
@@ -115,6 +119,7 @@ function RoleEditor({ pid, role, create, readOnly, onClose, onDuplicate }: { pid
             {readOnly ? "A builtin role cannot be edited. Copy it into the project to change it: the copy replaces the builtin of the same name here." : "A role is an agent configuration you call with @ in the chat, from the delegate tool or on a task."}
           </DialogDescription>
         </DialogHeader>
+        {readOnly ? null : <p className="text-sm text-muted-foreground">Most roles only need a name and instructions.</p>}
         <fieldset disabled={readOnly} className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -123,59 +128,20 @@ function RoleEditor({ pid, role, create, readOnly, onClose, onDuplicate }: { pid
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="role-title">Title</Label>
-              <Input id="role-title" value={d.title} placeholder="Docs writer" onChange={(e) => set({ title: e.target.value })} />
+              <Input id="role-title" value={d.title} placeholder="Docs writer (optional)" onChange={(e) => set({ title: e.target.value })} />
             </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="role-description">Description</Label>
-            <Input id="role-description" value={d.description} placeholder="What the role is for (shown to the delegating agent)" onChange={(e) => set({ description: e.target.value })} />
+            <Input id="role-description" value={d.description} placeholder="What this role does (shown to the delegating agent)" onChange={(e) => set({ description: e.target.value })} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="role-prompt">Instructions</Label>
             <Textarea id="role-prompt" rows={8} value={d.prompt} placeholder="You are … Do … Never …" onChange={(e) => set({ prompt: e.target.value })} />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="role-model">Model</Label>
-              <Input id="role-model" value={d.model} placeholder="the default model" onChange={(e) => set({ model: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Reasoning effort</Label>
-              <Select value={d.reasoningEffort || "default"} onValueChange={(v) => set({ reasoningEffort: v === "default" ? "" : v })} disabled={readOnly}>
-                <SelectTrigger aria-label="Reasoning effort"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">Default</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Tool profile</Label>
-              <Select value={d.toolProfile || "inherit"} onValueChange={(v) => set({ toolProfile: v === "inherit" ? "" : v })} disabled={readOnly}>
-                <SelectTrigger aria-label="Tool profile"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="inherit">Same tools as the run</SelectItem>
-                  <SelectItem value="read-only">Read-only (nothing is changed)</SelectItem>
-                  <SelectItem value="write">Read and write</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Permission mode</Label>
-              <Select value={d.permissionMode || "normal"} onValueChange={(v) => set({ permissionMode: v === "normal" ? "" : v })} disabled={readOnly}>
-                <SelectTrigger aria-label="Permission mode"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="plan">Plan (investigate, then propose)</SelectItem>
-                  <SelectItem value="ask">Ask before risky tool calls</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
           <div className="space-y-1.5">
             <Label>Executor</Label>
+            <p className="text-xs text-muted-foreground">Who does the work.</p>
             <Select value={d.executor || "internal"} onValueChange={(v) => set({ executor: v === "internal" ? "" : v })} disabled={readOnly}>
               <SelectTrigger aria-label="Executor"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -191,24 +157,94 @@ function RoleEditor({ pid, role, create, readOnly, onClose, onDuplicate }: { pid
                 : "Recommended. The 7ar harness codes in the sandbox with the project's memory and instructions, loop guards, budgets that count every token, approvals in the UI, and queue, steer and resume. It needs no setup."}
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="role-allow">Allowed tools</Label>
-              <Textarea id="role-allow" rows={2} value={allow} placeholder="empty: all of them. read_file, search_*" onChange={(e) => setAllow(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="role-deny">Denied tools</Label>
-              <Textarea id="role-deny" rows={2} value={deny} placeholder="execute_command, github__*" onChange={(e) => setDeny(e.target.value)} />
-            </div>
-          </div>
-          <ChipPicker label="Skills to load" options={skillOptions} value={d.skills} onChange={(skills) => set({ skills })} empty="No skills are installed." />
-          <ChipPicker label="MCP servers" options={mcpOptions} value={d.mcp} onChange={(mcp) => set({ mcp })} empty="No MCP server is on for this project: the role keeps the tools the run has." />
           <div className="flex items-center gap-2">
             <Switch id="role-enabled" checked={d.enabled} onCheckedChange={(enabled) => set({ enabled })} aria-label="Enabled" />
             <Label htmlFor="role-enabled">Enabled</Label>
             <span className="text-xs text-muted-foreground">A disabled role is not offered and cannot be called.</span>
           </div>
         </fieldset>
+
+        <Advanced storageKey="7ar.advanced.role" nonDefault={advancedSet} invalid={advancedProblem} hint="Model, tools, skills, history">
+          <fieldset disabled={readOnly} className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="role-model">Model</Label>
+                <Input id="role-model" value={d.model} placeholder="the default model" onChange={(e) => set({ model: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Reasoning effort</Label>
+                <Select value={d.reasoningEffort || "default"} onValueChange={(v) => set({ reasoningEffort: v === "default" ? "" : v })} disabled={readOnly}>
+                  <SelectTrigger aria-label="Reasoning effort"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Tool profile</Label>
+                <Select value={d.toolProfile || "inherit"} onValueChange={(v) => set({ toolProfile: v === "inherit" ? "" : v })} disabled={readOnly}>
+                  <SelectTrigger aria-label="Tool profile"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="inherit">Same tools as the run</SelectItem>
+                    <SelectItem value="read-only">Read-only (nothing is changed)</SelectItem>
+                    <SelectItem value="write">Read and write</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Permission mode</Label>
+                <Select value={d.permissionMode || "normal"} onValueChange={(v) => set({ permissionMode: v === "normal" ? "" : v })} disabled={readOnly}>
+                  <SelectTrigger aria-label="Permission mode"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="plan">Plan (investigate, then propose)</SelectItem>
+                    <SelectItem value="ask">Ask before risky tool calls</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="role-allow">Allowed tools</Label>
+                <Textarea id="role-allow" rows={2} value={allow} placeholder="empty: all of them. read_file, search_*" onChange={(e) => setAllow(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="role-deny">Denied tools</Label>
+                <Textarea id="role-deny" rows={2} value={deny} placeholder="execute_command, github__*" onChange={(e) => setDeny(e.target.value)} />
+              </div>
+            </div>
+            <ChipPicker label="Skills to load" options={skillOptions} value={d.skills} onChange={(skills) => set({ skills })} empty="No skills are installed." />
+            <ChipPicker label="MCP servers" options={mcpOptions} value={d.mcp} onChange={(mcp) => set({ mcp })} empty="No MCP server is on for this project: the role keeps the tools the run has." />
+          </fieldset>
+          {editing && !role?.builtin ? (
+            <div>
+              <Button type="button" variant="outline" size="sm" aria-pressed={showHistory} onClick={() => setShowHistory((s) => !s)}>
+                <History /> History
+              </Button>
+            </div>
+          ) : null}
+          {showHistory ? (
+            <div className="space-y-1 rounded-md border p-2" aria-label="Version history">
+              {history.isLoading ? <ListSkeleton rows={2} /> : null}
+              {history.data?.length === 0 ? <p className="p-1 text-xs text-muted-foreground">No earlier versions: the role has not been changed since it was created.</p> : null}
+              {history.data?.map((v) => (
+                <div key={v.version} className="flex items-center gap-2 text-sm">
+                  <span className="font-medium">v{v.version}</span>
+                  <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                    {v.changedBy ? `${v.changedBy}, ` : ""}
+                    {new Date(v.at).toLocaleString()} · {v.role.prompt.slice(0, 60)}
+                  </span>
+                  <Button size="sm" variant="outline" disabled={restore.isPending || readOnly} onClick={() => role && restore.mutate({ name: role.name, version: v.version }, { onSuccess: onClose })}>
+                    Restore
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </Advanced>
 
         {preview.data ? (
           <div className="space-y-2 rounded-md border bg-muted/40 p-3 text-sm" aria-label="Preview">
@@ -229,36 +265,12 @@ function RoleEditor({ pid, role, create, readOnly, onClose, onDuplicate }: { pid
           </div>
         ) : null}
 
-        {showHistory ? (
-          <div className="space-y-1 rounded-md border p-2" aria-label="Version history">
-            {history.isLoading ? <ListSkeleton rows={2} /> : null}
-            {history.data?.length === 0 ? <p className="p-1 text-xs text-muted-foreground">No earlier versions: the role has not been changed since it was created.</p> : null}
-            {history.data?.map((v) => (
-              <div key={v.version} className="flex items-center gap-2 text-sm">
-                <span className="font-medium">v{v.version}</span>
-                <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                  {v.changedBy ? `${v.changedBy}, ` : ""}
-                  {new Date(v.at).toLocaleString()} · {v.role.prompt.slice(0, 60)}
-                </span>
-                <Button size="sm" variant="outline" disabled={restore.isPending || readOnly} onClick={() => role && restore.mutate({ name: role.name, version: v.version }, { onSuccess: onClose })}>
-                  Restore
-                </Button>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
         {problem && (d.name || d.prompt) ? <p role="alert" className="text-xs text-destructive">{problem}</p> : null}
         <DialogFooter className="flex-wrap gap-2 sm:justify-between">
           <div className="flex gap-2">
             <Button type="button" variant="outline" size="sm" disabled={(!!problem && !readOnly) || preview.isPending} onClick={() => preview.mutate({ ...body, name: body.name || "preview" })}>
               <Eye /> Preview
             </Button>
-            {editing && !role?.builtin ? (
-              <Button type="button" variant="outline" size="sm" aria-pressed={showHistory} onClick={() => setShowHistory((s) => !s)}>
-                <History /> History
-              </Button>
-            ) : null}
             {readOnly && role && onDuplicate ? (
               <Button type="button" size="sm" onClick={() => onDuplicate(role)}>
                 <Copy /> Copy to the project

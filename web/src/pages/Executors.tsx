@@ -17,6 +17,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Advanced } from "@/components/app/advanced";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -159,6 +161,9 @@ const draftOf = (e: ExecutorView): ExecutorBody => ({
   credentialEnv: e.credentialEnv ?? [], parser: e.parser ?? "", modeFlags: e.modeFlags ?? {}, enabled: e.enabled,
 });
 
+/** The parts of a draft a template replaces: the command and everything that goes with it. */
+const templatePart = (d: ExecutorBody, env: string) => JSON.stringify([d.command, d.binary, d.installCommand, d.parser, d.modeFlags, parseEnv(env)]);
+
 function ExecutorEditor({ pid, ex, onClose }: { pid: string; ex?: ExecutorView; onClose: () => void }) {
   const [d, setD] = useState<ExecutorBody>(() => (ex ? draftOf(ex) : emptyDraft()));
   const [env, setEnv] = useState((ex?.credentialEnv ?? []).join(", "));
@@ -168,6 +173,35 @@ function ExecutorEditor({ pid, ex, onClose }: { pid: string; ex?: ExecutorView; 
   const problem = validateExecutor(body);
   const flag = (level: string) => body.modeFlags[level] ?? "";
   const setFlag = (level: string, v: string) => set({ modeFlags: { ...d.modeFlags, [level]: v } });
+
+  // "Start from": the builtin definitions as templates for a new executor.
+  const templates = (useExecutors(pid).data ?? []).filter((e) => e.kind === "builtin");
+  const [tpl, setTpl] = useState("blank");
+  const [asking, setAsking] = useState<ExecutorView | null>(null);
+  // What the template part held right after the last fill (or when the editor opened): it is "dirty" when the person changed it since.
+  const [baseline, setBaseline] = useState(() => templatePart(d, env));
+  const dirty = templatePart(d, env) !== baseline;
+  const fill = (t: ExecutorView) => {
+    const next = { command: t.command, binary: t.binary, installCommand: t.installCommand ?? "", parser: t.parser ?? "", modeFlags: { ...(t.modeFlags ?? {}) } };
+    const nextEnv = (t.credentialEnv ?? []).join(", ");
+    setD((x) => ({ ...x, ...next }));
+    setEnv(nextEnv);
+    setBaseline(templatePart({ ...d, ...next }, nextEnv));
+    setTpl(t.name);
+    setAsking(null);
+  };
+  const pick = (name: string) => {
+    if (name === "blank") {
+      setTpl("blank");
+      return;
+    }
+    const t = templates.find((e) => e.name === name);
+    if (!t) return;
+    if (dirty) setAsking(t);
+    else fill(t);
+  };
+  // Advanced holds what most executors leave alone: a description, an install step, flags per level, the output parser, enabled.
+  const advancedSet = !!(d.description || d.installCommand || d.parser || Object.values(d.modeFlags).some((v) => v) || !d.enabled);
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -176,6 +210,21 @@ function ExecutorEditor({ pid, ex, onClose }: { pid: string; ex?: ExecutorView; 
           <DialogDescription>A command that runs a coding agent in the sandbox. The task reaches it in the environment, never in the command line.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
+          {!ex && templates.length ? (
+            <div className="space-y-1">
+              <Label htmlFor="ex-template">Start from</Label>
+              <Select value={tpl} onValueChange={pick}>
+                <SelectTrigger id="ex-template" aria-label="Start from"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="blank">A blank command</SelectItem>
+                  {templates.map((t) => (
+                    <SelectItem key={t.name} value={t.name}>{t.title || t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Fills in the command, program, flags and credential variables. Give it your own name below.</p>
+            </div>
+          ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="ex-name">Name</Label>
@@ -183,55 +232,56 @@ function ExecutorEditor({ pid, ex, onClose }: { pid: string; ex?: ExecutorView; 
             </div>
             <div className="space-y-1">
               <Label htmlFor="ex-title">Title</Label>
-              <Input id="ex-title" value={d.title} onChange={(e) => set({ title: e.target.value })} />
+              <Input id="ex-title" value={d.title} placeholder="My agent (optional)" onChange={(e) => set({ title: e.target.value })} />
             </div>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="ex-desc">Description</Label>
-            <Input id="ex-desc" value={d.description} onChange={(e) => set({ description: e.target.value })} />
           </div>
           <div className="space-y-1">
             <Label htmlFor="ex-command">Command</Label>
             <Textarea id="ex-command" rows={3} value={d.command} placeholder="mycli run --yes {mode} {task}" onChange={(e) => set({ command: e.target.value })} />
             <p className="text-xs text-muted-foreground">
-              <code>{"{task}"}</code> is the task, <code>{"{mode}"}</code> the flags of the level below.
+              <code>{"{task}"}</code> is the task, <code>{"{mode}"}</code> the flags of the level below. For example <code>{"mycli run --yes {mode} {task}"}</code>.
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="ex-binary">Program</Label>
-              <Input id="ex-binary" value={d.binary} placeholder="mycli" onChange={(e) => set({ binary: e.target.value })} />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="ex-install">Install command</Label>
-              <Input id="ex-install" value={d.installCommand} placeholder="npm install -g mycli (optional)" onChange={(e) => set({ installCommand: e.target.value })} />
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {(["read-only", "edit", "full"] as const).map((l) => (
-              <div key={l} className="space-y-1">
-                <Label htmlFor={`ex-flags-${l}`}>Flags: {l}</Label>
-                <Input id={`ex-flags-${l}`} value={flag(l)} placeholder={l === "read-only" ? "empty: cannot run read-only" : ""} onChange={(e) => setFlag(l, e.target.value)} />
-              </div>
-            ))}
+          <div className="space-y-1">
+            <Label htmlFor="ex-binary">Program</Label>
+            <Input id="ex-binary" value={d.binary} placeholder="mycli" onChange={(e) => set({ binary: e.target.value })} />
+            <p className="text-xs text-muted-foreground">The program the command runs: the sandbox is checked for it.</p>
           </div>
           <div className="space-y-1">
             <Label htmlFor="ex-env">Credential variables</Label>
             <Input id="ex-env" value={env} placeholder="MYCLI_API_KEY, MYCLI_BASE_URL" onChange={(e) => setEnv(e.target.value)} />
             <p className="text-xs text-muted-foreground">Each member sets their own values in Account; they are sealed per person.</p>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="ex-parser">Output</Label>
-            <select id="ex-parser" className="h-9 w-full rounded-md border bg-transparent px-2 text-sm" value={d.parser} onChange={(e) => set({ parser: e.target.value })}>
-              <option value="">Plain text</option>
-              <option value="claude-stream-json">Claude Code stream-json</option>
-              <option value="codex-jsonl">Codex JSONL</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch id="ex-enabled" checked={d.enabled} onCheckedChange={(enabled) => set({ enabled })} aria-label="Enabled" />
-            <Label htmlFor="ex-enabled">Enabled</Label>
-          </div>
+          <Advanced storageKey="7ar.advanced.executor" nonDefault={advancedSet} hint="Install, flags, output, enabled">
+            <div className="space-y-1">
+              <Label htmlFor="ex-desc">Description</Label>
+              <Input id="ex-desc" value={d.description} onChange={(e) => set({ description: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="ex-install">Install command</Label>
+              <Input id="ex-install" value={d.installCommand} placeholder="npm install -g mycli (optional)" onChange={(e) => set({ installCommand: e.target.value })} />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {(["read-only", "edit", "full"] as const).map((l) => (
+                <div key={l} className="space-y-1">
+                  <Label htmlFor={`ex-flags-${l}`}>Flags: {l}</Label>
+                  <Input id={`ex-flags-${l}`} value={flag(l)} placeholder={l === "read-only" ? "empty: cannot run read-only" : ""} onChange={(e) => setFlag(l, e.target.value)} />
+                </div>
+              ))}
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="ex-parser">Output</Label>
+              <select id="ex-parser" className="h-9 w-full rounded-md border bg-transparent px-2 text-sm" value={d.parser} onChange={(e) => set({ parser: e.target.value })}>
+                <option value="">Plain text</option>
+                <option value="claude-stream-json">Claude Code stream-json</option>
+                <option value="codex-jsonl">Codex JSONL</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch id="ex-enabled" checked={d.enabled} onCheckedChange={(enabled) => set({ enabled })} aria-label="Enabled" />
+              <Label htmlFor="ex-enabled">Enabled</Label>
+            </div>
+          </Advanced>
         </div>
         {problem && (d.name || d.command) ? <p role="alert" className="text-xs text-destructive">{problem}</p> : null}
         <DialogFooter>
@@ -243,6 +293,18 @@ function ExecutorEditor({ pid, ex, onClose }: { pid: string; ex?: ExecutorView; 
           </Button>
         </DialogFooter>
       </DialogContent>
+      <AlertDialog open={!!asking} onOpenChange={(o) => !o && setAsking(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Replace what you typed?</AlertDialogTitle>
+            <AlertDialogDescription>Starting from {asking?.title || asking?.name} replaces the command, program, flags and credential variables you changed.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep mine</AlertDialogCancel>
+            <AlertDialogAction onClick={() => asking && fill(asking)}>Replace</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

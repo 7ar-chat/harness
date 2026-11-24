@@ -108,7 +108,7 @@ describe("the project's executors in the Roles tab", () => {
     fireEvent.click(screen.getByRole("button", { name: /New executor/ }));
     const dlg = within(await screen.findByRole("dialog"));
     expect((dlg.getByRole("button", { name: "Create" }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(dlg.getByLabelText("Name"), { target: { value: "mycli" } });
+    fireEvent.change(dlg.getByLabelText("Name", { exact: true }), { target: { value: "mycli" } });
     fireEvent.change(dlg.getByLabelText("Command"), { target: { value: "mycli run {task}" } });
     fireEvent.change(dlg.getByLabelText("Program"), { target: { value: "mycli" } });
     fireEvent.change(dlg.getByLabelText("Credential variables"), { target: { value: "MYCLI_KEY, MYCLI_KEY" } });
@@ -175,5 +175,94 @@ describe("the executor of a role", () => {
     fireEvent.click(dlg.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(f.find("PUT", "/api/projects/p1/roles/fixer")).toHaveLength(1));
     expect(f.find("PUT", "/api/projects/p1/roles/fixer")[0]!.body).toMatchObject({ name: "fixer", executor: "codex" });
+  });
+});
+
+describe("the executor editor: Advanced and templates", () => {
+  const T3 = "2026-01-01T00:00:00Z";
+  const tpl = (name: string, title: string, extra: object = {}) => ({
+    ...ex(name, { title, command: `${name} run {mode} {task}`, binary: name, installCommand: `npm i -g ${name}`, parser: "codex-jsonl", modeFlags: { "read-only": "--ro", edit: "--edit", full: "--full" }, credentialEnv: [`${name.toUpperCase()}_KEY`], createdAt: T3 }),
+    ...extra,
+  });
+  const routes = () => {
+    const p = project("p1", { name: "payments", role: "owner" });
+    return {
+      ...shellRoutes(overview({ projects: [{ ...p, threads: [] }] }), me({ projects: [p] })),
+      "GET /api/projects/p1": p,
+      "GET /api/projects/p1/members": [],
+      "GET /api/projects/p1/roles": [],
+      "GET /api/projects/p1/executors": [tpl("codex", "Codex"), tpl("omp", "Oh My Pi (omp)"), mine],
+      "POST /api/projects/p1/executors": mine,
+    };
+  };
+  const open = async () => {
+    window.localStorage.clear();
+    await renderApp("/p/p1?tab=roles");
+    await screen.findByRole("list", { name: "Project executors" });
+    fireEvent.click(screen.getByRole("button", { name: /New executor/ }));
+    return within(await screen.findByRole("dialog"));
+  };
+  const adv = (d: ReturnType<typeof within>) => d.getByRole("button", { name: /Advanced/ });
+  const choose = async (d: ReturnType<typeof within>, name: string) => {
+    fireEvent.click(d.getByRole("combobox", { name: "Start from" }));
+    fireEvent.click(await screen.findByRole("option", { name }));
+  };
+
+  it("shows only the five basics first, with Advanced collapsed", async () => {
+    mockFetch(routes());
+    const d = await open();
+    expect(adv(d).getAttribute("aria-expanded")).toBe("false");
+    for (const l of ["Name", "Title", "Command", "Program", "Credential variables"]) expect(d.getByLabelText(l, { exact: true })).toBeTruthy();
+    for (const l of ["Install command", "Flags: edit", "Output"]) expect(d.queryByLabelText(l)).toBeNull();
+    expect(d.getByText(/mycli run --yes/, { selector: "code" })).toBeTruthy();
+    fireEvent.click(adv(d));
+    expect(adv(d).getAttribute("aria-expanded")).toBe("true");
+    for (const l of ["Install command", "Flags: read-only", "Flags: edit", "Flags: full", "Output"]) expect(d.getByLabelText(l)).toBeTruthy();
+    expect(d.getByRole("switch", { name: "Enabled" })).toBeTruthy();
+  });
+
+  it("fills command, program, flags and credential variables from a template, and opens Advanced", async () => {
+    const f = mockFetch(routes());
+    const d = await open();
+    await choose(d, "Codex");
+    expect((d.getByLabelText("Command") as HTMLTextAreaElement).value).toBe("codex run {mode} {task}");
+    expect((d.getByLabelText("Program") as HTMLInputElement).value).toBe("codex");
+    expect((d.getByLabelText("Credential variables") as HTMLInputElement).value).toBe("CODEX_KEY");
+    expect(adv(d).getAttribute("aria-expanded")).toBe("true");
+    expect((d.getByLabelText("Flags: edit") as HTMLInputElement).value).toBe("--edit");
+    fireEvent.change(d.getByLabelText("Name", { exact: true }), { target: { value: "codex-team" } });
+    fireEvent.click(d.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(f.find("POST", "/api/projects/p1/executors")).toHaveLength(1));
+    expect(f.find("POST", "/api/projects/p1/executors")[0]!.body).toMatchObject({
+      name: "codex-team", command: "codex run {mode} {task}", binary: "codex", credentialEnv: ["CODEX_KEY"], modeFlags: { edit: "--edit" }, parser: "codex-jsonl", enabled: true,
+    });
+  });
+
+  it("asks before a template replaces what was typed", async () => {
+    mockFetch(routes());
+    const d = await open();
+    fireEvent.change(d.getByLabelText("Command"), { target: { value: "mine {task}" } });
+    await choose(d, "Oh My Pi (omp)");
+    const ask = within(await screen.findByRole("alertdialog"));
+    fireEvent.click(ask.getByRole("button", { name: "Keep mine" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect((d.getByLabelText("Command") as HTMLTextAreaElement).value).toBe("mine {task}");
+    await choose(d, "Oh My Pi (omp)");
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Replace" }));
+    await waitFor(() => expect((d.getByLabelText("Command") as HTMLTextAreaElement).value).toBe("omp run {mode} {task}"));
+  });
+
+  it("opens Advanced by itself for a definition with a flag, and keeps validation messages", async () => {
+    const p = routes();
+    mockFetch({ ...p, "GET /api/projects/p1/executors": [tpl("codex", "Codex"), { ...mine, modeFlags: { edit: "--yes" } }] });
+    window.localStorage.clear();
+    await renderApp("/p/p1?tab=roles");
+    const list = await screen.findByRole("list", { name: "Project executors" });
+    fireEvent.click(within(list).getByRole("button", { name: "Edit mycli" }));
+    const d = within(await screen.findByRole("dialog"));
+    expect(adv(d).getAttribute("aria-expanded")).toBe("true");
+    expect((d.getByLabelText("Flags: edit") as HTMLInputElement).value).toBe("--yes");
+    fireEvent.change(d.getByLabelText("Command"), { target: { value: "no placeholder" } });
+    expect(d.getByRole("alert").textContent).toMatch(/\{task\}/);
   });
 });
