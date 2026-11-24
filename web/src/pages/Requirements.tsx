@@ -410,7 +410,7 @@ export function Requirements({ projectId, role }: { projectId: string; role: Rol
           {canWork ? <Button size="sm" onClick={() => setEditing({})}>Write your first requirement</Button> : null}
         </EmptyGuide>
       ) : (
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        <div>
           <ul aria-label="Requirements" className="space-y-2">
             {shown.length === 0 ? <li className="p-4 text-sm text-muted-foreground">No requirement matches.</li> : null}
             {shown.map((r) => (
@@ -446,9 +446,6 @@ export function Requirements({ projectId, role }: { projectId: string; role: Rol
               </li>
             ))}
           </ul>
-          <div className="hidden md:block">
-            <p className="p-4 text-sm text-muted-foreground">Open a requirement to see what works on it. It opens in its own tab.</p>
-          </div>
         </div>
       )}
       <EditDialog projectId={projectId} requirement={editing?.requirement} open={editing !== null} onOpenChange={(o) => !o && setEditing(null)} />

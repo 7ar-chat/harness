@@ -308,7 +308,7 @@ function ConnectorRow({ c, onImport }: { c: Connector; onImport: () => void }) {
           <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
             <div className="flex gap-1">
               <dt>Account</dt>
-              <dd className="font-mono">{c.connected ? c.account || "connected" : "—"}</dd>
+              <dd className={c.connected ? "font-mono" : undefined}>{c.connected ? c.account || "connected" : "not connected"}</dd>
             </div>
             <div className="flex gap-1">
               <dt>Server</dt>

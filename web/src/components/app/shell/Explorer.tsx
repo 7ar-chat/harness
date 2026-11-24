@@ -1,7 +1,7 @@
 // The explorer: project switcher, what needs the person, sessions, work, setup, and the personal space.
 import { CircleHelp, Compass, Download, Ellipsis, FileText, ChevronDown, ChevronRight, ChevronsUpDown, Inbox, LayoutDashboard, LogOut, Monitor, Moon, Plus, Sun, Trash2, UserCog, Users, Brain, WifiOff, Bot } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { getDevUser, setDevUser } from "@/api/client";
 import { useNeedsReview } from "@/api/factory";
 import { useAdminUsers, useDeleteThread, useMe, useMemoryStats, useOverview, useSeen } from "@/api/queries";
@@ -259,6 +259,7 @@ function ProjectMenu() {
                 <FileText /> Import AGENTS.md
               </DropdownMenuItem>
             ) : null}
+            {a.canWrite && !a.canImport ? <p className="px-2 pb-1 text-xs text-muted-foreground">{a.importHint}</p> : null}
             <DropdownMenuItem onSelect={a.exportMemory}>
               <Download /> Export MEMORY.md
             </DropdownMenuItem>
@@ -278,6 +279,8 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
   const review = useNeedsReview().data;
   const { newSession, newProject } = useDialogs();
   const { projectId, openSwitcher, narrow, tabs } = useShell();
+  // The Dashboard shows the full checklist: the folded line is for every other page, so it is never on screen twice.
+  const onDashboard = useRouterState({ select: (r) => r.location.pathname === "/" });
   const { conn } = useFeed();
   const project = overview?.projects.find((p) => p.id === projectId);
   const threads = (project?.threads ?? []).filter((t) => t.kind !== "supervisor").sort(byRecent);
@@ -312,7 +315,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
         {conn === "offline" ? <WifiOff className="size-4 shrink-0 text-destructive" aria-label="Offline, reconnecting" /> : null}
       </div>
       <nav aria-label="Explorer" className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-2">
-        {onboardingAuto() ? <GettingStarted variant="explorer" projectId={projectId} onNavigate={onNavigate} /> : null}
+        {onboardingAuto() && !onDashboard ? <GettingStarted variant="explorer" projectId={projectId} onNavigate={onNavigate} /> : null}
         <div className="flex flex-col gap-px pt-1">
           <Row href="/" k="home" icon={<LayoutDashboard className="size-4 text-muted-foreground" />} onNavigate={onNavigate}>
             Dashboard
