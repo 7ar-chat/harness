@@ -18,6 +18,9 @@ import (
 type ToolUse struct {
 	Name string
 	Args map[string]any
+	// Input, when Custom, is the raw text of a freeform (custom) tool call, e.g. the JavaScript of Codex's "exec" tool.
+	Input  string
+	Custom bool
 }
 
 // Step is what the scripted model answers one request: some text, tool calls, and the usage it reports.
@@ -128,7 +131,7 @@ func WriteFileStep(r *Request, path, content string) ToolUse {
 			case strings.Contains(sch, `"filePath"`): // OpenCode
 				key = "filePath"
 			}
-			return ToolUse{t, map[string]any{key: path, "content": content}}
+			return ToolUse{Name: t, Args: map[string]any{key: path, "content": content}}
 		}
 	}
 	return ShellStep(r, "printf %s "+shq(content)+" > "+shq(path))
@@ -138,15 +141,21 @@ func WriteFileStep(r *Request, path, content string) ToolUse {
 func ShellStep(r *Request, command string) ToolUse {
 	switch {
 	case r.Tool("Bash") != "":
-		return ToolUse{r.Tool("Bash"), map[string]any{"command": command}}
+		return ToolUse{Name: r.Tool("Bash"), Args: map[string]any{"command": command}}
 	case r.Tool("bash") != "":
-		return ToolUse{r.Tool("bash"), map[string]any{"command": command}}
+		return ToolUse{Name: r.Tool("bash"), Args: map[string]any{"command": command}}
 	case r.Tool("shell") != "":
-		return ToolUse{r.Tool("shell"), map[string]any{"command": []string{"bash", "-lc", command}}}
+		return ToolUse{Name: r.Tool("shell"), Args: map[string]any{"command": []string{"bash", "-lc", command}}}
 	case r.Tool("exec_command") != "":
-		return ToolUse{r.Tool("exec_command"), map[string]any{"cmd": command}}
+		return ToolUse{Name: r.Tool("exec_command"), Args: map[string]any{"cmd": command}}
+	case r.Tool("exec") != "":
+		// Codex "code mode" (its default model): one freeform tool that runs JavaScript, and the shell is the
+		// nested tool tools.exec_command(...) of that runtime.
+		js, _ := json.Marshal(command)
+		return ToolUse{Name: r.Tool("exec"), Custom: true,
+			Input: "const r = await tools.exec_command({ cmd: " + string(js) + ", yield_time_ms: 30000 });\ntext(r.output ?? JSON.stringify(r));\n"}
 	}
-	return ToolUse{"bash", map[string]any{"command": command}}
+	return ToolUse{Name: "bash", Args: map[string]any{"command": command}}
 }
 
 func shq(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }

@@ -73,7 +73,7 @@ func TestRealClaudeFailures(t *testing.T) {
 }
 
 func TestRealCodexEdit(t *testing.T) {
-	p, shown := realFixture(t, "codex-edit")
+	p, shown := realFixture(t, "codex-pinned-edit")
 	for _, w := range []string{"I will create hello.txt.", "[run] printf %s 'hello from the scripted model", "Created hello.txt with the greeting."} {
 		if !strings.Contains(shown, w) {
 			t.Errorf("progress lacks %q:\n%s", w, shown)
@@ -90,7 +90,7 @@ func TestRealCodexEdit(t *testing.T) {
 
 // A run that had to reconnect ("error" events) and then completed is a success.
 func TestRealCodexTransientErrorsDoNotFailTheRun(t *testing.T) {
-	p, shown := realFixture(t, "codex-edit")
+	p, shown := realFixture(t, "codex-pinned-edit")
 	if s := p.Summary(); s.Failed {
 		t.Fatalf("%+v\n%s", s, shown)
 	}
@@ -109,7 +109,7 @@ func TestRealCodexTransientErrorsDoNotFailTheRun(t *testing.T) {
 }
 
 func TestRealCodexFailures(t *testing.T) {
-	for name, want := range map[string]string{"codex-nokey": "Missing bearer or basic authentication", "codex-badkey": "Incorrect API key provided"} {
+	for name, want := range map[string]string{"codex-nokey": "Missing bearer or basic authentication", "codex-pinned-badkey": "Incorrect API key provided"} {
 		p, shown := realFixture(t, name)
 		s := p.Summary()
 		if !s.Failed || !strings.Contains(s.Err, want) || !strings.Contains(s.Err, "401") || s.Text != "" {
@@ -121,8 +121,38 @@ func TestRealCodexFailures(t *testing.T) {
 	}
 }
 
+// The default model of codex-cli 0.172 (gpt-6.2-sol) works in "code mode": one freeform JavaScript exec tool whose
+// runtime calls tools.exec_command(...) and tools.apply_patch(...). The stream is the same JSONL: the nested calls come
+// out as command_execution and file_change items, and the exec tool itself (and a JavaScript error in it) prints nothing.
+func TestRealCodexCodeMode(t *testing.T) {
+	p, shown := realFixture(t, "codex-edit")
+	if !strings.Contains(shown, "[run] printf %s 'hello from the scripted model") || strings.Contains(shown, "zsh") {
+		t.Errorf("%s", shown)
+	}
+	if s := p.Summary(); s.Failed || s.Text != "Created hello.txt with the greeting." || s.Tokens != 4528 {
+		t.Fatalf("%+v", s)
+	}
+	p, shown = realFixture(t, "codex-codemode-patch")
+	for _, w := range []string{"[edit] add /workspace/repo/patched.txt", "[run] echo boom >&2; exit 3", "[run failed, exit 3] boom", "Patched."} {
+		if !strings.Contains(shown, w) {
+			t.Errorf("progress lacks %q:\n%s", w, shown)
+		}
+	}
+	if s := p.Summary(); s.Failed || s.Text != "Patched." || s.Tokens != 4231 {
+		t.Fatalf("%+v", s)
+	}
+	p, _ = realFixture(t, "codex-readonly")
+	if s := p.Summary(); s.Failed || s.Text != "Done." {
+		t.Fatalf("%+v", s)
+	}
+	p, shown = realFixture(t, "codex-badkey")
+	if s := p.Summary(); !s.Failed || !strings.Contains(s.Err, "Incorrect API key provided") || !strings.Contains(shown, "[error] unexpected status 401") {
+		t.Fatalf("%+v\n%s", s, shown)
+	}
+}
+
 func TestRealCodexReadOnly(t *testing.T) {
-	p, _ := realFixture(t, "codex-readonly")
+	p, _ := realFixture(t, "codex-pinned-readonly")
 	if s := p.Summary(); s.Failed || s.Text != "Done." {
 		t.Fatalf("%+v", s)
 	}

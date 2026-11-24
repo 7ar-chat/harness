@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 )
 
@@ -56,6 +57,14 @@ func parseResponses(path string, body []byte) (*Request, bool) {
 		rq.ToolSchemas[name] = t.Parameters
 	}
 	var items []struct {
+		Tools []struct {
+			Type  string `json:"type"`
+			Name  string `json:"name"`
+			Tools []struct {
+				Type string `json:"type"`
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"tools"`
 		Type    string          `json:"type"`
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
@@ -64,6 +73,17 @@ func parseResponses(path string, body []byte) (*Request, bool) {
 	if json.Unmarshal(in.Input, &items) == nil {
 		for _, it := range items {
 			switch {
+			case it.Type == "additional_tools":
+				// Codex's default model gets its tools here, not in "tools": a namespace holding one freeform
+				// "exec" tool (JavaScript) whose runtime exposes the others as tools.<name>(...).
+				for _, ns := range it.Tools {
+					if ns.Type != "namespace" {
+						rq.Tools = append(rq.Tools, ns.Name)
+					}
+					for _, t := range ns.Tools {
+						rq.Tools = append(rq.Tools, t.Name)
+					}
+				}
 			case strings.HasSuffix(it.Type, "_output"): // function_call_output, custom_tool_call_output, local_shell_call_output
 				rq.ToolResults = append(rq.ToolResults, textOfContent(it.Output))
 			case it.Type == "message" && it.Role == "user":
@@ -76,6 +96,9 @@ func parseResponses(path string, body []byte) (*Request, bool) {
 
 func (s *Server) responses(w http.ResponseWriter, r *http.Request, body []byte, script Script) {
 	rq, stream := parseResponses(r.URL.Path, body)
+	if d := os.Getenv("CLITEST_DUMP"); d != "" { // debugging aid: the request bodies the CLI really sends
+		_ = os.WriteFile(fmt.Sprintf("%s/responses-%03d.json", d, len(s.Log.Requests())), body, 0o644)
+	}
 	s.Log.add(rq)
 	step := Step{Text: "ok"}
 	if len(rq.Tools) > 0 {
@@ -97,6 +120,11 @@ func (s *Server) responses(w http.ResponseWriter, r *http.Request, body []byte, 
 			"content": []any{map[string]any{"type": "output_text", "text": step.Text, "annotations": []any{}}}})
 	}
 	for i, t := range step.Tools {
+		if t.Custom {
+			items = append(items, map[string]any{"type": "custom_tool_call", "id": fmt.Sprintf("ctc_%03d_%d", n, i), "call_id": fmt.Sprintf("call_%03d_%d", n, i),
+				"name": t.Name, "input": t.Input, "status": "completed"})
+			continue
+		}
 		args, _ := json.Marshal(t.Args)
 		items = append(items, map[string]any{"type": "function_call", "id": fmt.Sprintf("fc_%03d_%d", n, i), "call_id": fmt.Sprintf("call_%03d_%d", n, i),
 			"name": t.Name, "arguments": string(args), "status": "completed"})
@@ -134,6 +162,15 @@ func (s *Server) responses(w http.ResponseWriter, r *http.Request, body []byte, 
 			}
 			ev("response.output_text.done", map[string]any{"item_id": it["id"], "output_index": i, "content_index": 0, "text": text})
 			ev("response.content_part.done", map[string]any{"item_id": it["id"], "output_index": i, "content_index": 0, "part": map[string]any{"type": "output_text", "text": text, "annotations": []any{}}})
+			ev("response.output_item.done", map[string]any{"output_index": i, "item": it})
+		case "custom_tool_call":
+			added := map[string]any{"type": "custom_tool_call", "id": it["id"], "call_id": it["call_id"], "name": it["name"], "input": "", "status": "in_progress"}
+			ev("response.output_item.added", map[string]any{"output_index": i, "item": added})
+			input := it["input"].(string)
+			for _, piece := range chunks(input, 17) {
+				ev("response.custom_tool_call_input.delta", map[string]any{"item_id": it["id"], "output_index": i, "delta": piece})
+			}
+			ev("response.custom_tool_call_input.done", map[string]any{"item_id": it["id"], "output_index": i, "input": input})
 			ev("response.output_item.done", map[string]any{"output_index": i, "item": it})
 		case "function_call":
 			added := map[string]any{"type": "function_call", "id": it["id"], "call_id": it["call_id"], "name": it["name"], "arguments": "", "status": "in_progress"}

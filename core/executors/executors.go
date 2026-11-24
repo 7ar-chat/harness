@@ -264,10 +264,11 @@ func Builtins() []Executor {
 			//  - ANTHROPIC_BASE_URL and OPENAI_BASE_URL are ignored (the run went to api.anthropic.com), the base URL is
 			//    only read from the provider options of the config, so the command writes them there (".../v1" is added:
 			//    the AI SDK wants it, the sealed value has none, as for Claude Code).
-			//  - read-only is the builtin "plan" agent: it denies every edit (and shell write), verified by a scripted
-			//    write that failed with "a rule which prevents you from using this specific tool call". The plan agent may
-			//    still write markdown under .opencode/plans/. Edit needs no flag (file edits and the shell are allowed in
-			//    a headless run, anything that would ask is refused); full adds --auto (answers the asks yes).
+			//  - read-only is an agent the command defines (readonly: every permission denied but read, grep, glob, list;
+			//    verified: the shell and write tools are not even offered, "Available tools: glob, grep, read"). The
+			//    builtin "plan" agent was tried first and is NOT read-only: it denies the edit tool but its shell
+			//    wrote a file. Edit needs no flag (file edits and the shell are allowed in a headless run, anything
+			//    that would ask is refused); full adds --auto (answers the asks yes).
 			Name: OpenCode, Title: "OpenCode", Kind: KindBuiltin, Enabled: true,
 			Description: "the open source coding agent CLI (opencode run --format json), streaming its steps",
 			Command: `A="${ANTHROPIC_BASE_URL:+\"baseURL\":\"${ANTHROPIC_BASE_URL%/}/v1\"}"; O="${OPENAI_BASE_URL:+\"baseURL\":\"${OPENAI_BASE_URL%/}/v1\"}"; ` +

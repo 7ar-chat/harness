@@ -81,13 +81,16 @@ func newRig(t *testing.T, cli string, script clitest.Script) *rig {
 		r.name, r.bin = executors.ClaudeCode, "claude"
 		r.creds = map[string]string{"ANTHROPIC_API_KEY": "test-key", "ANTHROPIC_BASE_URL": srv.Base()}
 		sb.Base["CLAUDE_CODE_MAX_RETRIES"] = "1" // a rejected key is otherwise retried for three minutes
-	case "codex":
+	case "codex", "codex-pinned":
 		srv = clitest.NewResponses(script)
 		r.name, r.bin = executors.Codex, "codex"
-		// The key and the base URL are what a user seals for the executor; the model is pinned in the CLI's own
-		// config because the default model of this version needs a different tool shape than the fake serves.
+		// The key and the base URL are what a user seals for the executor. "codex" runs the CLI's real default model
+		// (gpt-6.2-sol in 0.172.0: code mode, one JavaScript exec tool), "codex-pinned" pins an older model.
 		sb.Base["CODEX_HOME"] = sb.Home() + "/.codex"
-		sb.HomeFile(t, ".codex/config.toml", "model = \"gpt-5.1-codex\"\n")
+		sb.HomeFile(t, ".codex/.keep", "")
+		if cli == "codex-pinned" { // an older model, whose tools are plain function calls (shell), not the code-mode exec
+			sb.HomeFile(t, ".codex/config.toml", "model = \"gpt-5.1-codex\"\n")
+		}
 		r.creds = map[string]string{"OPENAI_API_KEY": "test-key", "OPENAI_BASE_URL": srv.Base() + "/v1"}
 	case "opencode":
 		srv = clitest.NewOpenAIChat(script)
@@ -163,7 +166,7 @@ func (r *rig) fixture(t *testing.T, name string) {
 	}
 }
 
-func clis() []string { return []string{"claude", "codex", "omp", "opencode"} }
+func clis() []string { return []string{"claude", "codex", "codex-pinned", "omp", "opencode"} }
 
 // TestEditLevel: the CLI really uses its file tool in the repository, the runner streams it, reads the final
 // summary, the usage, the changed files and the diff stat.
@@ -222,8 +225,8 @@ func TestReadOnlyLevelRefusesToWrite(t *testing.T) {
 		"claude": "[denied] Write", // plan mode: "Cannot write to ... while in plan mode"
 		// The OS sandbox (seatbelt) refuses the redirect ("operation not permitted"), but codex exec --json does not emit
 		// an item for a command that was refused, so only the model's own words show it. The file is what proves it.
-		"codex": "I will create hello.txt.",
-		"omp":   "Tool bash not found", // the tool is not offered at all
+		"codex": "I will create hello.txt.", "codex-pinned": "I will create hello.txt.",
+		"omp": "Tool bash not found", // the tool is not offered at all
 		// the readonly agent offers only glob, grep and read: the scripted shell call is turned into an "invalid" call.
 		"opencode": "unavailable tool",
 	}
@@ -381,4 +384,52 @@ func TestOpenCodeReadOnlyCanRead(t *testing.T) {
 	if res.Failed() || res.Summary != "a.txt says hi." || !strings.Contains(got, "hi") {
 		t.Fatalf("result %+v tool result %q\n%s", res, got, live)
 	}
+}
+
+// codeMode runs a JavaScript source through Codex's exec tool (the shape of its default model).
+func codeMode(js, final string) clitest.Script {
+	return func(q *clitest.Request) clitest.Step {
+		if len(q.ToolResults) == 0 {
+			return clitest.Step{Text: "Working.", Tools: []clitest.ToolUse{{Name: q.Tool("exec"), Custom: true, Input: js}}}
+		}
+		return clitest.Step{Text: final, In: 2300, Out: 41}
+	}
+}
+
+// TestCodexCodeModeApplyPatch: the default model edits through tools.apply_patch(...) inside the JavaScript runtime
+// and reads a failing command: the run reports the changed files, the diff stat and the failed command.
+func TestCodexCodeModeApplyPatch(t *testing.T) {
+	js := "const patch = `*** Begin Patch\n*** Add File: patched.txt\n+patched by the scripted model\n*** End Patch\n`;\n" +
+		"await tools.apply_patch(patch);\n" +
+		"const r = await tools.exec_command({ cmd: 'echo boom >&2; exit 3' });\n" +
+		"text(JSON.stringify(r));\n"
+	r := newRig(t, "codex", codeMode(js, "Patched."))
+	res, live := r.run(t, executors.Request{Policy: "sandboxed"})
+	t.Logf("%+v\n%s", res, live)
+	if res.Failed() || res.Summary != "Patched." {
+		t.Fatalf("result %+v\n%s", res, live)
+	}
+	b, _ := os.ReadFile(filepath.Join(r.sb.Repo(), "patched.txt"))
+	if string(b) != "patched by the scripted model\n" {
+		t.Fatalf("patched.txt = %q\n%s", b, live)
+	}
+	if len(res.Changed) != 1 || res.Changed[0] != "patched.txt" || !strings.Contains(res.DiffStat, "patched.txt") {
+		t.Errorf("changes %v stat %q", res.Changed, res.DiffStat)
+	}
+	if !strings.Contains(live, "[run failed, exit 3]") {
+		t.Errorf("the failed command is not shown:\n%s", live)
+	}
+	r.fixture(t, "codex-codemode-patch")
+}
+
+// TestCodexCodeModeScriptError: a JavaScript error in the exec tool is reported to the model only. Codex prints no item
+// for it, so the progress shows nothing of it (documented, not a parser gap): the run still ends cleanly.
+func TestCodexCodeModeScriptError(t *testing.T) {
+	r := newRig(t, "codex", codeMode("throw new Error('script failed on purpose');\n", "Recovered."))
+	res, live := r.run(t, executors.Request{Policy: "sandboxed"})
+	if res.Failed() || res.Summary != "Recovered." || len(res.Changed) != 0 {
+		t.Fatalf("result %+v\n%s", res, live)
+	}
+	out, _, _ := r.sb.CLIOutput("codex")
+	t.Logf("stream mentions the script error: %v\nprogress:\n%s", strings.Contains(out, "script failed on purpose"), live)
 }
