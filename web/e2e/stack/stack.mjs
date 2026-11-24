@@ -96,6 +96,7 @@ export async function startStack({ log = console.log, keepLogs = false } = {}) {
     await S.proxy?.close().catch(() => {});
     await S.fake?.close().catch(() => {});
     await S.hook?.close().catch(() => {});
+    await S.tapd?.close().catch(() => {});
     if (S.composeFile) {
       spawnSync("docker", ["compose", "-p", project, "-f", S.composeFile, "down", "-v", "--remove-orphans", "-t", "2"], { timeout: 90_000, stdio: "ignore" });
       // belt and braces: anything still labelled with the project
@@ -186,6 +187,7 @@ ${dexConfig({ dexPort, redirect }).replaceAll("$", "$$$$").replace(/^/gm, "     
     // ---- fake LLM, webhook receiver --------------------------------------------------------------------------------
     S.fake = await startFakeLlm();
     S.hook = await startHook();
+    S.tapd = await startTapd();
     const prices = path.join(tmp, "prices.json");
     fs.writeFileSync(prices, JSON.stringify({ "gpt-test": { mode: "chat", litellm_provider: "openai", max_input_tokens: 128000, max_output_tokens: 8000, input_cost_per_token: 1e-3, output_cost_per_token: 1e-3 } }));
 
@@ -222,6 +224,7 @@ ${dexConfig({ dexPort, redirect }).replaceAll("$", "$$$$").replace(/^/gm, "     
       FACTORY_NO_REVIEW: "1",
       FACTORY_RETRY_BACKOFF_SECONDS: "1",
       HARNESS_NOTIFY_ALLOW_PRIVATE: "1",
+      HARNESS_TAPD_ALLOW_PRIVATE: "1",
       RUNTIME_SHUTDOWN_GRACE_SECONDS: "2",
       ARTIFACTS_S3_ENDPOINT: `http://127.0.0.1:${s3Port}`,
       ARTIFACTS_S3_BUCKET: "harness-e2e",
@@ -319,6 +322,24 @@ function spawnProc(S, name, bin, args, env, readyRe, readyFn) {
   };
   S.procs[name] = entry;
   return start();
+}
+
+/** A fake TAPD on loopback (basic auth, {status,data,info} envelopes): enough for the credentials check and an import. */
+async function startTapd() {
+  const tapd = { user: "e2e_api", pass: "e2e-tapd-password", calls: [] };
+  const srv = http.createServer((req, res) => {
+    const u = new URL(req.url, "http://x");
+    tapd.calls.push(u.pathname);
+    const out = (o) => res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(o));
+    if (req.headers.authorization !== "Basic " + Buffer.from(`${tapd.user}:${tapd.pass}`).toString("base64")) return out({ status: 401, data: [], info: "unauthorized" });
+    if (u.pathname === "/workflows/last_steps") return out({ status: 1, data: { resolved: "done" }, info: "success" });
+    if (u.pathname === "/stories") return out({ status: 1, data: [], info: "success" });
+    res.writeHead(404).end();
+  });
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  tapd.url = `http://127.0.0.1:${srv.address().port}`;
+  tapd.close = () => new Promise((r) => (srv.closeAllConnections?.(), srv.close(r)));
+  return tapd;
 }
 
 /** A webhook receiver on loopback: records what it is sent. */
