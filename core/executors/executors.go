@@ -44,6 +44,7 @@ const (
 	ParserText       = "text"
 	ParserClaudeJSON = "claude-stream-json"
 	ParserCodexJSONL = "codex-jsonl"
+	ParserOMPJSON    = "omp-json"
 )
 
 // Names of the builtin executors.
@@ -111,7 +112,7 @@ type Executor struct {
 	// CredentialEnv names the environment variables a user may set for this executor (their API key, base URL).
 	// They are sealed per user and injected only into the process of a run.
 	CredentialEnv []string `json:"credentialEnv,omitempty"`
-	// Parser is how the output is read: ParserText (default), ParserClaudeJSON or ParserCodexJSONL.
+	// Parser is how the output is read: ParserText (default), ParserClaudeJSON, ParserCodexJSONL or ParserOMPJSON.
 	Parser    string    `json:"parser,omitempty"`
 	Enabled   bool      `json:"enabled"`
 	CreatedBy string    `json:"createdBy,omitempty"`
@@ -153,7 +154,7 @@ func (e *Executor) Validate() error {
 		return invalid("the command contains control characters")
 	case !binRe.MatchString(e.Binary):
 		return invalid("name the program the command runs (binary), for the installer check")
-	case e.Parser != "" && e.Parser != ParserText && e.Parser != ParserClaudeJSON && e.Parser != ParserCodexJSONL:
+	case e.Parser != "" && e.Parser != ParserText && e.Parser != ParserClaudeJSON && e.Parser != ParserCodexJSONL && e.Parser != ParserOMPJSON:
 		return invalid("unknown output parser")
 	case len(e.InstallCommand) > MaxCommand:
 		return invalid("the install command is too long")
@@ -238,15 +239,19 @@ func Builtins() []Executor {
 		},
 		{
 			Name: Codex, Title: "Codex", Kind: KindBuiltin, Enabled: true,
+			// Verified against codex-cli 0.172: `codex exec` ignores OPENAI_API_KEY and OPENAI_BASE_URL. It reads
+			// CODEX_API_KEY, and a base URL only from its config (-c openai_base_url=...). The command maps the
+			// variables a user seals onto those, and closes stdin (codex appends a non-terminal stdin to the prompt).
 			Description: "OpenAI's coding agent CLI (codex exec)",
-			Command:     `codex exec --json --skip-git-repo-check {mode} {task}`,
+			Command: `CODEX_API_KEY="${CODEX_API_KEY:-$OPENAI_API_KEY}" codex exec --json --skip-git-repo-check {mode} ` +
+				`${OPENAI_BASE_URL:+-c "openai_base_url=\"$OPENAI_BASE_URL\""} -- {task} </dev/null`,
 			ModeFlags: map[Level]string{
 				LevelReadOnly: `--sandbox read-only`,
 				LevelEdit:     `--sandbox workspace-write`,
 				LevelFull:     `--dangerously-bypass-approvals-and-sandbox`,
 			},
 			Binary: "codex", InstallCommand: "npm install -g @openai/codex",
-			CredentialEnv: []string{"OPENAI_API_KEY", "OPENAI_BASE_URL"}, Parser: ParserCodexJSONL,
+			CredentialEnv: []string{"CODEX_API_KEY", "OPENAI_API_KEY", "OPENAI_BASE_URL"}, Parser: ParserCodexJSONL,
 		},
 		{
 			Name: OpenCode, Title: "OpenCode", Kind: KindBuiltin, Enabled: true,
@@ -258,12 +263,13 @@ func Builtins() []Executor {
 		{
 			// From omp.sh/docs (cli, modes, approvals, env): -p prints the final assistant text and exits; a headless
 			// session cannot answer an approval prompt (the call fails), so the edit and full levels use yolo and the
-			// sandbox is the boundary; read-only is the read tools only. stdin is closed because omp reads a
-			// non-terminal stdin to EOF before it starts. Its JSON stream has no documented schema, so the output is
-			// read as text and no spend is booked.
+			// sandbox is the boundary; read-only is the read tools only (verified: a call to an absent tool fails
+			// with "Tool bash not found"). stdin is closed because omp reads a non-terminal stdin to EOF before it
+			// starts. --mode json prints one JSON event per line (verified on omp 19.1): the parser reads the final
+			// text, the usage and the failure from it.
 			Name: OMP, Title: "Oh My Pi (omp)", Kind: KindBuiltin, Enabled: true,
-			Description: "the Oh My Pi coding agent CLI (omp -p); output is read as plain text, so its spend is not counted",
-			Command:     `omp -p {mode} {task} </dev/null`,
+			Description: "the Oh My Pi coding agent CLI (omp --mode json), streaming its steps",
+			Command:     `omp -p --mode json {mode} {task} </dev/null`,
 			ModeFlags: map[Level]string{
 				LevelReadOnly: `--tools read,grep,glob --approval-mode always-ask`,
 				LevelEdit:     `--approval-mode yolo`,
@@ -271,7 +277,7 @@ func Builtins() []Executor {
 			},
 			Binary: "omp", InstallCommand: "bun install -g @oh-my-pi/pi-coding-agent",
 			CredentialEnv: []string{"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_BASE_URL", "OPENAI_BASE_URL"},
-			Parser:        ParserText,
+			Parser:        ParserOMPJSON,
 		},
 	}
 }

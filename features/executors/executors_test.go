@@ -260,7 +260,7 @@ func TestPolicyLevels(t *testing.T) {
 		}
 		found := false
 		for _, cmd := range sb.cmds {
-			found = found || strings.HasPrefix(cmd, strings.Fields(c.exec)[0]) && strings.Contains(cmd, c.want) || c.exec == "claude-code" && strings.HasPrefix(cmd, "claude") && strings.Contains(cmd, c.want)
+			found = found || strings.Contains(cmd, strings.Fields(c.exec)[0]+" ") && strings.Contains(cmd, c.want) || c.exec == "claude-code" && strings.HasPrefix(cmd, "claude") && strings.Contains(cmd, c.want)
 		}
 		if !found {
 			t.Errorf("%v: no command with %q in %q", c, c.want, sb.cmds)
@@ -286,7 +286,7 @@ func TestTimeoutKillsAndReportsPartialWork(t *testing.T) {
 	sb := &fakeSandbox{}
 	sb.handlers = append([]func(sandbox.ExecRequest) (string, string, int, bool, bool){
 		func(r sandbox.ExecRequest) (string, string, int, bool, bool) {
-			if strings.HasPrefix(r.Command, "codex exec") {
+			if strings.Contains(r.Command, "codex exec") {
 				return `{"type":"item.completed","item":{"type":"agent_message","text":"working"}}` + "\n", "", 0, true, true
 			}
 			return "", "", 0, false, false

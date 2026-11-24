@@ -396,19 +396,53 @@ the task budget, and refuses to start once the budget is spent.
   variables it reads) in the tool result and in the task's `executor` event.
 * **Cost.** A CLI that reports no tokens or dollars (omp, opencode, custom commands) is booked as one *unpriced* run:
   the task event says "cost not reported by this CLI" and the Task detail and Usage rows say so. No number is made up
-  from the wall time.
-* `omp` (Oh My Pi, github.com/can1357/oh-my-pi, `bun install -g @oh-my-pi/pi-coding-agent`) is run as `omp -p ... </dev/null`
-  (stdin is closed because omp reads a non-terminal stdin to EOF before it starts). A headless omp cannot answer an
-  approval prompt, so the edit and full levels both use `--approval-mode yolo` and the sandbox is the boundary; the
-  read-only level is `--tools read,grep,glob --approval-mode always-ask` (from the omp.sh docs' own read-only example).
-  Checked against the real CLI (omp 19.1.1, claude-code and codex installed from npm, `--help` and a run with no key, no
-  model call): every flag the three adapters use exists (`omp -p/--tools/--approval-mode`, `claude -p/--output-format
-  stream-json/--permission-mode plan|acceptEdits/--allowedTools/--dangerously-skip-permissions`, `codex exec --json/--sandbox
-  read-only|workspace-write/--skip-git-repo-check/--dangerously-bypass-approvals-and-sandbox`), omp accepts the tool names
-  `read`, `grep` and `glob`, and a missing key makes omp exit 1 with a message the executor recognises. What no check has done
-  is run a model through them: the streamed output of Claude Code and Codex is still parsed from recorded samples. Its JSON stream has no documented schema, so its output
-  is read as text and its spend is not booked. Keys it reads: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
-  `OPENROUTER_API_KEY`, `GEMINI_API_KEY` and the two base URLs.
+  from the wall time. Claude Code (dollars and tokens) and omp (tokens, and dollars when its model has a price) report
+  usage; Codex reports tokens only.
+* **What was verified against the real CLIs.** `features/executors/clitest` runs the real binaries (claude 2.1.331,
+  codex-cli 0.172.0, omp 19.1.1) through `Provider.Run`, with the builtin command lines and parsers, against scripted fake
+  model servers on 127.0.0.1 (Anthropic Messages SSE, OpenAI Responses SSE, OpenAI chat-completions SSE), in a throwaway
+  HOME and a temporary git repository, with a clean environment. It is opt-in (`HARNESS_REAL_CLIS=<dir>`, see the package
+  doc) and needs no key. The fixtures in `core/executors/testdata/real` are the real stdout of those runs. Per CLI:
+  * Verified end to end, at the edit level, at the full level (autonomous), at the read-only level, with a rejected key,
+    with a timeout (the CLI and the command it started are killed) and with a cancel: the CLI uses its own file or shell
+    tool, the file appears, the final summary, token usage and (claude) `total_cost_usd` are parsed, the changed files and
+    the diff stat (untracked files included) are reported, no raw JSON reaches the progress.
+  * Read-only: Claude Code `--permission-mode plan` refuses the write ("Cannot write to ... while in plan mode", a
+    `permission_denied` system line, `permission_denials` in the result; the exit code stays 0, so the parser adds a note to
+    the summary); Codex `--sandbox read-only` makes the OS sandbox refuse the write (exit 0; `codex exec --json` emits no
+    item for the refused command, so the proof is the file, not the progress); omp `--tools read,grep,glob` does not offer
+    `bash` or `write` (a call fails with "Tool bash not found", exit 0). Not verified: Codex's Linux sandbox (landlock or
+    bubblewrap) inside the sandbox container; the run above used macOS seatbelt.
+  * Codex does NOT read `OPENAI_API_KEY` or `OPENAI_BASE_URL` in `codex exec`: it then asks the real OpenAI API with no
+    key (401, "Missing bearer or basic authentication"). The builtin therefore maps them: `CODEX_API_KEY` is
+    `${CODEX_API_KEY:-$OPENAI_API_KEY}` and a base URL becomes `-c openai_base_url=...`. Verified with a custom base URL.
+    The default model of codex 0.172 (`gpt-6.2-sol`) uses a "code mode" tool shape (one `exec` JavaScript tool in an
+    `additional_tools` input item); the fake server does not script it, so the runs pin `gpt-5.1-codex` in the CLI's
+    config. The events the parser reads (agent_message, command_execution, turn.completed, turn.failed, error) are the same
+    whatever the model, but a run with the default model is not covered. Its `error` events are mostly transient
+    ("Reconnecting... 2/5") and no longer fail a run; only `turn.failed`, or a stream that ends in an error, does.
+    `file_change`, `mcp_tool_call` and `web_search` items are parsed from the documented shapes and were not seen in a run.
+  * omp: `omp -p --mode json` prints a stable JSONL event stream (session header, agent_start, message_start/update/end,
+    tool_execution_start/end, turn_end, agent_end). The `omp-json` parser reads the assistant `message_end` events for
+    the text and usage (`totalTokens`, `cost.total`) and `stopReason: "error"` for a failure (exit 1, `errorMessage`).
+    `OPENAI_BASE_URL` is NOT honored by omp's builtin openai provider (it asked api.openai.com); a custom endpoint needs
+    a `models.yml` provider in the CLI's own config, so the base-URL variables declared for omp only help providers that
+    read them. The runs configure the fake provider in `~/.omp/agent/models.yml` and `config.yml` (`modelRoles.default`).
+  * A rejected key: Claude Code retries a 401 ten times with backoff (about three minutes) and then prints
+    "Invalid API key · Fix external API key" (`CLAUDE_CODE_MAX_RETRIES` shortens it); with no login it prints "Not logged
+    in · Please run /login" at once; Codex retries five times (about 6 s) and ends with `turn.failed` "unexpected status 401
+    Unauthorized: ..."; omp prints "401 Incorrect API key provided: ..." and exits 1. `Diagnose` recognises all of them
+    (tested on the real messages).
+  * The first request of Claude Code is a `HEAD /api/hello` probe; its agent loop uses `POST /v1/messages` only (no
+    count_tokens or models call was seen). A process the CLI starts in its own session (codex, omp commands) survives a
+    kill of the process group: the clitest sandbox kills the descendants as a container does; `adapters/sandbox/local`
+    kills the process group only.
+  * Not verified: OpenCode (not installed here, its output is read as text), a real model, the Claude Code stream with
+    `--include-partial-messages`, very long runs, and Windows.
+* `omp` (Oh My Pi, github.com/can1357/oh-my-pi, `bun install -g @oh-my-pi/pi-coding-agent`) is run as
+  `omp -p --mode json ... </dev/null` (stdin is closed because omp reads a non-terminal stdin to EOF before it starts).
+  A headless omp cannot answer an approval prompt, so the edit and full levels both use `--approval-mode yolo` and the
+  sandbox is the boundary.
 
 ## Known limits
 

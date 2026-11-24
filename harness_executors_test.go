@@ -32,7 +32,7 @@ func TestRunExecutorEndToEndThroughTheHarness(t *testing.T) {
 	be.OnCreate = func(sb *sandboxtest.Sandbox) {
 		sb.SetExec(func(_ context.Context, req sandbox.ExecRequest) (sandbox.ExecResult, error) {
 			switch {
-			case strings.HasPrefix(req.Command, "codex exec"):
+			case strings.Contains(req.Command, "codex exec"):
 				mu.Lock()
 				cliCmd, cliEnv = req.Command, req.Env
 				mu.Unlock()
