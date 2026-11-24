@@ -177,6 +177,12 @@ ${dexConfig({ dexPort, redirect }).replaceAll("$", "$$$$").replace(/^/gm, "     
       if (b.status !== 0) throw new Error(`go build ${name} failed:\n${b.stderr || b.stdout}`);
     }
 
+    /** Files RustFS holds for the artifact bucket (the container's data directory). */
+    S.s3Objects = () => {
+      const r = spawnSync("docker", ["compose", "-p", project, "-f", S.composeFile, "exec", "-T", "s3", "sh", "-c", "find /data -type f 2>&1 | grep -v '/.rustfs.sys/'"], { encoding: "utf8", timeout: 30_000 });
+      return r.stdout.split("\n").filter(Boolean);
+    };
+
     // ---- fake LLM, webhook receiver --------------------------------------------------------------------------------
     S.fake = await startFakeLlm();
     S.hook = await startHook();
@@ -359,6 +365,9 @@ async function startProxy(S) {
         if (proxy.log.length > 20000) proxy.log.splice(0, 10000);
         res.writeHead(r.statusCode, { ...r.headers, "x-replica": String(i) });
         r.pipe(res);
+        // a replica that dies mid-stream must cut the browser's connection too (pipe() would leave it hanging)
+        r.on("aborted", () => res.destroy());
+        r.on("error", () => res.destroy());
         res.on("close", () => r.destroy());
       },
     );
