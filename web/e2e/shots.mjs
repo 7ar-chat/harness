@@ -128,8 +128,12 @@ export async function runShots(h) {
         await d.getByRole("switch", { name: "Merge automatically" }).click();
         await pg.getByRole("alertdialog").waitFor({ state: "visible", timeout: 8000 });
       });
-      await pg.keyboard.press("Escape").catch(() => {});
-      await pg.keyboard.press("Escape").catch(() => {});
+      // The confirm sits on top of the form: close both, one Escape at a time, until no dialog is left (a swallowed Escape left the form
+      // open and blocked the next shot).
+      for (let i = 0; i < 4 && (await pg.getByRole("dialog").count()) + (await pg.getByRole("alertdialog").count()) > 0; i++) {
+        await pg.keyboard.press("Escape").catch(() => {});
+        await pg.waitForTimeout(350);
+      }
       await dlg("dlg-recipe-wizard", async () => {
         await pg.goto(`${base}/#/p/${pid}?tab=recipes`);
         await settle(pg);
