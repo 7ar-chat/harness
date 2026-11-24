@@ -232,6 +232,7 @@ ${dexConfig({ dexPort, redirect }).replaceAll("$", "$$$$").replace(/^/gm, "     
       OIDC_SESSION_KEY: S.secrets.sessionKey,
       OIDC_REQUIRE_APPROVAL: "1",
       HARNESS_ADMINS: "alice",
+      HARNESS_RUN_QUEUE: "redis", // the runs go through the shared Redis queue
       HARNESS_WEB_RUNS: "0", // the replicas only queue runs: the worker executes them
     };
 

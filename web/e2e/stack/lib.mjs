@@ -75,10 +75,16 @@ export function makeEnv(S, browser, problems) {
   };
 
   /** A person signed in once for the whole run, approved by alice when the sign-up was pending. */
-  env.person = async (name) => {
+  env.person = async (name, { welcome = false } = {}) => {
     if (people.has(name)) return people.get(name);
     const p = await env.signIn(name);
     people.set(name, p);
+    p.skipWelcome = async () => {
+      // the first-run welcome covers the app until it is skipped (s1 checks it, the others skip it)
+      const dlg = p.page.getByRole("dialog", { name: "Welcome to 7ar" });
+      if (await dlg.waitFor({ state: "visible", timeout: 2500 }).then(() => true, () => false)) await p.page.getByRole("button", { name: "Skip for now" }).click();
+    };
+    if (!welcome) await p.skipWelcome();
     if (name !== "alice") {
       const me = await p.api("GET", "/me");
       if (me.json?.user?.status === "pending") {

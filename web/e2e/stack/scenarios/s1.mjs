@@ -8,13 +8,13 @@ export const steps = [
   [
     "alice (admin) signs in, is approved, sees the app and the first-run welcome",
     async (env) => {
-      const alice = await env.person("alice");
+      const alice = await env.person("alice", { welcome: true });
       const me = await alice.get("/me");
       eq(me.user.login, "alice", "login claim");
       eq(me.user.status, "approved", "admin approved at once");
       ok(me.admin === true, "alice is an administrator (HARNESS_ADMINS)");
       await env.visible(alice.page.getByRole("dialog", { name: "Welcome to 7ar" }), "the first-run welcome");
-      await alice.page.keyboard.press("Escape");
+      await alice.page.getByRole("button", { name: "Skip for now" }).click();
       await env.gone(alice.page.getByRole("dialog", { name: "Welcome to 7ar" }), "welcome closed");
       const ck = (await alice.ctx.cookies()).filter((c) => c.name.toLowerCase().includes("session") || c.httpOnly);
       ok(ck.length > 0, "a session cookie was set");
