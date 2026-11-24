@@ -891,6 +891,8 @@ async function main() {
     await page.getByRole("button", { name: "Download report" }).filter({ visible: true }).first().click();
     await visible(page.getByRole("menuitem", { name: /Task table \(CSV\)/ }), "the CSV item");
     await page.keyboard.press("Escape");
+  });
+
   // k. Recipes: the gallery, the wizard, sharing, importing, triggers
   const shotTo = async (pg, name) => {
     if (!process.env.E2E_SHOTS) return;
@@ -1040,6 +1042,8 @@ async function main() {
     await gone(page.getByRole("dialog"), "the trigger form closed");
     const made = (await api(`/projects/${rk.a}/triggers`)).find((x) => x.name === "Nightly lint");
     eq([made?.template.budget?.maxUsd, made?.template.baseBranch], [1.5, "develop"], "the trigger's Advanced fields");
+  });
+
   // ---- l: notifications -------------------------------------------------------------------------------------------
   const lp = {};
   const signed = (c, secret) => c.headers["x-7ar-signature"] === "sha256=" + crypto.createHmac("sha256", secret).update(c.body).digest("hex");
