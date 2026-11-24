@@ -552,7 +552,7 @@ func (sv *Supervisor) spawnSession(ctx context.Context, me string, in spawnArgs)
 		return nil, err
 	}
 	if err := sv.team.SetThreadMeta(ctx, store.ThreadMeta{ThreadID: th.ID, ProjectID: in.ProjectID, Owner: me, CreatedBy: me, Kind: store.ThreadChat}); err != nil {
-		_, _ = sv.s.H.Store.DeleteThread(ctx, me, th.ID)
+		_, _ = sv.s.H.DeleteThread(ctx, me, th.ID)
 		return nil, err
 	}
 	c := Caller{Login: me, Actor: me, ProjectID: in.ProjectID}

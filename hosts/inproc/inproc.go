@@ -202,7 +202,7 @@ func (c *impl) RenameThread(ctx context.Context, id string, p client.ThreadPatch
 }
 
 func (c *impl) DeleteThread(ctx context.Context, id string) error {
-	_, err := c.h.Store.DeleteThread(ctx, c.user, id)
+	_, err := c.h.DeleteThread(ctx, c.user, id)
 	return mapErr(err)
 }
 

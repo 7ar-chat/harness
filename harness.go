@@ -166,6 +166,7 @@ type Harness struct {
 	runGate      func(ctx context.Context, user, threadID string) error
 	redo         redoStacks
 	factory      *Factory
+	threadHooks  threadHooks
 }
 
 // New wires the harness: the core (store, models, sandboxes, infrastructure,

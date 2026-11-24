@@ -368,7 +368,7 @@ func (s *server) dispatch(ctx context.Context, c Caller, p *store.Project, req *
 		}
 		meta := store.ThreadMeta{ThreadID: th.ID, ProjectID: p.ID, Owner: c.Actor, CreatedBy: c.Actor, Kind: store.ThreadChat}
 		if err := s.team.SetThreadMeta(ctx, meta); err != nil {
-			_, _ = s.H.Store.DeleteThread(ctx, c.Actor, th.ID)
+			_, _ = s.H.DeleteThread(ctx, c.Actor, th.ID)
 			return nil, err
 		}
 		pc := Caller{Login: c.Actor, Actor: c.Actor, ProjectID: p.ID}

@@ -63,4 +63,3 @@ func firstPolicy(n string) string {
 	}
 	return n
 }
-

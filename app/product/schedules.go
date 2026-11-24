@@ -124,6 +124,12 @@ func (s *server) routeSchedules() {
 	s.sched = &schedulerState{svc: harness.NewScheduleService(harness.ScheduleOptions{
 		Store: o.Store, Exec: &scheduleExecutor{s: s}, Every: o.Every, Locker: o.Locker, ID: "web", Timeout: o.Timeout,
 	})}
+	// A deleted conversation is no longer the reused session of a schedule: its next fire starts a fresh one.
+	s.H.OnThreadDeleted(func(ctx context.Context, threadID string) {
+		if err := o.Store.ClearThread(ctx, threadID); err != nil {
+			slog.Warn("schedules: forgetting the reused session of a deleted thread failed", "thread", threadID, "error", err)
+		}
+	})
 	if !o.NoRun {
 		ctx := o.Context
 		if ctx == nil {
@@ -436,7 +442,7 @@ func (e *scheduleExecutor) Execute(ctx context.Context, sc schedule.Schedule, ru
 		threadID = th.ID
 		meta := store.ThreadMeta{ThreadID: th.ID, ProjectID: sc.ProjectID, Owner: owner, CreatedBy: who, Kind: store.ThreadChat}
 		if err := s.team.SetThreadMeta(ctx, meta); err != nil {
-			_, _ = s.H.Store.DeleteThread(context.WithoutCancel(ctx), owner, th.ID)
+			_, _ = s.H.DeleteThread(context.WithoutCancel(ctx), owner, th.ID)
 			return harness.ScheduleOutcome{}, fmt.Errorf("linking the conversation to its project: %w", err)
 		}
 		s.note(Caller{Login: owner, Actor: who, ProjectID: sc.ProjectID}, th.ID, "thread.create", map[string]any{"schedule": sc.ID}, FeedEvent{Type: "thread.created", Title: title})

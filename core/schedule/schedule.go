@@ -171,6 +171,9 @@ type Store interface {
 	FinishRun(ctx context.Context, runID string, f Finish, now time.Time) error
 	// SetThread records the conversation a run executes in as soon as it exists, so a live run is linked to its session.
 	SetThread(ctx context.Context, runID, threadID, agentRunID string) error
+	// ClearThread forgets threadID as the reused conversation of any schedule (the conversation was deleted): the
+	// next fire starts a fresh one. The runs keep their history.
+	ClearThread(ctx context.Context, threadID string) error
 	// Runs returns the newest runs of a schedule first.
 	Runs(ctx context.Context, scheduleID string, limit int) ([]Run, error)
 	// RunOfThread returns the newest run that executed in the thread, ErrNotFound when none did.

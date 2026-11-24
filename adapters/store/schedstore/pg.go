@@ -356,6 +356,12 @@ func (s *PG) SetThread(ctx context.Context, runID, threadID, agentRunID string) 
 	})
 }
 
+// ClearThread implements schedule.Store.
+func (s *PG) ClearThread(ctx context.Context, threadID string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE work_schedules SET thread_id = '' WHERE thread_id = $1`, threadID)
+	return err
+}
+
 // Runs implements schedule.Store.
 func (s *PG) Runs(ctx context.Context, scheduleID string, limit int) ([]schedule.Run, error) {
 	if limit <= 0 {

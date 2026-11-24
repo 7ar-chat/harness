@@ -302,7 +302,7 @@ func (s *server) AfterFork(w http.ResponseWriter, r *http.Request, c Caller, th 
 	}
 	meta := store.ThreadMeta{ThreadID: th.ID, ProjectID: c.ProjectID, Owner: c.Login, CreatedBy: c.Actor, Kind: store.ThreadChat}
 	if err := s.team.SetThreadMeta(r.Context(), meta); err != nil {
-		_, _ = s.H.Store.DeleteThread(r.Context(), c.Login, th.ID)
+		_, _ = s.H.DeleteThread(r.Context(), c.Login, th.ID)
 		fail(w, err)
 		return true
 	}

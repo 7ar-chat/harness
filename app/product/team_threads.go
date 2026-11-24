@@ -37,7 +37,7 @@ func (s *server) createThreadTeam(w http.ResponseWriter, r *http.Request, c Call
 	}
 	meta := store.ThreadMeta{ThreadID: th.ID, ProjectID: body.ProjectID, Owner: c.Actor, CreatedBy: c.Actor, Kind: store.ThreadChat}
 	if err := s.team.SetThreadMeta(r.Context(), meta); err != nil {
-		_, _ = s.H.Store.DeleteThread(r.Context(), c.Actor, th.ID)
+		_, _ = s.H.DeleteThread(r.Context(), c.Actor, th.ID)
 		fail(w, err)
 		return
 	}

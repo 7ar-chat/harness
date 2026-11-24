@@ -309,7 +309,7 @@ func (h *Harness) Fork(ctx context.Context, user, threadID, messageID string) (*
 		copies = append(copies, &cp)
 	}
 	if err := h.Store.AppendMessages(ctx, copies...); err != nil {
-		_, _ = h.Store.DeleteThread(ctx, user, th.ID)
+		_, _ = h.DeleteThread(ctx, user, th.ID)
 		return nil, err
 	}
 	return h.Store.GetThread(ctx, user, th.ID)
