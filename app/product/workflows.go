@@ -647,7 +647,7 @@ func (s *server) gateAction(action string) handler {
 		}
 		nid := r.PathValue("nid")
 		n, found := run.Node(nid)
-		if !found || n.Kind != workflows.KindGate {
+		if !found || n.Kind != workflows.KindGate && !n.Kind.Command() { // a command step may wait for approval to run
 			writeError(w, http.StatusNotFound, "not_found", "No such gate.")
 			return
 		}

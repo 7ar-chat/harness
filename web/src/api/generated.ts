@@ -233,7 +233,7 @@ export interface FeedEvent {
   at: string;
 }
 
-export type FeedType = "thread.created" | "thread.updated" | "thread.deleted" | "run.started" | "run.finished" | "message.sent" | "member.changed" | "project.changed" | "memory.changed" | "task.created" | "task.updated" | "task.blocked" | "requirement.changed" | "workflow.changed" | "workflow.run" | "workflow.gate";
+export type FeedType = "thread.created" | "thread.updated" | "thread.deleted" | "run.started" | "run.finished" | "message.sent" | "member.changed" | "project.changed" | "memory.changed" | "task.created" | "task.updated" | "task.blocked" | "requirement.changed" | "workflow.changed" | "workflow.run" | "workflow.gate" | "schedule.updated";
 
 export type FileType = "file" | "directory";
 

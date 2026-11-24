@@ -46,6 +46,8 @@ type Options struct {
 	// Preview starts the app of a preview step (the host's preview mechanism) and returns its URL and the log.
 	// It returns ErrNoPreview when it cannot (the step then runs its command like a script).
 	Preview func(ctx context.Context, r core.Run, n core.Node, sb sandbox.Sandbox) (url, log string, err error)
+	// OnFinished is called once a run reached a final state (the host destroys the run's sandboxes).
+	OnFinished func(r core.Run)
 	// ExecTimeout bounds a command step (0: DefaultExecTimeout); RepoDir is the checkout directory (default
 	// /workspace/repo); FlushEvery is how often a running step's output is saved (0: 2s).
 	ExecTimeout time.Duration
@@ -227,6 +229,11 @@ func (e *Engine) mutate(ctx context.Context, runID string, fn func(*pass) error)
 			p.changes = []core.Change{{Run: *saved, Kind: "step"}}
 		}
 		if saved.State.Terminal() && !wasTerminal {
+			if e.o.OnFinished != nil {
+				run := *saved
+				e.wg.Add(1)
+				go func() { defer e.wg.Done(); e.o.OnFinished(run) }()
+			}
 			p.changes = append(p.changes, core.Change{Run: *saved, Kind: "finished"})
 			if saved.ParentRunID != "" {
 				e.advanceAsync(saved.ParentRunID)

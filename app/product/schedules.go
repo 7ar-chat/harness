@@ -123,6 +123,10 @@ func (s *server) routeSchedules() {
 	}
 	s.sched = &schedulerState{svc: harness.NewScheduleService(harness.ScheduleOptions{
 		Store: o.Store, Exec: &scheduleExecutor{s: s}, Every: o.Every, Locker: o.Locker, ID: "web", Timeout: o.Timeout,
+		// The schedules list follows a run to its end without waiting for a poll.
+		OnRunFinished: func(sc schedule.Schedule, _ schedule.Run) {
+			s.hub.publish(FeedEvent{Type: "schedule.updated", ProjectID: sc.ProjectID, Title: sc.Name, owner: sc.RunAs})
+		},
 	})}
 	// A deleted conversation is no longer the reused session of a schedule: its next fire starts a fresh one.
 	s.H.OnThreadDeleted(func(ctx context.Context, threadID string) {
@@ -425,6 +429,9 @@ func (e *scheduleExecutor) Execute(ctx context.Context, sc schedule.Schedule, ru
 				Error: who + " can no longer write to this project; save the schedule again to run it as someone else"}, nil
 		}
 	}
+	changed := func() {
+		s.hub.publish(FeedEvent{Type: "schedule.updated", ProjectID: sc.ProjectID, Title: sc.Name, Actor: who, owner: who})
+	}
 	owner, threadID := who, ""
 	if sc.ReuseSession && sc.ThreadID != "" {
 		if meta, err := s.team.GetThreadMeta(ctx, sc.ThreadID); err == nil && meta.ProjectID == sc.ProjectID && meta.Kind == store.ThreadChat {
@@ -448,6 +455,7 @@ func (e *scheduleExecutor) Execute(ctx context.Context, sc schedule.Schedule, ru
 		s.note(Caller{Login: owner, Actor: who, ProjectID: sc.ProjectID}, th.ID, "thread.create", map[string]any{"schedule": sc.ID}, FeedEvent{Type: "thread.created", Title: title})
 	}
 	started(threadID, "")
+	changed()
 	opts := client.SendOptions{Model: sc.Model}
 	if sc.Policy == schedule.PolicyReadOnly {
 		opts.Mode = client.ModePlan

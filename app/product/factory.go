@@ -202,6 +202,10 @@ func (h *FactoryHooks) OnTaskState(t factory.Task, from, to factory.State) {
 	h.mu.Unlock()
 	if srv != nil && from != to {
 		srv.requirementTaskMoved(t, to) // requirements follow their tasks (see requirements.go)
+		if t.ProjectID != "" {
+			// The Tasks tab and the task detail follow the move at once instead of at their next poll.
+			srv.hub.publish(FeedEvent{Type: "task.updated", ProjectID: t.ProjectID, ThreadID: t.ThreadID, Title: t.Title, Status: string(to), owner: t.Owner})
+		}
 		if eng := srv.opt.WorkflowEngine; eng != nil {
 			eng.TaskMoved(t) // workflow runs follow their tasks (see workflows.go)
 		}
