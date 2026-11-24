@@ -111,7 +111,8 @@ describe("the designer", () => {
     mockFetch(routes("member"));
     await open();
     fireEvent.click(await canvas().findByRole("button", { name: "Step plan" }));
-    fireEvent.click(page().getByRole("button", { name: "Script" })); // added after "plan"
+    fireEvent.pointerDown(page().getByRole("button", { name: /Add step/ }), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole("menuitem", { name: /^Script/ })); // added after "plan"
     expect(await canvas().findByRole("button", { name: "Step Script" })).toBeTruthy();
     expect(canvas().getByRole("button", { name: "Connection from plan to script" })).toBeTruthy();
 

@@ -4,6 +4,7 @@ import { checkValues, fillTemplate, valuesOf } from "@/api/recipes";
 import { mockFetch, reply } from "@/test/fetch";
 import { me, overview, project, shellRoutes } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
+import { describeCron } from "./Recipes";
 
 const T = "2026-11-01T00:00:00Z";
 const recipe = (over: object = {}) => ({
@@ -107,6 +108,9 @@ describe("the Recipes tab", () => {
     await renderApp("/p/p1?tab=recipes");
     fireEvent.click(await page().findByRole("button", { name: "Use this recipe" }));
     const dlg = within(await screen.findByRole("dialog"));
+    expect(dlg.queryByLabelText("When to run")).toBeNull(); // a common choice: no raw cron on screen
+    fireEvent.click(dlg.getByRole("combobox", { name: "When to run: common choices" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Custom" }));
     fireEvent.change(dlg.getByLabelText("When to run"), { target: { value: "every day" } });
     expect(dlg.getByText("Five fields, for example 0 2 * * *")).toBeTruthy();
     expect((dlg.getByRole("button", { name: "Create" }) as HTMLButtonElement).disabled).toBe(true);
@@ -201,5 +205,15 @@ describe("Share as recipe", () => {
     expect(m.find("POST", "/api/projects/p1/recipes/from")[0]!.body).toMatchObject({
       from: "schedule", id: "s1", scope: "personal", params: [{ key: "api", label: "Project", text: "api", type: "text" }],
     });
+  });
+});
+
+describe("describeCron", () => {
+  it("reads the common shapes in words and leaves the rest alone", () => {
+    expect(describeCron("0 2 * * *")).toBe("every day at 02:00");
+    expect(describeCron("30 9 * * 1-5")).toBe("on weekdays at 09:30");
+    expect(describeCron("0 17 * * 5")).toBe("every Friday at 17:00");
+    expect(describeCron("*/15 * * * *")).toBeUndefined();
+    expect(describeCron("@daily")).toBeUndefined();
   });
 });

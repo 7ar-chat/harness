@@ -273,7 +273,7 @@ function AutoDispatch({ projectId }: { projectId: string }) {
   return (
     <details className="rounded-lg border text-sm" open={on || comment}>
       <summary className="cursor-pointer select-none px-3 py-2 font-medium">
-        Automation <span className="font-normal text-muted-foreground">{on ? "Auto-dispatch is on" : "Off: hand ready requirements to agents by itself"}</span>
+        Hand off automatically <span className="font-normal text-muted-foreground">{on ? "On: ready requirements go to agents by themselves" : "Off: you hand ready requirements to agents"}</span>
       </summary>
     <section aria-label="Auto-dispatch" className="space-y-2 p-3 pt-1">
       <div className="flex items-center gap-2">
@@ -410,7 +410,7 @@ export function Requirements({ projectId, role }: { projectId: string; role: Rol
           {canWork ? <Button size="sm" onClick={() => setEditing({})}>Write your first requirement</Button> : null}
         </EmptyGuide>
       ) : (
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        <div>
           <ul aria-label="Requirements" className="space-y-2">
             {shown.length === 0 ? <li className="p-4 text-sm text-muted-foreground">No requirement matches.</li> : null}
             {shown.map((r) => (
@@ -446,9 +446,6 @@ export function Requirements({ projectId, role }: { projectId: string; role: Rol
               </li>
             ))}
           </ul>
-          <div className="hidden md:block">
-            <p className="p-4 text-sm text-muted-foreground">Open a requirement to see what works on it. It opens in its own tab.</p>
-          </div>
         </div>
       )}
       <EditDialog projectId={projectId} requirement={editing?.requirement} open={editing !== null} onOpenChange={(o) => !o && setEditing(null)} />

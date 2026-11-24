@@ -86,19 +86,54 @@ export async function runShots(h) {
     const dialogs = async (sub, pg, phone) => {
       const clickVis = (loc) => loc.filter({ visible: true }).first().click({ timeout: 15000 });
       const dlg = async (name, open) => {
-        await run(sub, pg, name, async () => {
+        const ok = await run(sub, pg, name, async () => {
           await open();
-          await pg.getByRole("dialog").first().waitFor({ state: "visible", timeout: 6000 });
+          await pg.getByRole("dialog").first().waitFor({ state: "visible", timeout: 8000 });
         });
+        if (!ok) {
+          // keep what the page looked like when the dialog did not come, and how many dialogs there were (a dialog that opens twice or late is a defect)
+          const n = await pg.getByRole("dialog").count().catch(() => -1);
+          missed.push(`  (${sub}/${name}: ${n} dialogs in the page at ${pg.url()})`);
+          fs.mkdirSync(path.join(dir, sub), { recursive: true });
+          await pg.screenshot({ path: path.join(dir, sub, `FAIL-${name}.png`) }).catch(() => {});
+        }
         await pg.keyboard.press("Escape").catch(() => {});
         await pg.waitForTimeout(250);
       };
-      await dlg("dlg-new-task", async () => {
+      const newTask = async () => {
         await pg.goto(`${base}/#/p/${pid}?tab=tasks`);
+        // The editor tab "Work · Tasks" stays mounted (TabHost keeps the 8 latest), so it comes back on the sub-view it was left on:
+        // after the tab-tasks-report shot that is Report, which has no New task button. That was the "dialog never opens" of desktop dark.
+        await pg.getByRole("tab", { name: "List", exact: true }).click({ timeout: 15000 });
         await pg.getByRole("button", { name: /New task/ }).first().waitFor({ state: "visible", timeout: 15000 });
         await settle(pg);
         await clickVis(pg.getByRole("button", { name: /New task/ }));
+      };
+      // The dialog keeps its Advanced section as it was left (it stays mounted), so open it only when it is closed.
+      const openAdvanced = async (d) => {
+        const t = d.getByRole("button", { name: /Advanced options/ });
+        if ((await t.getAttribute("aria-expanded")) !== "true") await t.click();
+      };
+      await dlg("dlg-new-task", newTask);
+      await dlg("dlg-new-task-advanced", async () => {
+        await newTask();
+        const d = pg.getByRole("dialog");
+        await openAdvanced(d);
+        await d.getByText(/Reviews are off/).waitFor({ state: "visible", timeout: 8000 });
       });
+      await run(sub, pg, "dlg-automerge-confirm", async () => {
+        await newTask();
+        const d = pg.getByRole("dialog");
+        await openAdvanced(d);
+        await d.getByRole("switch", { name: "Merge automatically" }).click();
+        await pg.getByRole("alertdialog").waitFor({ state: "visible", timeout: 8000 });
+      });
+      // The confirm sits on top of the form: close both, one Escape at a time, until no dialog is left (a swallowed Escape left the form
+      // open and blocked the next shot).
+      for (let i = 0; i < 4 && (await pg.getByRole("dialog").count()) + (await pg.getByRole("alertdialog").count()) > 0; i++) {
+        await pg.keyboard.press("Escape").catch(() => {});
+        await pg.waitForTimeout(350);
+      }
       await dlg("dlg-recipe-wizard", async () => {
         await pg.goto(`${base}/#/p/${pid}?tab=recipes`);
         await settle(pg);
@@ -152,7 +187,11 @@ export async function runShots(h) {
       await run(sub, pg, "card-digest", async () => {
         await pg.goto(`${base}/#/p/${pid}?tab=insights`);
         await settle(pg);
-        await pg.getByText(/digest/i).first().scrollIntoViewIfNeeded();
+        const card = pg.getByTestId("digest-card");
+        await card.waitFor({ state: "visible", timeout: 15000 });
+        await card.scrollIntoViewIfNeeded();
+        await pg.evaluate(() => document.querySelector('[data-testid="digest-card"]')?.scrollIntoView({ block: "start" }));
+        await pg.waitForTimeout(400);
       });
       await run(sub, pg, "dlg-workflow-node-inspector", async () => {
         await pg.goto(`${base}/#/p/${proj.wf}?tab=workflows&wf=${wfs?.[0]?.id ?? ""}`);
@@ -202,29 +241,15 @@ export async function runShots(h) {
 
     const DESK = { width: 1440, height: 900 };
     const PHONE = { width: 390, height: 844 };
-    let c = await mk("dark", DESK);
-    let pg = await c.newPage();
-    await pages("desktop-dark", pg, FULL);
-    await dialogs("desktop-dark", pg, false);
-    await c.close();
-    const lightNames = new Set(["route-dashboard", "route-inbox", "route-jobs", "route-connectors", "route-roles", "route-usage", "route-insights", "route-admin", "route-help", "route-profile", "route-schedules", "tab-board", "tab-tasks", "tab-requirements", "tab-workflows", "tab-settings", "tab-notifications", "tab-recipes", "tab-members", "tab-task-detail", "tab-workflow-designer", "session-edits", "session-approval"]);
-    c = await mk("light", DESK);
-    pg = await c.newPage();
-    await pages("desktop-light", pg, FULL.filter(([n]) => lightNames.has(n)));
-    await dialogs("desktop-light", pg, false);
-    await c.close();
-    const phoneNames = new Set(["route-dashboard", "route-inbox", "route-jobs", "route-roles", "route-help", "route-profile", "route-usage", "route-admin", "tab-board", "tab-overview", "tab-tasks", "tab-task-detail", "tab-requirements", "tab-requirement-detail", "tab-workflows", "tab-workflow-designer", "tab-settings", "tab-insights", "tab-recipes", "tab-notifications", "session-edits", "session-approval"]);
-    c = await mk("dark", PHONE);
-    pg = await c.newPage();
-    await pages("phone-dark", pg, FULL.filter(([n]) => phoneNames.has(n)));
-    await dialogs("phone-dark", pg, true);
-    await c.close();
-    c = await mk("light", PHONE);
-    pg = await c.newPage();
-    await pages("phone-light", pg, FULL.filter(([n]) => ["route-dashboard", "tab-board", "tab-tasks", "session-approval", "route-help"].includes(n)));
-    await c.close();
+    for (const [theme, size, sub] of [["dark", DESK, "desktop-dark"], ["light", DESK, "desktop-light"], ["dark", PHONE, "phone-dark"], ["light", PHONE, "phone-light"]]) {
+      const c = await mk(theme, size);
+      const pg = await c.newPage();
+      await pages(sub, pg, FULL);
+      await dialogs(sub, pg, size.width < 500);
+      await c.close();
+    }
     // welcome and tour: a newcomer
-    for (const [theme, size, sub] of [["dark", DESK, "desktop-dark"], ["light", DESK, "desktop-light"], ["dark", PHONE, "phone-dark"]]) {
+    for (const [theme, size, sub] of [["dark", DESK, "desktop-dark"], ["light", DESK, "desktop-light"], ["dark", PHONE, "phone-dark"], ["light", PHONE, "phone-light"]]) {
       await post("/me/preferences", { values: { onboarding: null, ui: null } }, "PATCH");
       const n = await browser.newContext({ viewport: size, reducedMotion: "reduce" });
       n.on("page", watch);
@@ -240,7 +265,7 @@ export async function runShots(h) {
         await np.goto(`${base}/#/`);
         await np.getByRole("dialog", { name: "Welcome to 7ar" }).waitFor({ state: "visible", timeout: T });
       });
-      if (sub !== "desktop-light") {
+      {
         await run(sub, np, "dlg-tour", async () => {
           await np.getByRole("dialog").getByRole("button", { name: "Skip for now" }).click();
           if (size.width < 500) await np.getByRole("button", { name: "Open navigation" }).click();

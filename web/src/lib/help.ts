@@ -156,6 +156,26 @@ Steps can wait for a person. That wait is called a **gate**.`,
 A waiting gate appears under **Needs you**. Open it, read what the earlier steps produced, then approve or reject. The run goes on from there.`,
   },
   {
+    slug: "reviews",
+    title: "Reviews and automatic merge",
+    group: "Concepts",
+    summary: "Who checks a change before it merges, and why a second model matters.",
+    keywords: "review reviewer independent model automatic merge auto merge FACTORY_REVIEW_MODEL",
+    body: `Before a change is merged, a reviewer reads it. Where **automatic merge** is on, the review and green checks are the only gate: nobody looks at the change in between.
+
+## Independent review
+The review is **independent** when it is done by a different model from the one that wrote the change. A model tends to approve its own work, so a second model catches more.
+
+## Not independent
+When no second model is set, the model that writes a change also reviews it. Tasks still work, but treat automatic merge with care: leave it off and merge the pull request yourself.
+
+## Reviews are off
+Where the administrator switched review off, a change merges on green checks alone.
+
+## What to do
+Ask an administrator to set a second review model (the server setting \`FACTORY_REVIEW_MODEL\`). Until then, keep **Merge automatically** off for work you have not read.`,
+  },
+  {
     slug: "policies",
     title: "Policies: supervised, sandboxed, autonomous",
     group: "Concepts",

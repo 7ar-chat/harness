@@ -33,6 +33,18 @@ const KIND_ICON: Record<string, ReactNode> = {
 /** Where a created thing lives, for the "Open" link after Create. */
 const KIND_TAB: Record<string, [string, string]> = { schedule: ["schedules", "Schedules"], task: ["tasks", "Tasks"], trigger: ["tasks", "Tasks & triggers"] };
 
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** A plain-words reading of the common cron shapes (minute hour * * weekday); undefined when the expression is something else. */
+export function describeCron(cron: string): string | undefined {
+  const m = /^(\d{1,2}) (\d{1,2}) \* \* (\*|[0-6]|1-5)$/.exec(cron.trim());
+  if (!m) return undefined;
+  const at = `${m[2]!.padStart(2, "0")}:${m[1]!.padStart(2, "0")}`;
+  if (m[3] === "*") return `every day at ${at}`;
+  if (m[3] === "1-5") return `on weekdays at ${at}`;
+  return `every ${WEEKDAYS[Number(m[3])]} at ${at}`;
+}
+
 const CRON_CHOICES: { label: string; cron: string }[] = [
   { label: "Every hour", cron: "0 * * * *" },
   { label: "Every day at 09:00", cron: "0 9 * * *" },
@@ -172,6 +184,7 @@ export function RecipeGallery({ kind, canUse, onUse, onDelete }: { kind?: Recipe
 
 function ParamField({ p, value, error, onChange }: { p: Param; value: string; error?: string; onChange: (v: string) => void }) {
   const id = `rp-${p.key}`;
+  const [customCron, setCustomCron] = useState(false); // "Custom" chosen: only then the raw cron expression is shown
   const effective = value !== "" ? value : (p.default ?? "");
   let input: ReactNode;
   switch (p.type) {
@@ -199,9 +212,16 @@ function ParamField({ p, value, error, onChange }: { p: Param; value: string; er
       break;
     case "cron": {
       const preset = CRON_CHOICES.find((c) => c.cron === effective)?.cron ?? "custom";
+      const raw = preset === "custom" || customCron;
       input = (
         <div className="grid gap-2 sm:grid-cols-2">
-          <Select value={preset} onValueChange={(v) => v !== "custom" && onChange(v)}>
+          <Select
+            value={raw ? "custom" : preset}
+            onValueChange={(v) => {
+              setCustomCron(v === "custom");
+              if (v !== "custom") onChange(v);
+            }}
+          >
             <SelectTrigger className="w-full" aria-label={`${p.label}: common choices`}>
               <SelectValue />
             </SelectTrigger>
@@ -214,7 +234,7 @@ function ParamField({ p, value, error, onChange }: { p: Param; value: string; er
               <SelectItem value="custom">Custom</SelectItem>
             </SelectContent>
           </Select>
-          <Input id={id} value={value} placeholder={p.default} onChange={(e) => onChange(e.target.value)} className="font-mono" aria-invalid={!!error} aria-label={p.label} />
+          {raw ? <Input id={id} value={value} placeholder={p.default} onChange={(e) => onChange(e.target.value)} className="font-mono" aria-invalid={!!error} aria-label={p.label} /> : null}
         </div>
       );
       break;
@@ -354,7 +374,7 @@ export function RecipeWizard({ projectId, recipe, canCreate, onClose }: { projec
               </p>
               {isSchedule || b.cron ? (
                 <p className="text-xs text-muted-foreground">
-                  Runs on <code>{cron}</code> ({zone})
+                  Runs {describeCron(cron) ?? <>on <code>{cron}</code></>} ({zone})
                 </p>
               ) : b.event ? (
                 <p className="text-xs text-muted-foreground">
@@ -705,10 +725,7 @@ export function RecipesPanel({ projectId, canEdit, owner }: { projectId: string;
   const del = useDeleteRecipe();
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          A recipe becomes a schedule, a task or a trigger of this project. To share your own, use <em>Share as recipe</em> on a schedule or a task.
-        </p>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <Button variant="outline" onClick={() => setImporting(true)} disabled={!canEdit}>
           <Upload /> Import a file
         </Button>

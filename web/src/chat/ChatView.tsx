@@ -262,7 +262,7 @@ export function ChatView({ threadId, settings, readOnly, users, self, suggestion
             </div>
           ) : null}
           <div className="flex items-center justify-between gap-2 px-1 text-xs text-muted-foreground">
-            <span>{running ? `Running · ${live.steps} steps` : live.phase === "failed" ? "Last run failed" : live.phase === "cancelled" ? "Cancelled" : readOnly ? "Read-only" : "Idle"}</span>
+            <span>{running ? `Running · ${live.steps} steps` : interrupt ? "Waiting for your answer" : live.phase === "failed" ? "Last run failed" : live.phase === "cancelled" ? "Cancelled" : readOnly ? "Read-only" : "Idle"}</span>
             <span className="truncate">{usage}</span>
           </div>
           <QueueCard items={queue.items} running={running} readOnly={readOnly} remove={queue.remove} sendNow={queue.sendNow} discardAll={queue.discardAll} pending={queue.pending} />

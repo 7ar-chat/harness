@@ -78,7 +78,24 @@ export async function runP(h) {
         };
         await pg.goto(`${base}/#/p/${pid}?tab=tasks`);
         await settle(pg);
+        await pg.getByRole("note", { name: "Review notice" }).waitFor({ state: "visible", timeout: T });
+        await scan(pg, `${name} tasks with the review notice`);
         await pg.getByRole("button", { name: /New task/ }).filter({ visible: true }).first().click();
+        {
+          // the merge hint and the confirm step of automatic merge (reviews are off on this server)
+          const d = pg.getByRole("dialog");
+          await d.waitFor({ state: "visible", timeout: T });
+          await d.getByRole("button", { name: /Advanced options/ }).click();
+          await visible(d.getByText(/Reviews are off/), "the merge hint");
+          await pg.waitForTimeout(300);
+          await scan(pg, `${name} dialog new task (Advanced open, merge hint)`);
+          await d.getByRole("switch", { name: "Merge automatically" }).click();
+          await pg.getByRole("alertdialog").waitFor({ state: "visible", timeout: T });
+          await pg.waitForTimeout(300);
+          await scan(pg, `${name} dialog automatic merge confirm`);
+          await pg.getByRole("alertdialog").getByRole("button", { name: "Keep it off" }).click();
+          await d.getByRole("button", { name: /Advanced options/ }).click(); // leave the remembered choice as found
+        }
         await dlgScan("new task");
         await pg.goto(`${base}/#/p/${pid}?tab=recipes`);
         await settle(pg);

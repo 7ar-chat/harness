@@ -245,7 +245,7 @@ export function UsagePanel({ projectId }: { projectId?: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <Tabs value={range} onValueChange={setRange}>
-          <TabsList>
+          <TabsList variant="line">
             {RANGES.map((r) => (
               <TabsTrigger key={r.key} value={r.key}>
                 {r.label}
@@ -292,7 +292,7 @@ export function UsagePanel({ projectId }: { projectId?: string }) {
           </section>
           {days.data ? <DayChart rows={days.data.rows} /> : null}
           <Tabs value={group} onValueChange={(g) => setGroup(g as UsageGroup)}>
-            <TabsList>
+            <TabsList variant="line">
               {GROUPS.map((g) => (
                 <TabsTrigger key={g.key} value={g.key}>
                   {g.label}
@@ -314,8 +314,8 @@ export function UsagePanel({ projectId }: { projectId?: string }) {
 export function UsagePage() {
   return (
     <ScrollArea className="h-full">
-      <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-8">
-        <h1 className="text-xl font-semibold">Usage</h1>
+      <div className="w-full max-w-5xl space-y-4 p-4 md:p-6">
+        <h1 className="text-xl font-semibold">My usage</h1>
         <p className="text-sm text-muted-foreground">What your sessions, your factory tasks and your scheduled tasks consumed, in every project and on your own.</p>
         <UsagePanel />
       </div>

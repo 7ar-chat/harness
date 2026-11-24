@@ -305,10 +305,11 @@ function ConnectorRow({ c, onImport }: { c: Connector; onImport: () => void }) {
             {statusOf(c)}
           </div>
           <p className="text-sm text-muted-foreground">{gh ? "Import repositories as projects and let agents work on them." : slack ? "Message your assistant or mention it in a channel; it also pings you when a session needs you." : "Chat with your assistant from Telegram; it also pings you when a session needs you."}</p>
-          <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+          {/* Not set up on the server: the badge and the message say it; a row of "not connected / not set up" would say it three times. */}
+          <dl className={c.configured || c.connected ? "flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground" : "sr-only"}>
             <div className="flex gap-1">
               <dt>Account</dt>
-              <dd className="font-mono">{c.connected ? c.account || "connected" : "—"}</dd>
+              <dd className={c.connected ? "font-mono" : undefined}>{c.connected ? c.account || "connected" : "not connected"}</dd>
             </div>
             <div className="flex gap-1">
               <dt>Server</dt>
@@ -444,7 +445,7 @@ export function ProfilePage() {
 function SidePage({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
   return (
     <ScrollArea className="h-full">
-      <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-8">
+      <div className="w-full max-w-5xl space-y-4 p-4 md:p-6">
         <header className="space-y-1">
           <h1 className="text-xl font-semibold">{title}</h1>
           <p className="text-sm text-muted-foreground">{hint}</p>
@@ -457,7 +458,7 @@ function SidePage({ title, hint, children }: { title: string; hint: string; chil
 
 export function ReferencesPage() {
   return (
-    <SidePage title="References" hint="Your CV, templates and other files. Your assistant can read them in every session and attach them to web forms.">
+    <SidePage title="Library" hint="Your CV, templates and other files. Your assistant can read them in every session and attach them to web forms.">
       <ReferencesPanel />
     </SidePage>
   );
@@ -473,7 +474,7 @@ export function ConnectorsPage() {
 
 export function CapabilitiesPage() {
   return (
-    <SidePage title="Tools & skills" hint="MCP servers that give your assistant more tools in your personal sessions.">
+    <SidePage title="My tools & skills" hint="MCP servers that give your assistant more tools in your personal sessions.">
       <CapabilitiesPanel scope={{ kind: "user" }} />
     </SidePage>
   );

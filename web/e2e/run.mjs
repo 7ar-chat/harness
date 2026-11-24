@@ -493,6 +493,42 @@ async function main() {
     await visible(page.getByRole("region", { name: "Task detail" }).getByRole("link", { name: /agent's session/ }), "the link to the agent's session");
   });
 
+  await step("g3b. Review warning: this server has review switched off, so the Tasks tab says 'Reviews are off' (never 'not independent'), dismissal sticks, and automatic merge asks first", async () => {
+    const st = await api(`/projects/${proj.id}/factory/status`);
+    eq(st.review, "off", "the status of a server with FACTORY_NO_REVIEW=1");
+    eq(st.independentReview, false, "independentReview");
+    eq(JSON.stringify(st).includes("Model"), false, "no model name in the status");
+    await page.evaluate(() => localStorage.removeItem("7ar.ui.reviewNotice.off"));
+    await projectTab("tasks");
+    const note = page.getByRole("note", { name: "Review notice" });
+    await visible(note, "the notice");
+    await visible(note.getByText(/Reviews are off/), "the notice says reviews are off");
+    eq(await page.getByText(/not independent/).count(), 0, "no claim that reviews are not independent");
+    eq(((await note.getByRole("link", { name: "Learn more" }).getAttribute("href")) ?? "").endsWith("#/help?a=reviews"), true, "the Learn more link");
+    await page.getByRole("button", { name: /New task/ }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByRole("button", { name: /Advanced options/ }).click();
+    await visible(dlg.getByText(/Reviews are off: a change merges on green checks alone/), "the hint beside the switch");
+    const sw = dlg.getByRole("switch", { name: "Merge automatically" });
+    await sw.click();
+    const ask = page.getByRole("alertdialog");
+    await visible(ask, "the confirm step");
+    await ask.getByRole("button", { name: "Keep it off" }).click();
+    eq(await sw.getAttribute("aria-checked"), "false", "still off after Keep it off");
+    await sw.click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Turn on automatic merge" }).click();
+    eq(await sw.getAttribute("aria-checked"), "true", "on after the confirm");
+    await page.keyboard.press("Escape");
+    await gone(page.getByRole("dialog"), "the task form closed");
+    await note.getByRole("button", { name: "Dismiss" }).click();
+    await gone(note, "the notice dismissed");
+    await page.reload();
+    await visible(page.getByRole("button", { name: /New task/ }), "the tab again");
+    eq(await page.getByRole("note", { name: "Review notice" }).count(), 0, "the notice stays dismissed after a reload");
+    await visible(page.getByRole("link", { name: /reviews/i }).first().or(page.getByRole("button", { name: /New task/ })), "tab rendered");
+    await page.evaluate(() => localStorage.removeItem("7ar.ui.reviewNotice.off"));
+  });
+
   await step("g4. the inbox lists a session that waits for an approval and clears when it is approved", async () => {
     await page.goto(`${base}/#/inbox`);
     await visible(page.getByRole("main").getByText("Nothing waits for you"), "the empty inbox");
@@ -1231,11 +1267,19 @@ async function main() {
     const member = card.getByRole("link", { name: /Invite a teammate/ });
     if (!/tab=members/.test((await member.getAttribute("href")) ?? "")) throw new Error("the teammate step does not link to the members tab");
     const explorer = np.getByRole("navigation", { name: "Explorer" }).getByRole("region", { name: "Getting started" });
-    await nvisible(explorer, "the explorer card");
+    eq(await explorer.filter({ visible: true }).count(), 0, "the explorer shows no second Getting started next to the dashboard card");
     await ishot(np, "onboarding-dashboard-checklist");
+    // on another page the folded line is there; dismissing the dashboard card dismisses it too
+    await np.goto(`${base}/#/inbox`);
+    await nvisible(explorer, "the explorer card on another page");
+    await np.goto(`${base}/#/`);
+    await nvisible(card, "the checklist on the dashboard again");
     await card.getByRole("button", { name: "Dismiss" }).click();
     await gone(card, "the checklist dismissed");
+    await np.goto(`${base}/#/inbox`);
+    await nvisible(np.getByRole("navigation", { name: "Explorer" }), "the explorer");
     eq(await explorer.filter({ visible: true }).count(), 0, "the explorer card is dismissed with it");
+    await np.goto(`${base}/#/`);
     await np.reload();
     await nvisible(main.getByRole("heading", { name: "Dashboard" }), "the dashboard again");
     eq(await main.getByRole("region", { name: "Getting started" }).count(), 0, "dismissed for good");

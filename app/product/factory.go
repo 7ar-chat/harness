@@ -36,6 +36,7 @@ import (
 //	POST   /api/projects/{pid}/triggers {name,kind,schedule|event,match,template,enabled} → 201 Trigger   (owner)
 //	DELETE /api/projects/{pid}/triggers/{trid}              → 204   (owner)
 //	GET    /api/projects/{pid}/factory/report?days=         → spend report
+//	GET    /api/projects/{pid}/factory/status               → {review: "independent"|"same_model"|"off", independentReview, canAutoMerge}   (members and owners; never names the model)
 //	GET    /api/projects/{pid}/factory/learning?view=rows|clusters|experiment&min=&n= → the learning dataset (rows: JSON lines of finished tasks with the context their runs had), the recurring failures mined from it, or the prompt-variant standings (404 without FACTORY_LEARNING=1)
 //	POST   /hooks/github                                    → GitHub webhook deliveries
 
@@ -47,6 +48,28 @@ type FactoryOptions struct {
 	Escalator *FactoryEscalator
 	// Hooks is the FactoryHooks the harness was built with (harness.FactoryOptions.OnSpawn); bound like Escalator.
 	Hooks *FactoryHooks
+	// Review says how the merge gate reviews a change: ReviewIndependent (a second model, FACTORY_REVIEW_MODEL),
+	// ReviewSameModel (the model that wrote the change also reviews it) or ReviewOff (no reviewer: green CI alone, or no
+	// forge). Empty is read as ReviewOff. It is only reported (GET /factory/status); the factory itself ignores it.
+	Review string
+}
+
+// The values of FactoryOptions.Review.
+const (
+	ReviewIndependent = "independent"
+	ReviewSameModel   = "same_model"
+	ReviewOff         = "off"
+)
+
+// ReviewMode derives FactoryOptions.Review from the harness factory options.
+func ReviewMode(reviewModel string, noReview, hasForge bool) string {
+	switch {
+	case noReview || !hasForge:
+		return ReviewOff
+	case reviewModel == "":
+		return ReviewSameModel
+	}
+	return ReviewIndependent
 }
 
 // FactoryEscalator is a factory.Escalator that can be handed to the harness before the server exists.
@@ -289,6 +312,7 @@ func (s *server) routeFactory() {
 	s.Route("POST /projects/{pid}/triggers", s.createTrigger)
 	s.Route("DELETE /projects/{pid}/triggers/{trid}", s.deleteTrigger)
 	s.Route("GET /projects/{pid}/factory/report", s.factoryReport)
+	s.Route("GET /projects/{pid}/factory/status", s.factoryStatus)
 	s.Route("GET /projects/{pid}/factory/learning", s.factoryLearning)
 	s.Mux.Handle("POST /hooks/github", s.factory().WebhookHandler())
 	s.Mux.Handle("POST /api/hooks/github", s.factory().WebhookHandler())
@@ -676,6 +700,23 @@ func (s *server) deleteTrigger(w http.ResponseWriter, r *http.Request, c Caller)
 	}
 	s.note(inProject(c, p.ID), "", "trigger.delete", map[string]any{"trigger": tr.ID}, FeedEvent{Type: "project.changed"})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// factoryStatus tells a project's members whether the merge review is independent of the model that writes the change.
+// Only the verdict is returned, not the model or any other configuration; viewers do not see it.
+func (s *server) factoryStatus(w http.ResponseWriter, r *http.Request, c Caller) {
+	p, role, ok := s.project(w, r, c, store.RoleMember)
+	if !ok {
+		return
+	}
+	mode := s.opt.Factory.Review
+	if mode == "" {
+		mode = ReviewOff
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"projectId": p.ID, "review": mode, "independentReview": mode == ReviewIndependent,
+		"canAutoMerge": store.RoleAtLeast(role, store.RoleOwner),
+	})
 }
 
 func (s *server) factoryReport(w http.ResponseWriter, r *http.Request, c Caller) {

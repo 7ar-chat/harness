@@ -7,12 +7,13 @@ import { ArrowLeft, ChevronDown, ChevronRight, ExternalLink, GitPullRequest, Plu
 import { useState } from "react";
 import { isUnsupported } from "@/api/client";
 import {
-  TASK_STATE_LABEL, isTerminalState, useCancelTask, useCreateTask, useCreateTrigger, useDeleteTrigger, useFactoryReport, useLearning, useResumeTask, useTask, useTasks, useTriggers,
+  TASK_STATE_LABEL, isTerminalState, useCancelTask, useCreateTask, useCreateTrigger, useDeleteTrigger, useFactoryReport, useFactoryStatus, useLearning, useResumeTask, useTask, useTasks, useTriggers,
   type FactoryState, type FactoryTask, type FactoryTaskEvent, type LearningCluster, type LearningExperiment, type TaskDetail, type TriggerInput,
 } from "@/api/factory";
 import { useRoles } from "@/api/roles";
 import type { Role } from "@/api/types";
-import { HelpButton } from "@/components/app/help";
+import { HelpButton, LearnMore } from "@/components/app/help";
+import { readJSON, writeJSON } from "@/lib/persist";
 import { Empty, ErrorState, ListSkeleton } from "@/components/app/common";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -240,6 +241,47 @@ function TaskInline({ projectId, taskId, canWrite, onBack }: { projectId: string
   );
 }
 
+/** What to tell people about how merges are reviewed, or nothing when the review is independent (or not known). */
+export function reviewWords(review: string | undefined): { short: string; long: string } | null {
+  if (review === "same_model")
+    return {
+      short: "Reviews are not independent: the model that writes a change also reviews it.",
+      long: "Reviews are not independent: the model that writes a change also reviews it. Ask an admin to set a second review model before turning on automatic merge.",
+    };
+  if (review === "off")
+    return { short: "Reviews are off: a change merges on green checks alone.", long: "Reviews are off: a change merges on green checks alone. Ask an admin to switch review on before turning on automatic merge." };
+  return null;
+}
+
+const reviewKey = (review: string) => `7ar.ui.reviewNotice.${review}`;
+
+/** A quiet notice above the task list for owners and members; dismissed per browser (and per kind of notice). */
+export function ReviewNotice({ projectId }: { projectId: string }) {
+  const status = useFactoryStatus(projectId);
+  const review = status.data?.review;
+  const [gone, setGone] = useState<string | null>(null);
+  const words = reviewWords(review);
+  if (!review || !words || gone === review || readJSON(reviewKey(review), false)) return null;
+  return (
+    <div role="note" aria-label="Review notice" className="flex flex-col items-start gap-1 rounded-md sm:flex-row sm:gap-2 border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+      <p className="min-w-0 flex-1">
+        {words.long} <LearnMore slug="reviews" />
+      </p>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="-mb-1 -ml-2 shrink-0 sm:-my-1 sm:ml-0"
+        onClick={() => {
+          writeJSON(reviewKey(review), true);
+          setGone(review);
+        }}
+      >
+        Dismiss
+      </Button>
+    </div>
+  );
+}
+
 const ROLES = ["coder", "planner", "reviewer", "tester", "explorer"];
 const POLICIES = [
   ["default", "Server default"],
@@ -261,6 +303,9 @@ function CreateTaskDialog({ projectId, owner, open, onOpenChange, existing }: { 
   const [f, setF] = useState({ title: "", spec: "", role: "coder", model: "", policy: "default", maxUsd: "", maxAttempts: "", autoMerge: false });
   const [deps, setDeps] = useState<string[]>([]);
   const [advanced, setAdvanced] = useState(false);
+  const [confirmMerge, setConfirmMerge] = useState(false);
+  const review = useFactoryStatus(projectId, owner && open).data?.review;
+  const reviewHint = reviewWords(review);
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
   const open_ = existing.filter((t) => !isTerminalState(t.state));
   const submit = (e: React.FormEvent) => {
@@ -393,9 +438,22 @@ function CreateTaskDialog({ projectId, owner, open, onOpenChange, existing }: { 
             <div>
               <Label htmlFor="task-merge">Merge automatically</Label>
               <p className="text-xs text-muted-foreground">{owner ? "Merge once CI is green and the review approves." : "Only a project owner can allow this."}</p>
+              {owner && reviewHint ? <p className="mt-1 text-xs text-muted-foreground">{reviewHint.short} <LearnMore slug="reviews" /></p> : null}
             </div>
-            <Switch id="task-merge" disabled={!owner} checked={f.autoMerge} onCheckedChange={(v) => set("autoMerge", v)} />
+            <Switch id="task-merge" disabled={!owner} checked={f.autoMerge} onCheckedChange={(v) => (v && reviewHint ? setConfirmMerge(true) : set("autoMerge", v))} />
           </div>
+          <AlertDialog open={confirmMerge} onOpenChange={setConfirmMerge}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Merge automatically without an independent review?</AlertDialogTitle>
+                <AlertDialogDescription>{reviewHint?.long} The change will merge once checks are green, with no one else looking at it.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Keep it off</AlertDialogCancel>
+                <AlertDialogAction onClick={() => set("autoMerge", true)}>Turn on automatic merge</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
             </CollapsibleContent>
           </Collapsible>
           <DialogFooter>
@@ -430,6 +488,7 @@ function TaskList({ projectId, role }: { projectId: string; role: Role }) {
   if (openId) return <TaskInline projectId={projectId} taskId={openId} canWrite={canWrite} onBack={() => setOpenId(undefined)} />;
   return (
     <div className="space-y-3">
+      {canWrite ? <ReviewNotice projectId={projectId} /> : null}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap gap-1" role="group" aria-label="Filter by state">
           {FILTERS.map((x) => {
@@ -889,7 +948,7 @@ export function TasksTab({ projectId, role }: { projectId: string; role: Role })
   if (open) return <TaskList projectId={projectId} role={role} />;
   return (
     <Tabs defaultValue="tasks">
-      <TabsList>
+      <TabsList variant="line">
         <TabsTrigger value="tasks">List</TabsTrigger>
         <TabsTrigger value="triggers">Triggers</TabsTrigger>
         <TabsTrigger value="report">Report</TabsTrigger>

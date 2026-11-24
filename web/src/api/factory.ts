@@ -15,6 +15,7 @@ export const fk = {
   triggers: (pid: string) => ["factory", pid, "triggers"] as const,
   report: (pid: string, days: number) => ["factory", pid, "report", days] as const,
   learning: (pid: string, view: string) => ["factory", pid, "learning", view] as const,
+  status: (pid: string) => ["factory", pid, "status"] as const,
   inbox: ["needs-review"] as const,
 };
 
@@ -104,6 +105,18 @@ export const useDeleteTrigger = (pid: string) => useFactoryAction((id: string) =
 
 export const useFactoryReport = (pid: string, days: number) =>
   useQuery({ queryKey: fk.report(pid, days), queryFn: () => api.get<FactoryReport>(`/projects/${pid}/factory/report?days=${days}`), retry: noRetryOnClientError });
+
+/** How merges are reviewed: by a second model (independent), by the model that wrote the change (same_model) or not at all (off). */
+export interface FactoryStatus {
+  projectId: string;
+  review: "independent" | "same_model" | "off";
+  independentReview: boolean;
+  canAutoMerge: boolean;
+}
+
+/** Members and owners only (a viewer gets 403, so the question is not asked); nothing is claimed while it loads or when the server cannot say. */
+export const useFactoryStatus = (pid: string, enabled = true) =>
+  useQuery({ queryKey: fk.status(pid), queryFn: () => api.get<FactoryStatus>(`/projects/${pid}/factory/status`), enabled, retry: false, staleTime: 5 * 60_000 });
 
 /** A learning view; null when the server has the learning feature off (404). */
 export const useLearning = <T,>(pid: string, view: "clusters" | "experiment") =>

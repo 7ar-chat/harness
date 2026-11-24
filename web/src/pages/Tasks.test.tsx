@@ -167,4 +167,81 @@ describe("Triggers and report", () => {
     expect(page().getByText("Big task")).toBeTruthy();
     expect(page().queryByText("Learning views are off on this server.")).toBeNull();
   });
+
+  describe("reviewer warning", () => {
+    const status = (review: string, canAutoMerge = true) => ({ projectId: "p1", review, independentReview: review === "independent", canAutoMerge });
+    const NOTICE = /Reviews are not independent: the model that writes a change also reviews it\. Ask an admin to set a second review model before turning on automatic merge\./;
+
+    it("tells owners and members that reviews are not independent, with a way to learn more, and stays quiet once dismissed", async () => {
+      localStorage.clear();
+      mockFetch({ ...routes("member"), "GET /api/projects/p1/factory/status": status("same_model", false) });
+      const { unmount } = await renderApp("/p/p1?tab=tasks");
+      const note = await screen.findByRole("note", { name: "Review notice" });
+      expect(within(note).getByText(NOTICE)).toBeTruthy();
+      expect(within(note).getByRole("link", { name: "Learn more" }).getAttribute("href")).toContain("a=reviews");
+      fireEvent.click(within(note).getByRole("button", { name: "Dismiss" }));
+      expect(screen.queryByRole("note", { name: "Review notice" })).toBeNull();
+      unmount();
+      mockFetch({ ...routes("member"), "GET /api/projects/p1/factory/status": status("same_model", false) });
+      await renderApp("/p/p1?tab=tasks");
+      await page().findByRole("button", { name: /New task/ });
+      expect(screen.queryByRole("note", { name: "Review notice" })).toBeNull();
+      localStorage.clear();
+    });
+
+    it("says reviews are off when review is switched off, says nothing when independent, and never asks a viewer", async () => {
+      localStorage.clear();
+      mockFetch({ ...routes("owner"), "GET /api/projects/p1/factory/status": status("off") });
+      const a = await renderApp("/p/p1?tab=tasks");
+      expect(await screen.findByText(/Reviews are off/)).toBeTruthy();
+      expect(screen.queryByText(/not independent/)).toBeNull();
+      a.unmount();
+      mockFetch({ ...routes("owner"), "GET /api/projects/p1/factory/status": status("independent") });
+      const b = await renderApp("/p/p1?tab=tasks");
+      await page().findByRole("button", { name: /New task/ });
+      expect(screen.queryByRole("note", { name: "Review notice" })).toBeNull();
+      b.unmount();
+      const m = mockFetch(routes("viewer"));
+      await renderApp("/p/p1?tab=tasks");
+      await page().findByText("No tasks yet");
+      expect(m.find("GET", "/api/projects/p1/factory/status")).toHaveLength(0);
+    });
+
+    it("hints at it next to Merge automatically and asks once before an owner turns it on", async () => {
+      localStorage.clear();
+      const m = mockFetch({ ...routes("owner"), "GET /api/projects/p1/factory/status": status("same_model"), "POST /api/projects/p1/tasks": task("n") });
+      await renderApp("/p/p1?tab=tasks");
+      fireEvent.click(await page().findByRole("button", { name: /New task/ }));
+      const d = within(await screen.findByRole("dialog"));
+      fireEvent.click(d.getByRole("button", { name: /Advanced options/ }));
+      expect(await d.findByText(/Reviews are not independent: the model that writes a change also reviews it\./)).toBeTruthy();
+      const sw = d.getByRole("switch", { name: "Merge automatically" });
+      fireEvent.click(sw);
+      const confirm = within(await screen.findByRole("alertdialog"));
+      fireEvent.click(confirm.getByRole("button", { name: "Keep it off" }));
+      await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+      expect(sw.getAttribute("aria-checked")).toBe("false");
+      fireEvent.click(sw);
+      fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Turn on automatic merge" }));
+      await waitFor(() => expect(sw.getAttribute("aria-checked")).toBe("true"));
+      fireEvent.change(d.getByLabelText("Title"), { target: { value: "T" } });
+      fireEvent.change(d.getByLabelText("Spec"), { target: { value: "S" } });
+      fireEvent.click(d.getByRole("button", { name: "Create task" }));
+      await waitFor(() => expect(m.find("POST", "/api/projects/p1/tasks")).toHaveLength(1));
+      expect(m.find("POST", "/api/projects/p1/tasks")[0]?.body).toMatchObject({ autoMerge: true });
+    });
+
+    it("turns automatic merge on without asking when the review is independent", async () => {
+      localStorage.clear();
+      mockFetch({ ...routes("owner"), "GET /api/projects/p1/factory/status": status("independent") });
+      await renderApp("/p/p1?tab=tasks");
+      fireEvent.click(await page().findByRole("button", { name: /New task/ }));
+      const d = within(await screen.findByRole("dialog"));
+      fireEvent.click(d.getByRole("button", { name: /Advanced options/ }));
+      const sw = d.getByRole("switch", { name: "Merge automatically" });
+      fireEvent.click(sw);
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+      await waitFor(() => expect(sw.getAttribute("aria-checked")).toBe("true"));
+    });
+  });
 });

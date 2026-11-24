@@ -232,7 +232,7 @@ export function WorkflowsPanel({ projectId, role }: { projectId: string; role: R
         ) : null}
       </div>
       <Tabs value={section} onValueChange={(v) => setSection(v as "workflows" | "runs")}>
-        <TabsList>
+        <TabsList variant="line">
           <TabsTrigger value="workflows">Workflows ({all.length})</TabsTrigger>
           <TabsTrigger value="runs">Runs</TabsTrigger>
         </TabsList>

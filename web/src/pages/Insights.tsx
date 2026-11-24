@@ -507,7 +507,7 @@ export function InsightsPage() {
     <div className="mx-auto w-full max-w-5xl space-y-4 p-4 sm:p-6" data-testid="insights">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-lg font-semibold">My insights</h1>
+          <h1 className="text-xl font-semibold">My insights</h1>
           <p className="text-sm text-muted-foreground">What your own tasks and runs delivered and cost, across projects.</p>
         </div>
         <RangePicker value={range} onChange={setRange} />

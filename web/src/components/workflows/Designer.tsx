@@ -1,6 +1,6 @@
 import { HelpButton } from "@/components/app/help";
 // The workflow designer: the canvas, the inspector of the selected step, the checks, the version history and publishing.
-import { ArrowLeft, Copy, History, LayoutGrid, Plus, Rocket, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, Copy, History, LayoutGrid, Plus, Rocket, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useRoles } from "@/api/roles";
@@ -8,6 +8,7 @@ import { issuesOf, useDuplicateWorkflow, usePublishWorkflow, useRestoreWorkflow,
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -355,7 +356,7 @@ export function Designer({ projectId, workflow, canEdit, onBack }: { projectId: 
         <Button variant="ghost" size="sm" onClick={onBack}>
           <ArrowLeft /> Workflows
         </Button>
-        <Input className="h-9 max-w-xs flex-1 font-medium" value={name} disabled={!editable} onChange={(e) => setName(e.target.value)} aria-label="Workflow name" />
+        <Input className="h-9 min-w-0 basis-full font-medium sm:max-w-xs sm:flex-1 sm:basis-0" value={name} disabled={!editable} onChange={(e) => setName(e.target.value)} aria-label="Workflow name" />
         <Badge variant={saved.status === "published" && !dirty ? "default" : "secondary"}>{saved.status === "published" ? (dirty ? "published, unsaved changes" : `published v${saved.publishedVersion}`) : "draft"}</Badge>
         <span className="text-xs text-muted-foreground">v{saved.version}</span>
         <div className="ml-auto flex flex-wrap gap-2">
@@ -379,12 +380,21 @@ export function Designer({ projectId, workflow, canEdit, onBack }: { projectId: 
 
       {editable ? (
         <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Add a step">
-          <Plus className="size-4 text-muted-foreground" />
-          {KINDS.map((k) => (
-            <Button key={k.kind} size="sm" variant="outline" title={k.hint} onClick={() => add(k.kind)}>
-              {k.label}
-            </Button>
-          ))}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline">
+                <Plus /> Add step <ChevronDown />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-72">
+              {KINDS.map((k) => (
+                <DropdownMenuItem key={k.kind} onSelect={() => add(k.kind)} className="flex-col items-start gap-0">
+                  <span>{k.label}</span>
+                  <span className="text-xs text-muted-foreground">{k.hint}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button size="sm" variant="ghost" onClick={() => edit(autoLayout(nodes))}>
             <LayoutGrid /> Tidy
           </Button>

@@ -191,7 +191,7 @@ function Settings({ pid }: { pid: string }) {
         </div>
         <div className="space-y-2">
           <Label htmlFor="s-branch">Default branch</Label>
-          <Input id="s-branch" value={f.defaultBranch} onChange={set("defaultBranch")} />
+          <Input id="s-branch" value={f.defaultBranch} onChange={set("defaultBranch")} placeholder="main" />
         </div>
         <h2 className="border-t pt-4 text-base font-semibold">Slack</h2>
         <div className="space-y-2">

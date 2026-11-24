@@ -18,7 +18,7 @@ export function useProjectActions(projectId?: string) {
     canWrite: writable,
     newSession: () => newSession(project.id),
     canImport: writable && ghReady,
-    importHint: ghReady ? "Import AGENTS.md from the repository as a pinned memory" : "Connect GitHub (Profile) to import AGENTS.md",
+    importHint: ghReady ? "Import AGENTS.md from the repository as a pinned memory" : "Connect GitHub in Connectors to import AGENTS.md",
     importAgents: () =>
       importAgents.mutate(undefined, {
         onSuccess: (e) => toast.success(`Imported ${e.title || "AGENTS.md"} as a pinned memory`),
