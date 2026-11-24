@@ -129,7 +129,9 @@ services:
       # and a reviewer model that is not the model that writes code. Run `harness-web -factory-check owner/name` first.
       FACTORY: ${FACTORY:-}
       FACTORY_WEBHOOK_SECRET: ${FACTORY_WEBHOOK_SECRET:-}
-      FACTORY_REVIEW_MODEL: ${FACTORY_REVIEW_MODEL:-}
+      # The independent reviewer of every pull request (docs/factory.md): it must differ from LLM_DEFAULT_MODEL, which wrote the
+      # change, and must be a model the LLM provider serves. A value in the Dokploy environment overrides this default.
+      FACTORY_REVIEW_MODEL: ${FACTORY_REVIEW_MODEL:-claude-haiku-5-5}
       FACTORY_NO_REVIEW: ${FACTORY_NO_REVIEW:-}
       FACTORY_REQUIRE_TESTS: ${FACTORY_REQUIRE_TESTS:-}
       FACTORY_PROTECTED: ${FACTORY_PROTECTED:-}
