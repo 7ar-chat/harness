@@ -344,6 +344,11 @@ type Store interface {
 	// exactly one process fires a given tick.
 	ClaimDueTriggers(ctx context.Context, now time.Time, next func(Trigger) time.Time) ([]Trigger, error)
 
+	// DeleteProject removes everything the project owns here: its tasks (whatever their state: callers cancel the
+	// running ones first), their events, the thread info of those tasks and its triggers. The spend ledger stays (the
+	// money was spent, instance-wide budgets still count it) and so do webhook deliveries. Deleting a project without any rows is not an error.
+	DeleteProject(ctx context.Context, projectID string) error
+
 	// SeenDelivery records a webhook delivery id and reports whether it was already recorded.
 	SeenDelivery(ctx context.Context, id string) (bool, error)
 

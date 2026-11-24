@@ -418,6 +418,61 @@ func (m *Mem) SeenDelivery(_ context.Context, id string) (bool, error) {
 	return false, nil
 }
 
+// DeleteProject implements factory.Store.
+func (m *Mem) DeleteProject(_ context.Context, projectID string) error {
+	if projectID == "" {
+		return fmt.Errorf("%w: project id", factory.ErrInvalid)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	tasks := map[string]*factory.Task{}
+	events := map[string][]factory.TaskEvent{}
+	threads := map[string]factory.ThreadInfo{}
+	triggers := map[string]*factory.Trigger{}
+	for id, t := range m.tasks {
+		if t.ProjectID == projectID {
+			tasks[id] = t
+			events[id] = m.events[id]
+		}
+	}
+	for id, ti := range m.threads {
+		if _, ok := tasks[ti.TaskID]; ok && ti.TaskID != "" {
+			threads[id] = ti
+		}
+	}
+	for id, t := range m.triggers {
+		if t.ProjectID == projectID {
+			triggers[id] = t
+		}
+	}
+	for id := range tasks {
+		delete(m.tasks, id)
+		delete(m.events, id)
+	}
+	for id := range threads {
+		delete(m.threads, id)
+	}
+	for id := range triggers {
+		delete(m.triggers, id)
+	}
+	if err := m.saveLocked(); err != nil {
+		for id, t := range tasks {
+			m.tasks[id] = t
+			if ev, ok := events[id]; ok {
+				m.events[id] = ev
+			}
+		}
+		for id, ti := range threads {
+			m.threads[id] = ti
+		}
+		for id, t := range triggers {
+			m.triggers[id] = t
+		}
+		return err
+	}
+	return nil
+}
+
 // SetThreadInfo implements factory.Store.
 func (m *Mem) SetThreadInfo(_ context.Context, ti factory.ThreadInfo) error {
 	if ti.ThreadID == "" {

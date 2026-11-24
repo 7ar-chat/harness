@@ -466,6 +466,7 @@ export interface InsightsView {
   cost: Cost;
   quality: Quality;
   people: Person[];
+  waiting: Waits;
   workflows: WorkflowStats;
   attention: Attention;
   tasks: TaskRow[];
@@ -483,6 +484,12 @@ export interface Issue {
   nodeId?: string;
   field?: string;
   message: string;
+}
+
+export interface Latency {
+  n: number;
+  medianSec: number;
+  totalSec: number;
 }
 
 export interface LinkedPR {
@@ -816,6 +823,8 @@ export interface Person {
   costUsd: number;
   approvals: number;
   denied: number;
+  latency: Latency;
+  waits: Waits;
 }
 
 export interface PlanItem {
@@ -827,6 +836,15 @@ export interface PlanItem {
 export interface Pos {
   x: number;
   y: number;
+}
+
+export interface Preferences {
+  values: Record<string, unknown>;
+  updatedAt?: string;
+}
+
+export interface PreferencesPatch {
+  values: Record<string, unknown>;
 }
 
 export interface PreviewInfo {
@@ -976,6 +994,17 @@ export interface RecipeBody {
   scope: string;
   projectId: string;
   version: number;
+}
+
+export interface RecipeCheck {
+  ok: boolean;
+  error?: string;
+  preview?: RecipeDryRun;
+}
+
+export interface RecipeCheckBody {
+  recipe: RecipeBody;
+  params: Record<string, string>;
 }
 
 export interface RecipeDoc {
@@ -1479,6 +1508,12 @@ export interface Version {
   recipe: RecipeDoc;
   changedBy?: string;
   at: string;
+}
+
+export interface Waits {
+  tools: Latency;
+  tasks: Latency;
+  gates: Latency;
 }
 
 export interface WeekPoint {

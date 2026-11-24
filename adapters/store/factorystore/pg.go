@@ -521,6 +521,26 @@ func (s *PG) SeenDelivery(ctx context.Context, id string) (bool, error) {
 	return false, nil
 }
 
+// DeleteProject implements factory.Store: one transaction, so a project is never left half removed. The events
+// go with their tasks (ON DELETE CASCADE); the thread rows of the tasks are removed explicitly.
+func (s *PG) DeleteProject(ctx context.Context, projectID string) error {
+	if projectID == "" {
+		return fmt.Errorf("%w: project id", factory.ErrInvalid)
+	}
+	return s.tx(ctx, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `DELETE FROM work_factory_threads WHERE task_id IN (SELECT id FROM work_factory_tasks WHERE project_id = $1)`, projectID); err != nil {
+			return fmt.Errorf("delete project threads: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM work_factory_tasks WHERE project_id = $1`, projectID); err != nil {
+			return fmt.Errorf("delete project tasks: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM work_factory_triggers WHERE project_id = $1`, projectID); err != nil {
+			return fmt.Errorf("delete project triggers: %w", err)
+		}
+		return nil
+	})
+}
+
 // SetThreadInfo implements factory.Store.
 func (s *PG) SetThreadInfo(ctx context.Context, ti factory.ThreadInfo) error {
 	if ti.ThreadID == "" {

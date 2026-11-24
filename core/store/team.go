@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/url"
 	"time"
@@ -211,6 +212,11 @@ type TeamStore interface {
 	UserPrefs(ctx context.Context, login string) (map[string]any, error)
 	// SetUserPrefs replaces the user's preferences.
 	SetUserPrefs(ctx context.Context, login string, prefs map[string]any) error
+
+	// Preferences returns the person's own settings document (empty values and a zero time when none).
+	Preferences(ctx context.Context, login string) (UserPreferences, error)
+	// PatchPreferences merges patch into the document (MergePreferences) and returns it; ErrNotFound for an unknown login.
+	PatchPreferences(ctx context.Context, login string, patch map[string]json.RawMessage) (UserPreferences, error)
 
 	// SeenThreads returns when login last saw each thread (by thread id); threads never seen are absent.
 	SeenThreads(ctx context.Context, login string) (map[string]time.Time, error)

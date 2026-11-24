@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/7ar-chat/harness/core/requirements"
 	"github.com/7ar-chat/harness/core/roles"
@@ -674,7 +675,13 @@ func (s *server) gateAction(action string) handler {
 			workflowFail(w, err)
 			return
 		}
-		s.note(inProject(c, run.ProjectID), "", "workflow.gate."+action, map[string]any{"run": run.ID, "node": nid}, FeedEvent{Type: "workflow.run", Title: run.WorkflowName, Status: string(out.State)})
+		detail := map[string]any{"run": run.ID, "node": nid}
+		for _, st := range run.Steps { // when the gate began to wait (before this decision), for the approval latency in insights
+			if st.NodeID == nid && !st.StartedAt.IsZero() {
+				detail["requestedAt"] = st.StartedAt.UTC().Format(time.RFC3339Nano)
+			}
+		}
+		s.note(inProject(c, run.ProjectID), "", "workflow.gate."+action, detail, FeedEvent{Type: "workflow.run", Title: run.WorkflowName, Status: string(out.State)})
 		writeJSON(w, http.StatusOK, out)
 	}
 }

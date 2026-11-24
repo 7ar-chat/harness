@@ -2,12 +2,13 @@
 // The URL still decides what is shown (hash routes), the shell only keeps the list of open tabs around it.
 import { useParams } from "@tanstack/react-router";
 import { PanelLeft } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNeedsReview } from "@/api/factory";
 import { useMe, useOverview } from "@/api/queries";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { identifyUser } from "@/lib/telemetry";
 import { usePersisted } from "@/lib/persist";
+import { rememberUi } from "@/lib/serverPrefs";
 import { DialogsProvider } from "./dialogs";
 import { BottomPanel } from "./shell/BottomPanel";
 import { ShellProvider, useNarrow, type PanelTab, type ShellState } from "./shell/context";
@@ -48,6 +49,12 @@ function Shell({ login, palette, setPalette, switcher, setSwitcher }: { login: s
   const setPanelD = useCallback((v: boolean | ((p: boolean) => boolean)) => setPanelChoice(typeof v === "function" ? v(panelD) : v), [panelD, setPanelChoice]);
   const [explorerW, setExplorerW] = usePersisted("7ar.ui.explorerW", 272);
   const [panelH, setPanelH] = usePersisted("7ar.ui.panelH", 178);
+  // the sizes are also kept on the server (not on the first render: only a change the person made)
+  const sized = useRef(false);
+  useEffect(() => {
+    if (sized.current) rememberUi({ explorerW, panelH });
+    sized.current = true;
+  }, [explorerW, panelH]);
   const [drawer, setDrawer] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [panelTab, setPanelTabState] = usePersisted<PanelTab>("7ar.ui.panelTab", "needs");

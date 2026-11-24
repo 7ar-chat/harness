@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/7ar-chat/harness/core/executors"
+	"github.com/7ar-chat/harness/core/factory"
 	"github.com/7ar-chat/harness/core/requirements"
 	"github.com/7ar-chat/harness/core/workflows"
 )
@@ -25,6 +26,54 @@ func (s *server) cancelProjectRuns(ctx context.Context, projectID string) {
 		if _, err := s.opt.WorkflowEngine.Cancel(ctx, r.ID, "project deleted"); err != nil && !errors.Is(err, workflows.ErrState) && !errors.Is(err, workflows.ErrNotFound) {
 			slog.Warn("project delete: cancelling a workflow run failed", "project", projectID, "run", r.ID, "error", err)
 		}
+	}
+}
+
+// cancelProjectTasks cancels the factory tasks of a project that is being deleted and are not finished, so no run keeps
+// working (and spending) in a project that is going away. Cancelling a running task also cancels its run, which
+// stops the agent; its thread's sandbox is released when the thread is deleted.
+func (s *server) cancelProjectTasks(ctx context.Context, projectID string) {
+	f := s.factory()
+	if f == nil || f.Store == nil || f.Tasks == nil {
+		return
+	}
+	live := []factory.State{factory.StatePending, factory.StateReady, factory.StateRunning, factory.StateReview, factory.StateBlocked}
+	list, err := f.Store.ListTasks(ctx, factory.Filter{ProjectID: projectID, States: live, Limit: 100000})
+	if err != nil {
+		slog.Warn("project delete: listing the tasks failed", "project", projectID, "error", err)
+		return
+	}
+	for _, t := range list {
+		if err := f.Tasks.Cancel(ctx, t.ID); err != nil && !errors.Is(err, factory.ErrConflict) && !errors.Is(err, factory.ErrNotFound) {
+			slog.Warn("project delete: cancelling a task failed", "project", projectID, "task", t.ID, "error", err)
+		}
+	}
+}
+
+// dropProjectTasks removes the factory rows of a deleted project: the threads its tasks worked in (which kills their
+// sandboxes and drops their documents, as deleting a thread does anywhere), then the tasks, their events and learning
+// records, their thread info and the project's triggers.
+func (s *server) dropProjectTasks(ctx context.Context, projectID string) {
+	f := s.factory()
+	if f == nil || f.Store == nil {
+		return
+	}
+	list, err := f.Store.ListTasks(ctx, factory.Filter{ProjectID: projectID, Limit: 100000})
+	if err != nil {
+		slog.Warn("project delete: listing the tasks failed", "project", projectID, "error", err)
+	}
+	for _, t := range list {
+		if t.ThreadID == "" {
+			continue
+		}
+		// Most of these threads went with the project's threads already; one that is still there is deleted, one that no
+		// store could delete still loses its documents.
+		if _, err := s.H.DeleteThread(ctx, t.Owner, t.ThreadID); err != nil {
+			s.H.ThreadDeleted(ctx, t.ThreadID)
+		}
+	}
+	if err := f.Store.DeleteProject(ctx, projectID); err != nil {
+		slog.Warn("project delete: deleting the factory rows failed", "project", projectID, "error", err)
 	}
 }
 

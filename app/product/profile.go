@@ -45,6 +45,7 @@ func viewOf(u store.User) userView {
 }
 
 func (s *server) routeProfile() {
+	s.routePreferences()
 	s.Route("PATCH /me/profile", s.patchProfile)
 	s.Route("PUT /me/avatar", s.putAvatar)
 	s.Route("DELETE /me/avatar", s.deleteAvatar)

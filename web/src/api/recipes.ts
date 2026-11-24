@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api, downloadText, isUnsupported } from "./client";
 import { toastError } from "./queries";
-import type { Param, Recipe, RecipeApplied, RecipeBody, RecipeDryRun, RecipeShareBody, RecipeVersions } from "./types";
+import type { Param, Recipe, RecipeApplied, RecipeBody, RecipeCheck, RecipeDryRun, RecipeShareBody, RecipeVersions } from "./types";
 
 export type { Param, Recipe, RecipeApplied, RecipeDryRun };
 export type RecipeKind = "schedule" | "task" | "trigger";
@@ -115,7 +115,47 @@ export const useSaveRecipe = () => {
   });
 };
 
-export const useRecipeVersions = (id: string, enabled: boolean) =>
+/** A recipe as the create and update routes want it. */
+export const bodyOf = (r: Pick<Recipe, "name" | "summary" | "category" | "kind" | "body" | "params" | "suggest">, over: Partial<RecipeBody> = {}): RecipeBody => ({
+  name: r.name, summary: r.summary, category: r.category, kind: r.kind, body: r.body, params: r.params, suggest: r.suggest,
+  scope: "personal", projectId: "", version: 0, ...over,
+});
+
+/** Makes the caller's own copy of any recipe they can see (a ready-made one included). */
+export const useDuplicateRecipe = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (r: Recipe) => api.post<Recipe>("/recipes", bodyOf({ ...r, name: `${r.name} (copy)`.slice(0, 80) })),
+    onSuccess: (r) => {
+      void qc.invalidateQueries({ queryKey: recipesKey });
+      toast.success(`Copied to your recipes as “${r.name}”`);
+    },
+    onError: toastError,
+  });
+};
+
+/** Asks the server whether a draft can be saved and what it would make with these values; nothing is stored. */
+export const checkRecipe = (recipe: RecipeBody, params: Record<string, string>) => api.post<RecipeCheck>("/recipes/check", { recipe, params });
+
+/** The text a recipe is compared by: one line per small field, then the body texts, so a diff reads like the editor. */
+export const recipeText = (r: Pick<Recipe, "name" | "summary" | "category" | "kind" | "body" | "params" | "suggest">): string => {
+  const b = r.body;
+  const lines = [`Name: ${r.name}`, `Summary: ${r.summary}`, `Category: ${r.category}`, `Kind: ${r.kind}`];
+  const one = (k: string, v: string | number | undefined) => v !== undefined && v !== "" && v !== 0 && lines.push(`${k}: ${v}`);
+  one("Schedule name", b.name);
+  one("Task title", b.title);
+  one("Cron", b.cron);
+  one("Timezone", b.timezone);
+  one("Event", b.event);
+  one("Role", r.suggest.role);
+  one("Policy", r.suggest.policy);
+  one("Budget (USD)", r.suggest.maxUsd);
+  for (const p of r.params) lines.push(`Parameter ${p.key}: ${p.label}, ${p.type}${p.required ? ", required" : ""}${p.default ? `, default "${p.default}"` : ""}${p.choices?.length ? `, choices ${p.choices.join(" / ")}` : ""}`);
+  lines.push("", "Prompt:", b.prompt ?? "");
+  return lines.join("\n");
+};
+
+export const useRecipeVersions =(id: string, enabled: boolean) =>
   useQuery({ queryKey: [...recipesKey, id, "versions"] as const, queryFn: () => api.get<RecipeVersions>(`/recipes/${id}/versions`), enabled, retry: false });
 
 export const exportRecipe = (r: Pick<Recipe, "id" | "name">) =>

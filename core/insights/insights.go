@@ -9,6 +9,8 @@
 //     as Completed. Failed, Cancelled: finished in the range. Blocked: waiting for a person right now.
 //   - Cycle time: first run to finish, for merged tasks.
 //   - Waiting on a human: the time a task spent in state "blocked" (an approval, a question, "ready to merge").
+//   - Approval latency: per person, the median time between a request (a tool approval, a blocked task, a workflow gate)
+//     and that person's decision; see latency.go.
 //   - Rework round: a red CI run or a review that asked for changes on the task's pull request.
 //   - First pass: merged with no rework round and a single attempt.
 //   - Days are cut in the caller's time zone.
@@ -67,12 +69,14 @@ type Result struct {
 	// Summary is the one-paragraph plain-language answer.
 	Summary string `json:"summary"`
 	// Empty is true when nothing was delivered or spent in the range.
-	Empty     bool          `json:"empty"`
-	Delivery  Delivery      `json:"delivery"`
-	Flow      Flow          `json:"flow"`
-	Cost      Cost          `json:"cost"`
-	Quality   Quality       `json:"quality"`
-	People    []Person      `json:"people"`
+	Empty    bool     `json:"empty"`
+	Delivery Delivery `json:"delivery"`
+	Flow     Flow     `json:"flow"`
+	Cost     Cost     `json:"cost"`
+	Quality  Quality  `json:"quality"`
+	People   []Person `json:"people"`
+	// Waiting breaks "time waiting on a human" down by what was waited for.
+	Waiting   Waits         `json:"waiting"`
 	Workflows WorkflowStats `json:"workflows"`
 	Attention Attention     `json:"attention"`
 	// Tasks is the table behind the numbers (one row per task that started or finished in the range).
@@ -224,6 +228,10 @@ type Person struct {
 	CostUSD   float64 `json:"costUsd"`
 	Approvals int     `json:"approvals"` // approvals decided (allowed or refused)
 	Denied    int     `json:"denied"`
+	// Latency is how long the requests this person decided had waited for them (all kinds together; N 0: not known),
+	// and Waits splits it into tool approvals, task escalations and workflow gates.
+	Latency Latency `json:"latency"`
+	Waits   Waits   `json:"waits"`
 }
 
 // WorkflowStats is about workflow runs started in the range.
@@ -425,8 +433,10 @@ func Compute(in Input) Result {
 	res.Flow = flow(in, loc, inRange, weeks)
 	res.Cost = cost(in, d.Merged, byRole, byExec, tasks, taskCostIn, unpricedT, loc)
 	res.Quality = quality(tasks, inRange)
-	res.People = people(in, inRange)
 	res.Workflows = workflowStats(in.Runs, inRange)
+	samples := waitSamples(in, inRange)
+	res.People = people(in, inRange, samples)
+	res.Waiting = waiting(in, samples, res.Workflows, inRange)
 	res.Attention = attention(tasks, end)
 	res.Tasks = rows(tasks)
 	res.Empty = d.Started == 0 && d.Merged == 0 && d.Failed == 0 && d.Cancelled == 0 && d.Blocked == 0 &&
@@ -686,7 +696,7 @@ func quality(tasks []perTask, inRange func(time.Time) bool) Quality {
 	return q
 }
 
-func people(in Input, inRange func(time.Time) bool) []Person {
+func people(in Input, inRange func(time.Time) bool, samples []waitSample) []Person {
 	m := map[string]*Person{}
 	get := func(login string) *Person {
 		p := m[login]
@@ -721,6 +731,7 @@ func people(in Input, inRange func(time.Time) bool) []Person {
 			}
 		}
 	}
+	personLatencies(samples, get)
 	out := make([]Person, 0, len(m))
 	for _, p := range m {
 		out = append(out, *p)

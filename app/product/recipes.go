@@ -92,6 +92,7 @@ func (s *server) routeRecipes() {
 	s.Route("GET /recipes", s.listRecipes)
 	s.Route("POST /recipes", s.createRecipe)
 	s.Route("POST /recipes/import", s.importRecipe)
+	s.Route("POST /recipes/check", s.checkRecipe)
 	s.Route("GET /recipes/{id}", s.getRecipe)
 	s.Route("PUT /recipes/{id}", s.updateRecipe)
 	s.Route("DELETE /recipes/{id}", s.deleteRecipe)
@@ -404,6 +405,40 @@ func (s *server) deleteRecipe(w http.ResponseWriter, r *http.Request, c Caller) 
 	}
 	s.note(recipeCaller(c, cur), "", "recipe.delete", map[string]any{"recipe": cur.ID, "name": cur.Name}, FeedEvent{Type: "project.changed"})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// recipeCheckBody is a draft to check: the recipe as the editor holds it and the values to try it with.
+type recipeCheckBody struct {
+	Recipe recipeBody        `json:"recipe"`
+	Params map[string]string `json:"params"`
+}
+
+// recipeCheck answers a check: Error is the server's own words when the draft cannot be saved (or tried), Preview is what
+// an apply with these values would make (the same render as apply with dryRun); nothing is stored.
+type recipeCheck struct {
+	OK      bool          `json:"ok"`
+	Error   string        `json:"error,omitempty"`
+	Preview *recipeDryRun `json:"preview,omitempty"`
+}
+
+// checkRecipe validates a draft recipe and renders it with the given values, so the editor can show messages and a
+// preview while the person types. Any member of the team may call it.
+func (s *server) checkRecipe(w http.ResponseWriter, r *http.Request, c Caller) {
+	var b recipeCheckBody
+	if !decode(w, r, &b) {
+		return
+	}
+	rec := b.Recipe.recipe()
+	if err := rec.Validate(); err != nil {
+		writeJSON(w, http.StatusOK, recipeCheck{Error: strings.TrimPrefix(err.Error(), "recipes: invalid: ")})
+		return
+	}
+	rd, err := rec.Apply(b.Params)
+	if err != nil {
+		writeJSON(w, http.StatusOK, recipeCheck{OK: true, Error: strings.TrimPrefix(err.Error(), "recipes: invalid: ")})
+		return
+	}
+	writeJSON(w, http.StatusOK, recipeCheck{OK: true, Preview: &recipeDryRun{DryRun: true, Kind: rd.Kind, Summary: renderedCreates(*rd), Rendered: *rd}})
 }
 
 func (s *server) recipeVersions(w http.ResponseWriter, r *http.Request, c Caller) {

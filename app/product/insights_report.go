@@ -496,8 +496,9 @@ td.l,th.l{text-align:left}
 
 <h2>Quality and people</h2>
 <p>Reviewer: {{.R.Quality.ReviewApproved}} approved, {{.R.Quality.ReviewBlocked}} asked for changes ({{pct .R.Quality.ReviewBlockRate}} blocked). Policy: {{.R.Quality.PolicyDenied}} denied, {{.R.Quality.PolicyAsked}} asked a person. Loop guard stopped {{.R.Quality.LoopGuardTrips}} task(s).</p>
-{{if .R.People}}<div class="tablewrap"><table><thead><tr><th>Member</th><th>Sessions</th><th>Runs</th><th>Approvals decided</th><th>Cost</th></tr></thead><tbody>
-{{range .R.People}}<tr><td>{{.Login}}</td><td>{{.Sessions}}</td><td>{{.Runs}}</td><td>{{.Approvals}}</td><td>{{money .CostUSD}}</td></tr>{{end}}</tbody></table></div>{{end}}
+{{if .R.People}}<div class="tablewrap"><table><thead><tr><th>Member</th><th>Sessions</th><th>Runs</th><th>Approvals decided</th><th>Median wait</th><th>Cost</th></tr></thead><tbody>
+{{range .R.People}}<tr><td>{{.Login}}</td><td>{{.Sessions}}</td><td>{{.Runs}}</td><td>{{.Approvals}}</td><td>{{if .Latency.N}}{{dur .Latency.MedianSec}}{{else}}n/a{{end}}</td><td>{{money .CostUSD}}</td></tr>{{end}}</tbody></table></div>{{end}}
+{{if or .R.Waiting.Tools.N .R.Waiting.Tasks.N .R.Waiting.Gates.N}}<p>Waiting on a person, by what was waited for (median, decided): tool approvals {{if .R.Waiting.Tools.N}}{{dur .R.Waiting.Tools.MedianSec}} ({{.R.Waiting.Tools.N}}){{else}}n/a{{end}}; task escalations {{if .R.Waiting.Tasks.N}}{{dur .R.Waiting.Tasks.MedianSec}} ({{.R.Waiting.Tasks.N}}){{else}}n/a{{end}}; workflow gates {{if .R.Waiting.Gates.N}}{{dur .R.Waiting.Gates.MedianSec}} ({{.R.Waiting.Gates.N}}){{else}}n/a{{end}}.</p>{{end}}
 {{if .R.Workflows.Runs}}<p>Workflows: {{.R.Workflows.Runs}} run(s), {{pct .R.Workflows.SuccessRate}} succeeded{{if .R.Workflows.SlowestNode}}; slowest step {{.R.Workflows.SlowestNode}} ({{dur .R.Workflows.SlowestNodeSec}}){{end}}{{if .R.Workflows.GateWaits}}; gates waited {{dur .R.Workflows.GateWaitMedianSec}} (median){{end}}.</p>{{end}}
 
 <h2>Tasks</h2>

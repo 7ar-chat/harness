@@ -264,6 +264,21 @@ func TestUpdatingKeepsVersionsAndChecksTheOwner(t *testing.T) {
 
 func jsonInt(n int) string { b, _ := json.Marshal(n); return string(b) }
 
+func TestCheckingADraftReportsProblemsAndRendersAPreview(t *testing.T) {
+	r := newRecipeRig(t)
+	draft := mine + `}`
+	ok := r.json("POST", "/api/recipes/check", "eve", `{"recipe":`+draft+`,"params":{"thing":"the docs"}}`, 200)
+	pv := ok["preview"].(map[string]any)["rendered"].(map[string]any)["body"].(map[string]any)
+	if ok["ok"] != true || pv["prompt"] != "Check the docs and report." {
+		t.Fatalf("check = %v", ok)
+	}
+	bad := strings.Replace(draft, `"Check {{thing}} and report."`, `"Check {{missing}}"`, 1)
+	res := r.json("POST", "/api/recipes/check", "eve", `{"recipe":`+bad+`}`, 200)
+	if res["ok"] == true || !strings.Contains(res["error"].(string), "missing") {
+		t.Fatalf("bad check = %v", res)
+	}
+}
+
 func TestSharingAScheduleAsARecipeAndUsingItInAnotherProject(t *testing.T) {
 	r := newRecipeRig(t)
 	sc := r.json("POST", "/api/projects/"+r.api+"/schedules", "bob",

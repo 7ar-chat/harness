@@ -216,6 +216,9 @@ async function main() {
     }
   };
   await ctx.addInitScript(onboarded);
+  // This browser stands for a person already onboarded on this machine; the server-side copy of the onboarding state belongs to the
+  // i* and o2 scenarios (the same user "local"), so here the preferences route answers an empty document and keeps nothing.
+  await ctx.route("**/api/me/preferences", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ values: {} }) }));
   const page = await ctx.newPage();
 
   // ---- assertion helpers (observable outcomes only; waits are locator/poll waits, never fixed sleeps) ----------
@@ -1349,6 +1352,104 @@ async function main() {
 
   // ---- m: the weak spots closed (stream M) ------------------------------------------------------------------------
   // A published workflow made through the API (the designer is covered by h1); nodes get a position.
+  // ---- o: recipe editor, preferences that follow the person ---------------------------------------------------------
+  await step("o1. Recipe editor: edit a recipe, a second edit elsewhere is a conflict, restore an older version, duplicate and delete", async () => {
+    const op = (await post("/projects", { name: "E2E recipe editor" })).id;
+    const original = "Changes of the repository, every Friday.";
+    const rec = await post("/recipes", {
+      name: "O1 changelog", summary: original, category: "reporting", kind: "schedule",
+      body: { name: "Changelog of {{repo}}", prompt: "List what changed in {{repo}} this week.", cron: "0 9 * * 5", timezone: "UTC" },
+      params: [{ key: "repo", label: "Repository", type: "text", default: "api", required: true }], suggest: { policy: "readonly" }, scope: "personal", version: 0,
+    });
+    await page.goto(`${base}/#/p/${op}?tab=recipes`);
+    await page.reload();
+    await page.getByLabel("Search recipes").fill("O1 changelog");
+    const card = page.getByRole("list", { name: "Recipes" }).getByRole("listitem", { name: "O1 changelog" });
+    await card.getByRole("button", { name: "Edit O1 changelog" }).click();
+    const dlg = page.getByRole("dialog", { name: /Edit “O1 changelog”/ });
+    await visible(dlg.getByText(/Preview with the default values/), "the live preview");
+    await visible(dlg.getByText(/List what changed in api this week/), "the rendered prompt in the preview");
+    await shotTo(page, "recipes-editor");
+    await dlg.getByLabel("What it does, in one line").fill("First edit.");
+    await dlg.getByRole("button", { name: "Save", exact: true }).click();
+    await visible(dlg.getByText(/Version 2\./), "version 2 after the save");
+    eq((await api(`/recipes/${rec.id}`)).summary, "First edit.", "the stored summary");
+
+    // someone else saves meanwhile: the editor's next save is refused with a plain message and nothing is lost
+    const read = await api(`/recipes/${rec.id}`);
+    await post(`/recipes/${rec.id}`, { name: read.name, summary: "Changed elsewhere.", category: read.category, kind: read.kind, body: read.body, params: read.params, suggest: read.suggest, version: read.version }, "PUT");
+    await dlg.getByLabel("What it does, in one line").fill("Second edit.");
+    const since = problems.length;
+    await dlg.getByRole("button", { name: "Save", exact: true }).click();
+    await visible(dlg.getByText(/Someone changed this recipe meanwhile/), "the conflict message");
+    expectStatus(since, 409);
+    eq((await api(`/recipes/${rec.id}`)).summary, "Changed elsewhere.", "the other change stays");
+    await dlg.getByRole("button", { name: "Load the latest version" }).click();
+    await poll(async () => (await dlg.getByLabel("What it does, in one line").inputValue()) === "Changed elsewhere.", "the latest version loaded");
+
+    // history: three versions, restore the first one (a new version 4), see what changed
+    await dlg.getByRole("button", { name: "History" }).click();
+    const versions = dlg.getByRole("list", { name: "Versions" });
+    await poll(async () => (await versions.getByRole("listitem").count()) === 3, "three versions listed");
+    await visible(dlg.getByLabel(/^Changes from version/), "the diff of two versions");
+    await shotTo(page, "recipes-history");
+    await dlg.getByRole("button", { name: "Restore version 1" }).click();
+    await visible(dlg.getByText(/Version 4\./), "restoring made version 4");
+    const restored = await api(`/recipes/${rec.id}`);
+    eq([restored.version, restored.summary], [4, original], "the restored recipe");
+    eq((await api(`/recipes/${rec.id}/versions`)).history.length, 3, "the older versions are all still there");
+
+    // duplicate, then delete the original with a confirmation
+    await dlg.getByRole("button", { name: "Duplicate to my recipes" }).click();
+    await poll(async () => (await api("/recipes")).some((r) => r.name === "O1 changelog (copy)"), "the copy exists");
+    await dlg.getByRole("button", { name: "Delete", exact: true }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Delete", exact: true }).click();
+    await gone(page.getByRole("dialog"), "the editor closed after the delete");
+    eq((await api("/recipes")).some((r) => r.id === rec.id), false, "the recipe is deleted");
+    eq((await api("/recipes")).some((r) => r.name === "O1 changelog (copy)"), true, "the copy stays");
+  });
+
+  await step("o2. Onboarding follows the person: the checklist dismissed in one browser is gone in another", async () => {
+    await post("/me/preferences", { values: { onboarding: null, ui: null } }, "PATCH");
+    const newPerson = async () => {
+      const c = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+      c.on("page", watch);
+      return { c, p: await c.newPage() };
+    };
+    const a = await newPerson();
+    try {
+      shotPage = a.p;
+      await a.p.goto(`${base}/#/`);
+      const welcome = a.p.getByRole("dialog", { name: "Welcome to 7ar" });
+      await visible(welcome, "the welcome for a person with nothing saved");
+      await welcome.getByRole("button", { name: "Skip for now" }).click();
+      const card = a.p.getByRole("main").getByRole("region", { name: "Getting started" });
+      await visible(card, "the checklist");
+      await card.getByRole("button", { name: "Dismiss" }).click();
+      await gone(card, "the checklist dismissed");
+      const saved = await poll(async () => {
+        const o = (await api("/me/preferences")).values.onboarding;
+        return o?.dismissed && o?.welcomed ? o : null;
+      }, "the server keeps the dismissed checklist");
+      if (!saved.at) throw new Error("the saved state carries no time");
+
+      const b = await newPerson(); // another browser: no local storage at all
+      try {
+        shotPage = b.p;
+        await b.p.goto(`${base}/#/`);
+        await visible(b.p.getByRole("main").getByRole("heading", { name: "Dashboard" }), "the dashboard in the second browser");
+        await poll(() => b.p.evaluate(() => JSON.parse(localStorage.getItem("7ar.onboarding.v1.local") ?? "{}").dismissed === true), "the second browser took the saved state");
+        eq(await b.p.getByRole("dialog", { name: "Welcome to 7ar" }).count(), 0, "no welcome in the second browser");
+        eq(await b.p.getByRole("region", { name: "Getting started" }).count(), 0, "no checklist in the second browser");
+      } finally {
+        await b.c.close();
+      }
+    } finally {
+      shotPage = page;
+      await a.c.close();
+    }
+  });
+
   const mkWorkflow = async (pid, name, nodes, inputs = []) => {
     const w = await post(`/projects/${pid}/workflows`, { name, inputs, nodes: nodes.map((n, i) => ({ pos: { x: i * 220, y: 0 }, ...n })) });
     return post(`/projects/${pid}/workflows/${w.id}/publish`, {});
@@ -1628,6 +1729,9 @@ async function main() {
     eq(bad.exitCode, 3, "the exit code of the failing script");
     if (!bad.log.includes("about-to-fail") || !/status 3/.test(bad.error)) throw new Error(`the failing step: ${JSON.stringify(bad)}`);
     eq(fake.requests.length, requestsBefore, "still no model call");
+    // the approval's request time was recorded, so insights knows how long this person took
+    const me = (await api(`/projects/${hp}/insights?range=7d`)).people.find((p) => p.login === "local");
+    if (!me || me.waits.gates.n < 1 || me.latency.n < 1) throw new Error(`no approval latency for the approver: ${JSON.stringify(me)}`);
   });
 
   await step("m8. Queued messages carry an image; Discard all empties the queue", async () => {

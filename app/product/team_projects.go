@@ -291,6 +291,7 @@ func (s *server) deleteProject(w http.ResponseWriter, r *http.Request, c Caller)
 	if !ok {
 		return
 	}
+	s.cancelProjectTasks(r.Context(), p.ID)
 	// The threads are deleted with the project: they are only reachable through it. Their queue and thread-state
 	// documents go with them (H.DeleteThread), and a thread no store could delete still loses its documents.
 	if metas, err := s.team.ListProjectThreads(r.Context(), p.ID); err == nil {
@@ -314,6 +315,7 @@ func (s *server) deleteProject(w http.ResponseWriter, r *http.Request, c Caller)
 	s.dropProjectNotifications(r.Context(), p.ID)
 	s.dropProjectData(r.Context(), p.ID)
 	s.dropProjectRecords(r.Context(), p.ID)
+	s.dropProjectTasks(r.Context(), p.ID)
 	// The project's marketplace installs (and their sealed keys) go with it; the project is already gone, so a
 	// failure here is logged and leaves rows nobody can reach.
 	if s.opt.Capabilities != nil {

@@ -44,6 +44,8 @@ type data struct {
 	Avatars  map[string]avatar                     `json:"avatars"`
 	Conns    map[string]map[string]store.Connector `json:"connectors"`
 	Seen     map[string]map[string]time.Time       `json:"seen"` // login → thread id → last seen
+	// Preferences is each person's own settings document (login → document).
+	Preferences map[string]store.UserPreferences `json:"preferences,omitempty"`
 }
 
 // NewMem returns an empty in-memory store that is never persisted.
@@ -85,6 +87,9 @@ func (m *Mem) fill() {
 	}
 	if m.d.Seen == nil {
 		m.d.Seen = map[string]map[string]time.Time{}
+	}
+	if m.d.Preferences == nil {
+		m.d.Preferences = map[string]store.UserPreferences{}
 	}
 	if m.d.Conns == nil {
 		m.d.Conns = map[string]map[string]store.Connector{}
@@ -295,6 +300,45 @@ func (m *Mem) SetUserPrefs(_ context.Context, login string, prefs map[string]any
 	}
 	m.d.Prefs[login] = cp
 	return m.save()
+}
+
+func (m *Mem) Preferences(_ context.Context, login string) (store.UserPreferences, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cur := m.d.Preferences[login]
+	out := store.UserPreferences{Values: make(map[string]json.RawMessage, len(cur.Values)), UpdatedAt: cur.UpdatedAt}
+	for k, v := range cur.Values {
+		out.Values[k] = append(json.RawMessage(nil), v...)
+	}
+	return out, nil
+}
+
+func (m *Mem) PatchPreferences(_ context.Context, login string, patch map[string]json.RawMessage) (store.UserPreferences, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.d.Users[login]; !ok {
+		return store.UserPreferences{}, store.ErrNotFound
+	}
+	cur := m.d.Preferences[login]
+	vals, err := store.MergePreferences(cur.Values, patch)
+	if err != nil {
+		return store.UserPreferences{}, err
+	}
+	next := store.UserPreferences{Values: vals, UpdatedAt: time.Now().UTC()}
+	if !next.UpdatedAt.After(cur.UpdatedAt) { // a later write always carries a later time, even on a coarse clock
+		next.UpdatedAt = cur.UpdatedAt.Add(time.Microsecond)
+	}
+	prev, had := m.d.Preferences[login]
+	m.d.Preferences[login] = next
+	if err := m.save(); err != nil {
+		if had {
+			m.d.Preferences[login] = prev
+		} else {
+			delete(m.d.Preferences, login)
+		}
+		return store.UserPreferences{}, err
+	}
+	return next, nil
 }
 
 func (m *Mem) SeenThreads(_ context.Context, login string) (map[string]time.Time, error) {
