@@ -88,5 +88,10 @@ func WireTypes() map[string]any {
 		"NotifyTestResults":    NotificationTestResults{},
 		"NotifyLogEntry":       notify.LogEntry{},
 		"MyNotifications":      MyNotifications{},
+		"DigestView":           DigestView{},
+		"DigestItem":           DigestItem{},
+		"DigestSetting":        DigestSetting{},
+		"DigestSendResult":     DigestSendResult{},
+		"TapdStatus":           TapdStatus{},
 	}
 }

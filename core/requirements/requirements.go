@@ -43,6 +43,7 @@ const (
 	SourceGitHubIssue = "github_issue"
 	SourceGitLabIssue = "gitlab_issue"
 	SourceGiteaIssue  = "gitea_issue"
+	SourceTAPDStory   = "tapd_story"
 )
 
 // Origin says where a requirement came from. A GitHub issue is identified by Repo and Number, unique per project.
@@ -50,11 +51,19 @@ type Origin struct {
 	Kind   string `json:"kind"`
 	Repo   string `json:"repo,omitempty"`
 	Number int    `json:"number,omitempty"`
-	URL    string `json:"url,omitempty"`
+	// ID is the id of a source whose ids are not small numbers (a TAPD story has 19 digits); Repo is then its workspace.
+	ID  string `json:"id,omitempty"`
+	URL string `json:"url,omitempty"`
 }
 
 // Key is the identity of the source inside a project ("" for a manual requirement, which has none).
 func (s Origin) Key() string {
+	if s.Kind == SourceTAPDStory {
+		if s.Repo == "" || s.ID == "" {
+			return ""
+		}
+		return "tapd:" + s.Repo + ":" + s.ID
+	}
 	if s.Repo == "" || s.Number <= 0 {
 		return ""
 	}

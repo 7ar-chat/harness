@@ -100,6 +100,8 @@ type Options struct {
 	// Notifications configures the notification rules, channels and delivery log (see notifications.go). Nil: the rules
 	// live in memory; the defaults (the app plus each person's linked Telegram, Slack and email) still apply.
 	Notifications *NotificationsOptions
+	// ProjectData, with Team, serves the weekly digest and the TAPD import (see digest.go, tapd.go). Nil: no routes.
+	ProjectData *ProjectDataOptions
 	// TrustIdentityHeaders makes the server take the signed-in user from the headers of a trusted gateway (see
 	// trustedheaders.go). Nil: off.
 	TrustIdentityHeaders *TrustedHeaders
@@ -125,6 +127,9 @@ type server struct {
 	sched *schedulerState
 	// nf is the notification engine (see notifications.go).
 	nf *notifier
+	// dg and tapdBox serve the weekly digest and the TAPD import (see digest.go, tapd.go).
+	dg      *digestState
+	tapdBox *secretBox
 }
 
 // New returns the HTTP handler: the API of h with the product on top.
@@ -260,6 +265,10 @@ func (s *server) Install(hs *httpapi.Server) error {
 	s.routeRecipes()
 	s.routeUsage()
 	s.routeInsights()
+	s.routeDigest()
+	if err := s.routeTapd(); err != nil {
+		return err
+	}
 	s.routeWorkflows()
 	s.routeGitHosts()
 	if s.opt.Supervisor != nil {

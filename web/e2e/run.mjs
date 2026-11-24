@@ -43,6 +43,7 @@ let server = null;
 const extraServers = []; // more harness-web processes a scenario started (m5)
 let fake = null;
 let hookSrv = null; // the webhook receiver of the notification scenarios (l*)
+let tapdSrv = null; // the fake TAPD of the import scenario (n1)
 let cleanupDone = null;
 const cleanup = () => (cleanupDone ??= doCleanup()); // one run, awaited by every caller (SIGINT and the normal exit)
 async function doCleanup() {
@@ -56,6 +57,8 @@ async function doCleanup() {
   await fake?.close().catch(() => {});
   hookSrv?.close();
   hookSrv?.closeAllConnections?.();
+  tapdSrv?.close();
+  tapdSrv?.closeAllConnections?.();
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
@@ -87,6 +90,27 @@ async function main() {
   });
   await new Promise((r) => hookSrv.listen(0, "127.0.0.1", r));
   hook.url = `http://127.0.0.1:${hookSrv.address().port}/e2e-hook`;
+  // A fake TAPD on loopback (open API: basic auth, {status,data,info} envelopes, 200 per page at most). Two of its three
+  // stories are open; the third is in a final status of the story workflow.
+  const tapd = { calls: [], user: "e2e_api", pass: "e2e-tapd-password" };
+  tapdSrv = http.createServer((req, res) => {
+    const u = new URL(req.url, "http://x");
+    tapd.calls.push({ path: u.pathname, query: u.search, auth: req.headers.authorization });
+    const out = (o) => res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(o));
+    if (req.headers.authorization !== "Basic " + Buffer.from(`${tapd.user}:${tapd.pass}`).toString("base64")) return out({ status: 401, data: [], info: "unauthorized" });
+    if (u.pathname === "/workflows/last_steps") return out({ status: 1, data: { resolved: "done", rejected: "no" }, info: "success" });
+    if (u.pathname === "/stories") {
+      const stories = [
+        { id: "1010104801001000001", name: "E2E TAPD login page", status: "planning", priority_label: "High", owner: "ann;", creator: "bob", description: "<p>Users <b>log in</b> with email</p><script>alert(1)</script>" },
+        { id: "1010104801001000002", name: "E2E TAPD old thing", status: "resolved", description: "done long ago" },
+        { id: "1010104801001000003", name: "E2E TAPD export", status: "developing", priority_label: "Low", description: "<ul><li>csv</li><li>json</li></ul>" },
+      ];
+      return out({ status: 1, data: u.searchParams.get("page") > 1 ? [] : stories.map((Story) => ({ Story })), info: "success" });
+    }
+    res.writeHead(404).end();
+  });
+  await new Promise((r) => tapdSrv.listen(0, "127.0.0.1", r));
+  tapd.url = `http://127.0.0.1:${tapdSrv.address().port}`;
   const dirs = { home: "home", ws: "workspace", state: "state" };
   for (const d of Object.values(dirs)) fs.mkdirSync(path.join(tmp, d));
   const ws = path.join(tmp, dirs.ws);
@@ -140,6 +164,7 @@ async function main() {
     HARNESS_SECRET_KEY: "e2e-secret-key-0123456789abcdef0123456789",
     HARNESS_ADMINS: "local",
     HARNESS_NOTIFY_ALLOW_PRIVATE: "1", // the webhook receiver above is on loopback (scenarios l*)
+    HARNESS_TAPD_ALLOW_PRIVATE: "1", // the fake TAPD above is on loopback (scenario n1)
     // The document library and the job search are optional features whose routes answer 404 without a directory; they are on
     // so that the References and Jobs pages render their real state (h5) instead of a "not available" one.
     HARNESS_DOCUMENTS_DIR: path.join(tmp, "documents"),
@@ -1669,6 +1694,82 @@ async function main() {
     const label = (await first.getByTestId("executor-availability").innerText()).trim();
     if (!["ready", "will be installed on first use", "not in the sandbox image", "unknown"].includes(label)) throw new Error(`availability badge: ${label}`);
     await visible(first.getByText(/Reads .*_API_KEY/), "the keys the executor reads");
+  });
+
+
+  // ---- n: TAPD import, weekly digest -------------------------------------------------------------------------------
+  const nz = {};
+  await step("n1. TAPD: connect a workspace, import its open stories (HTML stripped), import again without duplicates", async () => {
+    nz.id = (await post("/projects", { name: "E2E tapd" })).id;
+    await page.goto(`${base}/#/p/${nz.id}?tab=requirements`);
+    await page.reload();
+    const main = page.getByRole("main");
+    await main.getByRole("button", { name: "Connect TAPD" }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByLabel(/Workspace id/).fill("10104801");
+    await dlg.getByLabel("API user").fill(tapd.user);
+    await dlg.getByLabel(/Base URL/).fill(tapd.url);
+    // wrong credentials are refused with an explanation (asked outside the browser: a 400 is a console error there)
+    const bad = await fetch(`${base}/api/projects/${nz.id}/requirements/tapd`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspaceId: "10104801", baseUrl: tapd.url, user: tapd.user, password: "a-wrong-password" }) });
+    eq([bad.status, (await bad.text()).includes("TAPD refused the credentials")], [400, true], "wrong credentials are refused and explained");
+    await dlg.getByLabel("API password").fill(tapd.pass);
+    await dlg.getByRole("button", { name: "Connect" }).click();
+    await gone(page.getByRole("dialog"), "the connect dialog closed");
+    await visible(main.getByRole("button", { name: "Import from TAPD" }), "the import button");
+    const status = await api(`/projects/${nz.id}/requirements/tapd`);
+    eq([status.connected, status.workspaceId, status.hasPassword], [true, "10104801", true], "the connection");
+    eq(JSON.stringify(status).includes(tapd.pass), false, "the password is never returned");
+    await main.getByRole("button", { name: "Import from TAPD" }).click();
+    await visible(main.getByTestId("tapd-result").filter({ hasText: "Imported 2 TAPD story(ies), skipped 0" }), "the import summary");
+    await visible(main.getByText("E2E TAPD login page").first(), "the open story in the list");
+    eq(await main.getByText("E2E TAPD old thing").count(), 0, "a story in a final status is not imported");
+    const list = await api(`/projects/${nz.id}/requirements`);
+    eq(list.length, 2, "two requirements");
+    const login = list.find((r) => r.title === "E2E TAPD login page");
+    eq(login.body.includes("Users log in with email") && !login.body.includes("<") && !login.body.includes("alert"), true, "the HTML is plain text");
+    eq([login.source.kind, login.source.id, login.source.url], ["tapd_story", "1010104801001000001", `${tapd.url}/10104801/prong/stories/view/1010104801001000001`], "the source");
+    eq(login.priority, 3, "High priority");
+    await main.getByRole("button", { name: "Import from TAPD" }).click();
+    await visible(main.getByTestId("tapd-result").filter({ hasText: "Imported 0 TAPD story(ies), skipped 2" }), "the second import skips both");
+    eq((await api(`/projects/${nz.id}/requirements`)).length, 2, "no duplicates");
+    if (!tapd.calls.every((c) => c.path === "/stories" || c.path === "/workflows/last_steps")) throw new Error("unexpected TAPD calls");
+  });
+
+  await step("n2. Weekly digest: enable it, send one now, see it in the history, open the report and find it in the webhook's delivery log", async () => {
+    nz.dg = (await post("/projects", { name: "E2E digest" })).id;
+    // the webhook channel that receives digest.ready, chosen on the Notifications tab
+    await post(`/projects/${nz.dg}/notification-channels`, { kind: "webhook", name: "Digest hook", url: hook.url });
+    await page.goto(`${base}/#/p/${nz.dg}?tab=notifications`);
+    await page.reload();
+    await page.getByRole("main").getByLabel("The weekly digest is ready: Digest hook").click();
+    await poll(async () => (await api(`/projects/${nz.dg}/notifications`)).rules.events["digest.ready"]?.channels?.length, "the digest rule saved");
+    await page.goto(`${base}/#/p/${nz.dg}?tab=insights`);
+    await page.reload();
+    const card = page.getByTestId("digest-card");
+    await visible(card, "the weekly digest card");
+    await card.getByRole("switch", { name: "Send the weekly digest" }).click();
+    await card.getByLabel("Day").selectOption("5");
+    await card.getByLabel("Time", { exact: true }).selectOption("17");
+    await card.getByLabel("Time zone").fill("Europe/Berlin");
+    await card.getByRole("button", { name: "Save" }).click();
+    await visible(card.getByText(/Next one:/), "the next time is shown");
+    const saved = await api(`/projects/${nz.dg}/digest`);
+    eq([saved.setting.enabled, saved.setting.weekday, saved.setting.hour, saved.setting.timezone], [true, 5, 17, "Europe/Berlin"], "the saved setting");
+    const before = hook.calls.length;
+    await card.getByRole("button", { name: /Send one now/ }).click();
+    const list = card.getByRole("list", { name: "Sent digests" });
+    await visible(list.getByText("sent on request"), "the digest in the history");
+    const h = (await api(`/projects/${nz.dg}/digest`)).digests;
+    eq(h.length, 1, "one digest in the history");
+    const report = await fetch(`${base}${h[0].url}`);
+    const html = await report.text();
+    eq([report.status, html.includes("<html"), html.includes("E2E digest"), (report.headers.get("content-security-policy") ?? "").includes("default-src 'none'")], [200, true, true, true], "the stored report");
+    await poll(() => hook.calls.slice(before).some((c) => JSON.parse(c.body).event === "digest.ready"), "digest.ready at the webhook");
+    eq(hook.calls.slice(before).filter((c) => JSON.parse(c.body).event === "digest.ready").length, 1, "the webhook got it exactly once");
+    await poll(async () => (await api(`/projects/${nz.dg}/notifications/log`)).some((e) => e.event === "digest.ready" && e.status === "delivered"), "the delivery log entry");
+    await page.goto(`${base}/#/p/${nz.dg}?tab=notifications`);
+    await page.reload();
+    await visible(page.getByRole("table", { name: "Delivery log" }).getByText(/Weekly digest: E2E digest/).first(), "the digest in the delivery log table");
   });
 
   // Opt-in: E2E_SHOTS=<dir> saves screenshots of the main surfaces (not a scenario, nothing is asserted).

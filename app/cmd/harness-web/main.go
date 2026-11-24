@@ -158,6 +158,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if bt.notifications != nil {
 		prod.Notifications = &product.NotificationsOptions{Store: bt.notifications, AllowPrivate: getenv("HARNESS_NOTIFY_ALLOW_PRIVATE") == "1"}
 	}
+	if bt.projdata != nil {
+		prod.ProjectData = &product.ProjectDataOptions{Store: bt.projdata, TapdAllowPrivate: getenv("HARNESS_TAPD_ALLOW_PRIVATE") == "1"}
+	}
 	prod.TrustIdentityHeaders = trusted
 	if bt.wfs != nil {
 		prod.Workflows = bt.wfs
