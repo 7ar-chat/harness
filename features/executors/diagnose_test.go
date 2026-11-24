@@ -15,7 +15,7 @@ func TestFailedRunExplainsAMissingKeyAndBooksItUnpriced(t *testing.T) {
 	sb := &fakeSandbox{}
 	sb.handlers = append([]func(sandbox.ExecRequest) (string, string, int, bool, bool){
 		func(r sandbox.ExecRequest) (string, string, int, bool, bool) {
-			if strings.HasPrefix(r.Command, "opencode run") {
+			if strings.Contains(r.Command, "opencode run") {
 				return "", "Error: 401 Unauthorized: invalid api key\n", 1, false, true
 			}
 			return "", "", 0, false, false

@@ -18,7 +18,9 @@ func TestRenderBuiltins(t *testing.T) {
 		{ClaudeCode, LevelFull, []string{"--dangerously-skip-permissions"}, nil},
 		{Codex, LevelEdit, []string{"codex exec --json", "--sandbox workspace-write", `"$HARNESS_TASK"`}, nil},
 		{Codex, LevelReadOnly, []string{"--sandbox read-only"}, nil},
-		{OpenCode, LevelEdit, []string{`opencode run "$HARNESS_TASK"`}, []string{"{mode}"}},
+		{OpenCode, LevelEdit, []string{`opencode run --format json  "$HARNESS_TASK"`, "disabled_providers"}, []string{"{mode}", "--agent", "--auto"}},
+		{OpenCode, LevelReadOnly, []string{"--agent readonly"}, nil},
+		{OpenCode, LevelFull, []string{"--auto"}, nil},
 		{OMP, LevelEdit, []string{`omp -p`, "--approval-mode yolo", `"$HARNESS_TASK"`, "</dev/null"}, []string{"{mode}", "{task}"}},
 		{OMP, LevelFull, []string{"--approval-mode yolo"}, nil},
 		{OMP, LevelReadOnly, []string{"--tools read,grep,glob", "--approval-mode always-ask"}, []string{"yolo"}},
@@ -43,9 +45,9 @@ func TestRenderBuiltins(t *testing.T) {
 			}
 		}
 	}
-	oc, _ := BuiltinNamed(OpenCode)
-	if _, err := oc.Render(LevelReadOnly); !errors.Is(err, ErrReadOnlyUnsupported) {
-		t.Fatalf("opencode read-only: %v", err)
+	plain := Executor{Name: "plain", Command: "plain {task}"}
+	if _, err := plain.Render(LevelReadOnly); !errors.Is(err, ErrReadOnlyUnsupported) {
+		t.Fatalf("an executor with no read-only flags: %v", err)
 	}
 }
 

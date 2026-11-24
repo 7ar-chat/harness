@@ -217,7 +217,7 @@ func TestRedactsCredentialsEverywhere(t *testing.T) {
 	sb := &fakeSandbox{}
 	sb.handlers = append([]func(sandbox.ExecRequest) (string, string, int, bool, bool){
 		func(r sandbox.ExecRequest) (string, string, int, bool, bool) {
-			if strings.HasPrefix(r.Command, "opencode run") {
+			if strings.Contains(r.Command, "opencode run") {
 				return "using key " + key + "\ndone with " + key + "\n", "warning " + key + "\n", 0, false, true
 			}
 			return "", "", 0, false, false
@@ -271,9 +271,20 @@ func TestPolicyLevels(t *testing.T) {
 	}
 }
 
-func TestReadOnlyRefusedForOpenCode(t *testing.T) {
+// plainResolver serves one executor that has no read-only mode.
+type plainResolver struct{}
+
+func (plainResolver) Resolve(context.Context, executors.Query, string) (*executors.Executor, error) {
+	return &executors.Executor{Name: "plain", Kind: executors.KindCustom, Enabled: true, Command: "plain {task}", Binary: "plain"}, nil
+}
+func (plainResolver) Available(context.Context, executors.Query) ([]executors.Executor, error) {
+	return nil, nil
+}
+
+func TestReadOnlyRefusedWhenTheCLIHasNoReadOnlyMode(t *testing.T) {
 	sb := &fakeSandbox{}
-	_, err := newProvider(sb, nil, nil).Run(context.Background(), executors.Request{Login: "a", ThreadID: "t", Executor: "opencode", Task: "x", ReadOnly: true}, nil)
+	p := New(Options{Sandboxes: fakeManager{sb}, Resolver: plainResolver{}})
+	_, err := p.Run(context.Background(), executors.Request{Login: "a", ThreadID: "t", Executor: "plain", Task: "x", ReadOnly: true}, nil)
 	if err == nil || !strings.Contains(err.Error(), "read-only") {
 		t.Fatalf("err %v", err)
 	}
@@ -308,7 +319,7 @@ func TestCancelStopsTheRunAndRecordsIt(t *testing.T) {
 	sb := &fakeSandbox{}
 	sb.handlers = append([]func(sandbox.ExecRequest) (string, string, int, bool, bool){
 		func(r sandbox.ExecRequest) (string, string, int, bool, bool) {
-			if strings.HasPrefix(r.Command, "opencode run") {
+			if strings.Contains(r.Command, "opencode run") {
 				return "", "", 0, true, true
 			}
 			return "", "", 0, false, false
@@ -408,7 +419,7 @@ func TestFailedExitCodeIsAReportNotAnError(t *testing.T) {
 	sb := &fakeSandbox{}
 	sb.handlers = append([]func(sandbox.ExecRequest) (string, string, int, bool, bool){
 		func(r sandbox.ExecRequest) (string, string, int, bool, bool) {
-			if strings.HasPrefix(r.Command, "opencode run") {
+			if strings.Contains(r.Command, "opencode run") {
 				return "compile error\n", "boom\n", 2, false, true
 			}
 			return "", "", 0, false, false

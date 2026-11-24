@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// The fixtures under testdata/real are the REAL stdout of the CLIs (claude 2.1.331, codex-cli 0.172.0, omp 19.1.1),
+// The fixtures under testdata/real are the REAL stdout of the CLIs (claude 2.1.331, codex-cli 0.172.0, omp 19.1.1, opencode-ai 1.19.6),
 // captured by features/executors/clitest against scripted fake model servers and scrubbed of paths, ids and ports
 // (go test ./features/executors/clitest with HARNESS_REAL_CLIS and HARNESS_UPDATE_FIXTURES=1 rewrites them). The
 // *-nokey ones are trimmed from a run with no credentials (Codex: against the real API, which answered 401).
@@ -17,7 +17,7 @@ func realFixture(t *testing.T, name string) (Parser, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	parser := map[string]string{"claude": ParserClaudeJSON, "codex": ParserCodexJSONL, "omp": ParserOMPJSON}[strings.SplitN(name, "-", 2)[0]]
+	parser := map[string]string{"claude": ParserClaudeJSON, "codex": ParserCodexJSONL, "omp": ParserOMPJSON, "opencode": ParserOpenCodeJSON}[strings.SplitN(name, "-", 2)[0]]
 	p := NewParser(parser)
 	return p, strings.Join(feed(p, string(b)), "\n")
 }
@@ -196,5 +196,48 @@ func TestParserEdgeCases(t *testing.T) {
 	feed(o, `{"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"aborted","usage":{"totalTokens":5,"cost":{"total":0.25}}}}`)
 	if s := o.Summary(); !s.Failed || s.Tokens != 5 || s.USD != 0.25 {
 		t.Fatalf("%+v", s)
+	}
+}
+
+func TestRealOpenCodeEdit(t *testing.T) {
+	p, shown := realFixture(t, "opencode-edit")
+	for _, w := range []string{"I will create hello.txt.", "[tool write] hello.txt", "Created hello.txt with the greeting."} {
+		if !strings.Contains(shown, w) {
+			t.Errorf("progress lacks %q:\n%s", w, shown)
+		}
+	}
+	if strings.Contains(shown, `{"type"`) {
+		t.Errorf("raw JSON shown:\n%s", shown)
+	}
+	s := p.Summary()
+	// 2187 for the tool turn, 2341 for the answer (input 1300 + output 41 + cache read 1000).
+	if s.Text != "Created hello.txt with the greeting." || s.Tokens != 4528 || s.Failed {
+		t.Fatalf("%+v", s)
+	}
+}
+
+func TestRealOpenCodeReadOnlyShowsTheRefusal(t *testing.T) {
+	p, shown := realFixture(t, "opencode-readonly")
+	if !strings.Contains(shown, "[tool error] bash:") || strings.Contains(shown, `{"type"`) {
+		t.Fatalf("%s", shown)
+	}
+	if s := p.Summary(); s.Failed || s.Text != "Done." {
+		t.Fatalf("%+v", s)
+	}
+}
+
+func TestRealOpenCodeFailures(t *testing.T) {
+	for name, want := range map[string]string{
+		"opencode-badkey": "Incorrect API key provided: test. You can find your API key at https://platform.openai.com/account/api-keys.",
+		"opencode-nokey":  "Anthropic API key is missing. Pass it using the 'apiKey' parameter or the ANTHROPIC_API_KEY environment variable.",
+	} {
+		p, shown := realFixture(t, name)
+		s := p.Summary()
+		if !s.Failed || s.Err != want || s.Text != "" {
+			t.Errorf("%s: %+v", name, s)
+		}
+		if !strings.Contains(shown, "[error] "+want) {
+			t.Errorf("%s: %s", name, shown)
+		}
 	}
 }

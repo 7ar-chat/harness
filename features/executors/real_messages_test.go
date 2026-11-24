@@ -16,9 +16,12 @@ func TestDiagnoseRealAuthFailures(t *testing.T) {
 		"codex":        "unexpected status 401 Unauthorized: Missing bearer or basic authentication in header, url: https://api.openai.com/v1/responses, cf-ray: a5f547151a452e53-CDG, request id: req_50ed3634ea1d48e9a270326db708352d",
 		"codex2":       "unexpected status 401 Unauthorized: Incorrect API key provided: test. You can find your API key at https://platform.openai.com/account/api-keys., url: http://127.0.0.1:64994/v1/responses",
 		"omp":          "401 Incorrect API key provided: test-key. You can find your API key at https://platform.openai.com/account/api-keys. (type=invalid_request_error param=invalid_api_key)",
+		"opencode":     "Anthropic API key is missing. Pass it using the 'apiKey' parameter or the ANTHROPIC_API_KEY environment variable.",
+		"opencode2":    "Incorrect API key provided: test. You can find your API key at https://platform.openai.com/account/api-keys.",
+		"opencode3":    "invalid x-api-key",
 	}
 	for name, out := range cases {
-		ex, ok := executors.BuiltinNamed(strings.TrimSuffix(name, "2"))
+		ex, ok := executors.BuiltinNamed(strings.TrimRight(name, "23"))
 		if !ok {
 			t.Fatal(name)
 		}
