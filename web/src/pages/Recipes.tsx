@@ -65,7 +65,7 @@ function RecipeCard({ r, onUse, canUse, onDelete, onEdit, onDuplicate }: { r: Re
         <span className="mt-0.5 text-muted-foreground" title={KIND_LABEL[r.kind]}>
           {KIND_ICON[r.kind]}
         </span>
-        <h3 className="min-w-0 flex-1 text-sm leading-snug font-semibold">{r.name}</h3>
+        <h2 className="min-w-0 flex-1 text-sm leading-snug font-semibold">{r.name}</h2>
         {r.scope !== "builtin" ? <Badge variant="secondary">{r.scope === "project" ? (r.projectName ?? SCOPE_LABEL.project) : SCOPE_LABEL[r.scope]}</Badge> : null}
       </div>
       <p className="text-sm text-muted-foreground">{r.summary}</p>
@@ -707,7 +707,7 @@ export function RecipesPanel({ projectId, canEdit, owner }: { projectId: string;
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Ready-made schedules, tasks and triggers. Pick one, fill in a few words, and it becomes a schedule, a task or a trigger of this project. To share your own, use <em>Share as recipe</em> on a schedule or a task.
+          A recipe becomes a schedule, a task or a trigger of this project. To share your own, use <em>Share as recipe</em> on a schedule or a task.
         </p>
         <Button variant="outline" onClick={() => setImporting(true)} disabled={!canEdit}>
           <Upload /> Import a file

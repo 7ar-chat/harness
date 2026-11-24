@@ -165,6 +165,6 @@ describe("Triggers and report", () => {
     expect(await page().findByText("$12.50")).toBeTruthy();
     expect(page().getByText(/2 runs used a model with no known price/)).toBeTruthy();
     expect(page().getByText("Big task")).toBeTruthy();
-    expect(await page().findByText("Learning views are off on this server.")).toBeTruthy();
+    expect(page().queryByText("Learning views are off on this server.")).toBeNull();
   });
 });

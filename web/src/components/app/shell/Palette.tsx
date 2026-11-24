@@ -18,7 +18,7 @@ const PAGES: [string, string][] = [
   ["/jobs", "Job search"],
   ["/references", "References"],
   ["/connectors", "Connectors"],
-  ["/memory", "Library (my memory)"],
+  ["/memory", "My memory"],
   ["/schedules", "My schedules"],
   ["/roles", "My roles (personal)"],
   ["/usage", "My usage"],

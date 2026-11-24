@@ -79,7 +79,7 @@ function Members({ pid, owner, self }: { pid: string; owner: boolean; self: stri
       </ul>
       {owner ? (
         <div className="space-y-3">
-          <h3 className="text-sm font-medium">Invite by email</h3>
+          <h2 className="text-sm font-medium">Invite by email</h2>
           <form
             className="flex flex-wrap gap-2"
             onSubmit={(e) => {
@@ -177,7 +177,7 @@ function Settings({ pid }: { pid: string }) {
         <h2 className="border-t pt-4 text-base font-semibold">Repositories</h2>
         <div className="space-y-2">
           <Label htmlFor="s-repo">Repository URL</Label>
-          <Input id="s-repo" value={f.repoUrl} onChange={set("repoUrl")} type="url" />
+          <Input id="s-repo" value={f.repoUrl} onChange={set("repoUrl")} type="url" placeholder="https://github.com/org/repo" />
         </div>
         <div className="space-y-2">
           <Label htmlFor="s-more-repos">More repositories</Label>
@@ -228,6 +228,20 @@ function Settings({ pid }: { pid: string }) {
   );
 }
 
+const VERB: Record<string, string> = { create: "created", update: "updated", delete: "deleted", send: "sent", approve: "approved", deny: "denied", remove: "removed", invite: "invited", join: "joined", leave: "left", start: "started", cancel: "cancelled", run: "ran", set: "set", dispatch: "dispatched", import: "imported", publish: "published", resume: "resumed" };
+
+/** "task.create" reads as "created a task"; anything not recognised is shown as it is. */
+const SPECIAL: Record<string, string> = { "run.send": "sent a message", "thread.create": "started a session", "project.create": "created this project", "member.set": "changed a member role", "run.cancel": "stopped a run" };
+
+export function describeAction(action: string): string {
+  if (SPECIAL[action]) return SPECIAL[action]!;
+  const m = /^([a-z_-]+)\.([a-z_-]+)$/.exec(action);
+  const verb = m ? VERB[m[2]!] : undefined;
+  if (!m || !verb) return action;
+  const noun = m[1]!.replace(/[_-]/g, " ");
+  return `${verb} ${/^[aeiou]/.test(noun) ? "an" : "a"} ${noun}`;
+}
+
 function Audit({ pid }: { pid: string }) {
   const a = useAudit(pid, 200);
   if (a.isLoading) return <ListSkeleton />;
@@ -240,7 +254,7 @@ function Audit({ pid }: { pid: string }) {
           <UserAvatar login={e.actor} className="size-6" />
           <div className="min-w-0 flex-1">
             <span className="font-medium">{e.actor}</span>
-            {e.onBehalfOf ? <span className="text-muted-foreground"> for {e.onBehalfOf}</span> : null} <span className="text-muted-foreground">{e.action}</span>
+            {e.onBehalfOf ? <span className="text-muted-foreground"> for {e.onBehalfOf}</span> : null} <span className="text-muted-foreground">{describeAction(e.action)}</span>
             {e.threadId ? (
               <Link to="/t/$threadId" params={{ threadId: e.threadId }} className="ml-2 text-xs underline">
                 session

@@ -24,7 +24,7 @@ describe("ProfilePage", () => {
     // Act
     await renderApp("/profile");
     // Assert
-    expect(await page().findByRole("heading", { name: "Settings", level: 1 })).toBeTruthy();
+    expect(await page().findByRole("heading", { name: "My settings", level: 1 })).toBeTruthy();
     expect(await page().findByText("alice@example.com")).toBeTruthy();
     expect((page().getByLabelText("Display name") as HTMLInputElement).placeholder).toBe("Alice Doe");
   });

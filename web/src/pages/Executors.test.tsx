@@ -47,7 +47,7 @@ describe("the Executors card in Settings", () => {
     const rows = within(list).getAllByRole("listitem");
     expect(within(rows[0]!).getByText("ready")).toBeTruthy();
     expect(within(rows[1]!).getByText("will be installed on first use")).toBeTruthy();
-    expect(within(rows[2]!).getByText("unknown")).toBeTruthy();
+    expect(within(rows[2]!).getByText("not checked")).toBeTruthy();
     expect(within(rows[0]!).getByText("ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL")).toBeTruthy();
   });
 
@@ -80,7 +80,7 @@ describe("the Executors card in Settings", () => {
   it("shows nothing when the server has no executors", async () => {
     mockFetch({ ...routes(), "GET /api/executors": new Response(null, { status: 404 }) });
     await renderApp("/profile");
-    await screen.findByRole("heading", { name: "Settings" });
+    await screen.findByRole("heading", { name: "My settings" });
     expect(screen.queryByRole("list", { name: "Executors" })).toBeNull();
   });
 });

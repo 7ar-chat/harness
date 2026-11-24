@@ -2,7 +2,7 @@
 // the runs with their live state and controls. A workflow is a graph of steps (an agent, a command, a human gate, another
 // workflow); a run turns each step into a factory task in dependency order.
 import { EmptyGuide } from "@/components/app/EmptyGuide";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useProjectSearch } from "@/lib/place";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Copy, FilePlus2, Play, Trash2 } from "lucide-react";
@@ -224,13 +224,7 @@ export function WorkflowsPanel({ projectId, role }: { projectId: string; role: R
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-          A workflow is a procedure your team repeats: steps for agents, commands and people, with the order they depend on each other. Publish one to run it.{" "}
-          <Link to="/p/$projectId" params={{ projectId }} search={{ tab: "roles" }} className="underline">
-            Roles
-          </Link>{" "}
-          say who does each step.
-        </p>
+        <span className="flex-1" />
         {canEdit ? (
           <Button onClick={blank} disabled={create.isPending}>
             <FilePlus2 /> New workflow

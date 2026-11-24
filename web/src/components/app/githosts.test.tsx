@@ -73,7 +73,7 @@ describe("Profile, Git access", () => {
     mockFetch({ ...shellRoutes(), "GET /api/connectors": [] });
     // Act
     await renderApp("/profile");
-    await page().findByRole("heading", { name: "Settings", level: 1 });
+    await page().findByRole("heading", { name: "My settings", level: 1 });
     // Assert
     expect(screen.queryByText("Git access")).toBeNull();
   });

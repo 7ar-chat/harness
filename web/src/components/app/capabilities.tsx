@@ -803,7 +803,7 @@ export function CapabilitiesPanel({ scope }: { scope: CapabilitiesScope }) {
     <div className="space-y-6">
       <Section id="cap-market-h" title="Marketplace" count={shown.length}>
         <p className="text-sm text-muted-foreground">
-          MCP servers that give agents more tools in {who}.{canEdit ? "" : " Only a project owner can change them."}
+          {canEdit ? `Switch a server on to give agents its tools in ${who}.` : "Only a project owner can change them."}
         </p>
         <div className="flex flex-wrap gap-2">
           <div className="relative min-w-48 flex-1">

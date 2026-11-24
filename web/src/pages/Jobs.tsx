@@ -302,7 +302,7 @@ export function JobsPage() {
         </div>
       </details>
       <Tabs value={group} onValueChange={setGroup}>
-        <TabsList>
+        <TabsList className="h-auto flex-wrap justify-start">
           {GROUPS.map((x) => (
             <TabsTrigger key={x.key} value={x.key}>
               {x.label} ({x.statuses.reduce((n, s) => n + (counts[s] ?? 0), 0)})

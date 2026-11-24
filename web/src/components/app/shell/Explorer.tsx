@@ -162,7 +162,7 @@ export function UserMenu() {
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => tabs.open("/profile")}>
-          <UserCog /> Settings
+          <UserCog /> My settings
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => tabs.open("/memory")}>
           <Brain /> My memory
@@ -336,6 +336,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
 
         {project ? (
           <>
+            {needs.length ? (
             <Section title="Needs you" label="Needs you in the explorer" count={needs.length}>
               {visible.length ? (
                 visible.map((n) => (
@@ -343,15 +344,14 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
                     {n.label}
                   </Row>
                 ))
-              ) : (
-                <p className="px-2.5 py-1 text-xs text-muted-foreground">Nothing waits in this project.</p>
-              )}
+              ) : null}
               {needs.length > visible.length ? (
                 <Row href="/inbox" k="page:/inbox" onNavigate={onNavigate}>
                   <span className="text-muted-foreground">{needs.length - visible.length} more in Needs you</span>
                 </Row>
               ) : null}
             </Section>
+            ) : null}
 
             <Section
               title="Sessions"
@@ -439,7 +439,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
             Connectors
           </Row>
           <Row href="/memory" k="page:/memory" onNavigate={onNavigate}>
-            Library
+            My memory
           </Row>
           <Row href="/schedules" k="page:/schedules" onNavigate={onNavigate}>
             My schedules
@@ -460,7 +460,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
             </Row>
             {project.role === "owner" ? (
               <Row href={projectHref(project.id, "settings")} k={`p:${project.id}:settings`} onNavigate={onNavigate}>
-                Settings
+                Project settings
               </Row>
             ) : null}
           </>

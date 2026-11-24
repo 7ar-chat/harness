@@ -60,7 +60,7 @@ export function WhyNot({ log }: { log: NotifyLogEntry[] }) {
         <li>Quiet hours or the hourly digest hold messages for later{held ? ` (${held} held in the list below)` : ""}.</li>
         <li>The same event within the repeat window is sent once{collapsed ? ` (${collapsed} collapsed below)` : ""}.</li>
         <li>The channel may have failed{failed ? ` (${failed} failed below, with the reason)` : ""}: press Test on it.</li>
-        <li>Telegram, Slack and email only work once you linked them in Settings and Connectors.</li>
+        <li>Telegram, Slack and email only work once you linked them in My settings and Connectors.</li>
       </ul>
     </details>
   );
@@ -69,7 +69,7 @@ export function WhyNot({ log }: { log: NotifyLogEntry[] }) {
 function Log({ entries, showWho }: { entries: NotifyLogEntry[]; showWho?: boolean }) {
   if (!entries.length) return <Empty title="Nothing sent yet">Every message, held message and failure shows up here.</Empty>;
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div className="overflow-x-auto rounded-lg border" tabIndex={0} role="region" aria-label="Delivery log, scrolls sideways">
       <table className="w-full text-sm" aria-label="Delivery log">
         <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
           <tr>
@@ -243,18 +243,9 @@ export function ProjectNotifications({ projectId, canEdit }: { projectId: string
   const setRule = (e: NotifyEvent, next: NotifyRule) => put({ ...rules.events, [e.kind]: next });
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <Bell className="size-5" /> Notifications
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Who hears about what in this project. By default the person an item concerns is told where they chose (see Settings). Add channels to tell the whole team.
-        </p>
-      </header>
-
       <section className="space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Channels</h3>
+          <h2 className="text-sm font-semibold">Channels</h2>
           {canEdit ? (
             <Button size="sm" onClick={() => setAdding(true)} disabled={!v.canSecure} title={v.canSecure ? undefined : "This server has no secret key"}>
               <Plus className="size-4" /> Add channel
@@ -276,8 +267,8 @@ export function ProjectNotifications({ projectId, canEdit }: { projectId: string
       </section>
 
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold">Rules</h3>
-        <div className="overflow-x-auto rounded-lg border">
+        <h2 className="text-sm font-semibold">Rules</h2>
+        <div className="overflow-x-auto rounded-lg border" tabIndex={0} role="region" aria-label="Notification rules, scrolls sideways">
           <table className="w-full text-sm" aria-label="Notification rules">
             <thead className="bg-muted/40 text-xs text-muted-foreground">
               <tr>
@@ -341,7 +332,7 @@ export function ProjectNotifications({ projectId, canEdit }: { projectId: string
 
       {canEdit ? (
         <section className="space-y-2">
-          <h3 className="text-sm font-semibold">Delivery log</h3>
+          <h2 className="text-sm font-semibold">Delivery log</h2>
           {log.isLoading ? <ListSkeleton /> : <Log entries={log.data ?? []} showWho />}
           <WhyNot log={log.data ?? []} />
         </section>
@@ -388,7 +379,7 @@ export function MyNotificationsCard() {
         <CardDescription>Where the things that concern you reach you. The app always has them; add Telegram or Slack in Connectors, email comes from your profile.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border" tabIndex={0} role="region" aria-label="My notifications, scrolls sideways">
           <table className="w-full text-sm" aria-label="My notifications">
             <thead className="bg-muted/40 text-xs text-muted-foreground">
               <tr>

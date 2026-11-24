@@ -84,7 +84,7 @@ const AVAILABILITY: Record<string, { label: string; title: string; variant: "sec
   ready: { label: "ready", title: "The CLI is in the default sandbox image", variant: "secondary" },
   install: { label: "will be installed on first use", title: "Not in the sandbox image: a run installs it first", variant: "outline" },
   missing: { label: "not in the sandbox image", title: "Ask an admin to add it to the sandbox image", variant: "outline" },
-  unknown: { label: "unknown", title: "No sandbox to check, or the check has not answered yet", variant: "outline" },
+  unknown: { label: "not checked", title: "No sandbox to check, or the check has not answered yet", variant: "outline" },
 };
 
 function AvailabilityBadge({ value }: { value?: string }) {

@@ -71,11 +71,11 @@ export function Board({ projectId }: { projectId: string }) {
     <div className="grid gap-3 md:grid-cols-5" aria-label="Board">
       {cols.map((col) => (
         <section key={col.id} aria-label={col.title} className="min-w-0 rounded-lg bg-muted/40 p-2">
-          <h3 className="mb-2 flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
+          <h2 className="mb-2 flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
             <span className={cn("size-2 rounded-full", ACCENT[col.id])} />
             {col.title}
             <span className="ml-auto tabular-nums">{col.cards.length}</span>
-          </h3>
+          </h2>
           <ul className="space-y-2">
             {col.cards.map((c) => (
               <Card key={c.threadId} card={c} />
