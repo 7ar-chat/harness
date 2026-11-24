@@ -470,7 +470,7 @@ function Layer({ scope, readOnly, compact }: { scope: MemScope; readOnly: boolea
 export function MemoryManager({ project, compact, readOnly = false }: { project?: string; compact?: boolean; readOnly?: boolean }) {
   const [layer, setLayer] = useState<"shared" | "mine">("shared");
   const body = (
-    <div className={compact ? "space-y-4 p-3" : "mx-auto w-full max-w-5xl space-y-4 p-4 md:p-8"}>
+    <div className={compact ? "space-y-4 p-3" : "w-full max-w-5xl space-y-4 p-4 md:p-6"}>
       {project ? (
         <Tabs value={layer} onValueChange={(v) => setLayer(v === "mine" ? "mine" : "shared")}>
           <TabsList>
@@ -488,7 +488,7 @@ export function MemoryManager({ project, compact, readOnly = false }: { project?
 export function MemoryPage() {
   return (
     <div className="flex h-full flex-col">
-      <div className="mx-auto w-full max-w-5xl px-4 pt-4 md:px-8 md:pt-8">
+      <div className="w-full max-w-5xl px-4 pt-4 md:px-6 md:pt-6">
         <h1 className="flex items-center gap-2 text-xl font-semibold">
           <Brain className="size-5" /> My memory
         </h1>

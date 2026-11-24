@@ -102,6 +102,9 @@ export async function runShots(h) {
       };
       const newTask = async () => {
         await pg.goto(`${base}/#/p/${pid}?tab=tasks`);
+        // The editor tab "Work · Tasks" stays mounted (TabHost keeps the 8 latest), so it comes back on the sub-view it was left on:
+        // after the tab-tasks-report shot that is Report, which has no New task button. That was the "dialog never opens" of desktop dark.
+        await pg.getByRole("tab", { name: "List", exact: true }).click({ timeout: 15000 });
         await pg.getByRole("button", { name: /New task/ }).first().waitFor({ state: "visible", timeout: 15000 });
         await settle(pg);
         await clickVis(pg.getByRole("button", { name: /New task/ }));

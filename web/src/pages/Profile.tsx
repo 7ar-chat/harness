@@ -305,7 +305,8 @@ function ConnectorRow({ c, onImport }: { c: Connector; onImport: () => void }) {
             {statusOf(c)}
           </div>
           <p className="text-sm text-muted-foreground">{gh ? "Import repositories as projects and let agents work on them." : slack ? "Message your assistant or mention it in a channel; it also pings you when a session needs you." : "Chat with your assistant from Telegram; it also pings you when a session needs you."}</p>
-          <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+          {/* Not set up on the server: the badge and the message say it; a row of "not connected / not set up" would say it three times. */}
+          <dl className={c.configured || c.connected ? "flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground" : "sr-only"}>
             <div className="flex gap-1">
               <dt>Account</dt>
               <dd className={c.connected ? "font-mono" : undefined}>{c.connected ? c.account || "connected" : "not connected"}</dd>
@@ -444,7 +445,7 @@ export function ProfilePage() {
 function SidePage({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
   return (
     <ScrollArea className="h-full">
-      <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-8">
+      <div className="w-full max-w-5xl space-y-4 p-4 md:p-6">
         <header className="space-y-1">
           <h1 className="text-xl font-semibold">{title}</h1>
           <p className="text-sm text-muted-foreground">{hint}</p>

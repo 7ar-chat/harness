@@ -26,7 +26,7 @@ export function HelpPage() {
   const article = articleBySlug(slug);
   return (
     <ScrollArea className="h-full">
-      <div className="mx-auto w-full max-w-5xl space-y-5 p-4 md:p-8">
+      <div className="w-full max-w-5xl space-y-5 p-4 md:p-6">
         <header className="space-y-1">
           <h1 className="text-xl font-semibold">Help</h1>
           <p className="text-sm text-muted-foreground">Short answers in plain language. Nothing here needs the internet.</p>

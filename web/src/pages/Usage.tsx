@@ -314,7 +314,7 @@ export function UsagePanel({ projectId }: { projectId?: string }) {
 export function UsagePage() {
   return (
     <ScrollArea className="h-full">
-      <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-8">
+      <div className="w-full max-w-5xl space-y-4 p-4 md:p-6">
         <h1 className="text-xl font-semibold">Usage</h1>
         <p className="text-sm text-muted-foreground">What your sessions, your factory tasks and your scheduled tasks consumed, in every project and on your own.</p>
         <UsagePanel />

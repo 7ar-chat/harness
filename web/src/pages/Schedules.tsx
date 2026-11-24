@@ -435,7 +435,7 @@ export function SchedulesPanel({ projectId, canEdit, owner }: { projectId?: stri
 export function SchedulesPage() {
   return (
     <ScrollArea className="h-full">
-      <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-8">
+      <div className="w-full max-w-5xl space-y-4 p-4 md:p-6">
         <h1 className="text-xl font-semibold">My schedules</h1>
         <SchedulesPanel canEdit />
       </div>

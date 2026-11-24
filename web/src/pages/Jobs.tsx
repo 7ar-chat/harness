@@ -270,7 +270,7 @@ export function JobsPage() {
   const fresh = !!q.data && !(q.data.profile.titles ?? []).length;
   const shell = (children: React.ReactNode) => (
     <ScrollArea className="h-full">
-      <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-8">
+      <div className="w-full max-w-5xl space-y-4 p-4 md:p-6">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
             <h1 className="text-xl font-semibold">Job search</h1>

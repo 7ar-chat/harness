@@ -313,7 +313,7 @@ function RoleRow({ r, onOpen, onEdit, onDuplicate, onDelete, onToggle, canEdit }
         </div>
         {r.description ? <p className="truncate text-sm text-muted-foreground">{r.description}</p> : null}
         <p className="text-xs text-muted-foreground">
-          {[r.model ? `model ${r.model}` : "default model", ...tools, r.skills?.length ? `skills ${r.skills.join(", ")}` : ""].join(" · ")}
+          {[r.model ? `model ${r.model}` : "default model", ...tools, r.skills?.length ? `skills ${r.skills.join(", ")}` : ""].filter(Boolean).join(" · ")}
         </p>
       </div>
       <div className="flex items-center gap-1">
@@ -410,7 +410,7 @@ export function RolesPanel({ projectId, canEdit }: { projectId?: string; canEdit
 export function RolesPage() {
   return (
     <ScrollArea className="h-full">
-      <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-8">
+      <div className="w-full max-w-5xl space-y-4 p-4 md:p-6">
         <h1 className="text-xl font-semibold">My roles</h1>
         <p className="text-sm text-muted-foreground">A role is a named agent configuration: instructions, model, tools and skills. These are yours alone: type @ in a session to run as one. A project role of the same name wins inside that project.</p>
         <RolesPanel canEdit />
