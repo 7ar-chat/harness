@@ -1,5 +1,6 @@
 package product
 
+import "github.com/7ar-chat/harness/core/recipes"
 import "github.com/7ar-chat/harness/core/requirements"
 import "github.com/7ar-chat/harness/core/roles"
 import "github.com/7ar-chat/harness/core/schedule"
@@ -65,5 +66,14 @@ func WireTypes() map[string]any {
 		"GitHostList":          gitHostList{},
 		"GitHost":              gitHostView{},
 		"GitCredential":        gitCredentialView{},
+		"Recipe":               recipeView{},
+		"RecipeDoc":            recipes.Recipe{},
+		"RecipeVersions":       recipeVersions{},
+		"RecipeDryRun":         recipeDryRun{},
+		"RecipeApplied":        recipeApplied{},
+		"RecipeApplyBody":      applyBody{},
+		"RecipeBody":           recipeBody{},
+		"RecipeShareBody":      shareBody{},
+		"RecipeShareParam":     shareParam{},
 	}
 }

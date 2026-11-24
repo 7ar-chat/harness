@@ -27,6 +27,7 @@ export const PROJECT_SECTIONS: Record<string, string> = {
   workflows: "Workflows & runs",
   roles: "Roles & executors",
   schedules: "Schedules",
+  recipes: "Recipes",
   memory: "Memory & docs",
   members: "Members & access",
   capabilities: "Capabilities",

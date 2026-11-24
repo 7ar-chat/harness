@@ -737,7 +737,7 @@ async function main() {
   await step("h5. Route sweep: every top-level route and project tab renders without errors, on desktop and on a phone", async () => {
     const hp = (await post("/projects", { name: "E2E sweep" })).id;
     const top = ["/", "/supervisor", "/inbox", "/jobs", "/references", "/connectors", "/capabilities", "/schedules", "/usage", "/memory", "/profile", "/admin"];
-    const tabs = ["board", "overview", "members", "memory", "capabilities", "roles", "schedules", "usage", "audit", "tasks", "requirements", "workflows", "settings"];
+    const tabs = ["board", "overview", "members", "memory", "capabilities", "roles", "schedules", "recipes", "usage", "audit", "tasks", "requirements", "workflows", "settings"];
     const failures = [];
     const bad = [/Something went wrong/, /^Not found$/, /You do not have access to this/, /Try again/];
     const sweep = async (pg, label) => {
@@ -793,6 +793,157 @@ async function main() {
     await poll(() => page.url().endsWith(`#/t/${th.id}`), "the card click to open the session");
   });
 
+  // k. Recipes: the gallery, the wizard, sharing, importing, triggers
+  const shotTo = async (pg, name) => {
+    if (!process.env.E2E_SHOTS) return;
+    fs.mkdirSync(process.env.E2E_SHOTS, { recursive: true });
+    await pg.waitForTimeout(600);
+    await pg.screenshot({ path: path.join(process.env.E2E_SHOTS, `${name}.png`) });
+  };
+  const rk = {};
+  await step("k1. Recipes: open the gallery, filter it, apply 'Weekly project status digest' and find the schedule in Schedules", async () => {
+    rk.a = (await post("/projects", { name: "E2E recipes A" })).id;
+    await page.goto(`${base}/#/p/${rk.a}?tab=recipes`);
+    await page.reload();
+    const cards = page.getByRole("list", { name: "Recipes" });
+    await visible(cards.getByRole("listitem").first(), "the gallery cards");
+    if ((await cards.getByRole("listitem").count()) < 12) throw new Error("fewer than 12 recipes in the gallery");
+    await shotTo(page, "recipes-gallery");
+    await page.getByRole("group", { name: "Category" }).getByRole("button", { name: "Security" }).click();
+    await visible(cards.getByRole("listitem", { name: "Nightly dependency and vulnerability scan" }), "a security recipe");
+    await gone(cards.getByRole("listitem", { name: "Weekly project status digest" }), "a reporting recipe hidden by the security chip");
+    await page.getByRole("group", { name: "Category" }).getByRole("button", { name: "All" }).click();
+    await page.getByLabel("Search recipes").fill("status digest");
+    const card = cards.getByRole("listitem", { name: "Weekly project status digest" });
+    await visible(card, "the digest card after searching");
+    await visible(card.getByText("A schedule: every Friday at 17:00 (UTC)"), "what it makes, in words");
+    await card.getByRole("button", { name: "Use this recipe" }).click();
+    const dlg = page.getByRole("dialog");
+    await visible(dlg.getByText("This will create"), "the wizard preview");
+    await dlg.getByLabel(/^Time zone/).fill("Europe/Paris");
+    await visible(dlg.getByLabel("What the agent will be told").getByText(/status report/i), "the rendered prompt");
+    await shotTo(page, "recipes-wizard");
+    await dlg.getByRole("button", { name: "Create" }).click();
+    await visible(dlg.getByText(/Done: Weekly project status digest/), "the done message");
+    await dlg.getByRole("link", { name: "Open Schedules" }).click();
+    const list = page.getByRole("list", { name: "Schedules" });
+    await visible(list.getByText("Weekly status digest"), "the new schedule in Schedules");
+    const sch = (await api(`/projects/${rk.a}/schedules`))[0];
+    eq([sch.name, sch.cron, sch.timezone, sch.policy, sch.enabled], ["Weekly status digest", "0 17 * * 5", "Europe/Paris", "readonly", true], "the stored schedule");
+    await shotTo(page, "recipes-schedules-tab");
+    if (process.env.E2E_SHOTS) {
+      const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
+      phone.on("page", watch);
+      try {
+        const pp = await phone.newPage();
+        await pp.goto(`${base}/#/p/${rk.a}?tab=recipes`);
+        await visible(pp.getByRole("list", { name: "Recipes" }).getByRole("listitem").first(), "the gallery on a phone");
+        await shotTo(pp, "phone-recipes-gallery");
+        await pp.getByRole("button", { name: "Use this recipe" }).first().click();
+        await visible(pp.getByRole("dialog").getByText("This will create"), "the wizard on a phone");
+        await shotTo(pp, "phone-recipes-wizard");
+        await pp.keyboard.press("Escape");
+        await pp.goto(`${base}/#/p/${rk.a}?tab=schedules`);
+        await visible(pp.getByRole("button", { name: /Add from a recipe/ }), "the button on a phone");
+        await shotTo(pp, "phone-schedules-tab");
+      } finally {
+        await phone.close();
+      }
+    }
+  });
+
+  await step("k2. Recipes: share a schedule as a recipe, then apply it in another project", async () => {
+    rk.b = (await post("/projects", { name: "E2E recipes B" })).id;
+    await post(`/projects/${rk.a}/schedules`, { name: "Merged PRs of billing", prompt: "Summarise the merged pull requests of billing for the team.", cron: "0 7 * * 1", timezone: "UTC", policy: "readonly" });
+    await page.goto(`${base}/#/p/${rk.a}?tab=schedules`);
+    await page.reload();
+    await page.getByRole("button", { name: "Share Merged PRs of billing as a recipe" }).click();
+    const dlg = page.getByRole("dialog");
+    await dlg.getByLabel("Recipe name").fill("PR summary");
+    await dlg.getByLabel("What it does, in one line").fill("Summarise last week's merged pull requests");
+    const area = dlg.getByLabel("Text");
+    await area.evaluate((el) => {
+      const i = el.value.indexOf("billing");
+      el.focus();
+      el.setSelectionRange(i, i + "billing".length);
+    });
+    await area.dispatchEvent("mouseup");
+    await dlg.getByRole("button", { name: /Make the selection a parameter/ }).click();
+    await dlg.getByLabel("Label for billing").fill("Product name");
+    await dlg.getByRole("button", { name: "Share", exact: true }).click();
+    await gone(page.getByRole("dialog"), "the share dialog closed");
+    const mine = (await api("/recipes")).find((r) => r.name === "PR summary");
+    if (!mine) throw new Error("the shared recipe is not in the library");
+    eq([mine.scope, mine.body.prompt], ["personal", "Summarise the merged pull requests of {{billing}} for the team."], "the shared recipe");
+    // use it in project B with another value
+    await page.goto(`${base}/#/p/${rk.b}?tab=recipes`);
+    await page.reload();
+    await page.getByLabel("Search recipes").fill("PR summary");
+    await page.getByRole("list", { name: "Recipes" }).getByRole("listitem", { name: "PR summary" }).getByRole("button", { name: "Use this recipe" }).click();
+    const wiz = page.getByRole("dialog");
+    await wiz.getByLabel(/^Product name/).fill("checkout");
+    await visible(wiz.getByLabel("What the agent will be told").getByText(/of checkout for the team/), "the live preview with the new value");
+    await wiz.getByRole("button", { name: "Create" }).click();
+    await visible(wiz.getByText(/Done: PR summary/), "applied in the other project");
+    const made = (await api(`/projects/${rk.b}/schedules`))[0];
+    eq([made.prompt, made.name], ["Summarise the merged pull requests of checkout for the team.", "Merged PRs of checkout"], "the schedule of project B");
+  });
+
+  await step("k3. Recipes: export a recipe, import it as a file, and a broken file is refused", async () => {
+    const exported = await (await fetch(`${base}/api/recipes/daily-ci-triage/export`)).json();
+    eq(exported.format, "7ar-recipe", "the export format");
+    exported.recipe.name = "My CI triage";
+    const good = path.join(tmp, "good.recipe.json");
+    const bad = path.join(tmp, "bad.recipe.json");
+    fs.writeFileSync(good, JSON.stringify(exported));
+    fs.writeFileSync(bad, JSON.stringify({ ...exported, extra: true }));
+    await page.goto(`${base}/#/p/${rk.a}?tab=recipes`);
+    await page.reload();
+    await page.getByRole("button", { name: /Import a file/ }).click();
+    const dlg = page.getByRole("dialog");
+    // a file with an unknown field is refused by the server (asked directly: the browser logs every 4xx as a console error)
+    const refused = await fetch(`${base}/api/recipes/import?scope=personal`, { method: "POST", headers: { "Content-Type": "application/json" }, body: fs.readFileSync(bad) });
+    eq(refused.status, 400, "an unknown field in a recipe file is refused");
+    await dlg.getByLabel("Recipe file").setInputFiles(good);
+    await gone(page.getByRole("dialog"), "the import dialog closed");
+    await poll(async () => (await api("/recipes")).some((r) => r.name === "My CI triage" && r.scope === "personal"), "the imported recipe is stored");
+    await page.getByRole("button", { name: "Shared by people" }).click();
+    await visible(page.getByRole("list", { name: "Recipes" }).getByRole("listitem", { name: "My CI triage" }), "the imported recipe in the gallery");
+  });
+
+  await step("k4. Recipes: a trigger from a recipe, and the trigger form's Advanced fields", async () => {
+    await page.goto(`${base}/#/p/${rk.a}?tab=tasks`);
+    await page.reload();
+    await page.getByRole("tab", { name: "Triggers", exact: true }).click();
+    await page.getByRole("button", { name: /Add from a recipe/ }).click();
+    const gallery = page.getByRole("dialog");
+    await gallery.getByLabel("Search recipes").fill("dependency update");
+    await gallery.getByRole("listitem", { name: "Weekly dependency update pull request" }).getByRole("button", { name: "Use this recipe" }).click();
+    const wiz = page.getByRole("dialog");
+    await wiz.getByRole("button", { name: "Create" }).click();
+    await visible(wiz.getByText(/Done: Weekly dependency update/), "the trigger was created");
+    await wiz.getByRole("link", { name: /Open Tasks/ }).click();
+    const trigs = await api(`/projects/${rk.a}/triggers`);
+    const t = trigs.find((x) => x.name === "Weekly dependency update");
+    if (!t) throw new Error("the trigger is missing");
+    eq([t.kind, t.schedule, t.template.policy, t.template.budget.maxUsd], ["cron", "0 6 * * 1", "sandboxed", 3], "the stored trigger");
+    // the form: Advanced fields reach the stored trigger
+    await page.getByRole("tab", { name: "Triggers", exact: true }).click();
+    await visible(page.getByText("Weekly dependency update").first(), "the trigger in the list");
+    await page.getByRole("button", { name: /New trigger/ }).click();
+    const form = page.getByRole("dialog");
+    await form.getByLabel("Name").fill("Nightly lint");
+    await form.getByLabel("Schedule").fill("0 3 * * *");
+    await form.getByLabel("Task title").fill("Lint");
+    await form.getByRole("button", { name: "Advanced" }).click();
+    await form.getByLabel("Budget per task (USD)").fill("1.5");
+    await form.getByLabel("Base branch").fill("develop");
+    await form.getByRole("button", { name: "Create trigger" }).click();
+    await gone(page.getByRole("dialog"), "the trigger form closed");
+    const made = (await api(`/projects/${rk.a}/triggers`)).find((x) => x.name === "Nightly lint");
+    eq([made?.template.budget?.maxUsd, made?.template.baseBranch], [1.5, "develop"], "the trigger's Advanced fields");
+  });
+
   // Opt-in: E2E_SHOTS=<dir> saves screenshots of the main surfaces (not a scenario, nothing is asserted).
   if (process.env.E2E_SHOTS) {
     const dir = process.env.E2E_SHOTS;
@@ -820,7 +971,7 @@ async function main() {
     await shot(page, `/p/${proj.wf}?tab=workflows&run=${runs[0]?.id ?? ""}`, "workflow-run");
     await shot(page, `/p/${proj.id}?tab=settings`, "settings");
     
-    for (const t of ["requirements", "roles", "members", "memory", "capabilities", "usage", "schedules", "audit"]) await shot(page, `/p/${proj.id}?tab=${t}`, `tab-${t}`);
+    for (const t of ["requirements", "roles", "members", "memory", "capabilities", "usage", "schedules", "recipes", "audit"]) await shot(page, `/p/${proj.id}?tab=${t}`, `tab-${t}`);
     for (const r of ["/inbox", "/profile", "/jobs", "/admin", "/connectors"]) await shot(page, r, `page${r.replace("/", "-")}`);
     await shot(page, `/p/${proj.wf}?tab=workflows`, "workflows");
     await page.evaluate(() => localStorage.setItem("theme", "light"));

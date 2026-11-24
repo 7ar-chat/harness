@@ -36,6 +36,16 @@ export interface Author {
 
 export type AuthorKind = "user" | "supervisor" | "system";
 
+export interface Body {
+  name?: string;
+  title?: string;
+  prompt?: string;
+  cron?: string;
+  timezone?: string;
+  event?: string;
+  match?: Record<string, string>;
+}
+
 export interface Budget {
   maxUsd?: number;
   maxTokens?: number;
@@ -536,6 +546,16 @@ export interface OverviewProject extends ProjectWithRole {
   threads: ThreadSummary[];
 }
 
+export interface Param {
+  key: string;
+  label: string;
+  help?: string;
+  type: string;
+  choices?: string[];
+  default?: string;
+  required?: boolean;
+}
+
 /** The risky tool call waiting for a decision: store.Approval.Payload(), a map (its "id" is the interrupt id of the resume). */
 export interface PendingApproval {
   id: string;
@@ -654,6 +674,97 @@ export interface QueueItem {
 export interface QueueSendResult {
   steered: boolean;
   run?: Run;
+}
+
+export interface Recipe extends RecipeDoc {
+  creates: string;
+  cost?: string;
+  canEdit: boolean;
+  projectName?: string;
+}
+
+export interface RecipeApplied {
+  kind: string;
+  summary: string;
+  recipe: string;
+  created: unknown;
+}
+
+export interface RecipeApplyBody {
+  params: Record<string, string>;
+  dryRun: boolean;
+  advanced: {
+    role: string;
+    policy: string;
+    maxUsd: number;
+    maxTokens: number;
+    timeoutMinutes: number;
+    baseBranch: string;
+    model: string;
+  };
+}
+
+export interface RecipeBody {
+  name: string;
+  summary: string;
+  category: string;
+  kind: string;
+  body: Body;
+  params: Param[];
+  suggest: Suggest;
+  scope: string;
+  projectId: string;
+  version: number;
+}
+
+export interface RecipeDoc {
+  id: string;
+  name: string;
+  summary: string;
+  category: string;
+  kind: string;
+  body: Body;
+  params: Param[];
+  suggest: Suggest;
+  version: number;
+  scope: string;
+  scopeId?: string;
+  author?: string;
+  createdAt: string;
+  updatedAt: string;
+  uses: number;
+}
+
+export interface RecipeDryRun {
+  dryRun: boolean;
+  kind: string;
+  summary: string;
+  rendered: Rendered;
+}
+
+export interface RecipeShareBody {
+  from: string;
+  id: string;
+  name: string;
+  summary: string;
+  category: string;
+  scope: string;
+  params: RecipeShareParam[];
+}
+
+export interface RecipeShareParam extends Param {
+  text: string;
+}
+
+export interface RecipeVersions {
+  current: number;
+  history: Version[];
+}
+
+export interface Rendered {
+  kind: string;
+  body: Body;
+  suggest: Suggest;
 }
 
 export interface Requirement {
@@ -910,6 +1021,15 @@ export interface Spend {
   unpriced?: number;
 }
 
+export interface Suggest {
+  role?: string;
+  policy?: string;
+  maxUsd?: number;
+  maxTokens?: number;
+  timeoutMinutes?: number;
+  baseBranch?: string;
+}
+
 export interface SupervisorSettings {
   watch: boolean;
   stuckMinutes: number;
@@ -1036,6 +1156,13 @@ export interface User {
   avatarUrl: string;
   hasCustomAvatar: boolean;
   status?: string;
+}
+
+export interface Version {
+  version: number;
+  recipe: RecipeDoc;
+  changedBy?: string;
+  at: string;
 }
 
 export interface Workflow {

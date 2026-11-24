@@ -25,6 +25,7 @@ import { MemoryManager } from "./Memory";
 import { TasksTab } from "./Tasks";
 import { Requirements } from "./Requirements";
 import { RolesPanel } from "./Roles";
+import { RecipesPanel } from "./Recipes";
 import { SchedulesPanel } from "./Schedules";
 import { UsagePanel } from "./Usage";
 import { WorkflowsPanel } from "./Workflows";
@@ -319,7 +320,10 @@ export function ProjectPage() {
             <RolesPanel projectId={projectId} canEdit={canWrite(p.role)} />
           </TabsContent>
           <TabsContent value="schedules" className="mt-0">
-            <SchedulesPanel projectId={projectId} canEdit={canWrite(p.role)} />
+            <SchedulesPanel projectId={projectId} canEdit={canWrite(p.role)} owner={owner} />
+          </TabsContent>
+          <TabsContent value="recipes" className="mt-0">
+            <RecipesPanel projectId={projectId} canEdit={canWrite(p.role)} owner={owner} />
           </TabsContent>
           <TabsContent value="usage" className="mt-0">
             <UsagePanel projectId={projectId} />

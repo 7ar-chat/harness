@@ -326,6 +326,7 @@ export function ExplorerBody({ onNavigate }: { onNavigate?: () => void }) {
             <Section title="Setup">
               <SetupLink pid={project.id} section="roles" label="Roles & executors" onNavigate={onNavigate} />
               <SetupLink pid={project.id} section="schedules" label="Schedules" onNavigate={onNavigate} />
+              <SetupLink pid={project.id} section="recipes" label="Recipes" onNavigate={onNavigate} />
               <SetupLink pid={project.id} section="memory" label="Memory & docs" onNavigate={onNavigate} meta={memPending ? <span className="rounded-full bg-warning px-1.5 text-[10px] font-medium text-warning-foreground" aria-label={`${memPending} memories to review`}>{memPending}</span> : null} />
               <SetupLink pid={project.id} section="members" label="Members & access" onNavigate={onNavigate} />
               <SetupLink pid={project.id} section="capabilities" label="Capabilities" onNavigate={onNavigate} />

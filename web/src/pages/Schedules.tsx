@@ -1,7 +1,7 @@
 // Scheduled agent tasks: a prompt the agent runs by itself on a cron or interval schedule. The project tab and the personal page share the panel.
 import { Link } from "@tanstack/react-router";
 import { formatDistanceToNowStrict } from "date-fns";
-import { ChevronDown, ChevronRight, Clock, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock, Pencil, Play, Plus, Share2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { isUnsupported } from "@/api/client";
 import { useModels } from "@/api/queries";
@@ -18,6 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { AddFromRecipe, ShareRecipeDialog } from "./Recipes";
 
 /** The schedules people reach for most; anything else is typed as cron ("0 9 * * 1-5") or "@every 90m". */
 export const CRON_PRESETS: { label: string; cron: string }[] = [
@@ -132,8 +133,9 @@ function RunRow({ run, zone }: { run: ScheduleRun; zone: string }) {
   );
 }
 
-function ScheduleItem({ projectId, schedule, onEdit }: { projectId?: string; schedule: ScheduleView; onEdit: () => void }) {
+function ScheduleItem({ projectId, schedule, onEdit, owner }: { projectId?: string; schedule: ScheduleView; onEdit: () => void; owner?: boolean }) {
   const [open, setOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const save = useSaveSchedule(projectId);
   const run = useRunSchedule(projectId);
@@ -146,7 +148,7 @@ function ScheduleItem({ projectId, schedule, onEdit }: { projectId?: string; sch
         <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={`${open ? "Hide" : "Show"} runs of ${s.name}`} className="mt-0.5 text-muted-foreground hover:text-foreground">
           {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
         </button>
-        <div className="min-w-0 flex-1 space-y-1">
+        <div className="min-w-0 flex-1 basis-56 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{s.name}</span>
             {s.policy === "readonly" ? <Badge variant="secondary">read-only</Badge> : null}
@@ -175,6 +177,11 @@ function ScheduleItem({ projectId, schedule, onEdit }: { projectId?: string; sch
             <Button size="sm" variant="outline" disabled={run.isPending || busy} onClick={() => run.mutate(s.id)} aria-label={`Run ${s.name} now`}>
               <Play /> Run now
             </Button>
+            {projectId ? (
+              <Button size="icon" variant="ghost" onClick={() => setSharing(true)} aria-label={`Share ${s.name} as a recipe`} title="Share as recipe">
+                <Share2 />
+              </Button>
+            ) : null}
             <Button size="icon" variant="ghost" onClick={onEdit} aria-label={`Edit ${s.name}`}>
               <Pencil />
             </Button>
@@ -189,6 +196,7 @@ function ScheduleItem({ projectId, schedule, onEdit }: { projectId?: string; sch
           <RunHistory projectId={projectId} schedule={s} />
         </div>
       ) : null}
+      {projectId ? <ShareRecipeDialog projectId={projectId} owner={!!owner} source={sharing ? { from: "schedule", id: s.id, name: s.name, text: s.prompt } : null} onClose={() => setSharing(false)} /> : null}
       <AlertDialog open={confirm} onOpenChange={setConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -382,7 +390,7 @@ export function ScheduleDialog({ projectId, schedule, open, onClose }: { project
 }
 
 /** The schedules of a project (`projectId`), or the caller's own without one. `canEdit` says whether to offer "New schedule" (the rows follow what the server says). */
-export function SchedulesPanel({ projectId, canEdit }: { projectId?: string; canEdit: boolean }) {
+export function SchedulesPanel({ projectId, canEdit, owner }: { projectId?: string; canEdit: boolean; owner?: boolean }) {
   const q = useSchedules(projectId);
   const [editing, setEditing] = useState<ScheduleView | "new" | null>(null);
   if (q.error && isUnsupported(q.error)) return <Empty title="No scheduled tasks">This server has no scheduled tasks.</Empty>;
@@ -395,19 +403,22 @@ export function SchedulesPanel({ projectId, canEdit }: { projectId?: string; can
           Put an agent on a recurring job: it runs the prompt on its schedule, as an ordinary session you can open, with its cost on the Usage page. A run stops at its time limit.
         </p>
         {canEdit ? (
-          <Button onClick={() => setEditing("new")}>
-            <Plus /> New schedule
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {projectId ? <AddFromRecipe projectId={projectId} kind="schedule" /> : null}
+            <Button onClick={() => setEditing("new")}>
+              <Plus /> New schedule
+            </Button>
+          </div>
         ) : null}
       </div>
       {q.data.length ? (
         <ul className="space-y-3" aria-label="Schedules">
           {q.data.map((s) => (
-            <ScheduleItem key={s.id} projectId={projectId} schedule={s} onEdit={() => setEditing(s)} />
+            <ScheduleItem key={s.id} projectId={projectId} schedule={s} owner={owner} onEdit={() => setEditing(s)} />
           ))}
         </ul>
       ) : (
-        <Empty title="No schedules yet">{canEdit ? "Create one to have an agent do something every morning, every week or every hour." : "Members can create schedules."}</Empty>
+        <Empty title="No schedules yet">{canEdit ? (projectId ? "Start from a recipe, or create one to have an agent do something every morning, every week or every hour." : "Create one to have an agent do something every morning, every week or every hour.") : "Members can create schedules."}</Empty>
       )}
       <ScheduleDialog projectId={projectId} schedule={editing && editing !== "new" ? editing : undefined} open={editing !== null} onClose={() => setEditing(null)} />
     </div>
