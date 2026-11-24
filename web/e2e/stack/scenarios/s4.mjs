@@ -52,7 +52,7 @@ export const steps = [
       eq(await metric(S, "harness_worker_runs_started_total"), before + 1, "the worker started exactly this run");
       ok((await finished(S)).some((x) => x.startsWith("completed=") || x.startsWith("succeeded=") || x.startsWith("done=")), `the worker finished it: ${await finished(S)}`);
       const rec = await alice.get(`/runs/${run.id}`);
-      console.log("  run record:", JSON.stringify(rec).slice(0, 300));
+      eq(rec.status, "completed", "run record");
     },
   ],
   [
@@ -71,15 +71,15 @@ export const steps = [
       S.fake.release();
       const after = await alice.get(`/runs/${run.id}`);
       console.log("  after SIGTERM:", after.status, JSON.stringify(after).slice(0, 250));
-      ok(["interrupted", "queued", "running", "failed"].includes(after.status), `run status after SIGTERM: ${after.status}`);
-      await S.start.worker();
-      const final = await poll(async () => {
-        const r = await alice.get(`/runs/${run.id}`);
-        return ["completed", "succeeded", "done", "finished", "failed", "interrupted", "cancelled"].includes(r.status) && r.status !== after.status ? r : null;
-      }, "the run after the worker restart", 30_000).catch(() => null);
-      console.log("  after restart:", JSON.stringify(final ?? (await alice.get(`/runs/${run.id}`))).slice(0, 300));
+      eq([after.status, after.errorCode], ["interrupted", "interrupted"], "the run is marked interrupted (never lost, never hanging)");
       const t = await alice.get(`/threads/${th.id}`);
-      console.log("  thread:", t.status, t.messages.map((m) => m.role + ":" + String(m.content).slice(0, 40)).join(" | "));
+      eq(t.status, "idle", "the thread is idle again, so the person can go on");
+      ok(t.messages.some((m) => m.role === "assistant" && /Slow reply/.test(String(m.content))), "the text streamed before the stop is kept");
+      await S.start.worker();
+      // "Send your message again to continue": the restarted worker takes the new run
+      const again = await alice.post(`/threads/${th.id}/runs`, { message: "hello again", model: "gpt-test" });
+      await env.idle(alice, th.id);
+      eq((await alice.get(`/runs/${again.id}`)).status, "completed", "the run sent after the restart completes on the new worker");
     },
   ],
   [
@@ -94,12 +94,16 @@ export const steps = [
       S.fake.release();
       await sleep(500);
       await S.start.worker();
-      const t0 = Date.now();
+      // the heartbeat of the dead worker expires (10 s) and the sweeper (every 30 s) ends the orphan: ~1 minute
       const final = await poll(async () => {
         const r = await alice.get(`/runs/${run.id}`);
-        return ["completed", "succeeded", "done", "finished", "failed", "interrupted", "cancelled"].includes(r.status) ? r : null;
-      }, "the orphaned run is ended or finished", 60_000, 500);
-      console.log(`  orphan after ${Date.now() - t0}ms:`, JSON.stringify(final).slice(0, 300));
+        return ["completed", "failed", "interrupted", "cancelled"].includes(r.status) ? r : null;
+      }, "the orphaned run is ended by the sweeper", 90_000, 500);
+      eq([final.status, final.errorCode], ["interrupted", "interrupted"], "the orphan is interrupted by the sweeper");
+      eq((await alice.get(`/threads/${th.id}`)).status, "idle", "the thread is idle again");
+      const again = await alice.post(`/threads/${th.id}/runs`, { message: "hello after kill -9", model: "gpt-test" });
+      await env.idle(alice, th.id);
+      eq((await alice.get(`/runs/${again.id}`)).status, "completed", "a new run completes on the restarted worker");
     },
   ],
 ];
