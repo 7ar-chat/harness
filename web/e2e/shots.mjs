@@ -109,17 +109,22 @@ export async function runShots(h) {
         await settle(pg);
         await clickVis(pg.getByRole("button", { name: /New task/ }));
       };
+      // The dialog keeps its Advanced section as it was left (it stays mounted), so open it only when it is closed.
+      const openAdvanced = async (d) => {
+        const t = d.getByRole("button", { name: /Advanced options/ });
+        if ((await t.getAttribute("aria-expanded")) !== "true") await t.click();
+      };
       await dlg("dlg-new-task", newTask);
       await dlg("dlg-new-task-advanced", async () => {
         await newTask();
         const d = pg.getByRole("dialog");
-        await d.getByRole("button", { name: /Advanced options/ }).click();
+        await openAdvanced(d);
         await d.getByText(/Reviews are off/).waitFor({ state: "visible", timeout: 8000 });
       });
       await run(sub, pg, "dlg-automerge-confirm", async () => {
         await newTask();
         const d = pg.getByRole("dialog");
-        await d.getByRole("button", { name: /Advanced options/ }).click();
+        await openAdvanced(d);
         await d.getByRole("switch", { name: "Merge automatically" }).click();
         await pg.getByRole("alertdialog").waitFor({ state: "visible", timeout: 8000 });
       });

@@ -356,7 +356,7 @@ export function Designer({ projectId, workflow, canEdit, onBack }: { projectId: 
         <Button variant="ghost" size="sm" onClick={onBack}>
           <ArrowLeft /> Workflows
         </Button>
-        <Input className="h-9 w-full flex-1 font-medium sm:max-w-xs" value={name} disabled={!editable} onChange={(e) => setName(e.target.value)} aria-label="Workflow name" />
+        <Input className="h-9 min-w-0 basis-full font-medium sm:max-w-xs sm:flex-1 sm:basis-0" value={name} disabled={!editable} onChange={(e) => setName(e.target.value)} aria-label="Workflow name" />
         <Badge variant={saved.status === "published" && !dirty ? "default" : "secondary"}>{saved.status === "published" ? (dirty ? "published, unsaved changes" : `published v${saved.publishedVersion}`) : "draft"}</Badge>
         <span className="text-xs text-muted-foreground">v{saved.version}</span>
         <div className="ml-auto flex flex-wrap gap-2">
